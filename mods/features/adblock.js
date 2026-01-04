@@ -233,20 +233,83 @@ for (const key in window._yttv) {
 
 function processShelves(shelves, shouldAddPreviews = true) {
   for (const shelve of shelves) {
+    // the common shelfRenderer path (existing behavior)
     if (shelve.shelfRenderer) {
-      deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (shouldAddPreviews) {
-        addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
+      // try to operate on horizontal list items and also on grid renderer items (some pages use grid)
+      const hor = shelve.shelfRenderer.content?.horizontalListRenderer?.items;
+      const grid = shelve.shelfRenderer.content?.gridRenderer?.items;
+      const richGrid = shelve.richShelfRenderer?.content?.richGridRenderer?.contents;
+
+      if (hor && hor.length) {
+        deArrowify(hor);
+        hqify(hor);
+        addLongPress(hor);
+        if (shouldAddPreviews) addPreviews(hor);
+        shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(hor);
       }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+
+      if (grid && grid.length) {
+        deArrowify(grid);
+        hqify(grid);
+        addLongPress(grid);
+        if (shouldAddPreviews) addPreviews(grid);
+        shelve.shelfRenderer.content.gridRenderer.items = hideVideo(grid);
+      }
+
+      if (richGrid && richGrid.length) {
+        // richGridRenderer contents may contain tile-like objects; normalize and hide as well
+        deArrowify(richGrid);
+        hqify(richGrid);
+        addLongPress(richGrid);
+        if (shouldAddPreviews) addPreviews(richGrid);
+        shelve.richShelfRenderer = shelve.richShelfRenderer || {};
+        shelve.richShelfRenderer.content = shelve.richShelfRenderer.content || {};
+        shelve.richShelfRenderer.content.richGridRenderer = shelve.richShelfRenderer.content.richGridRenderer || {};
+        shelve.richShelfRenderer.content.richGridRenderer.contents = hideVideo(richGrid);
+      }
+
+      // keep the old shorts handling
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
           shelves.splice(shelves.indexOf(shelve), 1);
           continue;
         }
-        shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
+        shelve.shelfRenderer.content.horizontalListRenderer.items =
+          shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
+      }
+    } else {
+      // Some shelves may come in different shapes — attempt to detect and sanitize common sublists
+      // (This gives defensive coverage for subscription / special pages.)
+      try {
+        const maybeLists = [];
+        if (shelve?.richShelfRenderer?.content?.richGridRenderer?.contents) {
+          maybeLists.push(shelve.richShelfRenderer.content.richGridRenderer.contents);
+        }
+        if (shelve?.sectionListRenderer?.contents) {
+          // dive into deeper contents if present
+          for (const c of shelve.sectionListRenderer.contents) {
+            if (c?.shelfRenderer?.content?.horizontalListRenderer?.items) {
+              maybeLists.push(c.shelfRenderer.content.horizontalListRenderer.items);
+            }
+            if (c?.shelfRenderer?.content?.gridRenderer?.items) {
+              maybeLists.push(c.shelfRenderer.content.gridRenderer.items);
+            }
+          }
+        }
+        for (const list of maybeLists) {
+          if (!list || !Array.isArray(list)) continue;
+          deArrowify(list);
+          hqify(list);
+          addLongPress(list);
+          if (shouldAddPreviews) addPreviews(list);
+          // apply hiding in-place (if it's an array reference in the JSON, the caller already references it)
+          const filtered = hideVideo(list);
+          // mutate original array: clear and push filtered back to the original reference
+          list.splice(0, list.length, ...filtered);
+        }
+      } catch (e) {
+        // ignore defensive attempts
+        console.warn('processShelves: defensive handling failed', e);
       }
     }
   }
@@ -357,16 +420,99 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
+  // returns filtered items (keeps items that should be shown)
+  if (!Array.isArray(items)) return items;
 
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
+  // helper: attempt to detect resume/progress object in multiple renderer shapes
+  function findProgressBar(item) {
+    // common shapes where resume progress exists
+    const tryPaths = [
+      item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays,
+      item?.playlistVideoRenderer?.thumbnailOverlays,
+      item?.compactVideoRenderer?.thumbnailOverlays,
+      item?.gridVideoRenderer?.thumbnailOverlays,
+      item?.videoRenderer?.thumbnailOverlays
+    ];
+    for (const arr of tryPaths) {
+      if (!Array.isArray(arr)) continue;
+      const found = arr.find(o => o && o.thumbnailOverlayResumePlaybackRenderer);
+      if (found && found.thumbnailOverlayResumePlaybackRenderer) return found.thumbnailOverlayResumePlaybackRenderer;
+    }
+    // as a last resort, search any thumbnailOverlays property anywhere on the object
+    for (const key of Object.keys(item)) {
+      const val = item[key];
+      if (val && typeof val === 'object') {
+        if (Array.isArray(val.thumbnailOverlays)) {
+          const found = val.thumbnailOverlays.find(o => o && o.thumbnailOverlayResumePlaybackRenderer);
+          if (found && found.thumbnailOverlayResumePlaybackRenderer) return found.thumbnailOverlayResumePlaybackRenderer;
+        }
+      }
+    }
+    return null;
+  }
+
+  // helper: more tolerant page detection (match tokens)
+  function currentPageTokens() {
+    const tokens = [];
+    const hash = location.hash ? location.hash.substring(1) : '';
+    const path = location.pathname || '';
+
+    const combined = (hash + ' ' + path + ' ' + location.search).toLowerCase();
+
+    // add specific known token matches
+    if (combined.includes('/feed/subscriptions') || combined.includes('subscriptions') || combined.includes('abos')) tokens.push('subscriptions');
+    if (combined.includes('/feed/library') || combined.includes('library') || combined.includes('mediathek')) tokens.push('library');
+    if (combined.includes('/playlist') || combined.includes('list=')) tokens.push('playlist');
+    if (combined.includes('/results') || combined.includes('/search') || combined.includes('search')) tokens.push('search');
+    if (combined === '' || combined.includes('/home') || combined.includes('browse') || combined.includes('/')) tokens.push('home');
+    // fallback: split hash on / and add tokens
+    (hash || '').split(/[\/?&=#]/).filter(Boolean).forEach(t => tokens.push(t));
+    return tokens;
+  }
+
+  const pages = configRead('hideWatchedVideosPages') || [];
+  const pageTokens = currentPageTokens();
+
+  // if pages array is empty -> do not hide anywhere (preserve current default behaviour)
+  const pageFilterEnabled = Array.isArray(pages) && pages.length > 0;
+
+  return items.filter(item => {
+    if (!item) return false; // drop empties
+
+    // if there is no renderer-like shape let it pass
+    if (!item.tileRenderer && !item.playlistVideoRenderer && !item.compactVideoRenderer && !item.gridVideoRenderer && !item.videoRenderer) {
+      return true;
+    }
+
+    // If page-level filtering is enabled, check that current page matches any requested token
+    if (pageFilterEnabled) {
+      const lowerPages = pages.map(p => String(p).toLowerCase());
+      const anyMatch = lowerPages.some(p => pageTokens.some(t => t.includes(p) || p.includes(t)));
+      if (!anyMatch) {
+        // this page is not in the configured hide pages -> keep the item
+        return true;
+      }
+    }
+
+    // find a progress/resume overlay in many renderer shapes
+    const progressBar = findProgressBar(item);
+    if (!progressBar) {
+      // if we cannot detect progress info, keep the tile (safer)
+      return true;
+    }
+
+    // percent field used by the client code
+    const percentWatched = Number(progressBar.percentDurationWatched || 0);
+
+    // if the playlist specific config exists and we are on a playlist, use that toggle
+    const isPlaylistPage = pageTokens.includes('playlist') || pageTokens.includes('playlists') || pageTokens.includes('mediathek');
+    if (isPlaylistPage && !configRead('enableHideWatchedInPlaylists')) {
+      // the user disabled hiding for playlists
+      return true;
+    }
+
+    // finally compare threshold
+    const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+    return percentWatched <= threshold;
   });
 }
