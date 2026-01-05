@@ -232,22 +232,58 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
-  for (const shelve of shelves) {
-    if (shelve.shelfRenderer) {
-      deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (shouldAddPreviews) {
-        addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+  if (!Array.isArray(shelves)) return;
+  
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelve = shelves[i];
+    if (!shelve) continue;
+    
+    // Handle shelfRenderer
+    if (shelve.shelfRenderer?.content?.horizontalListRenderer?.items) {
+      const items = shelve.shelfRenderer.content.horizontalListRenderer.items;
+      
+      deArrowify(items);
+      hqify(items);
+      addLongPress(items);
+      if (shouldAddPreviews) addPreviews(items);
+      
+      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(items);
+      
+      // Handle shorts filtering
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
+          shelves.splice(i, 1);
           continue;
         }
-        shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
+        shelve.shelfRenderer.content.horizontalListRenderer.items = 
+          shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
+            item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
+          );
       }
+    }
+    
+    // Handle gridRenderer
+    if (shelve.shelfRenderer?.content?.gridRenderer?.items) {
+      const items = shelve.shelfRenderer.content.gridRenderer.items;
+      
+      deArrowify(items);
+      hqify(items);
+      addLongPress(items);
+      if (shouldAddPreviews) addPreviews(items);
+      
+      shelve.shelfRenderer.content.gridRenderer.items = hideVideo(items);
+    }
+    
+    // Handle richShelfRenderer
+    if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
+      const contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
+      
+      deArrowify(contents);
+      hqify(contents);
+      addLongPress(contents);
+      if (shouldAddPreviews) addPreviews(contents);
+      
+      shelve.richShelfRenderer.content.richGridRenderer.contents = hideVideo(contents);
     }
   }
 }
@@ -357,16 +393,82 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
+  if (!configRead('enableHideWatchedVideos')) {
+    return items;
+  }
+  
+  if (!Array.isArray(items)) return items;
+  
+  // Helper: Find progress bar in various renderer types
+  function findProgressBar(item) {
+    if (!item) return null;
+    
+    const renderers = [
+      item.tileRenderer,
+      item.playlistVideoRenderer,
+      item.compactVideoRenderer,
+      item.gridVideoRenderer,
+      item.videoRenderer,
+      item.richItemRenderer?.content?.videoRenderer
+    ];
+    
+    for (const renderer of renderers) {
+      if (!renderer) continue;
+      const overlays = renderer.thumbnailOverlays || renderer.header?.tileHeaderRenderer?.thumbnailOverlays;
+      if (!Array.isArray(overlays)) continue;
+      
+      const progressOverlay = overlays.find(o => o?.thumbnailOverlayResumePlaybackRenderer);
+      if (progressOverlay) {
+        return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+      }
+    }
+    return null;
+  }
+  
+  // Helper: Get current page
+  function getCurrentPage() {
+    const hash = location.hash ? location.hash.substring(1) : '';
+    const path = location.pathname || '';
+    const search = location.search || '';
+    const combined = (hash + ' ' + path + ' ' + search).toLowerCase();
+    
+    if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+    if (combined.includes('/feed/subscriptions') || combined.includes('subscriptions') || combined.includes('abos')) return 'subscriptions';
+    if (combined.includes('/feed/library') || combined.includes('library') || combined.includes('mediathek')) return 'library';
+    if (combined.includes('/results') || combined.includes('/search')) return 'search';
+    if (combined === '' || combined === '/' || combined.includes('/home')) return 'home';
+    
+    // Check for other configured pages
+    if (combined.includes('music')) return 'music';
+    if (combined.includes('gaming')) return 'gaming';
+    if (combined.includes('more')) return 'more';
+    
+    return 'other';
+  }
+  
+  const currentPage = getCurrentPage();
+  const configPages = configRead('hideWatchedVideosPages') || [];
+  const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+  
+  // Check if we should hide on this page
+  const shouldHideOnThisPage = configPages.length === 0 || configPages.includes(currentPage);
+  
+  if (!shouldHideOnThisPage) {
+    return items;
+  }
+  
+  // Special handling for playlists
+  if (currentPage === 'playlist' && !configRead('enableHideWatchedInPlaylists')) {
+    return items;
+  }
+  
   return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
-
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
+    if (!item) return false;
+    
+    const progressBar = findProgressBar(item);
+    if (!progressBar) return true; // No progress = not watched
+    
+    const percentWatched = Number(progressBar.percentDurationWatched || 0);
+    return percentWatched <= threshold;
   });
 }
