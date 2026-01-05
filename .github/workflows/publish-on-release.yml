@@ -1,5 +1,5 @@
 # -----------------------------------------------------------------------------
-# Build and publish TizenTubeKrX to npm
+# Build and publish TizenTube to npm
 #
 # WHAT THIS WORKFLOW DOES
 # -----------------------
@@ -46,7 +46,7 @@
 # PACKAGE REQUIREMENTS
 # --------------------
 # - package.json must contain a unique name, e.g.:
-#     "@krx3d/tizentubekrx"
+#     "@krx3d/tizentube"
 # - The version MUST be increased before each release
 #   (npm will reject duplicate versions)
 #
