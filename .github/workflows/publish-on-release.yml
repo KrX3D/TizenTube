@@ -1,3 +1,66 @@
+# -----------------------------------------------------------------------------
+# Build and publish TizenTubeKrX to npm
+#
+# WHAT THIS WORKFLOW DOES
+# -----------------------
+# - Runs on every push to the `main` branch (build + verification)
+# - Runs again when a GitHub Release is published (build + npm publish)
+# - Builds:
+#     - dist/userScript.js  (browser userscript, bundled & minified)
+#     - dist/service.js     (DIAL service, bundled with Rollup)
+# - Publishes the package to https://www.npmjs.com on release only
+#
+# WHEN IT RUNS
+# ------------
+# push to main:
+#   - Builds the project
+#   - Does NOT publish to npm
+#
+# release (published):
+#   - Builds the project
+#   - Publishes to npm
+#
+# PREREQUISITES (REQUIRED)
+# -----------------------
+# 1) Create an npm account:
+#    https://www.npmjs.com/signup
+#
+# 2) Create an npm access token:
+#    - npm → Profile → Access Tokens
+#    - Click "Generate New Token"
+#    - Token name: anything you want
+#    - CHECK: "Bypass two-factor authentication (2FA)"
+#    - Packages and scopes:
+#        - Permissions: Read and Write
+#        - Scope: All packages
+#    - Expiration date: e.g. 90 days
+#    - Click "Generate token" and COPY it
+#
+# 3) Add the token to GitHub Secrets:
+#    - GitHub repository → Settings
+#    - Security → Secrets and variables → Actions
+#    - Repository secrets → New repository secret
+#        Name:   NPM_TOKEN
+#        Secret: <paste npm token here>
+#
+# PACKAGE REQUIREMENTS
+# --------------------
+# - package.json must contain a unique name, e.g.:
+#     "@krx3d/tizentubekrx"
+# - The version MUST be increased before each release
+#   (npm will reject duplicate versions)
+#
+# HOW TO PUBLISH A NEW VERSION
+# ----------------------------
+# 1) Bump "version" in package.json
+# 2) Commit and push to `main`
+# 3) Create a GitHub Release
+# 4) When the release is published:
+#      → GitHub Actions builds
+#      → npm publish runs automatically
+#
+# -----------------------------------------------------------------------------
+
 name: Build and publish on release
 
 on:
