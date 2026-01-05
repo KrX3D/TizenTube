@@ -2,43 +2,63 @@ name: Build & Publish to npm
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: 'https://registry.npmjs.org/'
 
-      - name: Install tooling
+      - name: Install project deps (if any) + bundlers + polyfills
         run: |
-          npm install  # optional if you have dependencies
-          npm install --no-save esbuild @vercel/ncc
+          # install project deps if package.json lists any.
+          npm install
+          # Install bundlers & polyfills (no-save so package.json not changed)
+          npm install --no-save esbuild @vercel/ncc \
+            whatwg-fetch core-js \
+            @formatjs/intl-getcanonicallocales \
+            @formatjs/intl-locale \
+            @formatjs/intl-displaynames
 
-      - name: Build inject (esbuild)
+      - name: Build inject (esbuild) and service (ncc)
         run: |
-          npx esbuild mods/userScript.js --bundle --platform=browser --format=iife --minify \
+          mkdir -p dist
+          # Bundle the browser injection script (wrap in guarded IIFE)
+          npx esbuild mods/userScript.js \
+            --bundle \
+            --platform=browser \
+            --format=iife \
+            --minify \
             --outfile=dist/userScript.js \
             --banner:js="(function(){if(window.__TIZENTUBE_INJECT_LOADED)return;window.__TIZENTUBE_INJECT_LOADED=true;" \
             --footer:js="})();"
-
-      - name: Build service (ncc)
-        run: |
+          # Bundle the Node service into single file using ncc
           npx @vercel/ncc build service/index.js -o dist_tmp
           mv dist_tmp/index.js dist/service.js
           rm -rf dist_tmp
 
       - name: Verify dist
         run: |
-          test -f dist/userScript.js
-          test -f dist/service.js
+          if [ ! -f dist/userScript.js ]; then echo "❌ dist/userScript.js missing" >&2; exit 1; fi
+          if [ ! -f dist/service.js ]; then echo "❌ dist/service.js missing" >&2; exit 1; fi
+          echo "✅ dist verified"
 
-      - name: Publish
+      - name: Show dist sizes
+        run: ls -lh dist || true
+
+      - name: Publish to npm
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
