@@ -1,4 +1,4 @@
-name: Publish to npm
+name: Build & Publish to npm
 
 on:
   push:
@@ -10,22 +10,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2️⃣ Setup Node.js + npm auth
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
 
-      # Optional sanity check – helps debugging
-      - name: Show package info
-        run: |
-          node -v
-          npm -v
-          cat package.json
+      # 3️⃣ Install dependencies (clean, reproducible)
+      - name: Install dependencies
+        run: npm ci
 
+      # 4️⃣ Build dist/
+      - name: Build package
+        run: npm run build
+
+      # 5️⃣ Hard fail if dist is missing (VERY IMPORTANT)
+      - name: Verify dist output
+        run: |
+          if [ ! -f dist/userScript.js ]; then
+            echo "❌ dist/userScript.js missing"
+            exit 1
+          fi
+          if [ ! -f dist/service.js ]; then
+            echo "❌ dist/service.js missing"
+            exit 1
+          fi
+          echo "✅ dist verified"
+
+      # 6️⃣ Publish to npm
       - name: Publish to npm
         run: npm publish --access public
         env:
