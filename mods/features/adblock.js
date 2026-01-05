@@ -460,11 +460,11 @@ function hideVideo(items) {
     const combined = (hash + ' ' + path + ' ' + location.search).toLowerCase();
 
     // add specific known token matches
-    if (combined.includes('/feed/subscriptions') || combined.includes('subscriptions') || combined.includes('abos')) tokens.push('subscriptions');
-    if (combined.includes('/feed/library') || combined.includes('library') || combined.includes('mediathek')) tokens.push('library');
-    if (combined.includes('/playlist') || combined.includes('list=')) tokens.push('playlist');
-    if (combined.includes('/results') || combined.includes('/search') || combined.includes('search')) tokens.push('search');
-    if (combined === '' || combined.includes('/home') || combined.includes('browse') || combined.includes('/')) tokens.push('home');
+    if (combined.includes('/feed/subscriptions') || combined.includes('subscriptions') || combined.includes('abos') || combined.includes('abonnements')) tokens.push('subscriptions');
+    if (combined.includes('/feed/library') || combined.includes('library') || combined.includes('mediathek') || combined.includes('bibliothek')) tokens.push('library');
+    if (combined.includes('/playlist') || combined.includes('list=') || combined.includes('wiedergabeliste')) tokens.push('playlist');
+    if (combined.includes('/results') || combined.includes('/search') || combined.includes('search') || combined.includes('suche')) tokens.push('search');
+    if (combined === '' || combined.includes('/home') || combined.includes('browse') || combined.includes('/') || combined.includes('startseite')) tokens.push('home');
     // fallback: split hash on / and add tokens
     (hash || '').split(/[\/?&=#]/).filter(Boolean).forEach(t => tokens.push(t));
     return tokens;
