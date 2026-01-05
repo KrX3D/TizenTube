@@ -1,6 +1,9 @@
 name: Build and publish on release
 
 on:
+  push:
+    branches:
+      - main
   release:
     types: [published]
 
