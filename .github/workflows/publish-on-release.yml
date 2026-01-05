@@ -1,13 +1,8 @@
-name: Build & Publish (mods + service)
+name: Build and publish on release
 
 on:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: read
-  packages: write
+  release:
+    types: [published]
 
 jobs:
   build-and-publish:
@@ -21,123 +16,52 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: 'https://registry.npmjs.org/'
+          registry-url: https://registry.npmjs.org/
 
-      - name: Show repository structure
-        run: |
-          echo "=== ROOT ==="
-          ls -la
-          echo "=== mods ==="
-          [ -d mods ] && ls -la mods || echo "mods/ not present"
-          echo "=== service ==="
-          [ -d service ] && ls -la service || echo "service/ not present"
-
-      # -----------------------------
-      # Build MODS (Rollup – upstream)
-      # -----------------------------
+      # ----------------------------
+      # Build mods (userScript.js)
+      # ----------------------------
       - name: Install mods dependencies
         run: |
           set -euo pipefail
-          if [ -f mods/package.json ]; then
-            echo "Installing mods dependencies"
-            if [ -f mods/package-lock.json ]; then
-              npm ci --prefix mods
-            else
-              npm install --prefix mods
-            fi
-          else
-            echo "No mods/package.json, skipping mods install"
-          fi
+          cd mods
+          npm ci
 
       - name: Build mods (rollup)
         run: |
           set -euo pipefail
-          if [ -f mods/package.json ]; then
-            echo "Running mods build"
-            npm run build --prefix mods
-          else
-            echo "Skipping mods build"
-          fi
+          cd mods
+          npx rollup -c
 
-      - name: Verify dist/userScript.js
-        run: |
-          set -euo pipefail
-          if [ ! -f dist/userScript.js ]; then
-            echo "::error::dist/userScript.js not generated"
-            exit 1
-          fi
-          echo "dist/userScript.js:"
-          ls -lh dist/userScript.js
-
-      # -----------------------------
-      # Build SERVICE (ncc bundle)
-      # -----------------------------
+      # ----------------------------
+      # Build service (service.js)
+      # ----------------------------
       - name: Install service dependencies
         run: |
           set -euo pipefail
-          if [ -f service/package.json ]; then
-            echo "Installing service dependencies"
-            if [ -f service/package-lock.json ]; then
-              npm ci --prefix service
-            else
-              npm install --prefix service
-            fi
-          else
-            echo "No service/package.json, skipping service install"
-          fi
+          cd service
+          npm ci
 
-      - name: Detect service entry
-        id: service_entry
+      - name: Build service (rollup)
         run: |
           set -euo pipefail
+          cd service
+          npx rollup -c
 
-          ENTRY=""
-
-          if [ -f service/package.json ]; then
-            MAIN=$(node -e "console.log(require('./service/package.json').main || '')")
-            if [ -n "$MAIN" ]; then
-              if [[ "$MAIN" == */* ]]; then
-                ENTRY="$MAIN"
-              else
-                ENTRY="service/$MAIN"
-              fi
-            fi
-          fi
-
-          if [ -z "$ENTRY" ]; then
-            for f in service.js index.js app.js server.js; do
-              if [ -f "service/$f" ]; then
-                ENTRY="service/$f"
-                break
-              fi
-            done
-          fi
-
-          if [ -n "$ENTRY" ]; then
-            echo "entry=$ENTRY" >> "$GITHUB_OUTPUT"
-            echo "Service entry: $ENTRY"
-          else
-            echo "entry=" >> "$GITHUB_OUTPUT"
-            echo "No service entry found"
-          fi
-
-      - name: Bundle service with ncc
-        if: steps.service_entry.outputs.entry != ''
+      # ----------------------------
+      # Verify output
+      # ----------------------------
+      - name: Verify dist output
         run: |
           set -euo pipefail
-          mkdir -p dist
-          npx @vercel/ncc build "${{ steps.service_entry.outputs.entry }}" -o dist_tmp
-          mv dist_tmp/index.js dist/service.js
-          rm -rf dist_tmp
-          echo "dist/service.js:"
-          ls -lh dist/service.js
+          ls -lh dist
+          test -f dist/userScript.js
+          test -f dist/service.js
 
-      # -----------------------------
+      # ----------------------------
       # Publish to npm
-      # -----------------------------
-      - name: Publish to npm
+      # ----------------------------
+      - name: Publish package
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          npm publish --access public
