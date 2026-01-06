@@ -1,22 +1,4 @@
-# -----------------------------------------------------------------------------
-# Manual unpublish workflow for npm packages (version must be provided at run)
-#
-# Usage:
-# 1) Go to Actions → "Unpublish package from npm" workflow → Run workflow.
-# 2) Provide inputs:
-#      - version: REQUIRED (no default) — the version to unpublish (e.g. 1.15.19)
-#      - force: optional — "true" to unpublish entire package (--force)
-#      - confirm: REQUIRED — must equal "<PACKAGE_NAME>@<version>"
-#
-# Safety:
-# - Manual trigger only (workflow_dispatch)
-# - Exact confirmation required
-#
-# Secrets:
-# - NPM_TOKEN (automation token with publish/unpublish and 2FA bypass)
-# -----------------------------------------------------------------------------
-
-name: Unpublish package from npm (manual)
+name: Unpublish package from npm (manual, no confirm)
 
 on:
   workflow_dispatch:
@@ -29,14 +11,10 @@ on:
         description: 'Set to "true" to force-unpublish the entire package (--force). Optional.'
         required: false
         default: 'false'
-      confirm:
-        description: 'Type EXACTLY "<PACKAGE_NAME>@<version>" to confirm (required).'
-        required: true
-        default: ''
 
 env:
-  # Keep the package name here (or replace with your package scope/name)
-  PACKAGE_NAME: '@krx3d/tizentube'   # <-- edit if needed
+  # Keep the package name here (fixed)
+  PACKAGE_NAME: '@krx3d/tizentube'   # <-- edit this if needed
 
 jobs:
   unpublish:
@@ -45,74 +23,50 @@ jobs:
       - name: Checkout (optional)
         uses: actions/checkout@v4
 
-      - name: Resolve inputs and compute target
+      - name: Resolve inputs
         id: resolve
         run: |
           set -euo pipefail
 
-          # Read inputs
-          INPUT_VERSION="${{ github.event.inputs.version }}"
-          INPUT_FORCE="${{ github.event.inputs.force }}"
-          INPUT_CONFIRM="${{ github.event.inputs.confirm }}"
+          VERSION="${{ github.event.inputs.version }}"
+          FORCE_INPUT="${{ github.event.inputs.force }}"
 
-          # version is required by the dispatch inputs, so INPUT_VERSION must be non-empty
-          if [ -z "$INPUT_VERSION" ]; then
+          if [ -z "$VERSION" ]; then
             echo "::error::'version' input is required."
             exit 1
           fi
 
-          # Normalize force flag
-          case "${INPUT_FORCE,,}" in
+          case "${FORCE_INPUT,,}" in
             "true"|"1"|"yes" ) FORCE="true" ;;
             * ) FORCE="false" ;;
           esac
 
-          EXPECT="${PACKAGE_NAME}@${INPUT_VERSION}"
-
-          echo "Computed:"
-          echo "  PACKAGE_NAME=${PACKAGE_NAME}"
-          echo "  VERSION=${INPUT_VERSION}"
-          echo "  FORCE=${FORCE}"
-          echo "  EXPECT_CONFIRM=${EXPECT}"
-          echo "  INPUT_CONFIRM='${INPUT_CONFIRM}'"
-
-          # Export outputs for next steps
           echo "package=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
-          echo "version=${INPUT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "force=${FORCE}" >> "$GITHUB_OUTPUT"
-          echo "expect_confirm=${EXPECT}" >> "$GITHUB_OUTPUT"
-          echo "input_confirm=${INPUT_CONFIRM}" >> "$GITHUB_OUTPUT"
+          echo "resolved_ok=true" >> "$GITHUB_OUTPUT"
 
-      - name: Confirm exact match (safety gate)
+      - name: Verify version exists on npm (unless force)
+        if: steps.resolve.outputs.force != 'true'
+        env:
+          NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
         run: |
           set -euo pipefail
-          EXPECT="${{ steps.resolve.outputs.expect_confirm }}"
-          INPUT_CONFIRM="${{ steps.resolve.outputs.input_confirm }}"
-
-          if [ "$INPUT_CONFIRM" != "$EXPECT" ]; then
-            echo "::error::Confirmation failed. You must type the exact string: $EXPECT"
-            echo "Provided: '$INPUT_CONFIRM'"
+          PKG="${{ steps.resolve.outputs.package }}"
+          VER="${{ steps.resolve.outputs.version }}"
+          echo "Checking npm for ${PKG}@${VER} ..."
+          if ! npm view "${PKG}@${VER}" > /dev/null 2>&1; then
+            echo "::error::Version ${PKG}@${VER} not found on registry. Aborting."
             exit 1
           fi
+          echo "Version exists."
 
-          echo "Confirmation matched. Proceeding..."
-
-      - name: Show plan (dry-run logging)
-        run: |
-          set -euo pipefail
-          echo "------- PLAN -------"
-          echo "Package: ${{ steps.resolve.outputs.package }}"
-          echo "Version: ${{ steps.resolve.outputs.version }}"
-          echo "Force  : ${{ steps.resolve.outputs.force }}"
-          echo "--------------------"
-
-      - name: Unpublish (execute)
+      - name: Unpublish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
         run: |
           set -euo pipefail
-
           PKG="${{ steps.resolve.outputs.package }}"
           VER="${{ steps.resolve.outputs.version }}"
           FORCE="${{ steps.resolve.outputs.force }}"
@@ -125,7 +79,5 @@ jobs:
             npm unpublish "${PKG}@${VER}"
           fi
 
-          echo "npm unpublish command completed."
-
       - name: Done
-        run: echo "Unpublish workflow finished."
+        run: echo "Unpublish finished."
