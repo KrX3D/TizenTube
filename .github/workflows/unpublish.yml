@@ -89,5 +89,5 @@ jobs:
             npm unpublish "${PKG}@${VER}"
           fi
 
-      - name: Done
+      - name: Done2
         run: echo "Unpublish finished."
