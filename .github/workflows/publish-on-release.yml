@@ -74,10 +74,141 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
 
+    # -------------------------
+    # Edit these variables to exclude files/folders from triggering builds on push.
+    # Leave them empty if you don't want to ignore anything.
+    #
+    # EXCLUDE_FILES: newline-separated file globs or exact filenames (e.g. README.md, .github/workflows/**)
+    # EXCLUDE_FOLDERS: newline-separated folder globs (e.g. docs/**, translations/**)
+    # Note: patterns use bash glob matching (e.g. docs/** matches docs/a.txt or docs/sub/x.txt)
+    # -------------------------
+    env:
+      EXCLUDE_FILES: |
+        # Examples – edit or remove these lines
+        README.md
+        .github/FUNDING.yml
+
+      EXCLUDE_FOLDERS: |
+        # Examples – edit or remove these lines
+        docs/**
+        translations/**
+
+      # npm token (must be set in repo secrets)
+      # NPM_TOKEN: ${{ secrets.NPM_TOKEN }}   # don't set here; provided in publish step
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
+      # -------------------------
+      # Early exit on push-only when only excluded files/folders changed
+      # (skip for release events)
+      # -------------------------
+      - name: Skip build if only excluded files changed
+        if: github.event_name == 'push'
+        id: skip_check
+        run: |
+          set -euo pipefail
+          echo "Running skip-check (push event)."
+
+          # read env lists into arrays (remove comment lines and blank lines)
+          readarray -t EX_FILES < <(printf '%s\n' "$EXCLUDE_FILES" | sed '/^\s*#/d;/^\s*$/d')
+          readarray -t EX_FOLDERS < <(printf '%s\n' "$EXCLUDE_FOLDERS" | sed '/^\s*#/d;/^\s*$/d')
+
+          echo "Excluded files patterns:"
+          for p in "${EX_FILES[@]}"; do echo "  - $p"; done
+          echo "Excluded folders patterns:"
+          for p in "${EX_FOLDERS[@]}"; do echo "  - $p"; done
+
+          # Get changed files between before and after commit
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          # If BEFORE is all zeros (rare cases), fall back to compare with origin/main
+          if [[ "$BEFORE" =~ ^0+$ ]]; then
+            echo "No previous commit in payload; fetching origin/main for comparison..."
+            git fetch origin main --depth=1 || true
+            # fall back to list of files in current commit only
+            CHANGED=$(git diff --name-only HEAD^ HEAD 2>/dev/null || git rev-list --max-count=1 --pretty=format: --abbrev-commit HEAD | xargs -I{} git show --name-only --pretty=format: {})
+          else
+            CHANGED=$(git diff --name-only "$BEFORE" "$AFTER")
+          fi
+
+          # Normalize into newline list
+          CHANGED=$(printf '%s\n' "$CHANGED" | sed '/^\s*$/d')
+
+          if [ -z "$CHANGED" ]; then
+            echo "No changed files detected. Proceeding with build."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          printf '%s\n' "$CHANGED"
+
+          # Helper: check if a file matches any exclude pattern (bash globbing)
+          matches_any() {
+            local file="$1"
+            shift
+            local patterns=("$@")
+            for pat in "${patterns[@]}"; do
+              # Use bash pattern match (note: patterns are used directly)
+              if [[ "$file" == $pat ]]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          # Build combined patterns array (files and folders)
+          PATTERNS=()
+          for p in "${EX_FILES[@]}"; do PATTERNS+=("$p"); done
+          for p in "${EX_FOLDERS[@]}"; do PATTERNS+=("$p"); done
+
+          # If there are no patterns, do not skip
+          if [ ${#PATTERNS[@]} -eq 0 ]; then
+            echo "No exclude patterns configured; will not skip."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check all changed files: if every changed file matches at least one pattern, skip
+          ALL_MATCH=true
+          while IFS= read -r f; do
+            if [ -z "$f" ]; then continue; fi
+            if matches_any "$f" "${PATTERNS[@]}"; then
+              echo "Excluded change: $f"
+            else
+              echo "Relevant change detected: $f"
+              ALL_MATCH=false
+              break
+            fi
+          done <<< "$CHANGED"
+
+          if [ "$ALL_MATCH" = true ]; then
+            echo "All changed files match exclude patterns — skipping build."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          else
+            echo "At least one relevant file changed — proceeding with build."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+      - name: Check skip result and stop if skipped
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          SKIP="${{ steps.skip_check.outputs.skip }}"
+          if [ "$SKIP" = "true" ]; then
+            echo "Workflow skipped due to only excluded files changed."
+            exit 0
+          fi
+          echo "Not skipping; continuing build."
+
+      # -------------------------
+      # Build steps (same as before)
+      # -------------------------
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -120,14 +251,17 @@ jobs:
       - name: Verify dist output
         run: |
           set -euo pipefail
-          ls -lh dist
+          ls -lh dist || true
           test -f dist/userScript.js
           test -f dist/service.js
 
-      # ----------------------------
-      # Publish to npm
-      # ----------------------------
-      - name: Publish package
-        run: npm publish --access public
+      # -------------------------
+      # Publish (only on release events)
+      # -------------------------
+      - name: Publish to npm (release only)
+        #if: github.event_name == 'release'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm publish --access public

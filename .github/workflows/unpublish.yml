@@ -1,4 +1,4 @@
-name: Unpublish package from npm (manual, no confirm)
+name: Unpublish package from npm (manual)
 
 on:
   workflow_dispatch:
@@ -13,8 +13,8 @@ on:
         default: 'false'
 
 env:
-  # Keep the package name here (fixed)
-  PACKAGE_NAME: '@krx3d/tizentube'   # <-- edit this if needed
+  # Keep the package name fixed here
+  PACKAGE_NAME: '@krx3d/tizentube'   # <-- edit if needed
 
 jobs:
   unpublish:
@@ -27,7 +27,6 @@ jobs:
         id: resolve
         run: |
           set -euo pipefail
-
           VERSION="${{ github.event.inputs.version }}"
           FORCE_INPUT="${{ github.event.inputs.force }}"
 
@@ -44,7 +43,21 @@ jobs:
           echo "package=${PACKAGE_NAME}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "force=${FORCE}" >> "$GITHUB_OUTPUT"
-          echo "resolved_ok=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure npm auth (write ~/.npmrc)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set"
+            exit 1
+          fi
+          # Write a per-run ~/.npmrc so npm uses the token
+          printf "//registry.npmjs.org/:_authToken=%s\n" "$NPM_TOKEN" > ~/.npmrc
+          # Ensure always-auth so npm uses token for the registry
+          printf "always-auth=true\n" >> ~/.npmrc
+          echo "Wrote ~/.npmrc and set auth token."
 
       - name: Verify version exists on npm (unless force)
         if: steps.resolve.outputs.force != 'true'
@@ -55,15 +68,12 @@ jobs:
           PKG="${{ steps.resolve.outputs.package }}"
           VER="${{ steps.resolve.outputs.version }}"
           echo "Checking npm for ${PKG}@${VER} ..."
-          if ! npm view "${PKG}@${VER}" > /dev/null 2>&1; then
-            echo "::error::Version ${PKG}@${VER} not found on registry. Aborting."
-            exit 1
-          fi
+          # Show metadata for debugging
+          npm view "${PKG}@${VER}" --json || { echo "::error::Version not found on registry"; exit 1; }
           echo "Version exists."
 
-      - name: Unpublish
+      - name: Run unpublish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org/'
         run: |
           set -euo pipefail
