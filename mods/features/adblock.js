@@ -402,27 +402,67 @@ function hideVideo(items) {
   // Helper: Find progress bar in various renderer types
   function findProgressBar(item) {
     if (!item) return null;
-    
-    const renderers = [
-      item.tileRenderer,
-      item.playlistVideoRenderer,
-      item.compactVideoRenderer,
-      item.gridVideoRenderer,
-      item.videoRenderer,
-      item.richItemRenderer?.content?.videoRenderer
-    ];
-    
-    for (const renderer of renderers) {
-      if (!renderer) continue;
-      const overlays = renderer.thumbnailOverlays || renderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-      if (!Array.isArray(overlays)) continue;
-      
-      const progressOverlay = overlays.find(o => o?.thumbnailOverlayResumePlaybackRenderer);
-      if (progressOverlay) {
-        return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+
+    // Depth-limited recursive search for thumbnailOverlays or any object that
+    // contains percentDurationWatched / resume playback info.
+    const MAX_DEPTH = 6;
+    const seen = new WeakSet();
+
+    function walk(obj, depth) {
+      if (!obj || typeof obj !== 'object' || depth > MAX_DEPTH) return null;
+      if (seen.has(obj)) return null;
+      seen.add(obj);
+
+      // If this object has thumbnailOverlays, inspect them first
+      if (Array.isArray(obj.thumbnailOverlays)) {
+        for (const ov of obj.thumbnailOverlays) {
+          // Common overlay names used across different renderers
+          const overlay =
+            ov?.thumbnailOverlayResumePlaybackRenderer ||
+            ov?.thumbnailOverlayTimeStatusRenderer ||
+            ov?.thumbnailOverlayNowPlayingRenderer ||
+            ov?.thumbnailOverlayCompactProgressRenderer ||
+            ov?.thumbnailOverlayProgressRenderer ||
+            null;
+
+          if (overlay) return overlay;
+        }
       }
+
+      // some renderers put overlays under header.tileHeaderRenderer.thumbnailOverlays
+      if (obj.header?.tileHeaderRenderer?.thumbnailOverlays) {
+        for (const ov of obj.header.tileHeaderRenderer.thumbnailOverlays) {
+          const overlay =
+            ov?.thumbnailOverlayResumePlaybackRenderer ||
+            ov?.thumbnailOverlayTimeStatusRenderer ||
+            ov?.thumbnailOverlayNowPlayingRenderer ||
+            ov?.thumbnailOverlayCompactProgressRenderer ||
+            ov?.thumbnailOverlayProgressRenderer ||
+            null;
+          if (overlay) return overlay;
+        }
+      }
+
+      // Sometimes progress is exposed under other keys (playlistVideoRenderer, progressBar, etc.)
+      // quick checks for common shapes:
+      if (obj.progressBar && typeof obj.progressBar === 'object') return obj.progressBar;
+      if (obj.resumePlaybackRenderer && typeof obj.resumePlaybackRenderer === 'object') return obj.resumePlaybackRenderer;
+
+      // Recursively walk properties (only objects/arrays)
+      for (const k in obj) {
+        try {
+          const v = obj[k];
+          if (v && typeof v === 'object') {
+            const found = walk(v, depth + 1);
+            if (found) return found;
+          }
+        } catch (e) { /* defensive */ }
+      }
+
+      return null;
     }
-    return null;
+
+    return walk(item, 0);
   }
   
   // Helper: Get current page
@@ -464,11 +504,33 @@ function hideVideo(items) {
   
   return items.filter(item => {
     if (!item) return false;
-    
+
     const progressBar = findProgressBar(item);
-    if (!progressBar) return true; // No progress = not watched
-    
-    const percentWatched = Number(progressBar.percentDurationWatched || 0);
-    return percentWatched <= threshold;
+    if (!progressBar) return true; // No progress overlay -> keep item
+
+    // Normalise percent: try several common paths
+    let pct = 0;
+    // numeric percentDurationWatched (common)
+    if (typeof progressBar.percentDurationWatched !== 'undefined') {
+      pct = Number(progressBar.percentDurationWatched);
+    } else if (progressBar.progress && typeof progressBar.progress.percentDurationWatched !== 'undefined') {
+      pct = Number(progressBar.progress.percentDurationWatched);
+    } else if (progressBar.percentPlayed !== undefined) {
+      // some renderers use percentPlayed (0..1 or 0..100)
+      pct = Number(progressBar.percentPlayed);
+      if (pct > 0 && pct <= 1) pct = pct * 100;
+    } else if (progressBar.thumbnailProgress && typeof progressBar.thumbnailProgress === 'number') {
+      pct = Number(progressBar.thumbnailProgress);
+      if (pct > 0 && pct <= 1) pct = pct * 100;
+    } else if (progressBar?.style && typeof progressBar.style.width === 'string') {
+      // fallback: some data present as "style.width" like '32%'
+      const w = progressBar.style.width.match(/([\d.]+)/);
+      if (w) pct = Number(w[1]);
+    }
+
+    if (Number.isNaN(pct)) pct = 0;
+
+    // threshold is 0..100; keep if less or equal to threshold
+    return pct <= threshold;
   });
 }
