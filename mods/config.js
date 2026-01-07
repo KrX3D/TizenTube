@@ -35,7 +35,7 @@ const defaultConfig = {
   enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 10,
-  hideWatchedVideosPages: ['home', 'music', 'gaming', 'subscriptions', 'more', 'channel', 'watch'],
+  hideWatchedVideosPages: ['home', 'music', 'gaming', 'subscriptions', 'more', 'channel'],
   enableHideWatchedInPlaylists: true,
   enablePlaylistContinueButton: true,
   enableHideEndScreenCards: false,
