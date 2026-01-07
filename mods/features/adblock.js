@@ -237,24 +237,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
     const shelve = shelves[i];
     if (!shelve) continue;
     
-    // Get shelf title for "Watch Again" detection
-    let shelfTitle = '';
-    if (shelve.shelfRenderer?.shelfHeaderRenderer?.title) {
-      const titleObj = shelve.shelfRenderer.shelfHeaderRenderer.title;
-      shelfTitle = (titleObj.simpleText || titleObj.runs?.[0]?.text || '').toLowerCase();
-    }
-    if (shelve.richShelfRenderer?.title) {
-      const titleObj = shelve.richShelfRenderer.title;
-      shelfTitle = (titleObj.simpleText || titleObj.runs?.[0]?.text || '').toLowerCase();
-    }
-    
-    // Skip "Watch Again" / "Continue Watching" / "Erneut ansehen" shelves
-    const isWatchAgainShelf = shelfTitle.includes('erneut ansehen') || 
-                               shelfTitle.includes('watch again') ||
-                               shelfTitle.includes('continue watching') ||
-                               shelfTitle.includes('weiterschauen') ||
-                               shelfTitle.includes('recently watched');
-    
     // Handle shelfRenderer
     if (shelve.shelfRenderer) {
       // horizontalListRenderer
@@ -266,12 +248,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         addLongPress(items);
         if (shouldAddPreviews) addPreviews(items);
         
-        // Only hide watched if NOT a watch-again shelf
-        if (!isWatchAgainShelf) {
-          shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(items);
-        }
-        
-        // Filter shorts
+        // Filter shorts first
         if (!configRead('enableShorts')) {
           // Remove entire shorts shelf
           if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
@@ -285,18 +262,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
               if (item.tileRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return false;
               if (item.compactVideoRenderer?.badges?.find(b => b.metadataBadgeRenderer?.label === 'Shorts')) return false;
               if (item.videoRenderer?.badges?.find(b => b.metadataBadgeRenderer?.label === 'Shorts')) return false;
-              
-              // Check if navigation endpoint is /shorts/
-              const navEndpoint = item.tileRenderer?.onSelectCommand?.watchEndpoint || 
-                                 item.compactVideoRenderer?.navigationEndpoint?.watchEndpoint ||
-                                 item.videoRenderer?.navigationEndpoint?.watchEndpoint;
-              if (navEndpoint?.videoId && item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
-                // Can't detect from endpoint alone reliably, rely on other indicators
-              }
+              if (item.playlistVideoRenderer?.badges?.find(b => b.metadataBadgeRenderer?.label === 'Shorts')) return false;
               
               return true;
             });
         }
+        
+        // Then hide watched videos
+        shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
       }
       
       // gridRenderer
@@ -308,18 +281,17 @@ function processShelves(shelves, shouldAddPreviews = true) {
         addLongPress(items);
         if (shouldAddPreviews) addPreviews(items);
         
-        if (!isWatchAgainShelf) {
-          shelve.shelfRenderer.content.gridRenderer.items = hideVideo(items);
-        }
-        
         // Filter shorts from grid
         if (!configRead('enableShorts')) {
           shelve.shelfRenderer.content.gridRenderer.items = 
             shelve.shelfRenderer.content.gridRenderer.items.filter(item => {
               if (item.gridVideoRenderer?.badges?.find(b => b.metadataBadgeRenderer?.label === 'Shorts')) return false;
+              if (item.gridPlaylistRenderer?.badges?.find(b => b.metadataBadgeRenderer?.label === 'Shorts')) return false;
               return true;
             });
         }
+        
+        shelve.shelfRenderer.content.gridRenderer.items = hideVideo(shelve.shelfRenderer.content.gridRenderer.items);
       }
     }
     
@@ -331,10 +303,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
       hqify(contents);
       addLongPress(contents);
       if (shouldAddPreviews) addPreviews(contents);
-      
-      if (!isWatchAgainShelf) {
-        shelve.richShelfRenderer.content.richGridRenderer.contents = hideVideo(contents);
-      }
       
       // Filter shorts from richShelfRenderer
       if (!configRead('enableShorts')) {
@@ -357,6 +325,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
             return true;
           });
       }
+      
+      shelve.richShelfRenderer.content.richGridRenderer.contents = hideVideo(shelve.richShelfRenderer.content.richGridRenderer.contents);
     }
   }
 }
