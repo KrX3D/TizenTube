@@ -86,7 +86,7 @@
 #
 # -----------------------------------------------------------------------------
 
-name: Build, publish (on release) and cleanup old npm versions
+name: Build, publish and cleanup old npm versions
 
 on:
   push:
@@ -103,8 +103,9 @@ env:
   UNPUBLISH_WINDOW_HOURS: '72'
 
 jobs:
-  build:
+  build-publish-clean:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -113,8 +114,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          #registry-url: https://registry.npmjs.org/
 
-      - name: Install mods deps
+      # ----------------------------
+      # Build mods (userScript.js)
+      # ----------------------------
+      - name: Install mods dependencies
         run: |
           set -euo pipefail
           cd mods
@@ -126,7 +131,10 @@ jobs:
           cd mods
           npx rollup -c
 
-      - name: Install service deps
+      # ----------------------------
+      # Build service (service.js)
+      # ----------------------------
+      - name: Install service dependencies
         run: |
           set -euo pipefail
           cd service
@@ -138,25 +146,20 @@ jobs:
           cd service
           npx rollup -c
 
+      # ----------------------------
+      # Verify output
+      # ----------------------------
       - name: Verify dist output
         run: |
           set -euo pipefail
-          ls -lh dist || true
+          echo "Listing dist/ (should contain built outputs):"
+          ls -lh dist
           test -f dist/userScript.js
           test -f dist/service.js
 
-  publish-and-clean:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
+      # --------------------
+      # NPM AUTH
+      # --------------------
       - name: Configure npm auth
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -168,211 +171,133 @@ jobs:
           fi
           printf "//registry.npmjs.org/:_authToken=%s\n" "$NPM_TOKEN" > ~/.npmrc
           printf "always-auth=true\n" >> ~/.npmrc
-          echo "✓ Configured npm authentication"
+          npm whoami
+          echo "✓ npm auth OK"
 
+      # --------------------
+      # PUBLISH
+      # --------------------
       - name: Publish package to npm
         run: |
           set -euo pipefail
-          npm whoami
           npm publish --access public
 
-      - name: Wait for npm propagation after publish
+      - name: Wait for npm propagation
         run: sleep 15
 
-      - name: Gather current version and list of old versions
+      # --------------------
+      # FETCH VERSIONS
+      # --------------------
+      - name: Gather versions and publish times
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          
-          echo "Fetching all versions for ${PKG}..."
           npm view "${PKG}" versions --json > /tmp/versions.json
           npm view "${PKG}" time --json > /tmp/time.json
 
-          # Get current version from package.json
           CUR_VER=$(node -e "console.log(require('./package.json').version)")
-          echo "Current published version: $CUR_VER"
+          echo "Current repo version: $CUR_VER"
           echo "$CUR_VER" > /tmp/current_version.txt
-          
-      - name: Determine versions to unpublish (exclude current)
+
+      # --------------------
+      # DECIDE WHAT TO REMOVE
+      # --------------------
+      - name: Decide versions to unpublish / deprecate
         env:
-          PKG: ${{ env.PACKAGE_NAME }}
           UNPUBLISH_WINDOW_HOURS: ${{ env.UNPUBLISH_WINDOW_HOURS }}
         run: |
           set -euo pipefail
           node -e '
           const fs = require("fs");
-          const versions = JSON.parse(fs.readFileSync("/tmp/versions.json","utf8")||"[]");
-          const times = JSON.parse(fs.readFileSync("/tmp/time.json","utf8")||"{}");
+
+          const versions = JSON.parse(fs.readFileSync("/tmp/versions.json","utf8"));
+          const times = JSON.parse(fs.readFileSync("/tmp/time.json","utf8"));
           const current = fs.readFileSync("/tmp/current_version.txt","utf8").trim();
 
-          const windowHours = Number(process.env.UNPUBLISH_WINDOW_HOURS || "72");
+          const windowHours = Number(process.env.UNPUBLISH_WINDOW_HOURS || 72);
           const now = Date.now();
 
-          console.log("Current version to keep:", current);
-          console.log("All versions on npm:", versions);
+          const toUnpublish = [];
+          const toDeprecate = [];
 
-          // Convert to array if needed
-          const arr = Array.isArray(versions) ? versions : Object.keys(versions||{});
-          
-          // Filter out current version
-          const oldVersions = arr.filter(v => v !== current);
-          
-          console.log("Old versions (excluding current):", oldVersions);
+          for (const v of versions) {
+            if (v === current) continue;
 
-          const items = oldVersions.map(v => ({
-            v, 
-            t: times[v] ? new Date(times[v]) : null
-          }));
-
-          const toUnpublish = [], toDeprecate = [];
-          for (const it of items) {
-            if (!it.t) {
-              toDeprecate.push(it.v);
+            const t = times[v] ? new Date(times[v]) : null;
+            if (!t) {
+              toDeprecate.push(v);
               continue;
             }
-            const ageHours = (now - it.t.getTime()) / 36e5;
-            if (ageHours <= windowHours) {
-              toUnpublish.push(it.v);
-            } else {
-              toDeprecate.push(it.v);
-            }
+
+            const ageHours = (now - t.getTime()) / 36e5;
+            if (ageHours <= windowHours) toUnpublish.push(v);
+            else toDeprecate.push(v);
           }
 
-          // Add trailing newline to ensure proper file format
-          fs.writeFileSync("/tmp/to_unpublish.txt", toUnpublish.length > 0 ? toUnpublish.join("\n") + "\n" : "");
-          fs.writeFileSync("/tmp/to_deprecate.txt", toDeprecate.length > 0 ? toDeprecate.join("\n") + "\n" : "");
+          fs.writeFileSync("/tmp/to_unpublish.txt", toUnpublish.join("\n") + "\n");
+          fs.writeFileSync("/tmp/to_deprecate.txt", toDeprecate.join("\n") + "\n");
 
-          console.log("To unpublish (<= " + windowHours + "h):", toUnpublish);
-          console.log("To deprecate (> " + windowHours + "h):", toDeprecate);
-          ' 
+          console.log("To unpublish (<=72h):", toUnpublish);
+          console.log("To deprecate (>72h):", toDeprecate);
+          '
 
-          echo ""
-          echo "=== Versions to unpublish ==="
-          if [ -s /tmp/to_unpublish.txt ]; then 
-            cat /tmp/to_unpublish.txt
-            echo ""
-            echo "Count: $(wc -l < /tmp/to_unpublish.txt)"
-          else 
-            echo "(none)"
-          fi
-          
-          echo ""
-          echo "=== Versions to deprecate ==="
-          if [ -s /tmp/to_deprecate.txt ]; then 
-            cat /tmp/to_deprecate.txt
-            echo ""
-            echo "Count: $(wc -l < /tmp/to_deprecate.txt)"
-          else 
-            echo "(none)"
-          fi
+          echo "=== Unpublish candidates ==="
+          cat /tmp/to_unpublish.txt || true
+          echo "=== Deprecate candidates ==="
+          cat /tmp/to_deprecate.txt || true
 
+      # --------------------
+      # UNPUBLISH
+      # --------------------
       - name: Unpublish old versions (<=72h)
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          
+
           if [ ! -s /tmp/to_unpublish.txt ]; then
             echo "No versions to unpublish."
             exit 0
           fi
 
-          echo "Unpublishing old versions..."
-          FAILED_VERSIONS=""
-          COUNT=0
-          
           while IFS= read -r ver; do
             [ -z "$ver" ] && continue
-            COUNT=$((COUNT + 1))
-            
-            echo ""
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            echo "[$COUNT] Unpublishing: ${PKG}@${ver}"
-            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-            
-            # Capture full output for debugging
-            if npm unpublish "${PKG}@${ver}" 2>&1 | tee /tmp/unpublish_${ver}.log; then
-              echo "✓ Unpublished ${PKG}@${ver}"
-              # Small delay to avoid rate limiting
-              sleep 2
-            else
-              EXIT_CODE=$?
-              echo "::warning::Failed to unpublish ${PKG}@${ver} (exit code: ${EXIT_CODE})"
-              cat /tmp/unpublish_${ver}.log || true
-              FAILED_VERSIONS="${FAILED_VERSIONS}${ver} "
-              
-              # Try deprecate as fallback
-              echo "Attempting to deprecate instead..."
-              if npm deprecate "${PKG}@${ver}" "Deprecated - please upgrade to latest version." 2>&1; then
-                echo "✓ Deprecated ${PKG}@${ver} as fallback"
-              else
-                echo "::error::Both unpublish and deprecate failed for ${PKG}@${ver}"
-              fi
-            fi
-            
+            echo "Unpublishing ${PKG}@${ver}"
+            npm unpublish "${PKG}@${ver}" || true
+            sleep 2
           done < /tmp/to_unpublish.txt
-          
-          echo ""
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "Processed $COUNT versions"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          
-          if [ -n "$FAILED_VERSIONS" ]; then
-            echo ""
-            echo "::warning::Failed to unpublish these versions: ${FAILED_VERSIONS}"
-            echo "They may have been deprecated as a fallback."
-          fi
 
+      # --------------------
+      # DEPRECATE
+      # --------------------
       - name: Deprecate older versions (>72h)
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          
+
           if [ ! -s /tmp/to_deprecate.txt ]; then
             echo "No versions to deprecate."
             exit 0
           fi
 
-          echo "Deprecating older versions..."
           while IFS= read -r ver; do
             [ -z "$ver" ] && continue
-            
-            echo "Deprecating ${PKG}@${ver}..."
-            if npm deprecate "${PKG}@${ver}" "Deprecated - please upgrade to latest version."; then
-              echo "✓ Deprecated ${PKG}@${ver}"
-            else
-              echo "::warning::Failed to deprecate ${PKG}@${ver}"
-            fi
-            
+            echo "Deprecating ${PKG}@${ver}"
+            npm deprecate "${PKG}@${ver}" "Deprecated – please upgrade to latest."
           done < /tmp/to_deprecate.txt
 
-      - name: Wait for propagation
-        run: sleep 15
-
+      # --------------------
+      # VERIFY
+      # --------------------
       - name: Verify final state
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          
-          echo "Final versions on npm:"
-          npm view "${PKG}" versions --json || true
-          
-          echo ""
-          echo "Latest version:"
-          npm view "${PKG}" version || true
-
-      - name: Purge jsDelivr cache
-        run: |
-          set -euo pipefail
-          echo "Purging jsDelivr cache for ${PACKAGE_NAME}..."
-          curl -s "https://purge.jsdelivr.net/npm/${PACKAGE_NAME}@latest/package.json" || true
-          curl -s "https://purge.jsdelivr.net/npm/${PACKAGE_NAME}@*/package.json" || true
-          curl -s "https://purge.jsdelivr.net/npm/${PACKAGE_NAME}/package.json" || true
-          curl -s "https://purge.jsdelivr.net/npm/${PACKAGE_NAME}@*" || true
-          echo "✓ jsDelivr cache purge complete"
+          npm view "${PKG}" versions --json
+          npm view "${PKG}" version
 
       - name: Done
-        run: echo "✓ Publish and cleanup complete"
+        run: echo "✓ Build, publish and cleanup complete"
