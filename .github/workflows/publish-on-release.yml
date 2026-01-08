@@ -71,7 +71,7 @@ on:
     #branches:
       #- main
     #paths-ignore:
-      - '.github/**'     # ignore any changes inside .github (workflow edits won't trigger this workflow)
+      #- '.github/**'     # ignore any changes inside .github (workflow edits won't trigger this workflow)
       #- 'docs/**'
       #- 'README.md'
   release:
