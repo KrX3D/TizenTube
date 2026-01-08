@@ -27,6 +27,7 @@ export default function modernUI(update, parameters) {
             const end = base + 15;
             groups.push({
                 name: `${start} - ${end}`,
+                value: null, // <- mark as submenu so UI will drill in
                 options: buildFinalFourthOptions(firstOctet, secondOctet, thirdOctet, start, end)
             });
         }
@@ -40,6 +41,7 @@ export default function modernUI(update, parameters) {
             thirdList.push({
                 name: `${t}`,
                 subtitle: `${firstOctet}.${secondOctet}.${t}.x`,
+                value: null, // <- submenu marker
                 options: buildFourthGroupOptions(firstOctet, secondOctet, t)
             });
         }
@@ -57,6 +59,7 @@ export default function modernUI(update, parameters) {
         return ranges.map(r => ({
             name: `${r.s} - ${r.e}`,
             subtitle: `Third-octet range for ${firstOctet}.${secondOctet}.x`,
+            value: null, // <- submenu marker
             options: buildThirdListOptions(firstOctet, secondOctet, r.s, r.e)
         }));
     }
@@ -73,6 +76,7 @@ export default function modernUI(update, parameters) {
         return candidates.map(c => ({
             name: `${c.first}.${c.second}.x.x`,
             subtitle: `Pick third and fourth octet for ${c.first}.${c.second}.x.x`,
+            value: null, // <- submenu marker (important)
             options: buildThirdRangeOptions(c.first, c.second)
         }));
     }
@@ -806,15 +810,15 @@ export default function modernUI(update, parameters) {
                             value: null,
                             menuId: 'tt-syslog-presets-legacy',
                             options: [
-                                ...Array.from({length: 10}, (_, i) => ({
-                                    name: `192.168.1.${100 + i}`,
+                                ...Array.from({length: 50}, (_, i) => ({
+                                    name: `192.168.50.${90 + i}`,
                                     key: 'syslogServerIp',
-                                    value: `192.168.1.${100 + i}`
+                                    value: `192.168.50.${90 + i}`
                                 })),
-                                ...Array.from({length: 10}, (_, i) => ({
-                                    name: `192.168.0.${100 + i}`,
+                                ...Array.from({length: 20}, (_, i) => ({
+                                    name: `192.168.70.${100 + i}`,
                                     key: 'syslogServerIp',
-                                    value: `192.168.0.${100 + i}`
+                                    value: `192.168.70.${100 + i}`
                                 }))
                             ]
                         },
@@ -825,7 +829,7 @@ export default function modernUI(update, parameters) {
                             menuId: 'tt-syslog-port',
                             menuHeader: {
                                 title: 'Syslog Server Port',
-                                subtitle: 'Select port number (default: 514)'
+                                subtitle: 'Select port number (default: 8080)'
                             },
                             options: [514, 8080, 3000, 5000, 9000].map((port) => {
                                 return {
@@ -859,7 +863,7 @@ export default function modernUI(update, parameters) {
                             value: null,
                             options: {
                                 title: 'Test Syslog Connection',
-                                subtitle: 'Testing connection to ' + (configRead('syslogServerIp') || '192.168.1.100') + ':' + (configRead('syslogServerPort') || 514),
+                                subtitle: 'Testing connection to ' + (configRead('syslogServerIp') || '192.168.50.98') + ':' + (configRead('syslogServerPort') || 8080),
                                 content: scrollPaneRenderer([
                                     overlayMessageRenderer('A test log will be sent to your syslog server.'),
                                     overlayMessageRenderer('Check your PC terminal to see if the log appears.'),
@@ -882,24 +886,6 @@ export default function modernUI(update, parameters) {
                                 ])
                             }
                         }
-                    ]
-                },
-                {
-                    name: 'Quick Setup Presets (legacy buttons)',
-                    icon: 'SETTINGS',
-                    value: null,
-                    menuId: 'tt-syslog-presets-legacy-2',
-                    options: [
-                        ...Array.from({length: 10}, (_, i) => ({
-                            name: `192.168.1.${50 + i}`,
-                            key: 'syslogServerIp',
-                            value: `192.168.1.${50 + i}`
-                        })),
-                        ...Array.from({length: 10}, (_, i) => ({
-                            name: `10.0.0.${10 + i}`,
-                            key: 'syslogServerIp',
-                            value: `10.0.0.${10 + i}`
-                        }))
                     ]
                 }
             ]

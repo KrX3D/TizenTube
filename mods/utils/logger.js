@@ -1,5 +1,5 @@
 // Remote Syslog Logger for TizenTube - FIXED VERSION
-import { configRead } from '../config.js';
+import { configRead, configChangeEmitter } from '../config.js';
 
 class SyslogLogger {
   constructor() {
@@ -12,26 +12,38 @@ class SyslogLogger {
     this.batchTimer = null;
     this.lastError = null;
     this.connectionTested = false;
-    
+
+    // Listen for config changes so the logger re-initializes automatically
+    try {
+      configChangeEmitter.addEventListener('configChange', (ev) => {
+        const key = ev.detail && ev.detail.key;
+        if (['enableRemoteLogging', 'syslogServerIp', 'syslogServerPort', 'logLevel'].includes(key)) {
+          this.reinitialize();
+        }
+      });
+    } catch (e) {
+      // ignore if emitter not available
+    }
+
     this.init();
   }
 
   init() {
     try {
       this.enabled = configRead('enableRemoteLogging') || false;
-      
+
       const ip = configRead('syslogServerIp') || '192.168.1.100';
       const port = configRead('syslogServerPort') || 514;
-      this.serverUrl = `http://${ip}:${port}`;
-      
+      this.serverUrl = `http://${ip}:${port}`; // keep without trailing slash
+
       this.logLevel = configRead('logLevel') || 'INFO';
-      
+
       if (this.enabled) {
         console.log(`[Logger] ✓ Remote logging ENABLED`);
         console.log(`[Logger] → Server: ${this.serverUrl}`);
         console.log(`[Logger] → Log Level: ${this.logLevel}`);
         this.startBatchTimer();
-        
+
         // Don't send test on init, wait for explicit test
       } else {
         console.log('[Logger] ✗ Remote logging DISABLED');
@@ -59,7 +71,7 @@ class SyslogLogger {
 
   startBatchTimer() {
     if (this.batchTimer) clearInterval(this.batchTimer);
-    
+
     this.batchTimer = setInterval(() => {
       this.flush();
     }, this.batchInterval);
@@ -73,7 +85,7 @@ class SyslogLogger {
   formatMessage(level, category, message, data) {
     const timestamp = new Date().toISOString();
     const device = window.h5vcc?.tizentube?.GetVersion() || 'TizenTube';
-    
+
     return {
       timestamp,
       device,
@@ -116,7 +128,10 @@ class SyslogLogger {
         return false;
       }
 
-      const result = await response.json();
+      // Try to parse JSON but be tolerant
+      let result = null;
+      try { result = await response.json(); } catch (_) { result = null; }
+
       console.log(`[Logger] ✓ Successfully sent ${logs.length} logs`, result);
       this.lastError = null;
       this.connectionTested = true;
@@ -136,10 +151,10 @@ class SyslogLogger {
 
   log(level, category, message, data) {
     // Always log to console with color coding
-    const consoleMethod = level === 'ERROR' ? 'error' : 
-                         level === 'WARN' ? 'warn' : 
-                         level === 'DEBUG' ? 'debug' : 'log';
-    
+    const consoleMethod = level === 'ERROR' ? 'error' :
+      level === 'WARN' ? 'warn' :
+        level === 'DEBUG' ? 'debug' : 'log';
+
     console[consoleMethod](
       `[${category}]`,
       message,
@@ -163,7 +178,7 @@ class SyslogLogger {
 
     const logsToSend = [...this.logQueue];
     this.logQueue = [];
-    
+
     this.sendBatch(logsToSend);
   }
 
@@ -188,15 +203,13 @@ class SyslogLogger {
     console.log('[Logger] ═══════════════════════════════════════');
     console.log('[Logger] Testing connection to syslog server...');
     console.log('[Logger] ═══════════════════════════════════════');
-    
-    if (!this.enabled) {
-      console.error('[Logger] ✗ Remote logging is DISABLED!');
-      console.log('[Logger] Enable it in Settings > Developer Options > Enable Remote Logging');
-      return {
-        success: false,
-        error: 'Remote logging is disabled'
-      };
-    }
+
+    // Read current config (allow test even if enableRemoteLogging === false)
+    const ip = configRead('syslogServerIp') || '192.168.50.98';
+    const port = configRead('syslogServerPort') || 8080;
+    const url = `http://${ip}:${port}`;
+
+    console.log(`[Logger] → Attempting test POST to: ${url} (enableRemoteLogging=${configRead('enableRemoteLogging')})`);
 
     const testLog = this.formatMessage(
       'INFO',
@@ -205,39 +218,53 @@ class SyslogLogger {
       {
         testId: Math.random().toString(36).substr(2, 9),
         timestamp: new Date().toISOString(),
-        serverIp: configRead('syslogServerIp'),
-        serverPort: configRead('syslogServerPort')
+        serverIp: ip,
+        serverPort: port
       }
     );
 
-    console.log('[Logger] Test log prepared:', testLog);
-    
-    const success = await this.sendBatch([testLog]);
-    
-    if (success) {
-      console.log('[Logger] ═══════════════════════════════════════');
-      console.log('[Logger] ✓ CONNECTION TEST SUCCESSFUL!');
-      console.log('[Logger] Check your PC terminal for the test log');
-      console.log('[Logger] ═══════════════════════════════════════');
-      return {
-        success: true,
-        message: 'Connection successful! Check your PC terminal.'
+    try {
+      const payload = {
+        logs: [testLog],
+        source: 'TizenTube',
+        version: window.h5vcc?.tizentube?.GetVersion() || 'unknown'
       };
-    } else {
-      console.log('[Logger] ═══════════════════════════════════════');
-      console.log('[Logger] ✗ CONNECTION TEST FAILED!');
-      console.log('[Logger] Last error:', this.lastError);
-      console.log('[Logger] ═══════════════════════════════════════');
-      console.log('[Logger] Troubleshooting:');
-      console.log('[Logger] 1. Is syslog-server.js running on your PC?');
-      console.log('[Logger] 2. Is the IP address correct?', this.serverUrl);
-      console.log('[Logger] 3. Are TV and PC on the same network?');
-      console.log('[Logger] 4. Is Windows Firewall blocking the port?');
-      console.log('[Logger] ═══════════════════════════════════════');
-      return {
-        success: false,
-        error: this.lastError || 'Connection failed'
-      };
+
+      console.log('[Logger] Test payload:', JSON.stringify(payload, null, 2));
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        this.lastError = `HTTP ${response.status}: ${response.statusText}`;
+        console.error('[Logger] ✗ Test POST returned non-OK:', this.lastError);
+        return { success: false, error: this.lastError };
+      }
+
+      // Try to parse JSON, but not strictly required
+      let result = null;
+      try { result = await response.json(); } catch (_) { result = null; }
+
+      console.log('[Logger] ✓ CONNECTION TEST SUCCESSFUL!', result);
+      this.connectionTested = true;
+      this.lastError = null;
+      // if init hasn't set serverUrl yet, set it for future use
+      this.serverUrl = url;
+      return { success: true, message: 'Connection successful! Check your PC terminal.' };
+    } catch (error) {
+      this.lastError = error.message;
+      console.error('[Logger] ✗ CONNECTION TEST FAILED!', error);
+      console.error('[Logger] Troubleshooting:');
+      console.error('[Logger] 1. Is syslog-server.js running on your PC and listening on the configured port?');
+      console.error('[Logger] 2. Is the IP address correct?', url);
+      console.error('[Logger] 3. Are TV and PC on the same network?');
+      console.error('[Logger] 4. Is Windows Firewall blocking the port?');
+      return { success: false, error: this.lastError || 'Connection failed' };
     }
   }
 
@@ -263,7 +290,7 @@ export default logger;
 // Expose globally for debugging
 if (typeof window !== 'undefined') {
   window.TizenLogger = logger;
-  
+
   // Add console helper
   console.log('[Logger] ═══════════════════════════════════════');
   console.log('[Logger] TizenLogger available in console');

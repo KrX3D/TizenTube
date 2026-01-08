@@ -50,10 +50,10 @@ const defaultConfig = {
   launchToOnStartup: null,
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE'],
   enableUpdater: true,
-  enableRemoteLogging: false,
-  syslogServerIp: '192.168.70.124',
-  syslogServerPort: 514,             // Port number
-  logLevel: 'INFO' // DEBUG, INFO, WARN, ERROR
+  enableRemoteLogging: true,
+  syslogServerIp: '192.168.50.98',
+  syslogServerPort: 8080,             // Port number
+  logLevel: 'DEBUG' // DEBUG, INFO, WARN, ERROR
 };
 
 let localConfig;
