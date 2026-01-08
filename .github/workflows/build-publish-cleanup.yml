@@ -100,7 +100,7 @@ on:
 env:
   PACKAGE_NAME: '@krx3d/tizentube'
   NODE_VERSION: '20'
-  # unpublish window in hours (npm policy ~= 72 hours)
+  # unpublish window in hours (npm policy ≈ 72 hours)
   UNPUBLISH_WINDOW_HOURS: '72'
 
 jobs:
@@ -115,6 +115,24 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org/
+
+      # ----------------------------
+      # Ensure npm auth is configured (single canonical place)
+      # ----------------------------
+      - name: Configure npm auth (write ~/.npmrc)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NPM_TOKEN:-}" ]; then
+            echo "::error::NPM_TOKEN secret is not set"
+            exit 1
+          fi
+          printf "//registry.npmjs.org/:_authToken=%s\n" "${NPM_TOKEN}" > ~/.npmrc
+          printf "always-auth=true\n" >> ~/.npmrc
+          # quick auth check
+          echo "NPM auth configured. Running npm whoami to verify..."
+          npm whoami || echo "::warning::npm whoami failed (token may be invalid)"
 
       # ----------------------------
       # Build mods (userScript.js)
@@ -158,47 +176,38 @@ jobs:
           test -f dist/service.js
 
       # ----------------------------
-      # PUBLISH + CLEANUP (only on release events)
+      # PUBLISH (only on release events)
       # ----------------------------
       - name: Publish package to npm
-        #if: github.event_name == 'release'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN secret is not set"
-            exit 1
-          fi
-          # npm will read token from environment variable when publishing
+          echo "Publishing package (npm will use ~/.npmrc token)..."
           npm whoami
           npm publish --access public
 
       - name: Wait for npm propagation (after publish)
-        #if: github.event_name == 'release'
-        run: sleep 10
+        run: sleep 12
 
+      # ----------------------------
+      # Gather versions & times from npm
+      # ----------------------------
       - name: Gather versions & times from npm
-        #if: github.event_name == 'release'
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          printf "//registry.npmjs.org/:_authToken=%s\n" "${NPM_TOKEN}" > ~/.npmrc
-          printf "always-auth=true\n" >> ~/.npmrc
-
           echo "Fetching versions and publish times for ${PKG} ..."
           npm view "${PKG}" versions --json > /tmp/versions.json
           npm view "${PKG}" time --json > /tmp/time.json
 
-          # current repo version
           CUR_VER=$(node -e "console.log(require('./package.json').version)")
           echo "Current repo version: $CUR_VER"
           echo "CUR_VER=${CUR_VER}" > /tmp/curver.env
 
+      # ----------------------------
+      # Decide which versions to process (unpublish <=72h, deprecate others)
+      # ----------------------------
       - name: Decide which versions to process (unpublish <=72h, deprecate others)
-        #if: github.event_name == 'release'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
           UNPUBLISH_WINDOW_HOURS: ${{ env.UNPUBLISH_WINDOW_HOURS }}
@@ -213,7 +222,6 @@ jobs:
           const windowHours = Number(process.env.UNPUBLISH_WINDOW_HOURS || "72");
           const now = Date.now();
 
-          // ensure array and sort by time desc (newest first)
           const arr = Array.isArray(versions) ? versions.slice() : Object.keys(versions||{});
           const items = arr.map(v => ({v, t: times[v] ? new Date(times[v]) : null}));
 
@@ -224,7 +232,6 @@ jobs:
             return b.t - a.t;
           });
 
-          // exclude current version (just in case)
           const candidates = items.filter(i => i.v !== cur);
 
           const toUnpublish = [], toDeprecate = [];
@@ -238,14 +245,12 @@ jobs:
             else toDeprecate.push(it.v);
           }
 
-          // write with real newlines
           fs.writeFileSync("/tmp/to_unpublish.txt", toUnpublish.length ? toUnpublish.join("\n") + "\n" : "");
           fs.writeFileSync("/tmp/to_deprecate.txt", toDeprecate.length ? toDeprecate.join("\n") + "\n" : "");
 
           console.log("To unpublish (<= " + windowHours + "h):", toUnpublish);
           console.log("To deprecate (> " + windowHours + "h or unknown):", toDeprecate);
           '
-
           echo ""
           echo "=== Unpublish candidates (plain) ==="
           if [ -s /tmp/to_unpublish.txt ]; then
@@ -264,15 +269,14 @@ jobs:
             echo "(none)"
           fi
 
+      # ----------------------------
+      # Unpublish recent versions (<=72h) and deprecate the rest (verbose + verify)
+      # ----------------------------
       - name: Unpublish recent versions (<=72h) and deprecate the rest (verbose + verify)
-        #if: github.event_name == 'release'
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          printf "//registry.npmjs.org/:_authToken=%s\n" "${NPM_TOKEN}" > ~/.npmrc
-          printf "always-auth=true\n" >> ~/.npmrc
 
           # helper: attempt unpublish with retries and log output
           unpublish_with_retry(){
@@ -282,12 +286,32 @@ jobs:
             while [ $attempt -le $max ]; do
               echo "Attempt #$attempt: npm unpublish ${PKG}@${ver} ..."
               if npm unpublish "${PKG}@${ver}" 2>&1 | tee /tmp/npm_unpublish_${ver}.log; then
-                echo "Unpublish succeeded for ${PKG}@${ver}"
+                echo "Unpublish command returned success for ${PKG}@${ver}"
                 return 0
               else
                 echo "::warning::Unpublish attempt $attempt failed for ${PKG}@${ver} (see /tmp/npm_unpublish_${ver}.log)"
                 attempt=$((attempt + 1))
                 sleep 4
+              fi
+            done
+            return 1
+          }
+
+          verify_gone(){
+            ver="$1"
+            retries=6
+            attempt=1
+            while [ $attempt -le $retries ]; do
+              echo "Verify attempt #$attempt for ${PKG}@${ver} ..."
+              # npm view returns non-zero if not found; capture exit code
+              if npm view "${PKG}@${ver}" --json > /tmp/view_${ver}.json 2>&1; then
+                echo "npm view still shows ${PKG}@${ver}"
+                attempt=$((attempt + 1))
+                sleep 3
+                continue
+              else
+                echo "npm view does NOT show ${PKG}@${ver} (verified gone)"
+                return 0
               fi
             done
             return 1
@@ -299,17 +323,15 @@ jobs:
               ver="$(echo "$ver" | tr -d '\r' | xargs)"
               [ -z "$ver" ] && continue
               echo "Processing unpublish candidate: <${ver}>"
+
               if unpublish_with_retry "$ver"; then
-                # verify removal
-                sleep 2
-                echo "Verifying ${PKG}@${ver} is gone..."
-                if npm view "${PKG}@${ver}" --json > /tmp/view_${ver}.json 2>&1; then
-                  echo "::warning::npm view still shows ${PKG}@${ver} — unpublish may not have completed. See /tmp/view_${ver}.json and /tmp/npm_unpublish_${ver}.log"
-                  # fall back to deprecate
-                  echo "Falling back to deprecate ${PKG}@${ver}"
-                  npm deprecate "${PKG}@${ver}" "Deprecated — please upgrade to a newer release." 2>&1 | tee /tmp/npm_deprecate_${ver}.log || echo "::warning::deprecate failed for ${ver}"
+                # verify removal with a short polling loop
+                if verify_gone "$ver"; then
+                  echo "Verification: ${PKG}@${ver} removed successfully."
                 else
-                  echo "Verification: ${PKG}@${ver} does not exist according to npm view."
+                  echo "::warning::npm view still shows ${PKG}@${ver} after unpublish attempts — falling back to deprecate"
+                  echo "Deprecate fallback logs:"
+                  npm deprecate "${PKG}@${ver}" "Deprecated — please upgrade to a newer release." 2>&1 | tee /tmp/npm_deprecate_${ver}.log || echo "::warning::Deprecate failed for ${ver}"
                 fi
               else
                 echo "::warning::All unpublish attempts failed for ${PKG}@${ver} — falling back to deprecate"
@@ -332,16 +354,13 @@ jobs:
             echo "No older versions to deprecate."
           fi
 
-          # show final versions list for debug
           echo "Final versions (npm view):"
           npm view "${PKG}" versions --json || true
 
       - name: Wait for npm propagation
-        #if: github.event_name == 'release'
         run: sleep 10
 
       - name: Purge jsDelivr cache
-        #if: github.event_name == 'release'
         run: |
           set -euo pipefail
           echo "Purging jsDelivr cache for ${PACKAGE_NAME} ..."
