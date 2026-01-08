@@ -1,5 +1,9 @@
 # TizenTube TEST
 
+THIS IS ONLY FOR PERSONAL TESTS, ALl IMPROVEMENTS WILL BE LATER ADDED AS PR TO THE MAIN REPO
+
+
+
 TizenTube is a TizenBrew module that enhances your favourite streaming websites viewing experience by removing ads and adding support for Sponsorblock.
 
 Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.com/reisxd/TizenTubeCobalt). It offers everything TizenTube has for Android TVs. [Download the latest release here](https://github.com/reisxd/TizenTubeCobalt/releases/latest).

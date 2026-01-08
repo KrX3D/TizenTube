@@ -166,5 +166,17 @@ function customAction(action, parameters) {
         case 'CHECK_FOR_UPDATES':
             checkForUpdates(true);
             break;
+        case 'TEST_SYSLOG_CONNECTION':
+            import('./utils/logger.js').then(module => {
+                const logger = module.default;
+                logger.testConnection().then(result => {
+                    if (result.success) {
+                        showToast('Syslog Test', '✓ Connection successful! Check your PC terminal.');
+                    } else {
+                        showToast('Syslog Test', '✗ Failed: ' + (result.error || 'Unknown error'));
+                    }
+                });
+            });
+            break;
     }
 }
