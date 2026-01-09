@@ -123,6 +123,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           #registry-url: https://registry.npmjs.org/
 
+      - name: Update Browserslist DB
+        run: |
+          npx update-browserslist-db@latest
+
       # ----------------------------
       # Build mods (userScript.js)
       # ----------------------------
