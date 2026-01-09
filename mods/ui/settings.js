@@ -789,7 +789,7 @@ export default function modernUI(update, parameters) {
             ]
         },
 
-        // ======= Developer Options (REPLACED) =======
+        // ======= Developer Options =======
         {
             name: 'Developer Options',
             icon: 'SETTINGS',

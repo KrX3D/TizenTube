@@ -123,10 +123,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           #registry-url: https://registry.npmjs.org/
 
-      - name: Update Browserslist DB
-        run: |
-          npx update-browserslist-db@latest
-
       # ----------------------------
       # Build mods (userScript.js)
       # ----------------------------
@@ -135,6 +131,12 @@ jobs:
           set -euo pipefail
           cd mods
           npm ci
+
+      - name: Update Browserslist DB (mods)
+        run: |
+          set -euo pipefail
+          cd mods
+          npx update-browserslist-db@latest
 
       - name: Build mods (rollup)
         run: |
