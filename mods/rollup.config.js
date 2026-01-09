@@ -23,13 +23,28 @@ export default {
             babelHelpers: 'bundled',
             presets: [
                 ['@babel/preset-env', {
-                    targets: 'Chrome 47',
+                    // Updated target: Tizen 2016+ TVs support Chrome 56+
+                    // This enables modern features like fetch, Promise, async/await
+                    targets: {
+                        chrome: '56'  // Changed from 47 to 56
+                    },
+                    // Keep polyfills for safety
+                    useBuiltIns: false,
+                    // Don't transform modules (Rollup handles that)
+                    modules: false
                 }],
             ],
         }),
         terser({
-            ecma: '5',
+            ecma: 2016, // Changed from '5' to 2016 (ES7)
             mangle: true,
+            // Keep WebSocket and other important globals
+            compress: {
+                pure_getters: true,
+                unsafe: false,
+                unsafe_comps: false,
+                warnings: false
+            }
         }),
     ]
 };
