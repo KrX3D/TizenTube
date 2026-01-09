@@ -1,5 +1,6 @@
 .github/workflows/
 .github/workflows/**
+dist
 node_modules
 mods
 service
