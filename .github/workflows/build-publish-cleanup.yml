@@ -97,6 +97,10 @@ on:
   release:
     types: [published]
 
+# Allow this workflow to push back changes to the repo
+permissions:
+  contents: write
+
 env:
   PACKAGE_NAME: '@krx3d/tizentube2'
   NODE_VERSION: '20'
@@ -109,6 +113,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # ensure the checkout action leaves credentials so we can push
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -156,6 +163,32 @@ jobs:
           ls -lah dist || true
           test -f dist/userScript.js
           test -f dist/service.js
+
+      # ----------------------------
+      # Copy built JS to repo root and commit (overwrites)
+      # ----------------------------
+      - name: Copy built JS to repo root and commit
+        run: |
+          set -euo pipefail
+          echo "Copying dist/*.js to repository root (overwriting existing files)..."
+          cp -f dist/userScript.js ./userScript.js
+          cp -f dist/service.js ./service.js
+
+          # configure git user
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # stage files
+          git add userScript.js service.js
+
+          # commit only if staged changes exist
+          if git diff --staged --quiet; then
+            echo "No changes to built files — skipping commit."
+          else
+            git commit -m "chore(build): update built userScript.js and service.js from CI [skip ci]"
+            echo "Pushing updated built files to repo..."
+            git push origin HEAD:main
+          fi
 
       # --------------------
       # NPM AUTH
