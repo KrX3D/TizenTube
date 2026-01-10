@@ -82,6 +82,12 @@
         visible = !visible;
         consoleDiv.style.display = visible ? 'block' : 'none';
     };
+    console.log('[Visual Console] Initialized - Press ` or F12 to toggle');
+    
+    // ADD THESE TEST LOGS:
+    console.log('TEST LOG - If you see this, console is working!');
+    console.error('TEST ERROR - Red text');
+    console.warn('TEST WARN - Yellow text');
 })();
 
 import "./features/userAgentSpoofing.js";
