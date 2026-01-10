@@ -75,12 +75,43 @@ class SyslogLogger {
     this.logQueue = [];
     this.init();
   }
+  
+  // Add this new method to sync logs to debug viewer
+  syncToDebugViewer() {
+    const debugServerIp = configRead('syslogServerIp') || '192.168.70.124';
+    const debugViewerUrl = `http://${debugServerIp}:3123/api/logs`;
+    
+    // Collect all console logs from debugServer if available
+    const allLogs = window.TizenDebugServer ? window.TizenDebugServer.getLogs() : [];
+    
+    if (allLogs.length === 0) return;
+    
+    try {
+      fetch(debugViewerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logs: allLogs })
+      }).catch(() => {
+        // Silently fail if debug viewer not running
+      });
+    } catch (e) {
+      // Ignore errors
+    }
+  }
 
+  // Call this in the startBatchTimer method - add after the existing setInterval:
   startBatchTimer() {
     if (this.batchTimer) clearInterval(this.batchTimer);
+
     this.batchTimer = setInterval(() => {
       this.flush();
     }, this.batchInterval);
+    
+    // Also sync to debug viewer every 2 seconds
+    this.debugSyncTimer = setInterval(() => {
+      this.syncToDebugViewer();
+    }, 2000);
+    
     console.log('[Logger] Batch timer started');
   }
 

@@ -90,6 +90,7 @@
     console.warn('TEST WARN - Yellow text');
 })();
 
+import "./utils/debugServer.js";
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';
