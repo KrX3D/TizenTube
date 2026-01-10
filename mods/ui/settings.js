@@ -807,6 +807,30 @@ export default function modernUI(update, parameters) {
                 
                 return [
                     {
+                        name: 'Show Debug Console',
+                        icon: 'SETTINGS',
+                        value: null,
+                        options: {
+                            title: 'Debug Console',
+                            subtitle: 'On-screen console for debugging',
+                            content: scrollPaneRenderer([
+                                overlayMessageRenderer('This shows console logs on screen.'),
+                                overlayMessageRenderer('Useful for debugging on TV.'),
+                                buttonItem(
+                                    { title: 'Toggle Console', subtitle: 'Show/Hide console overlay' },
+                                    { icon: 'VISIBILITY' },
+                                    [
+                                        {
+                                            customAction: {
+                                                action: 'TOGGLE_DEBUG_CONSOLE'
+                                            }
+                                        }
+                                    ]
+                                )
+                            ])
+                        }
+                    },
+                    {
                         name: 'Enable Remote Logging',
                         icon: 'BROADCAST',
                         value: 'enableRemoteLogging',

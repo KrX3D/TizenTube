@@ -159,48 +159,102 @@ function customAction(action, parameters) {
         case 'CHECK_FOR_UPDATES':
             checkForUpdates(true);
             break;
+        case 'TOGGLE_DEBUG_CONSOLE':
+            if (typeof window.toggleDebugConsole === 'function') {
+                window.toggleDebugConsole();
+                showToast('Debug Console', 'Console toggled');
+            } else {
+                showToast('Debug Console', 'Console not available');
+            }
+            break;
         case 'TEST_SYSLOG_CONNECTION':
-            console.log('='.repeat(80));
-            console.log('TEST_SYSLOG_CONNECTION ACTION TRIGGERED!');
-            console.log('='.repeat(80));
+            console.log('╔═══════════════════════════════════════════════════════════╗');
+            console.log('║          TEST_SYSLOG_CONNECTION TRIGGERED                 ║');
+            console.log('╚═══════════════════════════════════════════════════════════╝');
             
-            // Show immediate feedback
-            showToast('Syslog Test', '🔄 Testing connection...');
+            // Immediate feedback
+            showToast('Syslog Test', '🔄 Starting test...');
             
-            // Dynamically import logger
-            import('./utils/logger.js').then(module => {
-                console.log('✓ Logger module loaded successfully');
-                const logger = module.default;
-                
-                if (!logger) {
-                    console.error('✗ Logger is undefined!');
-                    showToast('Syslog Test', '✗ Logger not found');
-                    return;
-                }
-                
-                console.log('Logger instance:', logger);
-                console.log('Logger status:', logger.getStatus());
-                
-                // Call testConnection
-                logger.testConnection().then(result => {
-                    console.log('Test connection result:', result);
+            console.log('[TEST] Step 1: Showing initial toast');
+            
+            // Try to import logger
+            console.log('[TEST] Step 2: Attempting to import logger module');
+            
+            import('./utils/logger.js')
+                .then(module => {
+                    console.log('[TEST] Step 3: Logger module imported successfully');
+                    console.log('[TEST] Module:', module);
                     
-                    if (result && result.success) {
-                        showToast('Syslog Test', '✓ Success! Check PC terminal.');
-                        console.log('✓ Connection test SUCCESSFUL!');
-                    } else {
-                        const errorMsg = (result && result.error) || 'Unknown error';
-                        showToast('Syslog Test', '✗ Failed: ' + errorMsg);
-                        console.error('✗ Connection test FAILED:', errorMsg);
+                    const logger = module.default;
+                    
+                    if (!logger) {
+                        console.error('[TEST] ✗ Logger is undefined!');
+                        showToast('Syslog Test', '✗ Logger not found');
+                        return;
                     }
-                }).catch(err => {
-                    console.error('✗ testConnection() threw error:', err);
-                    showToast('Syslog Test', '✗ Error: ' + err.message);
+                    
+                    console.log('[TEST] Step 4: Logger instance obtained');
+                    console.log('[TEST] Logger:', logger);
+                    
+                    // Get current status
+                    const status = logger.getStatus();
+                    console.log('[TEST] Step 5: Logger status:', status);
+                    
+                    showToast('Syslog Test', '🔄 Connecting...');
+                    
+                    // Call testConnection
+                    console.log('[TEST] Step 6: Calling logger.testConnection()');
+                    
+                    logger.testConnection()
+                        .then(result => {
+                            console.log('[TEST] Step 7: testConnection() returned');
+                            console.log('[TEST] Result:', result);
+                            console.log('[TEST] Result type:', typeof result);
+                            console.log('[TEST] Result keys:', Object.keys(result || {}));
+                            
+                            if (!result) {
+                                console.error('[TEST] ✗ Result is null/undefined');
+                                showToast('Syslog Test', '✗ No response from test');
+                                return;
+                            }
+                            
+                            if (result.success) {
+                                console.log('[TEST] ✓ Test reported SUCCESS');
+                                const msg = result.message || 'Success! Check PC terminal.';
+                                showToast('Syslog Test', '✓ ' + msg);
+                            } else {
+                                console.error('[TEST] ✗ Test reported FAILURE');
+                                const err = result.error || 'Unknown error';
+                                const errType = result.errorType || '';
+                                console.error('[TEST] Error:', err);
+                                console.error('[TEST] Error type:', errType);
+                                console.error('[TEST] URL:', result.url);
+                                showToast('Syslog Test', '✗ Failed: ' + err);
+                            }
+                        })
+                        .catch(err => {
+                            console.log('[TEST] ═══════════════════════════════════════');
+                            console.error('[TEST] ✗ testConnection() threw an error');
+                            console.log('[TEST] ═══════════════════════════════════════');
+                            console.error('[TEST] Error:', err);
+                            console.error('[TEST] Error name:', err.name);
+                            console.error('[TEST] Error message:', err.message);
+                            console.error('[TEST] Error stack:', err.stack);
+                            showToast('Syslog Test', '✗ Error: ' + err.message);
+                        });
+                })
+                .catch(err => {
+                    console.log('[TEST] ═══════════════════════════════════════');
+                    console.error('[TEST] ✗ Failed to import logger module');
+                    console.log('[TEST] ═══════════════════════════════════════');
+                    console.error('[TEST] Import error:', err);
+                    console.error('[TEST] Error name:', err.name);
+                    console.error('[TEST] Error message:', err.message);
+                    console.error('[TEST] Error stack:', err.stack);
+                    showToast('Syslog Test', '✗ Failed to load logger');
                 });
-            }).catch(err => {
-                console.error('✗ Failed to import logger module:', err);
-                showToast('Syslog Test', '✗ Failed to load logger module');
-            });
+            
+            console.log('[TEST] Step 8: Import chain started, waiting for async completion');
             break;
     }
 }
