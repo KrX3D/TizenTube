@@ -146,6 +146,14 @@ class SyslogLogger {
       return false;
     }
 
+    // Validate URL
+    if (!this.serverUrl.startsWith('http://') && !this.serverUrl.startsWith('https://')) {
+      console.error('[Logger] ✗ Invalid URL - must start with http:// or https://');
+      console.error('[Logger] Current URL:', this.serverUrl);
+      this.lastError = 'Invalid URL protocol';
+      return false;
+    }
+
     const payload = {
       logs,
       source: 'TizenTube',
@@ -158,13 +166,19 @@ class SyslogLogger {
     try {
       console.log('[Logger] Creating fetch request...');
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      
       const response = await fetch(this.serverUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       console.log('[Logger] Response received');
       console.log('[Logger] Status:', response.status);
@@ -174,6 +188,19 @@ class SyslogLogger {
       if (!response.ok) {
         this.lastError = `HTTP ${response.status}: ${response.statusText}`;
         console.error('[Logger] ✗ Response not OK:', this.lastError);
+        
+        // Specific error messages
+        if (response.status === 0) {
+          console.error('[Logger] Status 0 usually means:');
+          console.error('[Logger]   - CORS blocking the request');
+          console.error('[Logger]   - Server not reachable');
+          console.error('[Logger]   - Network error');
+        } else if (response.status === 404) {
+          console.error('[Logger] 404 - Server running but wrong endpoint');
+        } else if (response.status === 500) {
+          console.error('[Logger] 500 - Server error');
+        }
+        
         return false;
       }
 
@@ -201,7 +228,22 @@ class SyslogLogger {
       
       // Detailed error diagnosis
       if (error.name === 'TypeError') {
-        console.error('[Logger] TypeError - likely network/CORS issue');
+        console.error('[Logger] ═══════════════════════════════════');
+        console.error('[Logger] TypeError - "Failed to fetch" usually means:');
+        console.error('[Logger]   1. Server not running at ' + this.serverUrl);
+        console.error('[Logger]   2. Firewall blocking the connection');
+        console.error('[Logger]   3. Wrong IP address or port');
+        console.error('[Logger]   4. TV and PC not on same network');
+        console.error('[Logger]   5. CORS issue (but server should allow)');
+        console.error('[Logger] ═══════════════════════════════════');
+        console.error('[Logger] CHECK:');
+        console.error('[Logger]   - Is server running? (node syslog-server.js)');
+        console.error('[Logger]   - Is IP correct? Current:', this.serverUrl);
+        console.error('[Logger]   - Firewall rule exists? Port:', this.serverUrl.match(/:(\d+)/)?.[1]);
+        console.error('[Logger] ═══════════════════════════════════');
+      } else if (error.name === 'AbortError') {
+        console.error('[Logger] Request timeout after 5 seconds');
+        console.error('[Logger] Server might be slow or unreachable');
       } else if (error.name === 'NetworkError') {
         console.error('[Logger] NetworkError - server unreachable');
       }

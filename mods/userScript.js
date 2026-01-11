@@ -2,50 +2,89 @@
 // This creates an on-screen console you can see on your TV
 
 (function() {
-    // Create console overlay
+    // Read position from config (default: bottom-right)
+    const getConsolePosition = () => {
+        try {
+            const CONFIG_KEY = 'ytaf-configuration';
+            const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
+            return config.debugConsolePosition || 'bottom-right';
+        } catch (e) {
+            return 'bottom-right';
+        }
+    };
+
+    const getConsoleEnabled = () => {
+        try {
+            const CONFIG_KEY = 'ytaf-configuration';
+            const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
+            return config.enableDebugConsole !== false; // Default to true
+        } catch (e) {
+            return true;
+        }
+    };
+
+    const position = getConsolePosition();
+    const enabled = getConsoleEnabled();
+
+    // Position styles based on config
+    const positions = {
+        'top-left': 'top: 0; left: 0;',
+        'top-right': 'top: 0; right: 0;',
+        'bottom-left': 'bottom: 0; left: 0;',
+        'bottom-right': 'bottom: 0; right: 0;',
+        'center': 'top: 50%; left: 50%; transform: translate(-50%, -50%);'
+    };
+
     const consoleDiv = document.createElement('div');
     consoleDiv.id = 'tv-debug-console';
     consoleDiv.style.cssText = `
         position: fixed;
-        bottom: 0;
-        right: 0;
-        width: 600px;
-        height: 400px;
-        background: rgba(0, 0, 0, 0.9);
+        ${positions[position] || positions['bottom-right']}
+        width: 900px;
+        height: 500px;
+        background: rgba(0, 0, 0, 0.95);
         color: #0f0;
         font-family: monospace;
-        font-size: 14px;
+        font-size: 13px;
         padding: 10px;
         overflow-y: auto;
         z-index: 999999;
-        border: 2px solid #0f0;
-        display: block;
+        border: 3px solid #0f0;
+        display: ${enabled ? 'block' : 'none'};
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
     `;
-    document.body.appendChild(consoleDiv);
 
-    // Store original console methods
+    // Wait for DOM
+    if (document.body) {
+        document.body.appendChild(consoleDiv);
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.appendChild(consoleDiv);
+        });
+    }
+
     const originalLog = console.log;
     const originalError = console.error;
     const originalWarn = console.warn;
 
-    // Console state
-    let visible = false;
+    let visible = enabled;
     let logs = [];
 
-    // Add log to visual console
     function addLog(message, type = 'log') {
         const color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
         const timestamp = new Date().toLocaleTimeString();
-        const logEntry = `<div style="color:${color};margin-bottom:5px;">[${timestamp}] ${message}</div>`;
-        
+        const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${timestamp}] ${message}</div>`;
+
         logs.push(logEntry);
-        if (logs.length > 50) logs.shift(); // Keep last 50 logs
-        
-        consoleDiv.innerHTML = logs.join('');
-        consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        if (logs.length > 100) logs.shift(); // Keep last 100
+
+        if (consoleDiv) {
+            consoleDiv.innerHTML = logs.join('');
+            // AUTO-SCROLL TO BOTTOM
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
     }
 
-    // Override console methods
     console.log = function(...args) {
         originalLog.apply(console, args);
         addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'log');
@@ -61,35 +100,74 @@
         addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn');
     };
 
-    // Toggle console with keyboard shortcut
+    // Keyboard toggle (if keyboard available)
     document.addEventListener('keydown', (e) => {
-        // Press ` (backtick) or F12 to toggle
         if (e.key === '`' || e.key === 'F12') {
             visible = !visible;
             consoleDiv.style.display = visible ? 'block' : 'none';
         }
-        // Press C to clear
         if (e.key === 'c' && visible) {
             logs = [];
             consoleDiv.innerHTML = '';
         }
     });
 
-    console.log('[Visual Console] Initialized - Press ` or F12 to toggle, C to clear');
-    
-    // Expose globally
+    // Global toggle function
     window.toggleDebugConsole = function() {
         visible = !visible;
-        consoleDiv.style.display = visible ? 'block' : 'none';
+        if (consoleDiv) {
+            consoleDiv.style.display = visible ? 'block' : 'none';
+        }
+        
+        // Save state to config
+        try {
+            const CONFIG_KEY = 'ytaf-configuration';
+            const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
+            config.enableDebugConsole = visible;
+            window.localStorage[CONFIG_KEY] = JSON.stringify(config);
+        } catch (e) {
+            // ignore
+        }
     };
-    console.log('[Visual Console] Initialized - Press ` or F12 to toggle');
-    
-    // ADD THESE TEST LOGS:
-    console.log('TEST LOG - If you see this, console is working!');
-    console.error('TEST ERROR - Red text');
-    console.warn('TEST WARN - Yellow text');
+
+    // Update position function
+    window.setDebugConsolePosition = function(pos) {
+        const positionStyle = positions[pos] || positions['bottom-right'];
+        if (consoleDiv) {
+            // Remove all position styles
+            consoleDiv.style.top = '';
+            consoleDiv.style.right = '';
+            consoleDiv.style.bottom = '';
+            consoleDiv.style.left = '';
+            consoleDiv.style.transform = '';
+            
+            // Apply new position
+            const styles = positionStyle.split(';').filter(s => s.trim());
+            styles.forEach(style => {
+                const [prop, value] = style.split(':').map(s => s.trim());
+                if (prop && value) {
+                    consoleDiv.style[prop] = value;
+                }
+            });
+        }
+        
+        // Save to config
+        try {
+            const CONFIG_KEY = 'ytaf-configuration';
+            const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
+            config.debugConsolePosition = pos;
+            window.localStorage[CONFIG_KEY] = JSON.stringify(config);
+        } catch (e) {
+            // ignore
+        }
+    };
+
+    console.log('[Visual Console] Initialized');
+    console.log('[Visual Console] Position: ' + position);
+    console.log('[Visual Console] Enabled: ' + enabled);
 })();
 
+import "./utils/debugBridge.js";
 import "./utils/debugServer.js";
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";

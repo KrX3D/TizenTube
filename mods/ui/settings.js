@@ -807,36 +807,46 @@ export default function modernUI(update, parameters) {
                 
                 return [
                     {
-                        name: 'Show Debug Console',
+                        name: 'Debug Console',
                         icon: 'VISIBILITY',
+                        value: 'enableDebugConsole'
+                    },
+                    {
+                        name: 'Debug Console Position',
+                        icon: 'SETTINGS',
                         value: null,
-                        options: {
-                            title: 'Debug Console',
-                            subtitle: 'Toggle on-screen debugging console',
-                            content: scrollPaneRenderer([
-                                overlayMessageRenderer('📺 Debug Console'),
-                                overlayMessageRenderer('Shows console.log messages on your TV screen.'),
-                                overlayMessageRenderer('Useful for debugging when browser console is not accessible.'),
-                                overlayMessageRenderer(''),
-                                overlayMessageRenderer('Click the button below to show/hide the console.'),
-                                buttonItem(
-                                    { title: '👁️ Toggle Console', subtitle: 'Show or hide the debug overlay' },
-                                    { icon: 'VISIBILITY' },
-                                    [
-                                        {
-                                            customAction: {
-                                                action: 'TOGGLE_DEBUG_CONSOLE'
-                                            }
-                                        },
-                                        {
-                                            signalAction: {
-                                                signal: 'POPUP_BACK'
-                                            }
-                                        }
-                                    ]
-                                )
-                            ])
-                        }
+                        menuId: 'tt-debug-console-position',
+                        menuHeader: {
+                            title: 'Debug Console Position',
+                            subtitle: 'Choose where to display the debug console'
+                        },
+                        options: [
+                            {
+                                name: 'Top Left',
+                                key: 'debugConsolePosition',
+                                value: 'top-left'
+                            },
+                            {
+                                name: 'Top Right',
+                                key: 'debugConsolePosition',
+                                value: 'top-right'
+                            },
+                            {
+                                name: 'Bottom Left',
+                                key: 'debugConsolePosition',
+                                value: 'bottom-left'
+                            },
+                            {
+                                name: 'Bottom Right',
+                                key: 'debugConsolePosition',
+                                value: 'bottom-right'
+                            },
+                            {
+                                name: 'Center',
+                                key: 'debugConsolePosition',
+                                value: 'center'
+                            }
+                        ]
                     },
                     {
                         name: '🧪 Test Console',
@@ -912,7 +922,7 @@ export default function modernUI(update, parameters) {
                                     title: 'Syslog Server Port',
                                     subtitle: `Current: ${currentPort} (default: 8081)`
                                 },
-                                options: [514, 8081, 3000, 5000, 9000].map((port) => {
+                                options: [514, 8080, 8081, 3000, 5000, 9000].map((port) => {
                                     return {
                                         name: `Port ${port}`,
                                         key: 'syslogServerPort',

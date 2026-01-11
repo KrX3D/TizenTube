@@ -53,7 +53,9 @@ const defaultConfig = {
   enableRemoteLogging: true,
   syslogServerIp: '192.168.70.124',
   syslogServerPort: 8081,             // Port number
-  logLevel: 'DEBUG' // DEBUG, INFO, WARN, ERROR
+  logLevel: 'DEBUG', // DEBUG, INFO, WARN, ERROR
+  enableDebugConsole: true,
+  debugConsolePosition: 'bottom-right' // top-left, top-right, bottom-left, bottom-right, center
 };
 
 let localConfig;
