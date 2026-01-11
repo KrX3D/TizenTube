@@ -282,6 +282,17 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const configPages = configRead('hideWatchedVideosPages') || [];
   const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
+  console.log('[SHELF_DEBUG] Page detection:', {
+    page: page,
+    hash: location.hash,
+    pathname: location.pathname,
+    search: location.search,
+    hideWatchedEnabled: hideWatchedEnabled,
+    configPages: configPages,
+    pageIncluded: configPages.includes(page),
+    shouldHideWatched: shouldHideWatched
+  });
+  
   logger.info('SHELF_PROCESS_START', `Processing ${shelves.length} shelves on ${page}`, {
     shortsEnabled,
     hideWatchedEnabled,

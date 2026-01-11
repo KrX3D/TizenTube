@@ -162,7 +162,7 @@ function customAction(action, parameters) {
         case 'TOGGLE_DEBUG_CONSOLE':
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
-                showToast('Debug Console', 'Console toggled');
+                showToast('Debug Console', 'Console ' + (configRead('enableDebugConsole') ? 'shown' : 'hidden'));
             } else {
                 showToast('Debug Console', 'Console not available');
             }

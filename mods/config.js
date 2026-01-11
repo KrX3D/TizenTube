@@ -54,7 +54,7 @@ const defaultConfig = {
   syslogServerIp: '192.168.70.124',
   syslogServerPort: 8081,             // Port number
   logLevel: 'DEBUG', // DEBUG, INFO, WARN, ERROR
-  enableDebugConsole: true,
+  enableDebugConsole: false,
   debugConsolePosition: 'bottom-right' // top-left, top-right, bottom-left, bottom-right, center
 };
 
