@@ -728,7 +728,7 @@ function findProgressBar(item) {
   return null;
 }
 
-// Track last page to detect changes
+// Track last page to detect changes - MOVED OUTSIDE FUNCTION
 let lastDetectedPage = null;
 let lastFullUrl = null;
 
@@ -743,38 +743,41 @@ function getCurrentPage() {
   
   // Combine for detection
   const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href).toLowerCase();
-  const fullUrl = `${path}${hash}${search}`;
+  const fullUrl = `${path}${cleanHash}${search}`;
   
   // Detect page type - check hash first (most reliable for Tizen YouTube app)
   let detectedPage = 'other';
   
+  // IMPORTANT: Check most specific patterns first, most generic last
   // Check hash for page indicators (Tizen YouTube uses hash-based routing)
-  if (cleanHash.includes('/feed/subscriptions') || cleanHash.includes('subscriptions')) {
+  if (cleanHash.includes('/feed/subscriptions') || cleanHash.includes('/subscriptions')) {
     detectedPage = 'subscriptions';
-  } else if (cleanHash.includes('/feed/library') || cleanHash.includes('library')) {
+  } else if (cleanHash.includes('/feed/library') || cleanHash.includes('/library')) {
     detectedPage = 'library';
   } else if (cleanHash.includes('/playlist') || cleanHash.includes('list=') || combined.includes('playlist')) {
     detectedPage = 'playlist';
   } else if (cleanHash.includes('/results') || cleanHash.includes('/search') || combined.includes('search_query=')) {
     detectedPage = 'search';
-  } else if (cleanHash.includes('/@') || cleanHash.includes('/channel/') || cleanHash.includes('/c/') || cleanHash.includes('/user/')) {
-    detectedPage = 'channel';
-  } else if (combined.includes('music')) {
-    detectedPage = 'music';
-  } else if (combined.includes('gaming')) {
-    detectedPage = 'gaming';
-  } else if (combined.includes('/feed/trending') || cleanHash.includes('trending')) {
-    detectedPage = 'trending';
-  } else if (combined.includes('/feed/history') || cleanHash.includes('history')) {
-    detectedPage = 'history';
   } else if (cleanHash.includes('/watch')) {
     detectedPage = 'watch';
-  } else if (cleanHash === '' || cleanHash === '/' || cleanHash.includes('/home') || cleanHash.includes('browse') || path === '/tv') {
+  } else if (cleanHash.includes('/@') || cleanHash.includes('/channel/') || cleanHash.includes('/c/') || cleanHash.includes('/user/')) {
+    detectedPage = 'channel';
+  } else if (cleanHash.includes('/feed/trending') || cleanHash.includes('/trending')) {
+    detectedPage = 'trending';
+  } else if (cleanHash.includes('/feed/history') || cleanHash.includes('/history')) {
+    detectedPage = 'history';
+  } else if (combined.includes('music') || cleanHash.includes('/music')) {
+    detectedPage = 'music';
+  } else if (combined.includes('gaming') || cleanHash.includes('/gaming')) {
+    detectedPage = 'gaming';
+  } else if (cleanHash === '' || cleanHash === '/' || cleanHash.includes('home') || cleanHash.includes('browse')) {
     detectedPage = 'home';
   }
+  // Note: 'other' remains as fallback for unrecognized pages
   
-  // Log page changes with extensive detail
-  if (detectedPage !== lastDetectedPage || fullUrl !== lastFullUrl) {
+  // Log page changes with extensive detail - ONLY WHEN ACTUALLY CHANGED
+  const currentFullUrl = fullUrl;
+  if (detectedPage !== lastDetectedPage || currentFullUrl !== lastFullUrl) {
     console.log('═══════════════════════════════════════════════');
     console.log('[PAGE_CHANGE] Navigation detected');
     console.log('[PAGE_CHANGE] From:', lastDetectedPage || 'initial');
@@ -784,8 +787,7 @@ function getCurrentPage() {
     console.log('[PAGE_CHANGE]   hash:', hash);
     console.log('[PAGE_CHANGE]   cleanHash:', cleanHash);
     console.log('[PAGE_CHANGE]   search:', search);
-    console.log('[PAGE_CHANGE]   href:', href);
-    console.log('[PAGE_CHANGE]   combined:', combined);
+    console.log('[PAGE_CHANGE]   combined:', combined.substring(0, 100) + '...'); // Truncate for readability
     console.log('[PAGE_CHANGE]   fullUrl:', fullUrl);
     
     // Check if hide watched is enabled for this page
@@ -802,15 +804,16 @@ function getCurrentPage() {
     
     // Additional detection info
     console.log('[PAGE_CHANGE] Detection Logic:');
-    console.log('[PAGE_CHANGE]   Contains "subscriptions":', combined.includes('subscriptions'));
-    console.log('[PAGE_CHANGE]   Contains "library":', combined.includes('library'));
-    console.log('[PAGE_CHANGE]   Contains "playlist":', combined.includes('playlist'));
-    console.log('[PAGE_CHANGE]   Hash starts with "/":', cleanHash.startsWith('/'));
+    console.log('[PAGE_CHANGE]   Contains "/feed/subscriptions":', cleanHash.includes('/feed/subscriptions'));
+    console.log('[PAGE_CHANGE]   Contains "/feed/library":', cleanHash.includes('/feed/library'));
+    console.log('[PAGE_CHANGE]   Contains "/playlist":', cleanHash.includes('/playlist'));
+    console.log('[PAGE_CHANGE]   CleanHash value:', cleanHash);
     
     console.log('═══════════════════════════════════════════════');
     
+    // Update tracking variables AFTER logging
     lastDetectedPage = detectedPage;
-    lastFullUrl = fullUrl;
+    lastFullUrl = currentFullUrl;
   }
   
   return detectedPage;

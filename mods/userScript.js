@@ -73,15 +73,32 @@
     function forceScrollToBottom() {
         if (!consoleDiv) return;
         
-        // Use requestAnimationFrame for reliable scrolling
+        // Force scroll multiple ways for maximum compatibility
+        const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
+        
+        // Method 1: Direct assignment
+        consoleDiv.scrollTop = maxScroll;
+        
+        // Method 2: requestAnimationFrame (for rendering)
         requestAnimationFrame(() => {
-            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+            consoleDiv.scrollTop = maxScroll;
             
-            // Double-check after another frame
+            // Method 3: Double RAF for safety
             requestAnimationFrame(() => {
-                consoleDiv.scrollTop = consoleDiv.scrollHeight;
+                consoleDiv.scrollTop = maxScroll;
+                
+                // Method 4: One more after a tiny delay
+                setTimeout(() => {
+                    consoleDiv.scrollTop = maxScroll;
+                }, 10);
             });
         });
+        
+        // Method 5: scrollIntoView on last element
+        const lastDiv = consoleDiv.lastElementChild;
+        if (lastDiv) {
+            lastDiv.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }
     }
 
     function addLog(message, type = 'log') {
@@ -212,7 +229,7 @@
         console.log('[USB] === USB Detection Complete ===');
     }
 
-    console.log('[Console] Visual Console v5');
+    console.log('[Console] Visual Console v6');
     console.log('[Console] Position:', currentPosition);
     console.log('[Console] Enabled:', enabled);
     detectUSB();

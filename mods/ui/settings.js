@@ -453,6 +453,19 @@ export default function modernUI(update, parameters) {
                                 {
                                     name: 'Watch',
                                     value: 'watch'
+                                },
+                                {
+                                    name: 'Trending',
+                                    value: 'trending'
+                                },
+                                {
+                                    name: 'History',
+                                    value: 'history'
+                                },
+                                {
+                                    name: 'Other/Unknown Pages',
+                                    icon: 'HELP',
+                                    value: 'other'
                                 }
                             ]
                         }
