@@ -69,35 +69,29 @@
     const originalWarn = console.warn;
 
     let logs = [];
+    let isUserScrolling = false;
+    let scrollTimeout = null;
+
+    // Detect if user manually scrolls
+    consoleDiv.addEventListener('wheel', () => {
+        isUserScrolling = true;
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            isUserScrolling = false;
+        }, 2000); // Reset after 2 seconds of no scrolling
+    });
 
     function forceScrollToBottom() {
-        if (!consoleDiv) return;
+        if (!consoleDiv || isUserScrolling) return;
         
-        // Force scroll multiple ways for maximum compatibility
+        // Use MutationObserver approach - scroll AFTER DOM updates
         const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
-        
-        // Method 1: Direct assignment
         consoleDiv.scrollTop = maxScroll;
         
-        // Method 2: requestAnimationFrame (for rendering)
-        requestAnimationFrame(() => {
-            consoleDiv.scrollTop = maxScroll;
-            
-            // Method 3: Double RAF for safety
-            requestAnimationFrame(() => {
-                consoleDiv.scrollTop = maxScroll;
-                
-                // Method 4: One more after a tiny delay
-                setTimeout(() => {
-                    consoleDiv.scrollTop = maxScroll;
-                }, 10);
-            });
-        });
-        
-        // Method 5: scrollIntoView on last element
+        // Also scroll last element into view
         const lastDiv = consoleDiv.lastElementChild;
         if (lastDiv) {
-            lastDiv.scrollIntoView({ behavior: 'auto', block: 'end' });
+            lastDiv.scrollIntoView({ behavior: 'instant', block: 'end', inline: 'nearest' });
         }
     }
 
@@ -106,10 +100,13 @@
         const timestamp = new Date().toLocaleTimeString();
         const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${timestamp}] ${message}</div>`;
         logs.push(logEntry);
-        if (logs.length > 100) logs.shift();
+        if (logs.length > 150) logs.shift(); // Increased buffer
         if (consoleDiv) {
             consoleDiv.innerHTML = logs.join('');
-            forceScrollToBottom();
+            // Force scroll after content is added
+            setTimeout(forceScrollToBottom, 0);
+            setTimeout(forceScrollToBottom, 50);
+            setTimeout(forceScrollToBottom, 100);
         }
     }
 
@@ -199,69 +196,80 @@
         } catch (e) {}
     }, 500);
 
-    // USB Detection for Samsung Tizen
+    // USB Detection for Samsung Tizen with Monitoring
+    let lastUSBState = null;
+    
     function detectUSB() {
-        console.log('[USB] === USB Detection Started ===');
+        console.log('[USB] Checking storage...');
         
         // Method 1: Tizen Filesystem API
         try {
             if (typeof tizen !== 'undefined' && tizen.filesystem) {
-                console.log('[USB] Tizen filesystem API available');
                 tizen.filesystem.listStorages(
                     function(storages) {
-                        console.log('[USB] Found ' + storages.length + ' storage(s)');
-                        storages.forEach(function(storage, index) {
-                            console.log('[USB] Storage ' + index + ':');
-                            console.log('[USB]   label: ' + storage.label);
-                            console.log('[USB]   type: ' + storage.type);
-                            console.log('[USB]   state: ' + storage.state);
-                        });
+                        const usbStorages = storages.filter(s => s.type === 'REMOVABLE');
+                        const currentState = JSON.stringify(usbStorages.map(s => ({l: s.label, s: s.state})));
+                        
+                        if (currentState !== lastUSBState) {
+                            console.log(`[USB] ${storages.length} storage(s) detected`);
+                            storages.forEach(function(storage, index) {
+                                console.log(`[USB] ${index}: ${storage.label} | ${storage.type} | ${storage.state}`);
+                            });
+                            
+                            if (usbStorages.length > 0) {
+                                console.log(`[USB] ✓ ${usbStorages.length} USB drive(s) connected`);
+                            } else {
+                                console.log('[USB] No USB drives connected');
+                            }
+                            
+                            lastUSBState = currentState;
+                        }
                     },
                     function(error) {
-                        console.log('[USB] Tizen listStorages error: ' + error.message);
+                        console.log('[USB] Tizen error: ' + error.message);
                     }
                 );
             } else {
                 console.log('[USB] Tizen filesystem API not available');
             }
         } catch (e) {
-            console.log('[USB] Tizen filesystem error: ' + e.message);
+            console.log('[USB] Tizen error: ' + e.message);
         }
         
-        // Method 2: webOS h5vcc (for comparison)
+        // Method 2: h5vcc (webOS check)
         try {
             if (window.h5vcc && window.h5vcc.storage) {
-                console.log('[USB] h5vcc.storage available (webOS)');
                 const info = window.h5vcc.storage.getStorageInfo();
-                console.log('[USB] Storage info: ' + JSON.stringify(info));
+                console.log('[USB] h5vcc: ' + JSON.stringify(info));
             } else {
-                console.log('[USB] h5vcc.storage not available (expected on Tizen)');
+                console.log('[USB] h5vcc not available (expected on Tizen)');
             }
         } catch (e) {
-            console.log('[USB] h5vcc error: ' + e.message);
+            console.log('[USB] h5vcc check failed');
         }
         
-        // Method 3: Navigator storage (experimental)
+        // Method 3: Navigator storage
         try {
             if (navigator.storage && navigator.storage.estimate) {
                 navigator.storage.estimate().then(function(estimate) {
-                    console.log('[USB] Navigator storage estimate:');
-                    console.log('[USB]   quota: ' + (estimate.quota / (1024*1024*1024)).toFixed(2) + ' GB');
-                    console.log('[USB]   usage: ' + (estimate.usage / (1024*1024)).toFixed(2) + ' MB');
+                    const quotaGB = (estimate.quota / (1024*1024*1024)).toFixed(2);
+                    const usageMB = (estimate.usage / (1024*1024)).toFixed(2);
+                    console.log(`[USB] Browser storage: ${quotaGB}GB quota, ${usageMB}MB used`);
                 }).catch(function(err) {
-                    console.log('[USB] Navigator storage error: ' + err.message);
+                    console.log('[USB] Navigator error: ' + err.message);
                 });
             } else {
-                console.log('[USB] Navigator.storage.estimate not available');
+                console.log('[USB] Navigator.storage not available');
             }
         } catch (e) {
-            console.log('[USB] Navigator storage error: ' + e.message);
+            console.log('[USB] Navigator check failed');
         }
-        
-        console.log('[USB] === USB Detection Complete ===');
     }
+    
+    // Monitor USB changes every 5 seconds
+    setInterval(detectUSB, 5000);
 
-    console.log('[Console] Visual Console v7');
+    console.log('[Console] Visual Console v8');
     console.log('[Console] Position:', currentPosition);
     console.log('[Console] Enabled:', enabled);
     detectUSB();

@@ -738,33 +738,29 @@ function getCurrentPage() {
   const search = location.search || '';
   const href = location.href || '';
   
-  // Clean up the hash - remove additionalDataUrl and other query params AFTER first ?
-  const cleanHash = hash.split('?')[0];
+  // Clean up the hash - KEEP the C= parameter for browse detection
+  const cleanHash = hash.split('?additionalDataUrl')[0]; // Only remove additionalDataUrl
   
   // Extract browse parameters from hash (Tizen YouTube format: /browse?C=FEsubscriptions)
   let browseParam = '';
-  if (hash.includes('?C=')) {
-    browseParam = hash.split('?C=')[1]?.split('&')[0] || '';
+  const cMatch = hash.match(/[?&]C=([^&]+)/i);
+  if (cMatch) {
+    browseParam = cMatch[1].toLowerCase(); // Store lowercase for comparison
   }
   
   // Combine for detection
   const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href + ' ' + browseParam).toLowerCase();
-  const fullUrl = `${path}${cleanHash}${search}`;
+  const fullUrl = `${path}${hash.split('?additionalDataUrl')[0]}`;
   
-  // Detect page type - check hash first (most reliable for Tizen YouTube app)
+  // Detect page type - check browse parameters FIRST
   let detectedPage = 'other';
   
-  console.log('[PAGE_DEBUG] browseParam:', browseParam);
-  console.log('[PAGE_DEBUG] cleanHash:', cleanHash);
-  console.log('[PAGE_DEBUG] combined:', combined.substring(0, 150));
-  
-  // IMPORTANT: Check most specific patterns first, most generic last
-  // Check for Tizen YouTube browse parameters (format: /browse?C=FExxxxx)
-  if (browseParam.includes('fesubscriptions') || browseParam.includes('subscriptions')) {
+  // CRITICAL: Check browse parameters first (most reliable for Tizen)
+  if (browseParam.includes('fesubscription')) {
     detectedPage = 'subscriptions';
-  } else if (browseParam.includes('felibrary') || browseParam.includes('library')) {
+  } else if (browseParam.includes('felibrary')) {
     detectedPage = 'library';
-  } else if (browseParam.includes('fetrending') || browseParam.includes('trending')) {
+  } else if (browseParam.includes('fetrending')) {
     detectedPage = 'trending';
   } else if (browseParam.includes('fetopics_music') || browseParam.includes('music')) {
     detectedPage = 'music';
@@ -778,7 +774,7 @@ function getCurrentPage() {
     detectedPage = 'subscriptions';
   } else if (cleanHash.includes('/feed/library') || cleanHash.includes('/library')) {
     detectedPage = 'library';
-  } else if (cleanHash.includes('/playlist') || cleanHash.includes('list=') || combined.includes('playlist')) {
+  } else if (cleanHash.includes('/playlist') || combined.includes('list=')) {
     detectedPage = 'playlist';
   } else if (cleanHash.includes('/results') || cleanHash.includes('/search') || combined.includes('search_query=')) {
     detectedPage = 'search';
@@ -786,54 +782,34 @@ function getCurrentPage() {
     detectedPage = 'watch';
   } else if (cleanHash.includes('/@') || cleanHash.includes('/channel/') || cleanHash.includes('/c/') || cleanHash.includes('/user/')) {
     detectedPage = 'channel';
-  } else if (cleanHash.includes('/feed/trending') || cleanHash.includes('/trending')) {
-    detectedPage = 'trending';
-  } else if (cleanHash.includes('/feed/history') || cleanHash.includes('/history')) {
-    detectedPage = 'history';
-  } else if (cleanHash.includes('/browse')) {
+  } else if (cleanHash.includes('/browse') && !browseParam) {
     // Generic browse without specific C parameter
     detectedPage = 'home';
   } else if (cleanHash === '' || cleanHash === '/' || cleanHash.includes('home')) {
     detectedPage = 'home';
   }
   
-  // Log page changes with extensive detail - ONLY WHEN ACTUALLY CHANGED
+  // Log page changes COMPACTLY - ONLY WHEN ACTUALLY CHANGED
   const currentFullUrl = fullUrl;
   if (detectedPage !== lastDetectedPage || currentFullUrl !== lastFullUrl) {
-    console.log('═══════════════════════════════════════════════');
-    console.log('[PAGE_CHANGE] Navigation detected');
-    console.log('[PAGE_CHANGE] From:', lastDetectedPage || 'initial');
-    console.log('[PAGE_CHANGE] To:', detectedPage);
-    console.log('[PAGE_CHANGE] URL Details:');
-    console.log('[PAGE_CHANGE]   path:', path);
-    console.log('[PAGE_CHANGE]   hash:', hash);
-    console.log('[PAGE_CHANGE]   cleanHash:', cleanHash);
-    console.log('[PAGE_CHANGE]   browseParam:', browseParam);
-    console.log('[PAGE_CHANGE]   search:', search);
-    console.log('[PAGE_CHANGE]   fullUrl:', fullUrl);
+    console.log(`[PAGE] ${lastDetectedPage||'initial'} → ${detectedPage} | hash:${cleanHash} | C=${browseParam || 'none'}`);
     
-    // Check if hide watched is enabled for this page
     const hideWatchedEnabled = configRead('enableHideWatchedVideos');
     const configPages = configRead('hideWatchedVideosPages') || [];
     const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(detectedPage));
+    const threshold = configRead('hideWatchedVideosThreshold');
     
-    console.log('[PAGE_CHANGE] Hide Watched Settings:');
-    console.log('[PAGE_CHANGE]   globalEnabled:', hideWatchedEnabled);
-    console.log('[PAGE_CHANGE]   configuredPages:', JSON.stringify(configPages));
-    console.log('[PAGE_CHANGE]   pageInList:', configPages.includes(detectedPage));
-    console.log('[PAGE_CHANGE]   shouldHide:', shouldHideWatched);
-    console.log('[PAGE_CHANGE]   threshold:', configRead('hideWatchedVideosThreshold'));
+    console.log(`[PAGE] HideWatched: ${shouldHideWatched ? 'YES' : 'NO'} | Global:${hideWatchedEnabled} | InList:${configPages.includes(detectedPage)} | Threshold:${threshold}%`);
+    console.log(`[PAGE] ConfigPages: [${configPages.join(', ')}]`);
     
-    // Additional detection info
-    console.log('[PAGE_CHANGE] Detection Logic:');
-    console.log('[PAGE_CHANGE]   browseParam includes "fesubscriptions":', browseParam.toLowerCase().includes('fesubscriptions'));
-    console.log('[PAGE_CHANGE]   browseParam includes "felibrary":', browseParam.toLowerCase().includes('felibrary'));
-    console.log('[PAGE_CHANGE]   cleanHash includes "/feed/subscriptions":', cleanHash.includes('/feed/subscriptions'));
-    console.log('[PAGE_CHANGE]   cleanHash includes "/browse":', cleanHash.includes('/browse'));
+    // Only show detailed detection if page is 'other' (to help debug)
+    if (detectedPage === 'other') {
+      console.log('[PAGE_DEBUG] Detection failed - showing details:');
+      console.log('[PAGE_DEBUG]   browseParam:', browseParam);
+      console.log('[PAGE_DEBUG]   cleanHash:', cleanHash);
+      console.log('[PAGE_DEBUG]   fullHash:', hash);
+    }
     
-    console.log('═══════════════════════════════════════════════');
-    
-    // Update tracking variables AFTER logging
     lastDetectedPage = detectedPage;
     lastFullUrl = currentFullUrl;
   }
