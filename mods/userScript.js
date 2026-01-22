@@ -141,7 +141,24 @@
 
     window.toggleDebugConsole = function() {
         enabled = !enabled;
-        if (consoleDiv) consoleDiv.style.display = enabled ? 'block' : 'none';
+        if (consoleDiv) {
+            consoleDiv.style.display = enabled ? 'block' : 'none';
+            
+            // CRITICAL: Force scroll after showing the console
+            if (enabled) {
+                // Use setTimeout to wait for CSS display change to complete
+                setTimeout(() => {
+                    const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
+                    consoleDiv.scrollTop = maxScroll;
+                    
+                    // Also use scrollIntoView
+                    const lastDiv = consoleDiv.lastElementChild;
+                    if (lastDiv) {
+                        lastDiv.scrollIntoView({ behavior: 'auto', block: 'end' });
+                    }
+                }, 50);
+            }
+        }
     };
 
     window.setDebugConsolePosition = function(pos) {
@@ -156,7 +173,22 @@
             const newEnabled = config.enableDebugConsole !== false;
             if (newEnabled !== enabled) {
                 enabled = newEnabled;
-                if (consoleDiv) consoleDiv.style.display = enabled ? 'block' : 'none';
+                if (consoleDiv) {
+                    consoleDiv.style.display = enabled ? 'block' : 'none';
+                    
+                    // CRITICAL: Force scroll when console becomes visible
+                    if (enabled) {
+                        setTimeout(() => {
+                            const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
+                            consoleDiv.scrollTop = maxScroll;
+                            
+                            const lastDiv = consoleDiv.lastElementChild;
+                            if (lastDiv) {
+                                lastDiv.scrollIntoView({ behavior: 'auto', block: 'end' });
+                            }
+                        }, 50);
+                    }
+                }
             }
             const newPosition = config.debugConsolePosition || 'bottom-right';
             if (newPosition !== currentPosition) {
@@ -229,7 +261,7 @@
         console.log('[USB] === USB Detection Complete ===');
     }
 
-    console.log('[Console] Visual Console v6');
+    console.log('[Console] Visual Console v7');
     console.log('[Console] Position:', currentPosition);
     console.log('[Console] Enabled:', enabled);
     detectUSB();

@@ -64,9 +64,20 @@ try {
 }
 
 export function configRead(key) {
-  if (localConfig[key] === undefined) {
-    console.warn('Populating key', key, 'with default value', defaultConfig[key]);
-    localConfig[key] = defaultConfig[key];
+  if (localConfig[key] === undefined || localConfig[key] === null) {
+    if (defaultConfig[key] !== undefined) {
+      console.log('[CONFIG] Setting default for key:', key, '=', defaultConfig[key]);
+      localConfig[key] = defaultConfig[key];
+      // Save the default to localStorage
+      try {
+        window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+      } catch (e) {
+        console.error('[CONFIG] Failed to save default:', e);
+      }
+    } else {
+      console.warn('[CONFIG] No default value for key:', key);
+      return undefined;
+    }
   }
 
   return localConfig[key];

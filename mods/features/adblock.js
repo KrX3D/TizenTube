@@ -738,19 +738,43 @@ function getCurrentPage() {
   const search = location.search || '';
   const href = location.href || '';
   
-  // Clean up the hash - remove additionalDataUrl and other query params
+  // Clean up the hash - remove additionalDataUrl and other query params AFTER first ?
   const cleanHash = hash.split('?')[0];
   
+  // Extract browse parameters from hash (Tizen YouTube format: /browse?C=FEsubscriptions)
+  let browseParam = '';
+  if (hash.includes('?C=')) {
+    browseParam = hash.split('?C=')[1]?.split('&')[0] || '';
+  }
+  
   // Combine for detection
-  const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href).toLowerCase();
+  const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href + ' ' + browseParam).toLowerCase();
   const fullUrl = `${path}${cleanHash}${search}`;
   
   // Detect page type - check hash first (most reliable for Tizen YouTube app)
   let detectedPage = 'other';
   
+  console.log('[PAGE_DEBUG] browseParam:', browseParam);
+  console.log('[PAGE_DEBUG] cleanHash:', cleanHash);
+  console.log('[PAGE_DEBUG] combined:', combined.substring(0, 150));
+  
   // IMPORTANT: Check most specific patterns first, most generic last
-  // Check hash for page indicators (Tizen YouTube uses hash-based routing)
-  if (cleanHash.includes('/feed/subscriptions') || cleanHash.includes('/subscriptions')) {
+  // Check for Tizen YouTube browse parameters (format: /browse?C=FExxxxx)
+  if (browseParam.includes('fesubscriptions') || browseParam.includes('subscriptions')) {
+    detectedPage = 'subscriptions';
+  } else if (browseParam.includes('felibrary') || browseParam.includes('library')) {
+    detectedPage = 'library';
+  } else if (browseParam.includes('fetrending') || browseParam.includes('trending')) {
+    detectedPage = 'trending';
+  } else if (browseParam.includes('fetopics_music') || browseParam.includes('music')) {
+    detectedPage = 'music';
+  } else if (browseParam.includes('fetopics_gaming') || browseParam.includes('gaming')) {
+    detectedPage = 'gaming';
+  } else if (browseParam.includes('fetopics')) {
+    detectedPage = 'home';
+  }
+  // Check traditional hash patterns (fallback)
+  else if (cleanHash.includes('/feed/subscriptions') || cleanHash.includes('/subscriptions')) {
     detectedPage = 'subscriptions';
   } else if (cleanHash.includes('/feed/library') || cleanHash.includes('/library')) {
     detectedPage = 'library';
@@ -766,14 +790,12 @@ function getCurrentPage() {
     detectedPage = 'trending';
   } else if (cleanHash.includes('/feed/history') || cleanHash.includes('/history')) {
     detectedPage = 'history';
-  } else if (combined.includes('music') || cleanHash.includes('/music')) {
-    detectedPage = 'music';
-  } else if (combined.includes('gaming') || cleanHash.includes('/gaming')) {
-    detectedPage = 'gaming';
-  } else if (cleanHash === '' || cleanHash === '/' || cleanHash.includes('home') || cleanHash.includes('browse')) {
+  } else if (cleanHash.includes('/browse')) {
+    // Generic browse without specific C parameter
+    detectedPage = 'home';
+  } else if (cleanHash === '' || cleanHash === '/' || cleanHash.includes('home')) {
     detectedPage = 'home';
   }
-  // Note: 'other' remains as fallback for unrecognized pages
   
   // Log page changes with extensive detail - ONLY WHEN ACTUALLY CHANGED
   const currentFullUrl = fullUrl;
@@ -786,8 +808,8 @@ function getCurrentPage() {
     console.log('[PAGE_CHANGE]   path:', path);
     console.log('[PAGE_CHANGE]   hash:', hash);
     console.log('[PAGE_CHANGE]   cleanHash:', cleanHash);
+    console.log('[PAGE_CHANGE]   browseParam:', browseParam);
     console.log('[PAGE_CHANGE]   search:', search);
-    console.log('[PAGE_CHANGE]   combined:', combined.substring(0, 100) + '...'); // Truncate for readability
     console.log('[PAGE_CHANGE]   fullUrl:', fullUrl);
     
     // Check if hide watched is enabled for this page
@@ -804,10 +826,10 @@ function getCurrentPage() {
     
     // Additional detection info
     console.log('[PAGE_CHANGE] Detection Logic:');
-    console.log('[PAGE_CHANGE]   Contains "/feed/subscriptions":', cleanHash.includes('/feed/subscriptions'));
-    console.log('[PAGE_CHANGE]   Contains "/feed/library":', cleanHash.includes('/feed/library'));
-    console.log('[PAGE_CHANGE]   Contains "/playlist":', cleanHash.includes('/playlist'));
-    console.log('[PAGE_CHANGE]   CleanHash value:', cleanHash);
+    console.log('[PAGE_CHANGE]   browseParam includes "fesubscriptions":', browseParam.toLowerCase().includes('fesubscriptions'));
+    console.log('[PAGE_CHANGE]   browseParam includes "felibrary":', browseParam.toLowerCase().includes('felibrary'));
+    console.log('[PAGE_CHANGE]   cleanHash includes "/feed/subscriptions":', cleanHash.includes('/feed/subscriptions'));
+    console.log('[PAGE_CHANGE]   cleanHash includes "/browse":', cleanHash.includes('/browse'));
     
     console.log('═══════════════════════════════════════════════');
     
