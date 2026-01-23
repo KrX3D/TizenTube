@@ -2,6 +2,7 @@
 // This creates an on-screen console you can see on your TV
 // With WORKING auto-scroll and keyboard controls
 
+
 (function() {
     const CONFIG_KEY = 'ytaf-configuration';
     
@@ -25,7 +26,6 @@
 
     let currentPosition = getConsolePosition();
     let enabled = getConsoleEnabled();
-    let autoScroll = true; // Always auto-scroll by default
 
     const positions = {
         'top-left': { top: '0', left: '0', right: '', bottom: '', transform: '' },
@@ -71,13 +71,47 @@
     const originalWarn = console.warn;
 
     let logs = [];
+    
+    // EXPOSE to window for ui.js to control
+    window.consoleAutoScroll = true;
 
-    // CRITICAL FIX: Simple, reliable scroll function
-    function doAutoScroll() {
-        if (!consoleDiv || !autoScroll || !enabled) return;
-        
-        // Use the simplest possible approach - just set scrollTop directly
+    // Simple scroll function
+    window.scrollConsoleToBottom = function() {
+        if (!consoleDiv || !window.consoleAutoScroll || !enabled) return;
         consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    };
+
+    window.scrollConsoleUp = function() {
+        if (!consoleDiv) return;
+        window.consoleAutoScroll = false;
+        consoleDiv.scrollTop -= 100;
+        updateBorder();
+    };
+
+    window.scrollConsoleDown = function() {
+        if (!consoleDiv) return;
+        window.consoleAutoScroll = false;
+        consoleDiv.scrollTop += 100;
+        updateBorder();
+    };
+
+    window.scrollConsoleToTop = function() {
+        if (!consoleDiv) return;
+        window.consoleAutoScroll = false;
+        consoleDiv.scrollTop = 0;
+        updateBorder();
+    };
+
+    window.enableConsoleAutoScroll = function() {
+        window.consoleAutoScroll = true;
+        updateBorder();
+        window.scrollConsoleToBottom();
+    };
+
+    function updateBorder() {
+        if (consoleDiv) {
+            consoleDiv.style.borderColor = window.consoleAutoScroll ? '#0f0' : '#f80';
+        }
     }
 
     console.log = function(...args) {
@@ -95,93 +129,14 @@
         addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn');
     };
 
-    // Keyboard controls - using NUMBER KEYS and media keys that aren't taken
-    document.addEventListener('keydown', (e) => {
-        // Toggle console visibility with ` or F12
-        if (e.key === '`' || e.key === 'F12') {
-            enabled = !enabled;
-            consoleDiv.style.display = enabled ? 'block' : 'none';
-            if (enabled) {
-                autoScroll = true;
-                doAutoScroll();
-            }
-        }
-        
-        // Clear logs with 'c' when console is visible
-        if (e.key === 'c' && enabled) {
-            logs = [];
-            consoleDiv.innerHTML = '';
-        }
-
-        // Only handle scroll controls when console is visible
-        if (!enabled) return;
-
-        // Number keys for control (available on Samsung remotes)
-        // 1 = Scroll Up, 3 = Scroll Down, 5 = Toggle Auto-scroll, 7 = Top, 9 = Bottom
-        
-        if (e.key === '1') { // Scroll up
-            e.preventDefault();
-            autoScroll = false;
-            consoleDiv.scrollTop -= 100;
-            updateBorder();
-        }
-        else if (e.key === '3') { // Scroll down
-            e.preventDefault();
-            autoScroll = false;
-            consoleDiv.scrollTop += 100;
-            updateBorder();
-        }
-        else if (e.key === '5') { // Toggle auto-scroll
-            e.preventDefault();
-            autoScroll = !autoScroll;
-            updateBorder();
-            if (autoScroll) doAutoScroll();
-            console.log(`[Console] Auto-scroll: ${autoScroll ? 'ON' : 'OFF'}`);
-        }
-        else if (e.key === '7') { // Jump to top
-            e.preventDefault();
-            autoScroll = false;
-            consoleDiv.scrollTop = 0;
-            updateBorder();
-        }
-        else if (e.key === '9') { // Jump to bottom + enable auto-scroll
-            e.preventDefault();
-            autoScroll = true;
-            doAutoScroll();
-            updateBorder();
-        }
-        
-        // Also support arrow keys as fallback (if they're not intercepted by YouTube)
-        else if (e.keyCode === 38 && e.target === document.body) { // Up arrow
-            e.preventDefault();
-            autoScroll = false;
-            consoleDiv.scrollTop -= 50;
-            updateBorder();
-        }
-        else if (e.keyCode === 40 && e.target === document.body) { // Down arrow
-            e.preventDefault();
-            autoScroll = false;
-            consoleDiv.scrollTop += 50;
-            updateBorder();
-        }
-    });
-
-    // Visual indicator of auto-scroll state
-    function updateBorder() {
-        if (consoleDiv) {
-            consoleDiv.style.borderColor = autoScroll ? '#0f0' : '#f80'; // Green = auto, Orange = manual
-        }
-    }
-
     window.toggleDebugConsole = function() {
         enabled = !enabled;
         if (consoleDiv) {
             consoleDiv.style.display = enabled ? 'block' : 'none';
             if (enabled) {
-                autoScroll = true;
+                window.consoleAutoScroll = true;
                 updateBorder();
-                // Wait a tick for display:block to apply
-                setTimeout(doAutoScroll, 10);
+                setTimeout(window.scrollConsoleToBottom, 10);
             }
         }
     };
@@ -192,7 +147,6 @@
         if (consoleDiv) Object.assign(consoleDiv.style, posStyles);
     };
 
-    // Watch for config changes
     const checkConfigInterval = setInterval(() => {
         try {
             const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
@@ -202,9 +156,9 @@
                 if (consoleDiv) {
                     consoleDiv.style.display = enabled ? 'block' : 'none';
                     if (enabled) {
-                        autoScroll = true;
+                        window.consoleAutoScroll = true;
                         updateBorder();
-                        setTimeout(doAutoScroll, 10);
+                        setTimeout(window.scrollConsoleToBottom, 10);
                     }
                 }
             }
@@ -227,15 +181,13 @@
         
         if (consoleDiv && enabled) {
             consoleDiv.innerHTML = logs.join('');
-            // CRITICAL: Always try to scroll after updating content
-            if (autoScroll) {
-                // Use setTimeout to ensure DOM has updated
-                setTimeout(doAutoScroll, 0);
+            if (window.consoleAutoScroll) {
+                setTimeout(window.scrollConsoleToBottom, 0);
             }
         }
     }
 
-    // ========== USB Detection for Samsung Tizen - ENHANCED ==========
+    // USB Detection
     let usbCheckCount = 0;
     
     function getUSBMonitoringEnabled() {
@@ -255,12 +207,10 @@
         console.log(`[USB] Check #${usbCheckCount} - Scanning drives...`);
         console.log(`[USB] ========================================`);
         
-        // Try Tizen filesystem API if available
         if (window.tizen && window.tizen.filesystem) {
             try {
                 console.log('[USB] ✓ Tizen filesystem API available');
                 
-                // List all storages
                 const storages = window.tizen.filesystem.listStorages();
                 console.log(`[USB] Found ${storages.length} storage device(s)`);
                 console.log('[USB] ----------------------------------------');
@@ -272,23 +222,19 @@
                     console.log(`[USB]   Type: ${storage.type}`);
                     console.log(`[USB]   State: ${storage.state}`);
                     
-                    // Try to resolve and list contents
                     try {
                         window.tizen.filesystem.resolve(
                             storage.label,
                             function(dir) {
                                 console.log(`[USB]   ✓ Resolved path: ${dir.fullPath}`);
                                 
-                                // List directory contents
                                 dir.listFiles(
                                     function(files) {
                                         console.log(`[USB]   📂 Contents (${files.length} items):`);
                                         
-                                        // Separate folders and files
                                         const folders = files.filter(f => f.isDirectory);
                                         const regularFiles = files.filter(f => f.isFile);
                                         
-                                        // List folders first
                                         if (folders.length > 0) {
                                             console.log(`[USB]   📁 Folders (${folders.length}):`);
                                             folders.slice(0, 10).forEach(folder => {
@@ -299,7 +245,6 @@
                                             }
                                         }
                                         
-                                        // Then list files
                                         if (regularFiles.length > 0) {
                                             console.log(`[USB]   📄 Files (${regularFiles.length}):`);
                                             regularFiles.slice(0, 10).forEach(file => {
@@ -338,77 +283,27 @@
             console.log('[USB] ✗ Tizen filesystem API not available');
         }
         
-        // Try common USB mount paths
-        const commonPaths = ['usb0', 'usb1', 'usb2', 'sdcard', 'external', 'removable'];
-        console.log('[USB] Checking common mount paths...');
-        
-        commonPaths.forEach(path => {
-            if (window.tizen && window.tizen.filesystem) {
-                try {
-                    window.tizen.filesystem.resolve(
-                        path,
-                        function(dir) {
-                            console.log(`[USB] ✓ Found: ${path} -> ${dir.fullPath}`);
-                        },
-                        function(err) {
-                            // Silently skip non-existent paths
-                        }
-                    );
-                } catch (e) {}
-            }
-        });
-        
-        // Check localStorage for USB-related entries
-        try {
-            const keys = Object.keys(window.localStorage);
-            const usbKeys = keys.filter(k => 
-                k.toLowerCase().includes('usb') || 
-                k.toLowerCase().includes('storage') ||
-                k.toLowerCase().includes('external')
-            );
-            if (usbKeys.length > 0) {
-                console.log('[USB] localStorage keys found:', usbKeys.join(', '));
-            }
-        } catch (e) {}
-        
-        // Try navigator.storage API
-        try {
-            if (navigator.storage && navigator.storage.estimate) {
-                navigator.storage.estimate().then(function(estimate) {
-                    const quotaGB = (estimate.quota / (1024*1024*1024)).toFixed(2);
-                    const usageMB = (estimate.usage / (1024*1024)).toFixed(2);
-                    console.log(`[USB] Browser storage: ${usageMB}MB used of ${quotaGB}GB quota`);
-                }).catch(function(err) {
-                    console.log('[USB] Storage estimate failed:', err.message);
-                });
-            }
-        } catch (e) {}
-        
         console.log(`[USB] ========================================`);
     }
     
-    // Manual USB check function
     window.checkUSB = function() {
         console.log('[USB] 🔍 MANUAL CHECK REQUESTED');
         detectUSB();
     };
     
-    // Automatic checks on startup
-    setTimeout(detectUSB, 1000);   // 1 second
-    setTimeout(detectUSB, 5000);   // 5 seconds
-    setTimeout(detectUSB, 20000);  // 20 seconds
+    setTimeout(detectUSB, 1000);
+    setTimeout(detectUSB, 5000);
+    setTimeout(detectUSB, 20000);
 
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console 94 - FIXED');
+    console.log('[Console] Visual Console v95 - INTEGRATED');
     console.log('[Console] ========================================');
-    console.log('[Console] Controls:');
-    console.log('[Console]   [1] key - Scroll UP');
-    console.log('[Console]   [3] key - Scroll DOWN');
-    console.log('[Console]   [5] key - Toggle AUTO-SCROLL');
-    console.log('[Console]   [7] key - Jump to TOP');
-    console.log('[Console]   [9] key - Jump to BOTTOM');
-    console.log('[Console]   [c] key - Clear console');
-    console.log('[Console]   Border: GREEN=auto-scroll, ORANGE=manual');
+    console.log('[Console] Controls (hold BACK + color button):');
+    console.log('[Console]   BACK+RED - Scroll UP');
+    console.log('[Console]   BACK+GREEN - Scroll DOWN');
+    console.log('[Console]   BACK+YELLOW - Auto-scroll ON');
+    console.log('[Console]   BACK+BLUE - Jump to TOP');
+    console.log('[Console]   Border: GREEN=auto, ORANGE=manual');
     console.log('[Console] Position:', currentPosition);
     console.log('[Console] Enabled:', enabled);
     console.log('[Console] ========================================');

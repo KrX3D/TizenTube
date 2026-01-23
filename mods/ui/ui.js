@@ -128,7 +128,6 @@ function execute_once_dom_loaded() {
   } catch (e) { }
 
   var eventHandler = (evt) => {
-    // We handle key events ourselves.
     console.info(
       'Key event:',
       evt.type,
@@ -136,6 +135,8 @@ function execute_once_dom_loaded() {
       evt.keyCode,
       evt.defaultPrevented
     );
+    
+    // Screen dimming logic
     if (configRead('enableScreenDimming')) {
       if (keyTimeout) {
         clearTimeout(keyTimeout);
@@ -148,8 +149,66 @@ function execute_once_dom_loaded() {
         document.getElementById('container').style.setProperty('opacity', (1 - configRead('dimmingOpacity')).toString(), 'important');
       }, configRead('dimmingTimeout') * 1000);
     }
-    if (evt.keyCode == 403) {
-      console.info('Taking over!');
+    
+    // ========================================================================
+    // CONSOLE SCROLL CONTROLS - Hold BACK then press color button
+    // ========================================================================
+    
+    // Track BACK key state
+    if (evt.type === 'keydown' && evt.keyCode === 27) {
+        window.lastBackKeyTime = Date.now();
+    }
+    
+    // Check if BACK was recently pressed (within 500ms)
+    const isBackHeld = window.lastBackKeyTime && (Date.now() - window.lastBackKeyTime < 500);
+    
+    // Console controls: BACK + Color Button
+    if (isBackHeld && evt.type === 'keydown') {
+        if (evt.keyCode === 403) { // BACK + RED = Scroll UP
+            console.log('[Console] Scrolling UP');
+            if (typeof window.scrollConsoleUp === 'function') {
+                evt.preventDefault();
+                evt.stopPropagation();
+                window.scrollConsoleUp();
+                return false;
+            }
+        }
+        else if (evt.keyCode === 404) { // BACK + GREEN = Scroll DOWN
+            console.log('[Console] Scrolling DOWN');
+            if (typeof window.scrollConsoleDown === 'function') {
+                evt.preventDefault();
+                evt.stopPropagation();
+                window.scrollConsoleDown();
+                return false;
+            }
+        }
+        else if (evt.keyCode === 405) { // BACK + YELLOW = Auto-scroll ON
+            console.log('[Console] Auto-scroll ON');
+            if (typeof window.enableConsoleAutoScroll === 'function') {
+                evt.preventDefault();
+                evt.stopPropagation();
+                window.enableConsoleAutoScroll();
+                return false;
+            }
+        }
+        else if (evt.keyCode === 406 || evt.keyCode === 191) { // BACK + BLUE = Jump to TOP
+            console.log('[Console] Jump to TOP');
+            if (typeof window.scrollConsoleToTop === 'function') {
+                evt.preventDefault();
+                evt.stopPropagation();
+                window.scrollConsoleToTop();
+                return false;
+            }
+        }
+    }
+    
+    // ========================================================================
+    // ORIGINAL BUTTON HANDLERS (only when BACK is NOT held)
+    // ========================================================================
+    
+    if (!isBackHeld && evt.keyCode == 403) {
+      // RED button - TizenTube Theme Configurator
+      console.info('Taking over RED!');
       evt.preventDefault();
       evt.stopPropagation();
       if (evt.type === 'keydown') {
@@ -166,12 +225,15 @@ function execute_once_dom_loaded() {
         } catch (e) { }
       }
       return false;
-    } else if (evt.keyCode == 404) {
+    } 
+    else if (!isBackHeld && evt.keyCode == 404) {
+      // GREEN button - TizenTube Settings
       if (evt.type === 'keydown') {
         modernUI();
       }
-    } else if (evt.keyCode == 39) {
-      // Right key, for PiP
+    } 
+    else if (evt.keyCode == 39) {
+      // Right arrow - PiP handling
       if (evt.type === 'keydown') {
         if (document.querySelector('ytlr-search-text-box > .zylon-focus') && window.isPipPlaying) {
           const ytlrPlayer = document.querySelector('ytlr-player');
@@ -179,9 +241,10 @@ function execute_once_dom_loaded() {
           pipToFullscreen();
         }
       }
-    };
+    }
+    
     return true;
-  }
+  };
 
   // Red, Green, Yellow, Blue
   // 403, 404, 405, 406
