@@ -151,89 +151,50 @@ function execute_once_dom_loaded() {
     }
     
     // ========================================================================
-    // CONSOLE SCROLL CONTROLS - Hold BACK then press color button
+    // CONSOLE SCROLL CONTROLS - Color buttons only
     // ========================================================================
     
-    // Track BACK key state
-    if (evt.type === 'keydown' && evt.keyCode === 27) {
-        window.lastBackKeyTime = Date.now();
-    }
-    
-    // Check if BACK was recently pressed (within 500ms)
-    const isBackHeld = window.lastBackKeyTime && (Date.now() - window.lastBackKeyTime < 500);
-    
-    // Console controls: BACK + Color Button
-    if (isBackHeld && evt.type === 'keydown') {
-        if (evt.keyCode === 403) { // BACK + RED = Scroll UP
-            console.log('[Console] Scrolling UP');
+    if (evt.type === 'keydown') {
+        if (evt.keyCode === 403) { // RED = Scroll UP
+            console.log('[Console] RED - Scrolling UP');
+            evt.preventDefault();
+            evt.stopPropagation();
             if (typeof window.scrollConsoleUp === 'function') {
-                evt.preventDefault();
-                evt.stopPropagation();
                 window.scrollConsoleUp();
-                return false;
             }
+            return false;
         }
-        else if (evt.keyCode === 404) { // BACK + GREEN = Scroll DOWN
-            console.log('[Console] Scrolling DOWN');
+        else if (evt.keyCode === 404 || evt.keyCode === 172) { // GREEN = Scroll DOWN
+            console.log('[Console] GREEN - Scrolling DOWN');
+            evt.preventDefault();
+            evt.stopPropagation();
             if (typeof window.scrollConsoleDown === 'function') {
-                evt.preventDefault();
-                evt.stopPropagation();
                 window.scrollConsoleDown();
-                return false;
             }
+            return false;
         }
-        else if (evt.keyCode === 405) { // BACK + YELLOW = Auto-scroll ON
-            console.log('[Console] Auto-scroll ON');
+        else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Auto-scroll ON (jump to bottom)
+            console.log('[Console] YELLOW - Auto-scroll ON');
+            evt.preventDefault();
+            evt.stopPropagation();
             if (typeof window.enableConsoleAutoScroll === 'function') {
-                evt.preventDefault();
-                evt.stopPropagation();
                 window.enableConsoleAutoScroll();
-                return false;
             }
+            return false;
         }
-        else if (evt.keyCode === 406 || evt.keyCode === 191) { // BACK + BLUE = Jump to TOP
-            console.log('[Console] Jump to TOP');
+        else if (evt.keyCode === 406 || evt.keyCode === 191) { // BLUE = Jump to TOP
+            console.log('[Console] BLUE - Jump to TOP');
+            evt.preventDefault();
+            evt.stopPropagation();
             if (typeof window.scrollConsoleToTop === 'function') {
-                evt.preventDefault();
-                evt.stopPropagation();
                 window.scrollConsoleToTop();
-                return false;
             }
+            return false;
         }
     }
     
-    // ========================================================================
-    // ORIGINAL BUTTON HANDLERS (only when BACK is NOT held)
-    // ========================================================================
-    
-    if (!isBackHeld && evt.keyCode == 403) {
-      // RED button - TizenTube Theme Configurator
-      console.info('Taking over RED!');
-      evt.preventDefault();
-      evt.stopPropagation();
-      if (evt.type === 'keydown') {
-        try {
-          if (uiContainer.style.display === 'none') {
-            console.info('Showing and focusing!');
-            uiContainer.style.display = 'block';
-            uiContainer.focus();
-          } else {
-            console.info('Hiding!');
-            uiContainer.style.display = 'none';
-            uiContainer.blur();
-          }
-        } catch (e) { }
-      }
-      return false;
-    } 
-    else if (!isBackHeld && evt.keyCode == 404) {
-      // GREEN button - TizenTube Settings
-      if (evt.type === 'keydown') {
-        modernUI();
-      }
-    } 
-    else if (evt.keyCode == 39) {
-      // Right arrow - PiP handling
+    // Right arrow - PiP handling (keep this)
+    if (evt.keyCode == 39) {
       if (evt.type === 'keydown') {
         if (document.querySelector('ytlr-search-text-box > .zylon-focus') && window.isPipPlaying) {
           const ytlrPlayer = document.querySelector('ytlr-player');

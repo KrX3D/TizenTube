@@ -75,7 +75,7 @@
     // EXPOSE to window for ui.js to control
     window.consoleAutoScroll = true;
 
-    // Simple scroll function
+    // Simple, reliable scroll function
     window.scrollConsoleToBottom = function() {
         if (!consoleDiv || !window.consoleAutoScroll || !enabled) return;
         consoleDiv.scrollTop = consoleDiv.scrollHeight;
@@ -181,13 +181,17 @@
         
         if (consoleDiv && enabled) {
             consoleDiv.innerHTML = logs.join('');
+            // CRITICAL: Auto-scroll after DOM update
             if (window.consoleAutoScroll) {
                 setTimeout(window.scrollConsoleToBottom, 0);
             }
         }
     }
 
-    // USB Detection
+    // ========================================================================
+    // USB Detection for Samsung Tizen - ENHANCED
+    // ========================================================================
+    
     let usbCheckCount = 0;
     
     function getUSBMonitoringEnabled() {
@@ -296,14 +300,17 @@
     setTimeout(detectUSB, 20000);
 
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v95 - INTEGRATED');
+    console.log('[Console] Visual Console v99 - FINAL');
     console.log('[Console] ========================================');
-    console.log('[Console] Controls (hold BACK + color button):');
-    console.log('[Console]   BACK+RED - Scroll UP');
-    console.log('[Console]   BACK+GREEN - Scroll DOWN');
-    console.log('[Console]   BACK+YELLOW - Auto-scroll ON');
-    console.log('[Console]   BACK+BLUE - Jump to TOP');
-    console.log('[Console]   Border: GREEN=auto, ORANGE=manual');
+    console.log('[Console] Remote Controls:');
+    console.log('[Console]   RED button - Scroll UP');
+    console.log('[Console]   GREEN button - Scroll DOWN');
+    console.log('[Console]   YELLOW button - Auto-scroll ON (jump to bottom)');
+    console.log('[Console]   BLUE button - Jump to TOP');
+    console.log('[Console]   ');
+    console.log('[Console]   Border colors:');
+    console.log('[Console]     GREEN = Auto-scroll ON');
+    console.log('[Console]     ORANGE = Manual scroll mode');
     console.log('[Console] Position:', currentPosition);
     console.log('[Console] Enabled:', enabled);
     console.log('[Console] ========================================');
