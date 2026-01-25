@@ -146,24 +146,29 @@ JSON.parse = function () {
       const sections = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections;
       console.log('[SECONDARY_NAV] Processing', sections.length, 'sections');
       
+      let totalTabs = 0;
+      let tabsWithContent = 0;
+      
       for (let i = 0; i < sections.length; i++) {
         const section = sections[i];
-        console.log('[SECONDARY_NAV] Section', (i + 1), '- tabs:', section.tvSecondaryNavSectionRenderer?.tabs?.length || 0);
         
         if (section.tvSecondaryNavSectionRenderer?.tabs) {
+          totalTabs += section.tvSecondaryNavSectionRenderer.tabs.length;
+          
           for (let j = 0; j < section.tvSecondaryNavSectionRenderer.tabs.length; j++) {
             const tab = section.tvSecondaryNavSectionRenderer.tabs[j];
             const contents = tab.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
             
-            if (contents) {
-              console.log('[SECONDARY_NAV] Tab', (j + 1), '- processing', contents.length, 'shelves');
+            if (contents && contents.length > 0) {
+              tabsWithContent++;
+              console.log('[SECONDARY_NAV] Section', (i + 1), 'Tab', (j + 1), '- processing', contents.length, 'shelves');
               processShelves(contents);
-            } else {
-              console.log('[SECONDARY_NAV] Tab', (j + 1), '- no contents found');
             }
           }
         }
       }
+      
+      console.log('[SECONDARY_NAV] Complete -', totalTabs, 'tabs total,', tabsWithContent, 'with content,', (totalTabs - tabsWithContent), 'empty');
     } else {
       console.log('[JSON.parse] tvSecondaryNavRenderer already processed, SKIPPING');
     }
@@ -332,64 +337,192 @@ function processShelves(shelves, shouldAddPreviews = true) {
   let shelvesRemoved = 0;
   
   for (let i = shelves.length - 1; i >= 0; i--) {
-    const shelve = shelves[i];
-    if (!shelve) continue;
-    
-    let shelfType = 'unknown';
-    let itemsBefore = 0;
-    let itemsAfter = 0;
-    
-    console.log('[SHELF_PROCESS] ------ Processing shelf', (shelves.length - i), 'of', shelves.length, '------');
-    
-    // Handle shelfRenderer
-    if (shelve.shelfRenderer) {
-      // horizontalListRenderer
-      if (shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
-        shelfType = 'horizontalList';
-        let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
-        itemsBefore = items.length;
-        
-        console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
-        
-        deArrowify(items);
-        hqify(items);
-        addLongPress(items);
-        if (shouldAddPreviews) addPreviews(items);
-        
-        if (!shortsEnabled) {
-          if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-            console.log('[SHELF_PROCESS] Removing entire SHORTS shelf');
+    try {
+      const shelve = shelves[i];
+      if (!shelve) continue;
+      
+      let shelfType = 'unknown';
+      let itemsBefore = 0;
+      let itemsAfter = 0;
+      
+      console.log('[SHELF_PROCESS] ------ Processing shelf', (shelves.length - i), 'of', shelves.length, '------');
+      
+      // Handle shelfRenderer
+      if (shelve.shelfRenderer) {
+        // horizontalListRenderer
+        if (shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
+          shelfType = 'horizontalList';
+          let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
+          itemsBefore = items.length;
+          
+          console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
+          
+          deArrowify(items);
+          hqify(items);
+          addLongPress(items);
+          if (shouldAddPreviews) addPreviews(items);
+          
+          if (!shortsEnabled) {
+            if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+              console.log('[SHELF_PROCESS] Removing entire SHORTS shelf');
+              shelves.splice(i, 1);
+              shelvesRemoved++;
+              continue;
+            }
+            
+            const beforeShortFilter = items.length;
+            items = items.filter(item => !isShortItem(item));
+            if (beforeShortFilter !== items.length) {
+              console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
+            }
+          }
+          
+          console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
+          items = hideVideo(items);
+          console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
+          itemsAfter = items.length;
+          
+          shelve.shelfRenderer.content.horizontalListRenderer.items = items;
+          
+          if (items.length === 0) {
+            console.log('[SHELF_PROCESS] Shelf now empty, removing');
             shelves.splice(i, 1);
             shelvesRemoved++;
             continue;
           }
+        }
+        
+        // gridRenderer
+        else if (shelve.shelfRenderer.content?.gridRenderer?.items) {
+          shelfType = 'grid';
+          let items = shelve.shelfRenderer.content.gridRenderer.items;
+          itemsBefore = items.length;
           
-          const beforeShortFilter = items.length;
-          items = items.filter(item => !isShortItem(item));
-          if (beforeShortFilter !== items.length) {
-            console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
+          console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
+          
+          deArrowify(items);
+          hqify(items);
+          addLongPress(items);
+          if (shouldAddPreviews) addPreviews(items);
+          
+          if (!shortsEnabled) {
+            const beforeShortFilter = items.length;
+            items = items.filter(item => !isShortItem(item));
+            if (beforeShortFilter !== items.length) {
+              console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
+            }
+          }
+          
+          console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
+          items = hideVideo(items);
+          console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
+          itemsAfter = items.length;
+          
+          shelve.shelfRenderer.content.gridRenderer.items = items;
+          
+          if (items.length === 0) {
+            console.log('[SHELF_PROCESS] Shelf now empty, removing');
+            shelves.splice(i, 1);
+            shelvesRemoved++;
+            continue;
+          }
+        }
+
+        // verticalListRenderer
+        else if (shelve.shelfRenderer.content?.verticalListRenderer?.items) {
+          shelfType = 'verticalList';
+          let items = shelve.shelfRenderer.content.verticalListRenderer.items;
+          itemsBefore = items.length;
+          
+          console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
+          
+          deArrowify(items);
+          hqify(items);
+          addLongPress(items);
+          if (shouldAddPreviews) addPreviews(items);
+          
+          if (!shortsEnabled) {
+            const beforeShortFilter = items.length;
+            items = items.filter(item => !isShortItem(item));
+            if (beforeShortFilter !== items.length) {
+              console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
+            }
+          }
+          
+          console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
+          items = hideVideo(items);
+          console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
+          itemsAfter = items.length;
+          
+          shelve.shelfRenderer.content.verticalListRenderer.items = items;
+          
+          if (items.length === 0) {
+            console.log('[SHELF_PROCESS] Shelf now empty, removing');
+            shelves.splice(i, 1);
+            shelvesRemoved++;
+            continue;
+          }
+        }
+      }
+      
+      // Handle richShelfRenderer (subscriptions)
+      else if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
+        shelfType = 'richGrid';
+        let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
+        itemsBefore = contents.length;
+        
+        console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
+        
+        deArrowify(contents);
+        hqify(contents);
+        addLongPress(contents);
+        if (shouldAddPreviews) addPreviews(contents);
+        
+        if (!shortsEnabled) {
+          const beforeShortFilter = contents.length;
+          contents = contents.filter(item => !isShortItem(item));
+          if (beforeShortFilter !== contents.length) {
+            console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - contents.length), 'shorts from', shelfType);
           }
         }
         
-        console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
-        items = hideVideo(items);
-        console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
-        itemsAfter = items.length;
+        console.log('[SHELF_PROCESS] Before hideVideo:', contents.length, 'items');
+        contents = hideVideo(contents);
+        console.log('[SHELF_PROCESS] After hideVideo:', contents.length, 'items');
+        itemsAfter = contents.length;
         
-        shelve.shelfRenderer.content.horizontalListRenderer.items = items;
+        shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
         
-        if (items.length === 0) {
+        if (contents.length === 0) {
           console.log('[SHELF_PROCESS] Shelf now empty, removing');
           shelves.splice(i, 1);
           shelvesRemoved++;
           continue;
         }
       }
-      
-      // gridRenderer
-      else if (shelve.shelfRenderer.content?.gridRenderer?.items) {
-        shelfType = 'grid';
-        let items = shelve.shelfRenderer.content.gridRenderer.items;
+
+      // Handle richSectionRenderer
+      else if (shelve.richSectionRenderer?.content?.richShelfRenderer) {
+        shelfType = 'richSection';
+        console.log('[SHELF_PROCESS] Type:', shelfType);
+        
+        if (!shortsEnabled) {
+          const innerShelf = shelve.richSectionRenderer.content.richShelfRenderer;
+          const contents = innerShelf?.content?.richGridRenderer?.contents;
+          
+          if (Array.isArray(contents) && contents.some(item => isShortItem(item))) {
+            console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
+            shelves.splice(i, 1);
+            shelvesRemoved++;
+            continue;
+          }
+        }
+      }
+
+      // Handle gridRenderer at shelf level
+      else if (shelve.gridRenderer?.items) {
+        shelfType = 'topLevelGrid';
+        let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
         
         console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
@@ -412,7 +545,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
         itemsAfter = items.length;
         
-        shelve.shelfRenderer.content.gridRenderer.items = items;
+        shelve.gridRenderer.items = items;
         
         if (items.length === 0) {
           console.log('[SHELF_PROCESS] Shelf now empty, removing');
@@ -421,139 +554,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           continue;
         }
       }
-
-      // verticalListRenderer
-      else if (shelve.shelfRenderer.content?.verticalListRenderer?.items) {
-        shelfType = 'verticalList';
-        let items = shelve.shelfRenderer.content.verticalListRenderer.items;
-        itemsBefore = items.length;
-        
-        console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
-        
-        deArrowify(items);
-        hqify(items);
-        addLongPress(items);
-        if (shouldAddPreviews) addPreviews(items);
-        
-        if (!shortsEnabled) {
-          const beforeShortFilter = items.length;
-          items = items.filter(item => !isShortItem(item));
-          if (beforeShortFilter !== items.length) {
-            console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
-          }
-        }
-        
-        console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
-        items = hideVideo(items);
-        console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
-        itemsAfter = items.length;
-        
-        shelve.shelfRenderer.content.verticalListRenderer.items = items;
-        
-        if (items.length === 0) {
-          console.log('[SHELF_PROCESS] Shelf now empty, removing');
-          shelves.splice(i, 1);
-          shelvesRemoved++;
-          continue;
-        }
+      
+      totalItemsBefore += itemsBefore;
+      totalItemsAfter += itemsAfter;
+      
+      if (itemsBefore > 0) {
+        console.log('[SHELF_PROCESS] Shelf complete:', shelfType, '- Before:', itemsBefore, 'After:', itemsAfter);
       }
-    }
-    
-    // Handle richShelfRenderer (subscriptions)
-    else if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
-      shelfType = 'richGrid';
-      let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
-      itemsBefore = contents.length;
-      
-      console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
-      
-      deArrowify(contents);
-      hqify(contents);
-      addLongPress(contents);
-      if (shouldAddPreviews) addPreviews(contents);
-      
-      if (!shortsEnabled) {
-        const beforeShortFilter = contents.length;
-        contents = contents.filter(item => !isShortItem(item));
-        if (beforeShortFilter !== contents.length) {
-          console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - contents.length), 'shorts from', shelfType);
-        }
-      }
-      
-      console.log('[SHELF_PROCESS] Before hideVideo:', contents.length, 'items');
-      contents = hideVideo(contents);
-      console.log('[SHELF_PROCESS] After hideVideo:', contents.length, 'items');
-      itemsAfter = contents.length;
-      
-      shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
-      
-      if (contents.length === 0) {
-        console.log('[SHELF_PROCESS] Shelf now empty, removing');
-        shelves.splice(i, 1);
-        shelvesRemoved++;
-        continue;
-      }
-    }
-
-    // Handle richSectionRenderer
-    else if (shelve.richSectionRenderer?.content?.richShelfRenderer) {
-      shelfType = 'richSection';
-      console.log('[SHELF_PROCESS] Type:', shelfType);
-      
-      if (!shortsEnabled) {
-        const innerShelf = shelve.richSectionRenderer.content.richShelfRenderer;
-        const contents = innerShelf?.content?.richGridRenderer?.contents;
-        
-        if (Array.isArray(contents) && contents.some(item => isShortItem(item))) {
-          console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
-          shelves.splice(i, 1);
-          shelvesRemoved++;
-          continue;
-        }
-      }
-    }
-
-    // Handle gridRenderer at shelf level
-    else if (shelve.gridRenderer?.items) {
-      shelfType = 'topLevelGrid';
-      let items = shelve.gridRenderer.items;
-      itemsBefore = items.length;
-      
-      console.log('[SHELF_PROCESS] Type:', shelfType, '| Items:', itemsBefore);
-      
-      deArrowify(items);
-      hqify(items);
-      addLongPress(items);
-      if (shouldAddPreviews) addPreviews(items);
-      
-      if (!shortsEnabled) {
-        const beforeShortFilter = items.length;
-        items = items.filter(item => !isShortItem(item));
-        if (beforeShortFilter !== items.length) {
-          console.log('[SHELF_PROCESS] Filtered', (beforeShortFilter - items.length), 'shorts from', shelfType);
-        }
-      }
-      
-      console.log('[SHELF_PROCESS] Before hideVideo:', items.length, 'items');
-      items = hideVideo(items);
-      console.log('[SHELF_PROCESS] After hideVideo:', items.length, 'items');
-      itemsAfter = items.length;
-      
-      shelve.gridRenderer.items = items;
-      
-      if (items.length === 0) {
-        console.log('[SHELF_PROCESS] Shelf now empty, removing');
-        shelves.splice(i, 1);
-        shelvesRemoved++;
-        continue;
-      }
-    }
-    
-    totalItemsBefore += itemsBefore;
-    totalItemsAfter += itemsAfter;
-    
-    if (itemsBefore > 0) {
-      console.log('[SHELF_PROCESS] Shelf complete:', shelfType, '- Before:', itemsBefore, 'After:', itemsAfter);
+    } catch (error) {
+      console.log('[SHELF_PROCESS] ERROR processing shelf', (shelves.length - i), ':', error.message);
+      console.log('[SHELF_PROCESS] Error stack:', error.stack);
     }
   }
   
@@ -814,6 +824,10 @@ function getCurrentPage() {
     detectedPage = 'gaming';
   } else if (browseParam.includes('fetopics')) {
     detectedPage = 'home';
+  }
+  // Check if it's a channel based on browse parameter starting with UC (YouTube channel IDs)
+  else if (browseParam.startsWith('uc') && browseParam.length > 10) {
+    detectedPage = 'channel';
   }
   // Check traditional hash patterns (fallback)
   else if (cleanHash.includes('/feed/subscriptions') || cleanHash.includes('/subscriptions') || cleanHash.includes('/abos')) {

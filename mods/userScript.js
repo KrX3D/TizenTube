@@ -283,88 +283,81 @@
         usbCheckCount++;
         console.log('[USB] ======== Check #' + usbCheckCount + ' ========');
         
-        if (!window.tizen) {
-            console.log('[USB] ERROR: window.tizen not available');
-            return;
-        }
-        
-        if (!window.tizen.filesystem) {
-            console.log('[USB] ERROR: tizen.filesystem not available');
-            return;
-        }
-        
-        try {
-            console.log('[USB] Tizen filesystem API available');
-            
-            const storages = window.tizen.filesystem.listStorages();
-            console.log('[USB] Found', storages.length, 'storage(s)');
-            
-            if (storages.length === 0) {
-                console.log('[USB] No storage devices detected');
-                return;
-            }
-            
-            storages.forEach((storage, idx) => {
-                console.log('[USB] --- Storage', (idx + 1), '---');
-                console.log('[USB]   Label:', storage.label);
-                console.log('[USB]   Type:', storage.type);
-                console.log('[USB]   State:', storage.state);
+        // Check 1: Tizen native API (WebOS TV)
+        if (typeof tizen !== 'undefined' && tizen.filesystem) {
+            console.log('[USB] Using Tizen native filesystem API');
+            try {
+                const storages = tizen.filesystem.listStorages();
+                console.log('[USB] Found', storages.length, 'storage(s)');
                 
-                if (storage.type !== 'EXTERNAL') {
-                    console.log('[USB]   Skipping (not external)');
-                    return;
-                }
-                
-                if (storage.state !== 'MOUNTED') {
-                    console.log('[USB]   Skipping (not mounted)');
-                    return;
-                }
-                
-                try {
-                    window.tizen.filesystem.resolve(
-                        storage.label,
-                        function(dir) {
-                            console.log('[USB]   Path:', dir.fullPath);
-                            
-                            dir.listFiles(
-                                function(files) {
-                                    console.log('[USB]   Files:', files.length);
-                                    
-                                    const folders = files.filter(f => f.isDirectory);
-                                    const regularFiles = files.filter(f => f.isFile);
-                                    
-                                    console.log('[USB]   Folders:', folders.length, '| Files:', regularFiles.length);
-                                    
-                                    if (folders.length > 0) {
-                                        folders.slice(0, 5).forEach(f => console.log('[USB]     📁', f.name));
-                                        if (folders.length > 5) console.log('[USB]     ... +' + (folders.length - 5) + ' more');
-                                    }
-                                    
-                                    if (regularFiles.length > 0) {
-                                        regularFiles.slice(0, 5).forEach(f => {
-                                            const sizeMB = (f.fileSize / 1024 / 1024).toFixed(1);
-                                            console.log('[USB]     📄', f.name, '-', sizeMB + 'MB');
+                storages.forEach((storage, idx) => {
+                    console.log('[USB] Storage', (idx + 1) + ':', storage.label, '|', storage.type, '|', storage.state);
+                    
+                    if (storage.type === 'EXTERNAL' && storage.state === 'MOUNTED') {
+                        tizen.filesystem.resolve(
+                            storage.label,
+                            function(dir) {
+                                console.log('[USB] ✓ Mounted at:', dir.fullPath);
+                                dir.listFiles(
+                                    function(files) {
+                                        console.log('[USB] ✓ Contains', files.length, 'items');
+                                        files.slice(0, 5).forEach(f => {
+                                            console.log('[USB]  ', f.isDirectory ? '📁' : '📄', f.name);
                                         });
-                                        if (regularFiles.length > 5) console.log('[USB]     ... +' + (regularFiles.length - 5) + ' more');
-                                    }
-                                },
-                                function(err) {
-                                    console.log('[USB]   List error:', err.message);
-                                }
-                            );
-                        },
-                        function(err) {
-                            console.log('[USB]   Resolve error:', err.message);
-                        }
-                    );
-                } catch (e) {
-                    console.log('[USB]   Exception:', e.message);
-                }
-            });
-        } catch (e) {
-            console.log('[USB] ERROR:', e.message);
+                                        if (files.length > 5) console.log('[USB]   ... +' + (files.length - 5) + ' more');
+                                    },
+                                    function(err) { console.log('[USB] ✗ List failed:', err.message); }
+                                );
+                            },
+                            function(err) { console.log('[USB] ✗ Resolve failed:', err.message); }
+                        );
+                    }
+                });
+                return;
+            } catch (e) {
+                console.log('[USB] Tizen API error:', e.message);
+            }
         }
         
+        // Check 2: Cobalt h5vcc API (TizenBrew)
+        if (window.h5vcc && window.h5vcc.storage) {
+            console.log('[USB] Using Cobalt h5vcc storage API');
+            try {
+                const storageInfo = window.h5vcc.storage.getStorageInfo();
+                console.log('[USB] Storage info:', JSON.stringify(storageInfo));
+                return;
+            } catch (e) {
+                console.log('[USB] h5vcc error:', e.message);
+            }
+        }
+        
+        // Check 3: Try to read TizenBrew config (we're in the browser context)
+        if (window.localStorage) {
+            console.log('[USB] Attempting localStorage check for TizenBrew data');
+            try {
+                const keys = Object.keys(window.localStorage);
+                console.log('[USB] Found', keys.length, 'localStorage keys');
+                
+                const tizenKeys = keys.filter(k => k.toLowerCase().includes('tizen') || k.toLowerCase().includes('brew'));
+                if (tizenKeys.length > 0) {
+                    console.log('[USB] TizenBrew-related keys:', tizenKeys.join(', '));
+                }
+            } catch (e) {
+                console.log('[USB] localStorage error:', e.message);
+            }
+        }
+        
+        // Check 4: File System Access API (modern browsers, won't work on TV but worth checking)
+        if ('showDirectoryPicker' in window) {
+            console.log('[USB] File System Access API available (not supported on TV)');
+        }
+        
+        console.log('[USB] ✗ No supported USB detection method available');
+        console.log('[USB] Available APIs:', {
+            tizen: typeof tizen !== 'undefined',
+            h5vcc: typeof window.h5vcc !== 'undefined',
+            cobalt: typeof window.h5vcc?.tizentube !== 'undefined'
+        });
         console.log('[USB] ========================================');
     }
     
@@ -375,7 +368,7 @@
     };
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v120 - NEWEST FIRST');
+    console.log('[Console] Visual Console v140 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
