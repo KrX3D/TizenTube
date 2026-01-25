@@ -768,15 +768,20 @@ export default function modernUI(update, parameters) {
                         value: null,
                         options: {
                             title: 'Manual USB Check',
-                            subtitle: 'Check for connected USB drives now',
-                            content: scrollPaneRenderer([
+                            subtitle: 'Click the button below to scan for USB drives',
+                            content: overlayPanelItemListRenderer([
                                 buttonItem(
-                                    { title: 'Check USB Drives', subtitle: 'Click to scan' },
+                                    { title: 'Check USB Drives Now' },
                                     { icon: 'SYSTEM_UPDATE' },
                                     [
                                         {
                                             customAction: {
                                                 action: 'CHECK_USB'
+                                            }
+                                        },
+                                        {
+                                            signalAction: {
+                                                signal: 'POPUP_BACK'
                                             }
                                         }
                                     ]
@@ -791,14 +796,19 @@ export default function modernUI(update, parameters) {
                         options: {
                             title: 'Test Console',
                             subtitle: 'Force show console and test logging',
-                            content: scrollPaneRenderer([
+                            content: overlayPanelItemListRenderer([
                                 buttonItem(
-                                    { title: 'Force Show Console', subtitle: 'Click to test' },
+                                    { title: 'Force Show Console' },
                                     { icon: 'VISIBILITY' },
                                     [
                                         {
                                             customAction: {
                                                 action: 'FORCE_SHOW_CONSOLE'
+                                            }
+                                        },
+                                        {
+                                            signalAction: {
+                                                signal: 'POPUP_BACK'
                                             }
                                         }
                                     ]

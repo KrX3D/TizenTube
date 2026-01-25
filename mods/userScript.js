@@ -48,7 +48,7 @@
         font-family: monospace;
         font-size: 13px;
         padding: 10px;
-        overflow-y: scroll;
+        overflow-y: scroll !important;
         overflow-x: hidden;
         z-index: 999999;
         border: 3px solid #0f0;
@@ -56,6 +56,7 @@
         box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
         pointer-events: auto;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     `;
     
     Object.assign(consoleDiv.style, posStyles);
@@ -78,26 +79,36 @@
     // Scroll functions with EXTENSIVE debugging
     window.scrollConsoleUp = function() {
         console.log('[Scroll] === UP function called ===');
-        console.log('[Scroll] consoleDiv exists:', !!consoleDiv);
         if (!consoleDiv) {
             console.log('[Scroll] ERROR: No console div!');
             return;
         }
         
-        console.log('[Scroll] Current scrollTop:', consoleDiv.scrollTop);
-        console.log('[Scroll] scrollHeight:', consoleDiv.scrollHeight);
-        console.log('[Scroll] clientHeight:', consoleDiv.clientHeight);
-        console.log('[Scroll] Computed overflow-y:', window.getComputedStyle(consoleDiv).overflowY);
+        console.log('[Scroll] Before - scrollTop:', consoleDiv.scrollTop, 'scrollHeight:', consoleDiv.scrollHeight, 'clientHeight:', consoleDiv.clientHeight);
         
         const before = consoleDiv.scrollTop;
-        consoleDiv.scrollTop = Math.max(0, consoleDiv.scrollTop - 100);
+        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
+        
+        // Try multiple methods to force scroll
+        consoleDiv.scrollTop = newScroll;
+        consoleDiv.scroll(0, newScroll);
+        consoleDiv.scrollTo(0, newScroll);
+        
+        // Force a reflow
+        void consoleDiv.offsetHeight;
+        
         const after = consoleDiv.scrollTop;
+        console.log('[Scroll] After - scrollTop:', after, '| Changed by:', (before - after));
         
-        console.log('[Scroll] Changed from', before, 'to', after);
-        console.log('[Scroll] Actual change:', (before - after));
-        
-        if (before === after) {
-            console.log('[Scroll] WARNING: Scroll did not change! Already at top?');
+        if (before === after && before > 0) {
+            console.log('[Scroll] FAILED to scroll! Trying direct DOM manipulation...');
+            // Last resort: try to force it
+            try {
+                Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop').set.call(consoleDiv, newScroll);
+                console.log('[Scroll] Direct manipulation result:', consoleDiv.scrollTop);
+            } catch (e) {
+                console.log('[Scroll] Direct manipulation failed:', e.message);
+            }
         }
         
         window.consoleAutoScroll = false;
@@ -106,28 +117,38 @@
 
     window.scrollConsoleDown = function() {
         console.log('[Scroll] === DOWN function called ===');
-        console.log('[Scroll] consoleDiv exists:', !!consoleDiv);
         if (!consoleDiv) {
             console.log('[Scroll] ERROR: No console div!');
             return;
         }
         
-        console.log('[Scroll] Current scrollTop:', consoleDiv.scrollTop);
-        console.log('[Scroll] scrollHeight:', consoleDiv.scrollHeight);
-        console.log('[Scroll] clientHeight:', consoleDiv.clientHeight);
-        console.log('[Scroll] Max scroll:', consoleDiv.scrollHeight - consoleDiv.clientHeight);
+        console.log('[Scroll] Before - scrollTop:', consoleDiv.scrollTop, 'scrollHeight:', consoleDiv.scrollHeight, 'clientHeight:', consoleDiv.clientHeight);
         
         const before = consoleDiv.scrollTop;
         const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
-        consoleDiv.scrollTop = Math.min(maxScroll, consoleDiv.scrollTop + 100);
+        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
+        
+        console.log('[Scroll] Attempting to scroll to:', newScroll, '(max:', maxScroll + ')');
+        
+        // Try multiple methods to force scroll
+        consoleDiv.scrollTop = newScroll;
+        consoleDiv.scroll(0, newScroll);
+        consoleDiv.scrollTo(0, newScroll);
+        
+        // Force a reflow
+        void consoleDiv.offsetHeight;
+        
         const after = consoleDiv.scrollTop;
+        console.log('[Scroll] After - scrollTop:', after, '| Changed by:', (after - before));
         
-        console.log('[Scroll] Changed from', before, 'to', after);
-        console.log('[Scroll] Actual change:', (after - before));
-        
-        if (before === after) {
-            console.log('[Scroll] WARNING: Scroll did not change! Already at bottom or not scrollable?');
-            console.log('[Scroll] Is scrollable?', maxScroll > 0);
+        if (before === after && before < maxScroll) {
+            console.log('[Scroll] FAILED to scroll! Trying direct DOM manipulation...');
+            try {
+                Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop').set.call(consoleDiv, newScroll);
+                console.log('[Scroll] Direct manipulation result:', consoleDiv.scrollTop);
+            } catch (e) {
+                console.log('[Scroll] Direct manipulation failed:', e.message);
+            }
         }
         
         window.consoleAutoScroll = false;
@@ -139,9 +160,10 @@
         window.consoleAutoScroll = true;
         updateBorder();
         if (consoleDiv) {
-            const before = consoleDiv.scrollTop;
             consoleDiv.scrollTop = 0;
-            console.log('[Scroll] Jumped to top:', before, '→', consoleDiv.scrollTop);
+            consoleDiv.scroll(0, 0);
+            consoleDiv.scrollTo(0, 0);
+            console.log('[Scroll] Jumped to top, scrollTop now:', consoleDiv.scrollTop);
         }
     };
 
@@ -329,7 +351,7 @@
     };
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v115 - NEWEST FIRST');
+    console.log('[Console] Visual Console v120 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
