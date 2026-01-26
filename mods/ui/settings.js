@@ -778,14 +778,14 @@ export default function modernUI(update, parameters) {
                                 value: '800'
                             },
                             {
-                                name: 'Double (1000px)',
+                                name: 'Double (1020px)',
                                 key: 'debugConsoleHeight',
-                                value: '1000'
+                                value: '1020'
                             },
                             {
-                                name: 'Full Screen (1080px)',
+                                name: 'Full Screen (1060px)',
                                 key: 'debugConsoleHeight',
-                                value: '1080'
+                                value: '1060'
                             }
                         ]
                     },
