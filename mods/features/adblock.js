@@ -253,6 +253,7 @@ function isShortItem(item) {
 
   const detectionReasons = [];
 
+  // Check all possible renderer paths
   if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
     detectionReasons.push('reelRenderer');
   }
@@ -262,35 +263,65 @@ function isShortItem(item) {
     item.compactVideoRenderer,
     item.gridVideoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.tileRenderer
+    item.tileRenderer,
+    // NEW: Additional paths for Tizen 5.0
+    item.gridChannelRenderer,
+    item.channelRenderer
   ];
 
   for (const video of videoRenderers) {
     if (!video) continue;
 
+    // Check badges (works on both versions)
     if (video.badges) {
       for (const badge of video.badges) {
-        if (badge.metadataBadgeRenderer?.label === 'Shorts') {
+        if (badge.metadataBadgeRenderer?.label === 'Shorts' || 
+            badge.metadataBadgeRenderer?.label === 'Short') {
           detectionReasons.push('badge');
           break;
         }
       }
     }
 
+    // Check overlays (enhanced for Tizen 5.0)
     if (video.thumbnailOverlays) {
       for (const overlay of video.thumbnailOverlays) {
-        if (overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS') {
+        if (overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
+            overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORT') {
           detectionReasons.push('overlay');
           break;
         }
       }
     }
 
-    const navEndpoint = video.navigationEndpoint || video.onSelectCommand;
-    const url = navEndpoint?.commandMetadata?.webCommandMetadata?.url || navEndpoint?.watchEndpoint?.videoId;
+    // Check navigation endpoint (multiple paths for compatibility)
+    const navEndpoint = video.navigationEndpoint || 
+                       video.onSelectCommand ||
+                       video.command?.commandMetadata;
     
-    if (url && typeof url === 'string' && url.includes('/shorts/')) {
+    const url = navEndpoint?.commandMetadata?.webCommandMetadata?.url || 
+                navEndpoint?.watchEndpoint?.videoId ||
+                navEndpoint?.webCommandMetadata?.url;
+    
+    if (url && typeof url === 'string' && 
+        (url.includes('/shorts/') || url.includes('/short/'))) {
       detectionReasons.push('url');
+    }
+    
+    // NEW: Check for shorts-specific metadata (Tizen 5.0)
+    if (video.videoId && video.lengthSeconds) {
+      const length = parseInt(video.lengthSeconds, 10);
+      // Shorts are typically under 60 seconds
+      if (length <= 60 && length > 0) {
+        // Additional check: aspect ratio or other metadata
+        if (video.thumbnail?.thumbnails?.[0]) {
+          const thumb = video.thumbnail.thumbnails[0];
+          // Shorts often have 9:16 aspect ratio
+          if (thumb.height > thumb.width) {
+            detectionReasons.push('aspect-ratio');
+          }
+        }
+      }
     }
   }
 
@@ -347,6 +378,11 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
           itemsBefore = items.length;
           
+          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+                    
           deArrowify(items);
           hqify(items);
           addLongPress(items);
@@ -387,7 +423,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelfType = 'grid';
           let items = shelve.shelfRenderer.content.gridRenderer.items;
           itemsBefore = items.length;
-          
+
+          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+
           deArrowify(items);
           hqify(items);
           addLongPress(items);
@@ -419,7 +460,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelfType = 'vList';
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
           itemsBefore = items.length;
-          
+
+          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+
           deArrowify(items);
           hqify(items);
           addLongPress(items);
@@ -452,7 +498,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelfType = 'richGrid';
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
         itemsBefore = contents.length;
-        
+
+        console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+        console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
+        console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
+        console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
+
         deArrowify(contents);
         hqify(contents);
         addLongPress(contents);
@@ -500,7 +551,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelfType = 'topGrid';
         let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
-        
+
+        console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+        console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+        console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+        console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+
         deArrowify(items);
         hqify(items);
         addLongPress(items);
@@ -686,22 +742,33 @@ function findProgressBar(item) {
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
     
+    // MORE COMPREHENSIVE overlay paths for Tizen 5.0 compatibility
     const overlayPaths = [
       renderer.thumbnailOverlays,
       renderer.header?.tileHeaderRenderer?.thumbnailOverlays,
-      renderer.thumbnail?.thumbnailOverlays
+      renderer.thumbnail?.thumbnailOverlays,
+      // NEW: Additional paths for older Tizen versions
+      renderer.thumbnailOverlayRenderer,
+      renderer.overlay?.thumbnailOverlayResumePlaybackRenderer
     ];
     
     for (const overlays of overlayPaths) {
-      if (!Array.isArray(overlays)) continue;
-      const progressOverlay = overlays.find(o => o?.thumbnailOverlayResumePlaybackRenderer);
-      if (progressOverlay) {
-        return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+      if (!overlays) continue;
+      
+      // Handle both array and single object
+      if (Array.isArray(overlays)) {
+        const progressOverlay = overlays.find(o => o?.thumbnailOverlayResumePlaybackRenderer);
+        if (progressOverlay) {
+          return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+        }
+      } else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
+        return overlays.thumbnailOverlayResumePlaybackRenderer;
       }
     }
     return null;
   };
   
+  // MORE COMPREHENSIVE renderer types for Tizen 5.0
   const rendererTypes = [
     item.tileRenderer,
     item.playlistVideoRenderer,
@@ -709,7 +776,11 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.richItemRenderer?.content?.reelItemRenderer
+    item.richItemRenderer?.content?.reelItemRenderer,
+    // NEW: Additional renderer types for older Tizen
+    item.gridChannelRenderer,
+    item.channelRenderer,
+    item.playlistRenderer
   ];
   
   for (const renderer of rendererTypes) {
