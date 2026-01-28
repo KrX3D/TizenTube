@@ -167,35 +167,24 @@
     window.toggleDebugConsole = function() {
         const now = Date.now();
         if (now - lastToggleTime < 500) {
-            return;
+            return; // Debounce
         }
         lastToggleTime = now;
         
-        // Toggle both enabled and visible
+        // Toggle state
         enabled = !enabled;
         consoleVisible = enabled;
         
-        // Update localStorage
+        // Update localStorage FIRST
         try {
             const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
             config.enableDebugConsole = enabled;
             window.localStorage[CONFIG_KEY] = JSON.stringify(config);
-            
-            // Trigger config change event for settings UI
-            if (window.configChangeEmitter) {
-                window.configChangeEmitter.dispatchEvent(
-                    new CustomEvent('configChange', { 
-                        detail: { 
-                            key: 'enableDebugConsole', 
-                            value: enabled 
-                        } 
-                    })
-                );
-            }
         } catch (e) {
             console.error('[Console] Failed to save config:', e);
         }
         
+        // Update UI
         if (consoleDiv) {
             consoleDiv.style.display = consoleVisible ? 'block' : 'none';
             if (consoleVisible) {
@@ -207,6 +196,24 @@
                 }
             }
         }
+        
+        // ⭐ NEW: Dispatch event AFTER localStorage is updated
+        setTimeout(() => {
+            if (window.configChangeEmitter) {
+                window.configChangeEmitter.dispatchEvent(
+                    new CustomEvent('configChange', { 
+                        detail: { 
+                            key: 'enableDebugConsole', 
+                            value: enabled 
+                        } 
+                    })
+                );
+            }
+            
+            // ⭐ NEW: Log to help user understand what happened
+            console.log('[Console] Console ' + (enabled ? 'ENABLED ✓' : 'DISABLED ✗') + ' via BLUE button');
+            console.log('[Console] Settings UI will update next time you open it');
+        }, 100);
     };
 
     window.setDebugConsolePosition = function(pos) {
@@ -277,15 +284,18 @@
     
     // Method 1: Try Tizen Web API for filesystem access
     function checkUSBWithTizenAPI() {
-        if (typeof tizen === 'undefined' || !tizen.filesystem) {
-            console.log('[USB] Method 1: Tizen filesystem API not available');
-            return false;
-        }
-        
+        // ⭐ Changed: Don't check at top, try the code and handle errors
         try {
             console.log('[USB] Method 1: Trying Tizen filesystem API...');
+            
+            // Check if available
+            if (typeof tizen === 'undefined' || !tizen.filesystem) {
+                console.log('[USB] Method 1: ✗ Tizen filesystem API not available');
+                return false;
+            }
+            
             const storages = tizen.filesystem.listStorages();
-            console.log('[USB] Found', storages.length, 'storage devices');
+            console.log('[USB] Method 1: Found', storages.length, 'storage devices');
             
             let foundUSB = false;
             storages.forEach((storage, index) => {
@@ -323,27 +333,36 @@
                     }
                 }
             });
+            
+            if (foundUSB) {
+                console.log('[USB] Method 1: ✓ SUCCESS - USB drive(s) detected');
+            } else {
+                console.log('[USB] Method 1: ✗ No USB drives found (but API works)');
+            }
             return foundUSB;
+            
         } catch (error) {
-            console.log('[USB] Method 1 error:', error.message);
+            console.log('[USB] Method 1: ✗ Error:', error.message);
             return false;
         }
     }
 
     // Method 2: Try Cobalt's h5vcc storage API
     function checkUSBWithCobalt() {
-        if (typeof window.h5vcc === 'undefined' || !window.h5vcc.storage) {
-            console.log('[USB] Method 2: Cobalt storage API not available');
-            return false;
-        }
-        
         try {
             console.log('[USB] Method 2: Trying Cobalt storage API...');
+            
+            if (typeof window.h5vcc === 'undefined' || !window.h5vcc.storage) {
+                console.log('[USB] Method 2: ✗ Cobalt storage API not available');
+                return false;
+            }
+            
             const storageInfo = window.h5vcc.storage.getStorageInfo();
-            console.log('[USB] Cobalt storage:', JSON.stringify(storageInfo, null, 2));
+            console.log('[USB] Method 2: ✓ Got storage info:', JSON.stringify(storageInfo, null, 2));
             return true;
+            
         } catch (error) {
-            console.log('[USB] Method 2 error:', error.message);
+            console.log('[USB] Method 2: ✗ Error:', error.message);
             return false;
         }
     }
@@ -354,101 +373,118 @@
         
         const xhr = new XMLHttpRequest();
         xhr.onload = function() {
-            console.log('[USB] Method 3: Config read success!');
+            console.log('[USB] Method 3: ✓ Config read success!');
             try {
                 const config = JSON.parse(this.responseText);
-                console.log('[USB] Config:', JSON.stringify(config, null, 2));
+                console.log('[USB] Method 3: Config:', JSON.stringify(config, null, 2));
             } catch (e) {
-                console.log('[USB] Config parse error:', e.message);
+                console.log('[USB] Method 3: Config parse error:', e.message);
             }
         };
         xhr.onerror = function() {
-            console.log('[USB] Method 3: Config read failed - file:// URLs blocked by browser security');
+            console.log('[USB] Method 3: ✗ Config read failed');
+            console.log('[USB] Method 3: (Expected on web browsers - file:// URLs blocked)');
         };
         
         try {
             xhr.open('GET', 'file:///home/owner/share/tizenbrewConfig.json', true);
             xhr.send();
         } catch (e) {
-            console.log('[USB] Method 3: Cannot access file:// URLs:', e.message);
+            console.log('[USB] Method 3: ✗ Cannot access file:// URLs:', e.message);
+            console.log('[USB] Method 3: (Expected on web browsers)');
         }
     }
 
     function detectUSB() {
-        // Only run if enabled AND console is enabled
-        if (!getUSBMonitoringEnabled() || !enabled) {
-            return;
-        }
-        
-        usbCheckCount++;
-        console.log('[USB] === Check #' + usbCheckCount + ' ===');
-        
-        // Check available APIs first
-        const apis = {
-            tizen: typeof tizen !== 'undefined',
-            'tizen.filesystem': typeof tizen !== 'undefined' && tizen.filesystem,
-            h5vcc: typeof window.h5vcc !== 'undefined',
-            'h5vcc.storage': typeof window.h5vcc !== 'undefined' && window.h5vcc.storage,
-            'h5vcc.tizentube': typeof window.h5vcc !== 'undefined' && window.h5vcc.tizentube,
-            cobalt: typeof window.h5vcc?.tizentube !== 'undefined'
-        };
-        
-        console.log('[USB] APIs available:', JSON.stringify(apis, null, 2));
-        
-        if (!apis.tizen && !apis.h5vcc) {
-            console.log('[USB] ✗ No Tizen/Cobalt APIs available (running in web browser?)');
-            console.log('[USB] Note: USB detection only works on real Tizen TVs');
-            console.log('[USB] =========================');
-            return;
-        }
-        
-        console.log('[USB] ---');
-        console.log('[USB] Attempting 3 different methods to detect USB drives:');
-        console.log('[USB] ---');
-        
-        // Try all three methods
-        let method1Result = checkUSBWithTizenAPI();
-        console.log('[USB] ---');
-        
-        let method2Result = checkUSBWithCobalt();
-        console.log('[USB] ---');
-        
-        tryReadTizenBrewConfig();
-        console.log('[USB] ---');
-        
-        // Check localStorage for TizenBrew data
-        if (window.localStorage) {
-            try {
-                console.log('[USB] Checking localStorage for TizenBrew data...');
-                const keys = Object.keys(window.localStorage);
-                console.log('[USB] localStorage: ' + keys.length + ' keys total');
-                
-                const tizenKeys = keys.filter(k => k.toLowerCase().includes('tizen') || k.toLowerCase().includes('brew'));
-                if (tizenKeys.length > 0) {
-                    console.log('[USB] TizenBrew keys found:', tizenKeys.length);
-                    tizenKeys.forEach(key => {
-                        const value = window.localStorage[key];
-                        if (value.length < 200) {
-                            console.log('[USB]   ' + key + ':', value.substring(0, 100));
-                        } else {
-                            console.log('[USB]   ' + key + ': (' + value.length + ' chars)');
-                        }
-                    });
-                } else {
-                    console.log('[USB] No TizenBrew-related keys found');
-                }
-            } catch (e) {
-                console.log('[USB] localStorage error:', e.message);
-            }
-        }
-        
-        console.log('[USB] =========================');
-        console.log('[USB] Results summary:');
-        console.log('[USB]   Method 1 (Tizen API): ' + (method1Result ? 'SUCCESS' : 'FAILED'));
-        console.log('[USB]   Method 2 (Cobalt API): ' + (method2Result ? 'SUCCESS' : 'FAILED'));
-        console.log('[USB]   Method 3 (file://): Check logs above');
-        console.log('[USB] =========================');
+    if (!getUSBMonitoringEnabled() || !enabled) {
+        return;
     }
+    
+    usbCheckCount++;
+    console.log('[USB] === Check #' + usbCheckCount + ' ===');
+    
+    // Check available APIs first
+    const apis = {
+        tizen: typeof tizen !== 'undefined',
+        'tizen.filesystem': typeof tizen !== 'undefined' && tizen.filesystem,
+        h5vcc: typeof window.h5vcc !== 'undefined',
+        'h5vcc.storage': typeof window.h5vcc !== 'undefined' && window.h5vcc.storage,
+        'h5vcc.tizentube': typeof window.h5vcc !== 'undefined' && window.h5vcc.tizentube,
+        cobalt: typeof window.h5vcc?.tizentube !== 'undefined'
+    };
+    
+    console.log('[USB] APIs available:', JSON.stringify(apis, null, 2));
+    
+    // ⭐ NEW: Better messaging, but DON'T return!
+    if (!apis.tizen && !apis.h5vcc) {
+        console.log('[USB] ========================================');
+        console.log('[USB] ⚠️  PRIMARY PLATFORM DETECTION');
+        console.log('[USB] ========================================');
+        console.log('[USB] Status: No Tizen/Cobalt APIs detected');
+        console.log('[USB] ');
+        console.log('[USB] This likely means:');
+        console.log('[USB]   • Running in web browser (not Tizen TV)');
+        console.log('[USB]   • Testing on PC/Mac/Linux');
+        console.log('[USB] ');
+        console.log('[USB] ℹ️  Will still attempt 3 detection methods:');
+        console.log('[USB]   1. Tizen filesystem API');
+        console.log('[USB]   2. Cobalt storage API');  
+        console.log('[USB]   3. File system access (file://)');
+        console.log('[USB] ========================================');
+        // ⭐ NO return here! Keep going!
+    } else {
+        console.log('[USB] ========================================');
+        console.log('[USB] ✓ Platform APIs detected');
+        console.log('[USB] ========================================');
+    }
+    
+    console.log('[USB] ---');
+    console.log('[USB] Attempting 3 different detection methods:');
+    console.log('[USB] ---');
+    
+    // ⭐ Try all three methods (this now always runs!)
+    let method1Result = checkUSBWithTizenAPI();
+    console.log('[USB] ---');
+    
+    let method2Result = checkUSBWithCobalt();
+    console.log('[USB] ---');
+    
+    tryReadTizenBrewConfig();
+    console.log('[USB] ---');
+    
+    // Check localStorage for TizenBrew data
+    if (window.localStorage) {
+        try {
+            console.log('[USB] Checking localStorage for TizenBrew data...');
+            const keys = Object.keys(window.localStorage);
+            console.log('[USB] localStorage: ' + keys.length + ' keys total');
+            
+            const tizenKeys = keys.filter(k => k.toLowerCase().includes('tizen') || k.toLowerCase().includes('brew'));
+            if (tizenKeys.length > 0) {
+                console.log('[USB] TizenBrew keys found:', tizenKeys.length);
+                tizenKeys.forEach(key => {
+                    const value = window.localStorage[key];
+                    if (value.length < 200) {
+                        console.log('[USB]   ' + key + ':', value.substring(0, 100));
+                    } else {
+                        console.log('[USB]   ' + key + ': (' + value.length + ' chars)');
+                    }
+                });
+            } else {
+                console.log('[USB] No TizenBrew-related keys found');
+            }
+        } catch (e) {
+            console.log('[USB] localStorage error:', e.message);
+        }
+    }
+    
+    console.log('[USB] =========================');
+    console.log('[USB] Results summary:');
+    console.log('[USB]   Method 1 (Tizen API): ' + (method1Result ? 'SUCCESS ✓' : 'FAILED ✗'));
+    console.log('[USB]   Method 2 (Cobalt API): ' + (method2Result ? 'SUCCESS ✓' : 'FAILED ✗'));
+    console.log('[USB]   Method 3 (file://): Check logs above');
+    console.log('[USB] =========================');
+}
     
     let usbCheckCount = 0;
     window.checkUSB = function() {
@@ -457,7 +493,7 @@
     };
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v200 - NEWEST FIRST');
+    console.log('[Console] Visual Console v210 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');

@@ -123,10 +123,10 @@ JSON.parse = function () {
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
-    console.log('SHELF_ENTRY', 'Processing continuation contents', {
-      count: r.continuationContents.sectionListContinuation.contents.length,
-      page: getCurrentPage()
-    });
+    const page = getCurrentPage();
+    console.log('[CONTINUATION]', page, '- Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
+    
+    // This is where individual channel content loads!
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
 
@@ -141,37 +141,81 @@ JSON.parse = function () {
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    if (!r.__tizentubeProcessedSecondary) {
-      r.__tizentubeProcessedSecondary = true;
-      const sections = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections;
-      console.log('[SECONDARY_NAV] Processing', sections.length, 'sections');
-      
-      let totalTabs = 0;
-      let tabsWithContent = 0;
-      
-      for (let i = 0; i < sections.length; i++) {
-        const section = sections[i];
+      if (!r.__tizentubeProcessedSecondary) {
+        r.__tizentubeProcessedSecondary = true;
+        const sections = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections;
         
-        if (section.tvSecondaryNavSectionRenderer?.tabs) {
-          totalTabs += section.tvSecondaryNavSectionRenderer.tabs.length;
+        // ⭐ NEW: Better logging
+        console.log('[SECONDARY_NAV] Processing', sections.length, 'sections on page:', getCurrentPage());
+        
+        let totalTabs = 0;
+        let tabsWithContent = 0;
+        let tabsProcessed = 0;
+        
+        for (let i = 0; i < sections.length; i++) {
+          const section = sections[i];
           
-          for (let j = 0; j < section.tvSecondaryNavSectionRenderer.tabs.length; j++) {
-            const tab = section.tvSecondaryNavSectionRenderer.tabs[j];
-            const contents = tab.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+          if (section.tvSecondaryNavSectionRenderer?.tabs) {
+            totalTabs += section.tvSecondaryNavSectionRenderer.tabs.length;
             
-            if (contents && contents.length > 0) {
-              tabsWithContent++;
-              console.log('[SECONDARY_NAV] Section', (i + 1), 'Tab', (j + 1), '- processing', contents.length, 'shelves');
-              processShelves(contents);
+            for (let j = 0; j < section.tvSecondaryNavSectionRenderer.tabs.length; j++) {
+              const tab = section.tvSecondaryNavSectionRenderer.tabs[j];
+              
+              // ⭐ NEW: Get tab name for better logging
+              const tabTitle = tab.tabRenderer?.title?.simpleText || `Tab ${j+1}`;
+              const contents = tab.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+              
+              if (contents && contents.length > 0) {
+                tabsWithContent++;
+                tabsProcessed++;
+                console.log(`[SECONDARY_NAV] "${tabTitle}" - processing ${contents.length} shelves`);
+                processShelves(contents);
+              } else {
+                // ⭐ NEW: Log empty tabs (these load on-click)
+                console.log(`[SECONDARY_NAV] "${tabTitle}" - empty (loads on click)`);
+              }
             }
           }
         }
+        
+        console.log('[SECONDARY_NAV] Summary:', totalTabs, 'tabs,', tabsProcessed, 'pre-loaded,', (totalTabs - tabsProcessed), 'lazy-loaded');
+      }
+  }
+
+  // ⭐ NEW: Log library page structure
+  if (r?.contents?.tvBrowseRenderer && getCurrentPage() === 'library') {
+      console.log('[LIBRARY] ========================================');
+      console.log('[LIBRARY] Structure detected');
+      console.log('[LIBRARY] URL:', window.location.href);
+      
+      if (r.contents.tvBrowseRenderer.content?.tvSecondaryNavRenderer) {
+        const tabs = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections;
+        console.log('[LIBRARY] Has', tabs?.length || 0, 'tab sections');
       }
       
-      console.log('[SECONDARY_NAV] Complete -', totalTabs, 'tabs total,', tabsWithContent, 'with content,', (totalTabs - tabsWithContent), 'empty');
-    } else {
-      console.log('[JSON.parse] tvSecondaryNavRenderer already processed, SKIPPING');
-    }
+      if (r.contents.tvBrowseRenderer.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer) {
+        const shelves = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
+        console.log('[LIBRARY] Main view has', shelves?.length || 0, 'shelves');
+      }
+      console.log('[LIBRARY] ========================================');
+  }
+
+  // ⭐ NEW: Special handling for playlists when entering them
+  if (r?.contents?.singleColumnBrowseResultsRenderer && window.location.hash.includes('list=')) {
+      console.log('[PLAYLIST] ========================================');
+      console.log('[PLAYLIST] Entered playlist');
+      console.log('[PLAYLIST] URL:', window.location.href);
+      
+      const tabs = r.contents.singleColumnBrowseResultsRenderer.tabs;
+      if (tabs) {
+        tabs.forEach((tab, idx) => {
+          if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
+            console.log(`[PLAYLIST] Tab ${idx} - processing shelves`);
+            processShelves(tab.tabRenderer.content.sectionListRenderer.contents);
+          }
+        });
+      }
+      console.log('[PLAYLIST] ========================================');
   }
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
@@ -340,6 +384,7 @@ function isShortItem(item) {
 }
 
 function processShelves(shelves, shouldAddPreviews = true) {
+  const ENABLE_SHELF_DEBUG = false; // Set to true when debugging specific shelf issues
   if (!Array.isArray(shelves)) {
     logger.warn('SHELF_PROCESS', 'processShelves called with non-array', { type: typeof shelves });
     return;
@@ -376,10 +421,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
           itemsBefore = items.length;
           
-          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          if (ENABLE_SHELF_DEBUG) {
+            if (items && items.length > 0 && items[0]) {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            } else {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            }
+          }
                     
           deArrowify(items);
           hqify(items);
@@ -422,10 +473,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.gridRenderer.items;
           itemsBefore = items.length;
 
-          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          if (ENABLE_SHELF_DEBUG) {
+            if (items && items.length > 0 && items[0]) {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            } else {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            }
+          }
 
           deArrowify(items);
           hqify(items);
@@ -459,10 +516,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
           itemsBefore = items.length;
 
-          console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-          console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-          console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-          console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          if (ENABLE_SHELF_DEBUG) {
+            if (items && items.length > 0 && items[0]) {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            } else {
+              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            }
+          }
 
           deArrowify(items);
           hqify(items);
@@ -497,10 +560,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
         itemsBefore = contents.length;
 
-        console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-        console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
-        console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
-        console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
+        if (ENABLE_SHELF_DEBUG) {
+          if (items && items.length > 0 && items[0]) {
+            console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+            console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          } else {
+            console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+          }
+        }
 
         deArrowify(contents);
         hqify(contents);
@@ -550,10 +619,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
 
-        console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-        console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-        console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-        console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+        if (ENABLE_SHELF_DEBUG) {
+          if (items && items.length > 0 && items[0]) {
+            console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+            console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          } else {
+            console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+          }
+        }
 
         deArrowify(items);
         hqify(items);
