@@ -561,11 +561,11 @@ function processShelves(shelves, shouldAddPreviews = true) {
         itemsBefore = contents.length;
 
         if (ENABLE_SHELF_DEBUG) {
-          if (items && items.length > 0 && items[0]) {
+          if (contents && contents.length > 0 && contents[0]) {
             console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-            console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
+            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
+            console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
           } else {
             console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
           }

@@ -493,7 +493,7 @@
     };
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v210 - NEWEST FIRST');
+    console.log('[Console] Visual Console v220 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
