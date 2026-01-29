@@ -442,7 +442,7 @@ export default function modernUI(update, parameters) {
                                     value: 'library'
                                 },
                                 {
-                                    name: 'Library → Playlists Overview',
+                                    name: 'Library → Playlists Overview', //Subscriptions -> Playlists - arent probably removed since no indication if all videos in the Playlist are watched
                                     icon: 'PLAYLIST_PLAY',
                                     value: 'playlists'
                                 },

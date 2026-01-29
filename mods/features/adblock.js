@@ -640,9 +640,56 @@ function isShortItem(item) {
       }
     }
     
-    // Log if we checked a tileRenderer but didn't find it was a short
+    // Method 7: Check for "Shorts" or "#shorts" in video title (Tizen 5.5 fallback)
+    const videoTitle = item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || '';
+    if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
+      if (debugEnabled) console.log('[SHORTS_DETECT] Method 7 (title contains #shorts):', item.tileRenderer.contentId || 'unknown');
+      return true;
+    }
+    
+    // Method 8: Check video length - shorts are typically under 90 seconds (YouTube Shorts max is 60s but allow buffer)
+    // Look for lengthText in metadata
+    const lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      i => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+    
+    if (lengthText) {
+      // Check if it's a short duration (under 90 seconds, format like "0:15", "0:45", "1:29")
+      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
+      if (durationMatch) {
+        const minutes = parseInt(durationMatch[1], 10);
+        const seconds = parseInt(durationMatch[2], 10);
+        const totalSeconds = minutes * 60 + seconds;
+        
+        if (totalSeconds <= 90) {
+          if (debugEnabled) {
+            console.log('[SHORTS_DETECT] Method 8 (duration ≤90s):', item.tileRenderer.contentId || 'unknown');
+            console.log('[SHORTS_DETECT]   Duration:', lengthText, '(' + totalSeconds + 's)');
+            console.log('[SHORTS_DETECT]   Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || 'unknown');
+            console.log('[SHORTS_DETECT]   URL pattern:', item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId ? 
+              '/watch?v=' + item.tileRenderer.onSelectCommand.watchEndpoint.videoId : 'unknown');
+          }
+          return true;
+        }
+      }
+    }
+    
+    // Log full structure if we checked a tileRenderer but didn't find it was a short
     if (debugEnabled && item.tileRenderer.contentId) {
       console.log('[SHORTS_DETECT] Checked tileRenderer but NOT a short:', item.tileRenderer.contentId);
+      
+      // ⭐ DIAGNOSTIC: Dump the full structure to help identify shorts on Tizen 5.5
+      console.log('[SHORTS_DIAGNOSTIC] Full item structure for:', item.tileRenderer.contentId);
+      console.log('[SHORTS_DIAGNOSTIC] contentType:', item.tileRenderer.contentType);
+      console.log('[SHORTS_DIAGNOSTIC] onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand || {}));
+      console.log('[SHORTS_DIAGNOSTIC] Has header?:', !!item.tileRenderer.header);
+      if (item.tileRenderer.header) {
+        console.log('[SHORTS_DIAGNOSTIC] Header keys:', Object.keys(item.tileRenderer.header));
+        if (item.tileRenderer.header.tileHeaderRenderer) {
+          console.log('[SHORTS_DIAGNOSTIC] tileHeaderRenderer keys:', Object.keys(item.tileRenderer.header.tileHeaderRenderer));
+        }
+      }
+      console.log('[SHORTS_DIAGNOSTIC] Full tileRenderer (first 500 chars):', JSON.stringify(item.tileRenderer).substring(0, 500));
     }
   }
   
@@ -684,6 +731,19 @@ function processShelves(shelves, shouldAddPreviews = true) {
     try {
       const shelve = shelves[i];
       if (!shelve) continue;
+      
+      // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
+      if (!shortsEnabled && shelve.shelfRenderer) {
+        const shelfTitle = shelve.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
+        if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
+          if (ENABLE_SHELF_DEBUG) {
+            console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
+          }
+          shelves.splice(i, 1);
+          shelvesRemoved++;
+          continue;
+        }
+      }
       
       let shelfType = 'unknown';
       let itemsBefore = 0;
@@ -1152,9 +1212,29 @@ function hideVideo(items) {
     }
     
     const progressBar = findProgressBar(item);
-    if (!progressBar) return true;
+    
+    // ⭐ DEBUG: Log items without progress bar
+    if (!progressBar) {
+      if (debugEnabled) {
+        const videoId = item.tileRenderer?.contentId || 
+                       item.videoRenderer?.videoId || 
+                       'unknown';
+        console.log('[HIDE_DEBUG] No progress bar found for:', videoId, '- KEEPING video');
+      }
+      return true; // Keep videos without progress bar
+    }
     
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
+    
+    // ⭐ DEBUG: Log all videos with progress bars
+    if (debugEnabled) {
+      const videoId = item.tileRenderer?.contentId || 
+                     item.videoRenderer?.videoId || 
+                     'unknown';
+      console.log('[HIDE_DEBUG] Video:', videoId, '| Watched:', percentWatched + '%', '| Threshold:', threshold + '%', 
+                  '| Will hide:', percentWatched >= threshold);
+    }
+    
     if (percentWatched >= threshold) {
       hiddenCount++;
       const videoId = item.tileRenderer?.contentId || 
@@ -1181,6 +1261,8 @@ function hideVideo(items) {
 function findProgressBar(item) {
   if (!item) return null;
   
+  const debugEnabled = configRead('enableDebugConsole');
+  
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
     
@@ -1206,12 +1288,30 @@ function findProgressBar(item) {
           o?.thumbnailOverlayResumePlaybackRenderer
         );
         if (progressOverlay) {
-          return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+          const progressBar = progressOverlay.thumbnailOverlayResumePlaybackRenderer;
+          
+          // ⭐ DEBUG: Log found progress bar
+          if (debugEnabled) {
+            const videoId = renderer.contentId || renderer.videoId || 'unknown';
+            const percentWatched = Number(progressBar.percentDurationWatched || 0);
+            console.log('[PROGRESS_BAR] Found for:', videoId, '| Percent:', percentWatched + '%');
+          }
+          
+          return progressBar;
         }
       } 
       // Handle direct object
       else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
-        return overlays.thumbnailOverlayResumePlaybackRenderer;
+        const progressBar = overlays.thumbnailOverlayResumePlaybackRenderer;
+        
+        // ⭐ DEBUG: Log found progress bar
+        if (debugEnabled) {
+          const videoId = renderer.contentId || renderer.videoId || 'unknown';
+          const percentWatched = Number(progressBar.percentDurationWatched || 0);
+          console.log('[PROGRESS_BAR] Found for:', videoId, '| Percent:', percentWatched + '%');
+        }
+        
+        return progressBar;
       }
     }
     return null;
@@ -1231,6 +1331,15 @@ function findProgressBar(item) {
   for (const renderer of rendererTypes) {
     const result = checkRenderer(renderer);
     if (result) return result;
+  }
+  
+  // ⭐ DEBUG: Log when no progress bar found
+  if (debugEnabled) {
+    const videoId = item.tileRenderer?.contentId || 
+                   item.videoRenderer?.videoId || 
+                   item.playlistVideoRenderer?.videoId ||
+                   'unknown';
+    console.log('[PROGRESS_BAR] NOT found for:', videoId);
   }
   
   return null;
