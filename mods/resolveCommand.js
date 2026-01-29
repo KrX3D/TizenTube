@@ -170,7 +170,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v310');
+            console.log('[Console] Visual Console v315');
             console.log('========================================');
             console.log('If you see this, the console is working!');
             console.log('Time:', new Date().toISOString());

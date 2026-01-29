@@ -13,9 +13,9 @@ function directFilterArray(arr, page, context = '') {
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
-  // Check if this page should be filtered
+  // Check if this page should be filtered (EXACT match required)
   const shouldHideWatched = hideWatchedEnabled && 
-    (configPages.length === 0 || configPages.includes(page) ||
+    (configPages.includes(page) ||
      (page === 'playlist' && configRead('enableHideWatchedInPlaylists')));
   
   const shouldFilterShorts = !shortsEnabled;
@@ -32,7 +32,7 @@ function directFilterArray(arr, page, context = '') {
   const filtered = arr.filter(item => {
     if (!item) return true;
     
-    // Check if it's a video item (has common video properties)
+    // Check if it's a video item
     const isVideoItem = item.tileRenderer || 
                         item.videoRenderer || 
                         item.gridVideoRenderer ||
@@ -41,47 +41,36 @@ function directFilterArray(arr, page, context = '') {
     
     if (!isVideoItem) return true;
     
-    // Filter shorts
+    // Filter shorts first
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
-      if (debugEnabled) {
-        const videoId = item.tileRenderer?.contentId || 
-                       item.videoRenderer?.videoId || 
-                       'unknown';
-        console.log('[DIRECT_FILTER] Removing short:', videoId);
-      }
       return false;
     }
     
     // Filter watched videos
     if (shouldHideWatched) {
       const progressBar = findProgressBar(item);
-      if (progressBar) {
-        const percentWatched = Number(progressBar.percentDurationWatched || 0);
-        if (percentWatched >= threshold) {
-          hiddenCount++;
-          if (debugEnabled) {
-            const videoId = item.tileRenderer?.contentId || 
-                           item.videoRenderer?.videoId || 
-                           'unknown';
-            console.log('[DIRECT_FILTER] Removing watched:', videoId, '(' + percentWatched + '%)');
-          }
-          return false;
-        }
+      
+      // Keep videos without progress bar (unwatched/new videos)
+      if (!progressBar) {
+        return true;
+      }
+      
+      const percentWatched = Number(progressBar.percentDurationWatched || 0);
+      
+      // Hide if watched above threshold
+      if (percentWatched >= threshold) {
+        hiddenCount++;
+        return false;
       }
     }
     
     return true;
   });
   
-  // Log results if anything was filtered
-  if (hiddenCount > 0 || shortsCount > 0) {
-    console.log('[DIRECT_FILTER] ========================================');
-    console.log('[DIRECT_FILTER] Page:', page, '| Context:', context);
-    console.log('[DIRECT_FILTER] Original:', originalLength, '→ Filtered:', filtered.length);
-    console.log('[DIRECT_FILTER] Watched removed:', hiddenCount);
-    console.log('[DIRECT_FILTER] Shorts removed:', shortsCount);
-    console.log('[DIRECT_FILTER] ========================================');
+  // Log summary
+  if (debugEnabled && (hiddenCount > 0 || shortsCount > 0)) {
+    console.log('[DIRECT_FILTER] Page:', page, '| Watched:', hiddenCount, '| Shorts:', shortsCount, '| ' + originalLength + '→' + filtered.length);
   }
   
   return filtered;
@@ -1142,62 +1131,28 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  const debugEnabled = configRead('enableDebugConsole');
-  
-  if (debugEnabled) {
-    console.log('[HIDE] ========================================');
-    console.log('[HIDE] hideVideo() called with', items ? items.length : 0, 'items');
-  }
-  
   if (!configRead('enableHideWatchedVideos') || !Array.isArray(items)) {
-    if (debugEnabled) {
-      console.log('[HIDE] SKIPPED - enableHideWatchedVideos:', configRead('enableHideWatchedVideos'));
-      console.log('[HIDE] SKIPPED - items is array:', Array.isArray(items));
-    }
     return items;
   }
   
+  const debugEnabled = configRead('enableDebugConsole');
   const page = getCurrentPage();
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-
-  if (debugEnabled) {
-    console.log('[HIDE] Current page:', page);
-    console.log('[HIDE] Configured pages:', configPages);
-    console.log('[HIDE] Threshold:', threshold + '%');
-  }
-
-  if (window._lastLoggedPage !== page) {
-    console.log('[PAGE_DEBUG] ========================================');
-    console.log('[PAGE_DEBUG] Page changed to:', page);
-    console.log('[PAGE_DEBUG] URL:', window.location.href);
-    console.log('[PAGE_DEBUG] Hash:', window.location.hash);
-    console.log('[PAGE_DEBUG] ========================================');
-    window._lastLoggedPage = page;
-  }
   
-  // Special handling for playlists (legacy config support)
+  // Special handling for playlists
   if (page === 'playlist' || page === 'playlists') {
     if (!configRead('enableHideWatchedInPlaylists')) {
-      if (debugEnabled) console.log('[HIDE] Playlist filtering disabled by config');
       return items;
     }
-    if (debugEnabled) console.log('[HIDE] Filtering playlist page (config enabled)');
   }
   
-  // ⭐ EXACT PAGE MATCHING - Only filter if THIS EXACT page is in the list
-  // This prevents "library" from filtering "history", "playlists", "playlist"
+  // EXACT PAGE MATCHING - Only filter if THIS EXACT page is in the list
   const shouldHideOnThisPage = configPages.includes(page) ||
                                 (page === 'playlist' && configRead('enableHideWatchedInPlaylists'));
   
   if (!shouldHideOnThisPage) {
-    if (debugEnabled) console.log('[HIDE] Page', page, 'not in filter list (exact match required)');
     return items;
-  }
-  
-  if (debugEnabled) {
-    console.log('[HIDE] ✓ Filtering enabled for page:', page);
-    console.log('[HIDE] Threshold:', threshold + '%');
   }
   
   let hiddenCount = 0;
@@ -1213,46 +1168,24 @@ function hideVideo(items) {
     
     const progressBar = findProgressBar(item);
     
-    // ⭐ DEBUG: Log items without progress bar
+    // Keep videos without progress bar (unwatched/new videos)
     if (!progressBar) {
-      if (debugEnabled) {
-        const videoId = item.tileRenderer?.contentId || 
-                       item.videoRenderer?.videoId || 
-                       'unknown';
-        console.log('[HIDE_DEBUG] No progress bar found for:', videoId, '- KEEPING video');
-      }
-      // return true; // Keep videos without progress bar
+      return true;
     }
     
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     
-    // ⭐ DEBUG: Log all videos with progress bars
-    if (debugEnabled) {
-      const videoId = item.tileRenderer?.contentId || 
-                     item.videoRenderer?.videoId || 
-                     'unknown';
-      console.log('[HIDE_DEBUG] Video:', videoId, '| Watched:', percentWatched + '%', '| Threshold:', threshold + '%', 
-                  '| Will hide:', percentWatched >= threshold);
-    }
-    
+    // Hide if watched above threshold
     if (percentWatched >= threshold) {
       hiddenCount++;
-      const videoId = item.tileRenderer?.contentId || 
-                     item.videoRenderer?.videoId || 
-                     'unknown';
-      
-      if (debugEnabled) {
-        console.log('[HIDE] Hiding:', videoId, '(' + percentWatched + '%)');
-      }
       return false;
     }
     
     return true;
   });
   
-  if (debugEnabled || hiddenCount > 0) {
-    console.log('[HIDE] Total hidden:', hiddenCount, 'videos on page:', page);
-    console.log('[HIDE] Before:', items.length, '→ After:', filtered.length);
+  if (debugEnabled && hiddenCount > 0) {
+    console.log('[HIDE] Page:', page, '| Hidden:', hiddenCount, '| ' + items.length + '→' + filtered.length);
   }
   
   return filtered;
@@ -1260,8 +1193,6 @@ function hideVideo(items) {
 
 function findProgressBar(item) {
   if (!item) return null;
-  
-  const debugEnabled = configRead('enableDebugConsole');
   
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
@@ -1288,30 +1219,12 @@ function findProgressBar(item) {
           o?.thumbnailOverlayResumePlaybackRenderer
         );
         if (progressOverlay) {
-          const progressBar = progressOverlay.thumbnailOverlayResumePlaybackRenderer;
-          
-          // ⭐ DEBUG: Log found progress bar
-          if (debugEnabled) {
-            const videoId = renderer.contentId || renderer.videoId || 'unknown';
-            const percentWatched = Number(progressBar.percentDurationWatched || 0);
-            console.log('[PROGRESS_BAR] Found for:', videoId, '| Percent:', percentWatched + '%');
-          }
-          
-          return progressBar;
+          return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
         }
       } 
       // Handle direct object
       else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
-        const progressBar = overlays.thumbnailOverlayResumePlaybackRenderer;
-        
-        // ⭐ DEBUG: Log found progress bar
-        if (debugEnabled) {
-          const videoId = renderer.contentId || renderer.videoId || 'unknown';
-          const percentWatched = Number(progressBar.percentDurationWatched || 0);
-          console.log('[PROGRESS_BAR] Found for:', videoId, '| Percent:', percentWatched + '%');
-        }
-        
-        return progressBar;
+        return overlays.thumbnailOverlayResumePlaybackRenderer;
       }
     }
     return null;
@@ -1331,15 +1244,6 @@ function findProgressBar(item) {
   for (const renderer of rendererTypes) {
     const result = checkRenderer(renderer);
     if (result) return result;
-  }
-  
-  // ⭐ DEBUG: Log when no progress bar found
-  if (debugEnabled) {
-    const videoId = item.tileRenderer?.contentId || 
-                   item.videoRenderer?.videoId || 
-                   item.playlistVideoRenderer?.videoId ||
-                   'unknown';
-    console.log('[PROGRESS_BAR] NOT found for:', videoId);
   }
   
   return null;
