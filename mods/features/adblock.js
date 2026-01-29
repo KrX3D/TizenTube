@@ -1131,28 +1131,32 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  if (!configRead('enableHideWatchedVideos') || !Array.isArray(items)) {
+  if (!Array.isArray(items)) {
     return items;
   }
   
   const debugEnabled = configRead('enableDebugConsole');
   const page = getCurrentPage();
+  const shortsEnabled = configRead('enableShorts');
+  const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-  const shortsEnabled = configRead('enableShorts');
   
-  // Special handling for playlists
-  if (page === 'playlist' || page === 'playlists') {
-    if (!configRead('enableHideWatchedInPlaylists')) {
-      return items;
+  // Determine if we should filter watched videos on this page
+  let shouldHideWatched = false;
+  if (hideWatchedEnabled) {
+    if (page === 'playlist' || page === 'playlists') {
+      shouldHideWatched = configRead('enableHideWatchedInPlaylists');
+    } else {
+      shouldHideWatched = configPages.includes(page);
     }
   }
   
-  // EXACT PAGE MATCHING - Only filter if THIS EXACT page is in the list
-  const shouldHideOnThisPage = configPages.includes(page) ||
-                                (page === 'playlist' && configRead('enableHideWatchedInPlaylists'));
+  // Shorts filtering is INDEPENDENT - always check if shorts are disabled
+  const shouldFilterShorts = !shortsEnabled;
   
-  if (!shouldHideOnThisPage) {
+  // If nothing to filter, return original array
+  if (!shouldFilterShorts && !shouldHideWatched) {
     return items;
   }
   
@@ -1168,32 +1172,37 @@ function hideVideo(items) {
       return true;
     }
     
-    // ⭐ CRITICAL: Filter shorts FIRST (before checking progress bar)
-    if (!shortsEnabled && isShortItem(item)) {
+    // ⭐ CRITICAL: Check for shorts FIRST (before progress bar)
+    // Shorts often don't have progress bars, so we must filter them first
+    if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
       return false;
     }
     
-    const progressBar = findProgressBar(item);
-    
-    // Keep videos without progress bar (unwatched/new videos)
-    if (!progressBar) {
-      return true;
-    }
-    
-    const percentWatched = Number(progressBar.percentDurationWatched || 0);
-    
-    // Hide if watched above threshold
-    if (percentWatched >= threshold) {
-      hiddenCount++;
-      return false;
+    // ⭐ THEN check watched videos (only if enabled for this page)
+    if (shouldHideWatched) {
+      const progressBar = findProgressBar(item);
+      
+      // Keep videos without progress bar (unwatched/new videos)
+      // This is safe now because shorts were already filtered above
+      //if (!progressBar) {
+        //return true;
+      //}
+      
+      const percentWatched = Number(progressBar.percentDurationWatched || 0);
+      
+      // Hide if watched above threshold
+      if (percentWatched >= threshold) {
+        hiddenCount++;
+        return false;
+      }
     }
     
     return true;
   });
   
   if (debugEnabled && (hiddenCount > 0 || shortsCount > 0)) {
-    console.log('[HIDE] Page:', page, '| Hidden:', hiddenCount, '| Shorts:', shortsCount, '| ' + items.length + '→' + filtered.length);
+    console.log('[HIDE] Page:', page, '| Watched:', hiddenCount, '| Shorts:', shortsCount, '| ' + items.length + '→' + filtered.length);
   }
   
   return filtered;
