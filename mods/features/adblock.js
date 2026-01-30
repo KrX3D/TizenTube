@@ -514,12 +514,12 @@ JSON.parse = function () {
 
   // ⭐ FIXED: Removed redundant window.location.hash.includes('list=') check
   // We already know the page type from getCurrentPage()
-  if (r?.contents?.singleColumnBrowseResultsRenderer && window.location.hash.includes('list=')) {
-  //if (r?.contents?.singleColumnBrowseResultsRenderer) {
+  //if (r?.contents?.singleColumnBrowseResultsRenderer && window.location.hash.includes('list=')) {
+  if (r?.contents?.singleColumnBrowseResultsRenderer) {
     const page = getCurrentPage();
     
     // Only process if it's actually a playlist page
-    //if (page === 'playlist') {
+    if (page === 'playlist') {
       if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
         console.log('[PLAYLIST] Entered playlist');
@@ -540,7 +540,7 @@ JSON.parse = function () {
       if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
       }
-    //}
+    }
   }
   
   // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
@@ -550,29 +550,37 @@ JSON.parse = function () {
     if (!r.__tizentubeProcessedPlaylist) {
       r.__tizentubeProcessedPlaylist = true;
       
-      console.log('[PLAYLIST_PAGE] ========================================');
-      console.log('[PLAYLIST_PAGE] ENTERED PLAYLIST HANDLER');
-      console.log('[PLAYLIST_PAGE] Page detected as:', page);
-      console.log('[PLAYLIST_PAGE] URL:', window.location.href);
-      console.log('[PLAYLIST_PAGE] Number of tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] ========================================');
+        console.log('[PLAYLIST_PAGE] ENTERED PLAYLIST HANDLER');
+        console.log('[PLAYLIST_PAGE] Page detected as:', page);
+        console.log('[PLAYLIST_PAGE] URL:', window.location.href);
+        console.log('[PLAYLIST_PAGE] Number of tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
+      }
       
       r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
-        console.log(`[PLAYLIST_PAGE] --- Processing Tab ${tabIndex} ---`);
+        if (DEBUG_ENABLED) {
+          console.log(`[PLAYLIST_PAGE] --- Processing Tab ${tabIndex} ---`);
+        }
         
         // Log what's available in this tab
-        console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} has tabRenderer:`, !!tab.tabRenderer);
-        if (tab.tabRenderer) {
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} content keys:`, Object.keys(tab.tabRenderer.content || {}));
+        if (DEBUG_ENABLED) {
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} has tabRenderer:`, !!tab.tabRenderer);
+          if (tab.tabRenderer) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} content keys:`, Object.keys(tab.tabRenderer.content || {}));
+          }
         }
         
         // Check sectionListRenderer
         if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
           const sections = tab.tabRenderer.content.sectionListRenderer.contents;
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - sectionListRenderer with ${sections.length} sections`);
-          
-          // Log first section structure
-          if (sections[0]) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First section keys:`, Object.keys(sections[0]));
+          if (DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - sectionListRenderer with ${sections.length} sections`);
+            
+            // Log first section structure
+            if (sections[0]) {
+              console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First section keys:`, Object.keys(sections[0]));
+            }
           }
           
           processShelves(sections);
@@ -581,13 +589,15 @@ JSON.parse = function () {
         // Check richGridRenderer
         if (tab.tabRenderer?.content?.richGridRenderer?.contents) {
           const items = tab.tabRenderer.content.richGridRenderer.contents;
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGridRenderer with ${items.length} items`);
-          
-          // Log first item structure
-          if (items[0]) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First item keys:`, Object.keys(items[0]));
+          if (DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGridRenderer with ${items.length} items`);
+            
+            // Log first item structure
+            if (items[0]) {
+              console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First item keys:`, Object.keys(items[0]));
+            }
           }
-          
+
           const filtered = directFilterArray(
             items,
             page,
@@ -600,16 +610,22 @@ JSON.parse = function () {
         if (tab.tabRenderer?.content && 
             !tab.tabRenderer.content.sectionListRenderer && 
             !tab.tabRenderer.content.richGridRenderer) {
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - UNRECOGNIZED CONTENT STRUCTURE!`);
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Content keys:`, Object.keys(tab.tabRenderer.content));
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Full content (first 500 chars):`, JSON.stringify(tab.tabRenderer.content).substring(0, 500));
+          if (DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - UNRECOGNIZED CONTENT STRUCTURE!`);
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Content keys:`, Object.keys(tab.tabRenderer.content));
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Full content (first 500 chars):`, JSON.stringify(tab.tabRenderer.content).substring(0, 500));
+          }
         }
       });
       
-      console.log('[PLAYLIST_PAGE] Processing complete');
-      console.log('[PLAYLIST_PAGE] ========================================');
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] Processing complete');
+        console.log('[PLAYLIST_PAGE] ========================================');
+      }
     } else {
-      console.log('[PLAYLIST_PAGE] Already processed, skipping');
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] Already processed, skipping');
+      }
     }
   }
 
