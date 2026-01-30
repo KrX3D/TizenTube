@@ -41,7 +41,7 @@ function directFilterArray(arr, page, context = '') {
     if (DEBUG_ENABLED && LOG_WATCHED) {
       console.log('[FILTER] Skipping already-filtered array:', context);
     }
-    return arr;
+    //return arr;
   }
   
   const shortsEnabled = configRead('enableShorts');
@@ -81,8 +81,8 @@ function directFilterArray(arr, page, context = '') {
                         item.videoRenderer || 
                         item.gridVideoRenderer ||
                         item.compactVideoRenderer ||
-                        item.playlistVideoRenderer ||
                         item.richItemRenderer?.content?.videoRenderer;
+                        // item.playlistVideoRenderer ||
     
     if (!isVideoItem) return true;
     
