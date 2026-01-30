@@ -547,43 +547,69 @@ JSON.parse = function () {
   if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
     
-    // ONLY process if it's actually a playlist page
     if (!r.__tizentubeProcessedPlaylist) {
       r.__tizentubeProcessedPlaylist = true;
       
-      if (LOG_WATCHED && DEBUG_ENABLED) {
-        console.log('[PLAYLIST_PAGE] ========================================');
-        console.log('[PLAYLIST_PAGE] Page:', page);
-        console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
-      }
+      console.log('[PLAYLIST_PAGE] ========================================');
+      console.log('[PLAYLIST_PAGE] ENTERED PLAYLIST HANDLER');
+      console.log('[PLAYLIST_PAGE] Page detected as:', page);
+      console.log('[PLAYLIST_PAGE] URL:', window.location.href);
+      console.log('[PLAYLIST_PAGE] Number of tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
       
       r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
-        // Check tabRenderer → sectionListRenderer
-        if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
-          if (LOG_WATCHED && DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - processing ${tab.tabRenderer.content.sectionListRenderer.contents.length} sections`);
-          }
-          processShelves(tab.tabRenderer.content.sectionListRenderer.contents);
+        console.log(`[PLAYLIST_PAGE] --- Processing Tab ${tabIndex} ---`);
+        
+        // Log what's available in this tab
+        console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} has tabRenderer:`, !!tab.tabRenderer);
+        if (tab.tabRenderer) {
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} content keys:`, Object.keys(tab.tabRenderer.content || {}));
         }
         
-        // Check richGridRenderer (some playlists use this)
-        if (tab.tabRenderer?.content?.richGridRenderer?.contents) {
-          if (LOG_WATCHED && DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGrid with ${tab.tabRenderer.content.richGridRenderer.contents.length} items`);
+        // Check sectionListRenderer
+        if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
+          const sections = tab.tabRenderer.content.sectionListRenderer.contents;
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - sectionListRenderer with ${sections.length} sections`);
+          
+          // Log first section structure
+          if (sections[0]) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First section keys:`, Object.keys(sections[0]));
           }
+          
+          processShelves(sections);
+        }
+        
+        // Check richGridRenderer
+        if (tab.tabRenderer?.content?.richGridRenderer?.contents) {
+          const items = tab.tabRenderer.content.richGridRenderer.contents;
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGridRenderer with ${items.length} items`);
+          
+          // Log first item structure
+          if (items[0]) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First item keys:`, Object.keys(items[0]));
+          }
+          
           const filtered = directFilterArray(
-            tab.tabRenderer.content.richGridRenderer.contents,
+            items,
             page,
             `playlist-tab-${tabIndex}`
           );
           tab.tabRenderer.content.richGridRenderer.contents = filtered;
         }
+        
+        // Check if there's content but we didn't recognize it
+        if (tab.tabRenderer?.content && 
+            !tab.tabRenderer.content.sectionListRenderer && 
+            !tab.tabRenderer.content.richGridRenderer) {
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - UNRECOGNIZED CONTENT STRUCTURE!`);
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Content keys:`, Object.keys(tab.tabRenderer.content));
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Full content (first 500 chars):`, JSON.stringify(tab.tabRenderer.content).substring(0, 500));
+        }
       });
       
-      if (LOG_WATCHED && DEBUG_ENABLED) {
-        console.log('[PLAYLIST_PAGE] Processing complete');
-        console.log('[PLAYLIST_PAGE] ========================================');
-      }
+      console.log('[PLAYLIST_PAGE] Processing complete');
+      console.log('[PLAYLIST_PAGE] ========================================');
+    } else {
+      console.log('[PLAYLIST_PAGE] Already processed, skipping');
     }
   }
 
@@ -712,35 +738,48 @@ function isShortItem(item) {
                  'unknown';
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
-    // ⭐ DIAGNOSTIC: Always log what we're checking
-    console.log('[SHORTS_CHECK] ========================================');
-    console.log('[SHORTS_CHECK] Checking video:', videoId);
-    console.log('[SHORTS_CHECK] Has tileRenderer:', !!item.tileRenderer);
-    console.log('[SHORTS_CHECK] Has videoRenderer:', !!item.videoRenderer);
-    console.log('[SHORTS_CHECK] Has gridVideoRenderer:', !!item.gridVideoRenderer);
-    console.log('[SHORTS_CHECK] Has richItemRenderer:', !!item.richItemRenderer);
+    console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    console.log('[SHORTS_DIAGNOSTIC] Checking video:', videoId);
+    console.log('[SHORTS_DIAGNOSTIC] Has tileRenderer:', !!item.tileRenderer);
+    console.log('[SHORTS_DIAGNOSTIC] Has videoRenderer:', !!item.videoRenderer);
+    console.log('[SHORTS_DIAGNOSTIC] Has gridVideoRenderer:', !!item.gridVideoRenderer);
+    
+    // Log the FULL structure for Tizen 5.5 debugging
+    if (item.tileRenderer) {
+      console.log('[SHORTS_DIAGNOSTIC] tileRenderer.contentType:', item.tileRenderer.contentType);
+      console.log('[SHORTS_DIAGNOSTIC] tileRenderer.onSelectCommand exists:', !!item.tileRenderer.onSelectCommand);
+      
+      if (item.tileRenderer.onSelectCommand) {
+        console.log('[SHORTS_DIAGNOSTIC] onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
+        console.log('[SHORTS_DIAGNOSTIC] onSelectCommand has reelWatchEndpoint:', !!item.tileRenderer.onSelectCommand.reelWatchEndpoint);
+        
+        // Check if ANY property contains 'reel' or 'shorts'
+        const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
+        console.log('[SHORTS_DIAGNOSTIC] Command contains "reelWatch":', cmdStr.includes('reelWatch'));
+        console.log('[SHORTS_DIAGNOSTIC] Command contains "/shorts/":', cmdStr.includes('/shorts/'));
+        console.log('[SHORTS_DIAGNOSTIC] Command (first 500 chars):', cmdStr.substring(0, 500));
+      }
+      
+      if (item.tileRenderer.header?.tileHeaderRenderer) {
+        console.log('[SHORTS_DIAGNOSTIC] Has header:', true);
+        console.log('[SHORTS_DIAGNOSTIC] Header keys:', Object.keys(item.tileRenderer.header));
+        console.log('[SHORTS_DIAGNOSTIC] tileHeaderRenderer keys:', Object.keys(item.tileRenderer.header.tileHeaderRenderer || {}));
+      }
+    }
   }
   
   // Method 1: Check tileRenderer contentType
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
     if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 1 (contentType)');
-      console.log('[SHORTS_CHECK] ========================================');
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 1 (contentType)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
   }
   
   // Method 2: Check videoRenderer
   if (item.videoRenderer) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] Checking videoRenderer...');
-    }
-    
     if (item.videoRenderer.thumbnailOverlays) {
-      if (DEBUG_ENABLED && LOG_SHORTS) {
-        console.log('[SHORTS_CHECK]   Has thumbnailOverlays:', item.videoRenderer.thumbnailOverlays.length);
-      }
-      
       const hasShortsBadge = item.videoRenderer.thumbnailOverlays.some(overlay => 
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
         overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS'
@@ -748,40 +787,30 @@ function isShortItem(item) {
       
       if (hasShortsBadge) {
         if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (videoRenderer overlay)');
-          console.log('[SHORTS_CHECK] ========================================');
+          console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 2 (videoRenderer overlay)');
+          console.log('[SHORTS_DIAGNOSTIC] ========================================');
         }
         return true;
       }
     }
     
     const navEndpoint = item.videoRenderer.navigationEndpoint;
-    if (navEndpoint) {
+    if (navEndpoint?.reelWatchEndpoint) {
       if (DEBUG_ENABLED && LOG_SHORTS) {
-        console.log('[SHORTS_CHECK]   Has navigationEndpoint');
-        console.log('[SHORTS_CHECK]   Has reelWatchEndpoint:', !!navEndpoint.reelWatchEndpoint);
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 2 (reelWatchEndpoint)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
       }
-      
-      if (navEndpoint.reelWatchEndpoint) {
+      return true;
+    }
+    
+    if (navEndpoint?.commandMetadata?.webCommandMetadata?.url) {
+      const url = navEndpoint.commandMetadata.webCommandMetadata.url;
+      if (url.includes('/shorts/')) {
         if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (reelWatchEndpoint)');
-          console.log('[SHORTS_CHECK] ========================================');
+          console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 2 (URL contains /shorts/)');
+          console.log('[SHORTS_DIAGNOSTIC] ========================================');
         }
         return true;
-      }
-      
-      if (navEndpoint.commandMetadata?.webCommandMetadata?.url) {
-        const url = navEndpoint.commandMetadata.webCommandMetadata.url;
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK]   URL:', url);
-        }
-        if (url.includes('/shorts/')) {
-          if (DEBUG_ENABLED && LOG_SHORTS) {
-            console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (URL contains /shorts/)');
-            console.log('[SHORTS_CHECK] ========================================');
-          }
-          return true;
-        }
       }
     }
   }
@@ -789,111 +818,88 @@ function isShortItem(item) {
   // Method 3: Check richItemRenderer
   if (item.richItemRenderer?.content?.reelItemRenderer) {
     if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 3 (richItemRenderer)');
-      console.log('[SHORTS_CHECK] ========================================');
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 3 (richItemRenderer)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
   }
   
   // Method 4: Check gridVideoRenderer
-  if (item.gridVideoRenderer) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] Checking gridVideoRenderer...');
-    }
-    
-    if (item.gridVideoRenderer.thumbnailOverlays) {
-      const hasShortsBadge = item.gridVideoRenderer.thumbnailOverlays.some(overlay =>
-        overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
-      );
-      if (hasShortsBadge) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 4 (gridVideoRenderer)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
+  if (item.gridVideoRenderer?.thumbnailOverlays) {
+    const hasShortsBadge = item.gridVideoRenderer.thumbnailOverlays.some(overlay =>
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+    );
+    if (hasShortsBadge) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 4 (gridVideoRenderer)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
       }
+      return true;
     }
   }
   
   // Method 5: Check compactVideoRenderer
-  if (item.compactVideoRenderer) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] Checking compactVideoRenderer...');
-    }
-    
-    if (item.compactVideoRenderer.thumbnailOverlays) {
-      const hasShortsBadge = item.compactVideoRenderer.thumbnailOverlays.some(overlay =>
-        overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
-      );
-      if (hasShortsBadge) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 5 (compactVideoRenderer)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-    }
-  }
-  
-  // Method 6-8: Check tileRenderer (Tizen 5.5 specific)
-  if (item.tileRenderer) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_CHECK] Checking tileRenderer details...');
-      console.log('[SHORTS_CHECK]   contentType:', item.tileRenderer.contentType);
-    }
-    
-    // Check navigation endpoint
-    if (item.tileRenderer.onSelectCommand) {
+  if (item.compactVideoRenderer?.thumbnailOverlays) {
+    const hasShortsBadge = item.compactVideoRenderer.thumbnailOverlays.some(overlay =>
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+    );
+    if (hasShortsBadge) {
       if (DEBUG_ENABLED && LOG_SHORTS) {
-        console.log('[SHORTS_CHECK]   Has onSelectCommand');
-        console.log('[SHORTS_CHECK]   Has reelWatchEndpoint:', !!item.tileRenderer.onSelectCommand.reelWatchEndpoint);
-      }
-      
-      if (item.tileRenderer.onSelectCommand.reelWatchEndpoint) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6 (tileRenderer reelWatchEndpoint)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-      
-      // ⭐ NEW: Check the full command structure
-      const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
-      if (cmdStr.includes('reelWatch') || cmdStr.includes('/shorts/')) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6b (command contains reelWatch or /shorts/)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-    }
-    
-    // Check thumbnail overlays
-    if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays) {
-      const hasShortsBadge = item.tileRenderer.header.tileHeaderRenderer.thumbnailOverlays.some(overlay =>
-        overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
-      );
-      if (hasShortsBadge) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6c (tileRenderer overlay)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-    }
-    
-    // Method 7: Check title for #shorts
-    const videoTitle = item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || '';
-    if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
-      if (DEBUG_ENABLED && LOG_SHORTS) {
-        console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 7 (title contains #shorts)');
-        console.log('[SHORTS_CHECK] Title:', videoTitle);
-        console.log('[SHORTS_CHECK] ========================================');
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 5 (compactVideoRenderer)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
       }
       return true;
     }
-    
-    // Method 8: Check duration
+  }
+  
+  // Method 6: Check tileRenderer reelWatchEndpoint
+  if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 6 (tileRenderer reelWatchEndpoint)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
+  
+  // Method 6b: Check command string for reelWatch/shorts (Tizen 5.5)
+  if (item.tileRenderer?.onSelectCommand) {
+    const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
+    if (cmdStr.includes('reelWatch') || cmdStr.includes('/shorts/')) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 6b (command contains reelWatch or /shorts/)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
+      }
+      return true;
+    }
+  }
+  
+  // Method 6c: Check tileRenderer overlay
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays) {
+    const hasShortsBadge = item.tileRenderer.header.tileHeaderRenderer.thumbnailOverlays.some(overlay =>
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+    );
+    if (hasShortsBadge) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 6c (tileRenderer overlay)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
+      }
+      return true;
+    }
+  }
+  
+  // Method 7: Check title for #shorts
+  const videoTitle = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || '';
+  if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 7 (title contains #shorts)');
+      console.log('[SHORTS_DIAGNOSTIC] Title:', videoTitle);
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
+  
+  // Method 8: Check duration
+  if (item.tileRenderer) {
     let lengthText = null;
     
     const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
@@ -911,52 +917,28 @@ function isShortItem(item) {
     }
     
     if (lengthText) {
-      if (DEBUG_ENABLED && LOG_SHORTS) {
-        console.log('[SHORTS_CHECK]   Duration text:', lengthText);
-      }
-      
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
         
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_CHECK]   Duration:', totalSeconds, 'seconds');
-        }
-        
         if (totalSeconds <= 90) {
           if (DEBUG_ENABLED && LOG_SHORTS) {
-            console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 8 (duration ≤90s)');
-            console.log('[SHORTS_CHECK] ========================================');
+            console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s)');
+            console.log('[SHORTS_DIAGNOSTIC] Duration:', totalSeconds, 'seconds');
+            console.log('[SHORTS_DIAGNOSTIC] ========================================');
           }
           return true;
         }
       }
     }
-
-    // ⭐ Method 9: Check for Shorts in navigation endpoint (Tizen 5.5)
-    if (item.tileRenderer?.onSelectCommand) {
-      const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
-      if (cmdStr.includes('reelWatch') || cmdStr.includes('/shorts/')) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_DETECT] Method 9 (nav command):', videoId);
-        }
-        return true;
-      }
-    }
-    
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      // ⭐ DIAGNOSTIC: Dump full structure if we still don't know
-      console.log('[SHORTS_CHECK] ⚠️ Could not determine if short');
-      console.log('[SHORTS_CHECK] Full tileRenderer structure (first 1000 chars):');
-      console.log(JSON.stringify(item.tileRenderer).substring(0, 1000));
-    }
   }
   
+  // NOT A SHORT
   if (DEBUG_ENABLED && LOG_SHORTS) {
-    console.log('[SHORTS_CHECK] ❌ NOT A SHORT');
-    console.log('[SHORTS_CHECK] ========================================');
+    console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
+    console.log('[SHORTS_DIAGNOSTIC] ========================================');
   }
   return false;
 }
