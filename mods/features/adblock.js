@@ -35,7 +35,6 @@ function directFilterArray(arr, page, context = '') {
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
   
-  console.log('========================================');
   // ⭐ DEBUG: Log configuration
   if (debugEnabled && (shouldFilterShorts || shouldHideWatched)) {
     console.log('[FILTER_START #' + callId + '] Context:', context, '| Page:', page, '| Items:', arr.length);
@@ -113,8 +112,6 @@ function directFilterArray(arr, page, context = '') {
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
-
-  console.log('========================================');
   
   const debugEnabled = configRead('enableDebugConsole');
   
@@ -223,7 +220,6 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       }
     }
   }
-  console.log('========================================');
 }
 
 const origParse = JSON.parse;

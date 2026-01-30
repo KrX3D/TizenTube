@@ -273,7 +273,7 @@
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v380 - NEWEST FIRST');
+    console.log('[Console] Visual Console v390 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
@@ -282,11 +282,6 @@
     console.log('[Console]   YELLOW button - Jump to TOP (newest)');
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
-    console.log('[Console]   Border colors:');
-    console.log('[Console]     GREEN = Showing newest logs');
-    console.log('[Console]     ORANGE = Manual scroll mode');
-    console.log('[Console] Position:', currentPosition);
-    console.log('[Console] Enabled:', enabled);
     console.log('[Console] ========================================');
     
     updateBorder();
