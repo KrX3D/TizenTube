@@ -4,18 +4,46 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
- const logShorts =  true;
- const logWatched =  false; 
+// ⭐ CONFIGURATION: Set these to control logging output
+const LOG_SHORTS = true;   // Set false to disable shorts logging  
+const LOG_WATCHED = false;  // Set false to disable watched video logging
+
+// ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
+// Updated automatically via config change events
+let DEBUG_ENABLED = configRead('enableDebugConsole');
+
+// ⭐ EXPOSE: Allow external code to update the cache
+window.adblock = window.adblock || {};
+window.adblock.setDebugEnabled = function(value) {
+    DEBUG_ENABLED = value;
+    console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
+};
+
+// Listen for config changes to update DEBUG_ENABLED cache
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (window.configChangeEmitter) {
+      window.configChangeEmitter.addEventListener('configChange', (e) => {
+        if (e.detail?.key === 'enableDebugConsole') {
+          DEBUG_ENABLED = e.detail.value;
+          console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
+        }
+      });
+    }
+  }, 100);
+}
 
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
   // ⭐ CRITICAL: Check if this array was already filtered
   if (arr.__alreadyFiltered) {
+    if (DEBUG_ENABLED && LOG_WATCHED) {
+      console.log('[FILTER] Skipping already-filtered array:', context);
+    }
     return arr;
   }
   
-  const debugEnabled = configRead('enableDebugConsole');
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -36,7 +64,7 @@ function directFilterArray(arr, page, context = '') {
   const callId = Math.random().toString(36).substr(2, 6);
   
   // ⭐ DEBUG: Log configuration
-  if (debugEnabled && (shouldFilterShorts || shouldHideWatched)) {
+  if (DEBUG_ENABLED && (shouldFilterShorts || shouldHideWatched)) {
     console.log('[FILTER_START #' + callId + '] Context:', context, '| Page:', page, '| Items:', arr.length);
     console.log('[FILTER_CONFIG #' + callId + '] Threshold:', threshold + '%', '| Hide watched:', shouldHideWatched, '| Filter shorts:', shouldFilterShorts);
   }
@@ -67,7 +95,7 @@ function directFilterArray(arr, page, context = '') {
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
 
-      if (logShorts && debugEnabled) {
+      if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[FILTER #' + callId + '] REMOVED SHORT:', videoId);
       }
       return false;
@@ -79,7 +107,7 @@ function directFilterArray(arr, page, context = '') {
       const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
       
       // ⭐ DEBUG: Log each decision
-      if (logWatched && debugEnabled) {
+      if (LOG_WATCHED && DEBUG_ENABLED) {
         const hasProgressBar = !!progressBar;
         console.log('[FILTER #' + callId + '] Video:', videoId, '| Has progress:', hasProgressBar, '| Progress:', percentWatched + '%', '| Threshold:', threshold + '%', '| Will hide:', percentWatched >= threshold);
       }
@@ -94,15 +122,16 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
-  // ⭐ Mark this array as already filtered to prevent duplicate filtering
+  // ⭐ CRITICAL: Mark this array to prevent duplicate filtering
   Object.defineProperty(filtered, '__alreadyFiltered', {
     value: true,
     enumerable: false,
-    writable: false
+    writable: false,
+    configurable: false  // ⭐ ADDED: Prevents property from being deleted
   });
   
   // Log summary
-  if (debugEnabled) {
+  if (DEBUG_ENABLED) {
     console.log('[FILTER_END #' + callId + '] Result:', originalLength + '→' + filtered.length, '| Watched removed:', hiddenCount, '| Shorts removed:', shortsCount);
     console.log('========================================');
   }
@@ -112,8 +141,6 @@ function directFilterArray(arr, page, context = '') {
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
-  
-  const debugEnabled = configRead('enableDebugConsole');
   
   // If this is an array with video items, filter it
   if (Array.isArray(obj) && obj.length > 0) {
@@ -127,7 +154,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasVideoItems) {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[SCAN] Found video array at:', path, '| Length:', obj.length);
       }
       return directFilterArray(obj, page, path);
@@ -150,7 +177,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
           if (shelf?.shelfRenderer) {
             const shelfTitle = shelf.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
             if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
-              if (logShorts && debugEnabled) {
+              if (LOG_SHORTS && DEBUG_ENABLED) {
                 console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
               }
               obj.splice(i, 1);
@@ -192,7 +219,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
         }
         
         if (isEmpty) {
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             console.log('[SCAN_CLEANUP] Removing empty shelf at:', path + '[' + i + ']');
           }
           obj.splice(i, 1);
@@ -272,7 +299,7 @@ JSON.parse = function () {
     if (!r.__tizentubeProcessedBrowse) {
       r.__tizentubeProcessedBrowse = true;
       
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
           console.log('[BROWSE] ==============tvBrowseRenderer============');
           console.log('[BROWSE] Page:', currentPage);
           console.log('[BROWSE] URL:', window.location.href);
@@ -304,7 +331,7 @@ JSON.parse = function () {
 
       processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
     } else {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[JSON.parse] tvBrowseRenderer already processed, SKIPPING');
       }
     }
@@ -339,7 +366,7 @@ JSON.parse = function () {
   if (r?.contents?.sectionListRenderer?.contents) {
     if (!r.__tizentubeProcessedSection) {
       r.__tizentubeProcessedSection = true;
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('SHELF_ENTRY', 'Processing sectionListRenderer.contents', {
           count: r.contents.sectionListRenderer.contents.length,
           page: getCurrentPage()
@@ -347,7 +374,7 @@ JSON.parse = function () {
       }
       processShelves(r.contents.sectionListRenderer.contents);
     } else {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[JSON.parse] sectionListRenderer already processed, SKIPPING');
       }
     }
@@ -355,12 +382,12 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     const page = getCurrentPage();
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log('[CONTINUATION]', page, '- Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
     }
 
     if (window._lastLoggedPage !== page) {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[PAGE_DEBUG] ========================================');
         console.log('[PAGE_DEBUG] Page changed to:', page);
         console.log('[PAGE_DEBUG] URL:', window.location.href);
@@ -377,9 +404,8 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
-    const debugEnabled = configRead('enableDebugConsole');
     
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log('[CONTINUATION] ========================================');
       console.log('[CONTINUATION] Page:', page);
       console.log('[CONTINUATION] Actions:', r.onResponseReceivedActions.length);
@@ -387,7 +413,7 @@ JSON.parse = function () {
     
     r.onResponseReceivedActions.forEach((action, idx) => {
       if (action.appendContinuationItemsAction?.continuationItems) {
-        if (debugEnabled) {
+        if (DEBUG_ENABLED) {
           console.log('[CONTINUATION] Processing action', idx);
         }
         
@@ -398,13 +424,13 @@ JSON.parse = function () {
       }
     });
     
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log('[CONTINUATION] ========================================');
     }
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log('SHELF_ENTRY', 'Processing horizontal list continuation', {
         count: r.continuationContents.horizontalListContinuation.items.length
       });
@@ -420,9 +446,8 @@ JSON.parse = function () {
     const page = getCurrentPage();
     
     if (page === 'subscriptions') {
-      const debugEnabled = configRead('enableDebugConsole');
       
-      if (logWatched && debugEnabled) {
+      if (LOG_WATCHED && DEBUG_ENABLED) {
         console.log('[SUBSCRIPTIONS] ========================================');
         console.log('[SUBSCRIPTIONS] Detected subscriptions page');
         console.log('[SUBSCRIPTIONS] Applying direct filtering...');
@@ -431,7 +456,7 @@ JSON.parse = function () {
       // Scan and filter ALL arrays in the secondary nav
       scanAndFilterAllArrays(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer, page);
       
-      if (logWatched && debugEnabled) {
+      if (LOG_WATCHED && DEBUG_ENABLED) {
         console.log('[SUBSCRIPTIONS] Direct filtering complete');
         console.log('[SUBSCRIPTIONS] ========================================');
       }
@@ -440,7 +465,7 @@ JSON.parse = function () {
 
   // Log library page structure
   if (r?.contents?.tvBrowseRenderer && getCurrentPage() === 'library') {
-      if (logWatched && debugEnabled) {    
+      if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[LIBRARY] ========================================');
         console.log('[LIBRARY] Structure detected');
         console.log('[LIBRARY] URL:', window.location.href);
@@ -448,52 +473,57 @@ JSON.parse = function () {
       
       if (r.contents.tvBrowseRenderer.content?.tvSecondaryNavRenderer) {
         const tabs = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections;
-        if (logWatched && debugEnabled) {    
+        if (LOG_WATCHED && DEBUG_ENABLED) {    
           console.log('[LIBRARY] Has', tabs?.length || 0, 'tab sections');
         }
       }
       
       if (r.contents.tvBrowseRenderer.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer) {
         const shelves = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
-        if (logWatched && debugEnabled) {    
+        if (LOG_WATCHED && DEBUG_ENABLED) {    
           console.log('[LIBRARY] Main view has', shelves?.length || 0, 'shelves');
         }
       }
-      if (logWatched && debugEnabled) {    
+      if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[LIBRARY] ========================================');
       }
   }
 
-  // Special handling for playlists when entering them
-  if (r?.contents?.singleColumnBrowseResultsRenderer && window.location.hash.includes('list=')) {
-      if (logWatched && debugEnabled) {    
+  // ⭐ FIXED: Removed redundant window.location.hash.includes('list=') check
+  // We already know the page type from getCurrentPage()
+  if (r?.contents?.singleColumnBrowseResultsRenderer) {
+    const page = getCurrentPage();
+    
+    // Only process if it's actually a playlist page
+    if (page === 'playlist') {
+      if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
         console.log('[PLAYLIST] Entered playlist');
-        console.log('[PLAYLIST] URL:', window.location.href);
+        console.log('[PLAYLIST] Page:', page);
       }
       
       const tabs = r.contents.singleColumnBrowseResultsRenderer.tabs;
       if (tabs) {
         tabs.forEach((tab, idx) => {
           if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
-            if (logWatched && debugEnabled) {    
+            if (LOG_WATCHED && DEBUG_ENABLED) {    
               console.log(`[PLAYLIST] Tab ${idx} - processing shelves`);
             }
             processShelves(tab.tabRenderer.content.sectionListRenderer.contents);
           }
         });
       }
-      if (logWatched && debugEnabled) {    
+      if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
       }
+    }
   }
   
   // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
   if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
-    const debugEnabled = configRead('enableDebugConsole');
     
-    if (logWatched && debugEnabled) {
+    if (LOG_WATCHED && DEBUG_ENABLED) {
       console.log('[PLAYLIST_PAGE] ========================================');
       console.log('[PLAYLIST_PAGE] Page:', page);
       console.log('[PLAYLIST_PAGE] Applying direct filtering to tabs...');
@@ -502,7 +532,7 @@ JSON.parse = function () {
     // Scan and filter ALL arrays in all tabs
     scanAndFilterAllArrays(r.contents.twoColumnBrowseResultsRenderer, page);
     
-    if (logWatched && debugEnabled) {
+    if (LOG_WATCHED && DEBUG_ENABLED) {
       console.log('[PLAYLIST_PAGE] Direct filtering complete');
       console.log('[PLAYLIST_PAGE] ========================================');
     }
@@ -511,9 +541,8 @@ JSON.parse = function () {
   // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
-    const debugEnabled = configRead('enableDebugConsole');
     
-    if (logWatched && debugEnabled) {
+    if (LOG_WATCHED && DEBUG_ENABLED) {
       console.log('[SINGLE_COLUMN] ========================================');
       console.log('[SINGLE_COLUMN] Page:', page);
       console.log('[SINGLE_COLUMN] Applying direct filtering...');
@@ -522,7 +551,7 @@ JSON.parse = function () {
     // Scan and filter ALL arrays
     scanAndFilterAllArrays(r.contents.singleColumnBrowseResultsRenderer, page);
     
-    if (logWatched && debugEnabled) {
+    if (LOG_WATCHED && DEBUG_ENABLED) {
       console.log('[SINGLE_COLUMN] Direct filtering complete');
       console.log('[SINGLE_COLUMN] ========================================');
     }
@@ -600,9 +629,7 @@ JSON.parse = function () {
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
     
-    const debugEnabled = configRead('enableDebugConsole');
-    
-    //if (debugEnabled) {
+    //if (DEBUG_ENABLED) {
       //console.log('[UNIVERSAL] ========================================');
       //console.log('[UNIVERSAL] Applying universal filtering to page:', currentPage);
     //}
@@ -610,7 +637,7 @@ JSON.parse = function () {
     // Scan the ENTIRE response object and filter ALL video arrays
     scanAndFilterAllArrays(r, currentPage);
     
-    //if (debugEnabled) {
+    //if (DEBUG_ENABLED) {
       //console.log('[UNIVERSAL] Universal filtering complete');
       //console.log('[UNIVERSAL] ========================================');
     //}
@@ -629,11 +656,9 @@ for (const key in window._yttv) {
 function isShortItem(item) {
   if (!item) return false;
   
-  const debugEnabled = configRead('enableDebugConsole');
-  
   // Method 1: Check tileRenderer contentType
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
-    if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 1 (contentType):', item.tileRenderer.contentId || 'unknown');
+    if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 1 (contentType):', item.tileRenderer.contentId || 'unknown');
     return true;
   }
   
@@ -646,7 +671,7 @@ function isShortItem(item) {
         overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 2 (videoRenderer overlay):', item.videoRenderer.videoId || 'unknown');
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 2 (videoRenderer overlay):', item.videoRenderer.videoId || 'unknown');
         return true;
       }
     }
@@ -655,14 +680,14 @@ function isShortItem(item) {
     const navEndpoint = item.videoRenderer.navigationEndpoint;
     if (navEndpoint?.reelWatchEndpoint || 
         navEndpoint?.commandMetadata?.webCommandMetadata?.url?.includes('/shorts/')) {
-      if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 2 (videoRenderer endpoint):', item.videoRenderer.videoId || 'unknown');
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 2 (videoRenderer endpoint):', item.videoRenderer.videoId || 'unknown');
       return true;
     }
   }
   
   // Method 3: Check richItemRenderer for shorts (newer format)
   if (item.richItemRenderer?.content?.reelItemRenderer) {
-    if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 3 (richItemRenderer)');
+    if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 3 (richItemRenderer)');
     return true;
   }
   
@@ -673,7 +698,7 @@ function isShortItem(item) {
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 4 (gridVideoRenderer):', item.gridVideoRenderer.videoId || 'unknown');
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 4 (gridVideoRenderer):', item.gridVideoRenderer.videoId || 'unknown');
         return true;
       }
     }
@@ -686,7 +711,7 @@ function isShortItem(item) {
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 5 (compactVideoRenderer):', item.compactVideoRenderer.videoId || 'unknown');
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 5 (compactVideoRenderer):', item.compactVideoRenderer.videoId || 'unknown');
         return true;
       }
     }
@@ -696,7 +721,7 @@ function isShortItem(item) {
   if (item.tileRenderer) {
     // Check navigation endpoint
     if (item.tileRenderer.onSelectCommand?.reelWatchEndpoint) {
-      if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 6 (tileRenderer reelWatchEndpoint):', item.tileRenderer.contentId || 'unknown');
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 6 (tileRenderer reelWatchEndpoint):', item.tileRenderer.contentId || 'unknown');
       return true;
     }
     
@@ -706,7 +731,7 @@ function isShortItem(item) {
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 6 (tileRenderer overlay):', item.tileRenderer.contentId || 'unknown');
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 6 (tileRenderer overlay):', item.tileRenderer.contentId || 'unknown');
         return true;
       }
     }
@@ -714,7 +739,7 @@ function isShortItem(item) {
     // Method 7: Check for "Shorts" or "#shorts" in video title (Tizen 5.5 fallback)
     const videoTitle = item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || '';
     if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
-      if (logShorts && debugEnabled) console.log('[SHORTS_DETECT] Method 7 (title contains #shorts):', item.tileRenderer.contentId || 'unknown');
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 7 (title contains #shorts):', item.tileRenderer.contentId || 'unknown');
       return true;
     }
     
@@ -747,7 +772,7 @@ function isShortItem(item) {
         const totalSeconds = minutes * 60 + seconds;
         
         if (totalSeconds <= 90) {
-          if (logShorts && debugEnabled) {
+          if (LOG_SHORTS && DEBUG_ENABLED) {
             console.log('[SHORTS_DETECT] Method 8 (duration ≤90s):', item.tileRenderer.contentId || 'unknown');
             console.log('[SHORTS_DETECT]   Duration:', lengthText, '(' + totalSeconds + 's)');
             console.log('[SHORTS_DETECT]   Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || 'unknown');
@@ -758,7 +783,7 @@ function isShortItem(item) {
     }
     
     // Log full structure if we checked a tileRenderer but didn't find it was a short
-    if (logShorts && debugEnabled && item.tileRenderer.contentId) {
+    if (LOG_SHORTS && DEBUG_ENABLED && item.tileRenderer.contentId) {
       console.log('[SHORTS_DETECT] Checked tileRenderer but NOT a short:', item.tileRenderer.contentId);
       
       // ⭐ DIAGNOSTIC: Dump the full structure to help identify shorts on Tizen 5.5
@@ -791,12 +816,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const configPages = configRead('hideWatchedVideosPages') || [];
   const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
-  if (debugEnabled) {
+  if (DEBUG_ENABLED) {
     console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide:', shouldHideWatched, '| Shorts:', shortsEnabled);
   }
 
   if (window._lastLoggedPage !== page) {
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log('[PAGE_DEBUG] ========================================');
       console.log('[PAGE_DEBUG] Page changed to:', page);
       console.log('[PAGE_DEBUG] URL:', window.location.href);
@@ -821,7 +846,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (!shortsEnabled && shelve.shelfRenderer) {
         const shelfTitle = shelve.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
         if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
           shelves.splice(i, 1);
@@ -842,7 +867,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
           itemsBefore = items.length;
           
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             if (items && items.length > 0 && items[0]) {
               console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
               console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
@@ -852,7 +877,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
               console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
             }
           }
-                    
+                  
           deArrowify(items);
           hqify(items);
           addLongPress(items);
@@ -860,7 +885,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (!shortsEnabled) {
             if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-              if (debugEnabled) {
+              if (DEBUG_ENABLED) {
                   console.log('[SHELF_PROCESS] Removing entire SHORTS shelf');
               }
               shelves.splice(i, 1);
@@ -883,7 +908,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelve.shelfRenderer.content.horizontalListRenderer.items = items;
           
           if (items.length === 0) {
-            if (debugEnabled) {
+            if (DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
@@ -898,7 +923,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.gridRenderer.items;
           itemsBefore = items.length;
 
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             if (items && items.length > 0 && items[0]) {
               console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
               console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
@@ -928,7 +953,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelve.shelfRenderer.content.gridRenderer.items = items;
           
           if (items.length === 0) {
-            if (debugEnabled) {
+            if (DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
@@ -943,7 +968,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
           itemsBefore = items.length;
 
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             if (items && items.length > 0 && items[0]) {
               console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
               console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
@@ -973,7 +998,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelve.shelfRenderer.content.verticalListRenderer.items = items;
           
           if (items.length === 0) {
-            if (debugEnabled) {
+            if (DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
@@ -989,7 +1014,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
         itemsBefore = contents.length;
 
-        if (debugEnabled) {
+        if (DEBUG_ENABLED) {
           if (contents && contents.length > 0 && contents[0]) {
             console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
             console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
@@ -1019,7 +1044,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
         
         if (contents.length === 0) {
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
           }
           shelves.splice(i, 1);
@@ -1037,7 +1062,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const contents = innerShelf?.content?.richGridRenderer?.contents;
           
           if (Array.isArray(contents) && contents.some(item => isShortItem(item))) {            
-            if (logShorts && debugEnabled) {
+            if (LOG_SHORTS && DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
             }
             shelves.splice(i, 1);
@@ -1053,7 +1078,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
 
-        if (debugEnabled) {
+        if (DEBUG_ENABLED) {
           if (items && items.length > 0 && items[0]) {
             console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
             console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
@@ -1083,7 +1108,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelve.gridRenderer.items = items;
         
         if (items.length === 0) {
-          if (debugEnabled) {
+          if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
           }
           shelves.splice(i, 1);
@@ -1096,7 +1121,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       totalItemsAfter += itemsAfter;
       
     } catch (error) {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[SHELF] ERROR shelf', (shelves.length - i), ':', error.message);
       }
     }
@@ -1126,7 +1151,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
     }
     
     if (isEmpty) {
-      if (debugEnabled) {
+      if (DEBUG_ENABLED) {
         console.log('[SHELF_CLEANUP] Removing empty shelf at final cleanup');
       }
       shelves.splice(i, 1);
@@ -1134,7 +1159,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   }
   
   // Single summary line
-  if (debugEnabled) {
+  if (DEBUG_ENABLED) {
     console.log('[SHELF] Done:', totalItemsBefore, '→', totalItemsAfter, '| Hidden:', totalHidden, '| Shorts:', totalShortsRemoved, '| Removed:', shelvesRemoved, 'shelves');
   }
 }
@@ -1413,8 +1438,7 @@ function getCurrentPage() {
   const lastFullUrl = window._lastFullUrl;
   
   if (detectedPage !== lastDetectedPage || fullUrl !== lastFullUrl) {
-    const debugEnabled = configRead('enableDebugConsole');
-    if (debugEnabled) {
+    if (DEBUG_ENABLED) {
       console.log(`[PAGE] ${lastDetectedPage||'initial'} → ${detectedPage}`);
       console.log(`[PAGE] Hash: "${cleanHash}"`);
       if (browseParam) console.log(`[PAGE] Browse param: "${browseParam}"`);

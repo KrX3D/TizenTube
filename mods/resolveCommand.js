@@ -162,7 +162,14 @@ function customAction(action, parameters) {
         case 'TOGGLE_DEBUG_CONSOLE':
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
-                showToast('Debug Console', 'Console ' + (configRead('enableDebugConsole') ? 'shown' : 'hidden'));
+                
+                // ⭐ UPDATE: Manually update the cached DEBUG_ENABLED in adblock.js
+                const newValue = configRead('enableDebugConsole');
+                if (window.adblock && window.adblock.setDebugEnabled) {
+                    window.adblock.setDebugEnabled(newValue);
+                }
+                
+                showToast('Debug Console', 'Console ' + (newValue ? 'shown' : 'hidden'));
             } else {
                 showToast('Debug Console', 'Console not available');
             }
@@ -170,7 +177,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v390');
+            console.log('[Console] Visual Console v400');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
