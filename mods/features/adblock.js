@@ -656,111 +656,49 @@ for (const key in window._yttv) {
 function isShortItem(item) {
   if (!item) return false;
   
-  const videoId = item.tileRenderer?.contentId || 
-                 item.videoRenderer?.videoId || 
-                 item.gridVideoRenderer?.videoId ||
-                 item.compactVideoRenderer?.videoId ||
-                 'unknown';
-  
-  // ⭐ DIAGNOSTIC: Always log what we're checking
-  if (LOG_SHORTS && DEBUG_ENABLED) {
-    console.log('[SHORTS_CHECK] ========================================');
-    console.log('[SHORTS_CHECK] Checking video:', videoId);
-    console.log('[SHORTS_CHECK] Has tileRenderer:', !!item.tileRenderer);
-    console.log('[SHORTS_CHECK] Has videoRenderer:', !!item.videoRenderer);
-    console.log('[SHORTS_CHECK] Has gridVideoRenderer:', !!item.gridVideoRenderer);
-    console.log('[SHORTS_CHECK] Has richItemRenderer:', !!item.richItemRenderer);
-  }
-  
   // Method 1: Check tileRenderer contentType
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 1 (contentType)');
-      console.log('[SHORTS_CHECK] ========================================');
-    }
+    if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 1 (contentType):', item.tileRenderer.contentId || 'unknown');
     return true;
   }
   
-  // Method 2: Check videoRenderer
+  // Method 2: Check videoRenderer for shorts
   if (item.videoRenderer) {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] Checking videoRenderer...');
-    }
-    
+    // Check thumbnail overlays for shorts badge
     if (item.videoRenderer.thumbnailOverlays) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_CHECK]   Has thumbnailOverlays:', item.videoRenderer.thumbnailOverlays.length);
-      }
-      
       const hasShortsBadge = item.videoRenderer.thumbnailOverlays.some(overlay => 
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
         overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS'
       );
-      
       if (hasShortsBadge) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (videoRenderer overlay)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 2 (videoRenderer overlay):', item.videoRenderer.videoId || 'unknown');
         return true;
       }
     }
     
+    // Check navigation endpoint for shorts
     const navEndpoint = item.videoRenderer.navigationEndpoint;
-    if (navEndpoint) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_CHECK]   Has navigationEndpoint');
-        console.log('[SHORTS_CHECK]   Has reelWatchEndpoint:', !!navEndpoint.reelWatchEndpoint);
-      }
-      
-      if (navEndpoint.reelWatchEndpoint) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (reelWatchEndpoint)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-      
-      if (navEndpoint.commandMetadata?.webCommandMetadata?.url) {
-        const url = navEndpoint.commandMetadata.webCommandMetadata.url;
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK]   URL:', url);
-        }
-        if (url.includes('/shorts/')) {
-          if (LOG_SHORTS && DEBUG_ENABLED) {
-            console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 2 (URL contains /shorts/)');
-            console.log('[SHORTS_CHECK] ========================================');
-          }
-          return true;
-        }
-      }
+    if (navEndpoint?.reelWatchEndpoint || 
+        navEndpoint?.commandMetadata?.webCommandMetadata?.url?.includes('/shorts/')) {
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 2 (videoRenderer endpoint):', item.videoRenderer.videoId || 'unknown');
+      return true;
     }
   }
   
-  // Method 3: Check richItemRenderer
+  // Method 3: Check richItemRenderer for shorts (newer format)
   if (item.richItemRenderer?.content?.reelItemRenderer) {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 3 (richItemRenderer)');
-      console.log('[SHORTS_CHECK] ========================================');
-    }
+    if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 3 (richItemRenderer)');
     return true;
   }
   
   // Method 4: Check gridVideoRenderer
   if (item.gridVideoRenderer) {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] Checking gridVideoRenderer...');
-    }
-    
     if (item.gridVideoRenderer.thumbnailOverlays) {
       const hasShortsBadge = item.gridVideoRenderer.thumbnailOverlays.some(overlay =>
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 4 (gridVideoRenderer)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 4 (gridVideoRenderer):', item.gridVideoRenderer.videoId || 'unknown');
         return true;
       }
     }
@@ -768,85 +706,48 @@ function isShortItem(item) {
   
   // Method 5: Check compactVideoRenderer
   if (item.compactVideoRenderer) {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] Checking compactVideoRenderer...');
-    }
-    
     if (item.compactVideoRenderer.thumbnailOverlays) {
       const hasShortsBadge = item.compactVideoRenderer.thumbnailOverlays.some(overlay =>
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 5 (compactVideoRenderer)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 5 (compactVideoRenderer):', item.compactVideoRenderer.videoId || 'unknown');
         return true;
       }
     }
   }
   
-  // Method 6-8: Check tileRenderer (Tizen 5.5 specific)
+  // Method 6: Check for shorts in tileRenderer metadata (Tizen 5.5 specific)
   if (item.tileRenderer) {
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] Checking tileRenderer details...');
-      console.log('[SHORTS_CHECK]   contentType:', item.tileRenderer.contentType);
-    }
-    
     // Check navigation endpoint
-    if (item.tileRenderer.onSelectCommand) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_CHECK]   Has onSelectCommand');
-        console.log('[SHORTS_CHECK]   Has reelWatchEndpoint:', !!item.tileRenderer.onSelectCommand.reelWatchEndpoint);
-      }
-      
-      if (item.tileRenderer.onSelectCommand.reelWatchEndpoint) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6 (tileRenderer reelWatchEndpoint)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
-      
-      // ⭐ NEW: Check the full command structure
-      const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
-      if (cmdStr.includes('reelWatch') || cmdStr.includes('/shorts/')) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6b (command contains reelWatch or /shorts/)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
-        return true;
-      }
+    if (item.tileRenderer.onSelectCommand?.reelWatchEndpoint) {
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 6 (tileRenderer reelWatchEndpoint):', item.tileRenderer.contentId || 'unknown');
+      return true;
     }
     
-    // Check thumbnail overlays
+    // Check thumbnail overlays on tileRenderer
     if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays) {
       const hasShortsBadge = item.tileRenderer.header.tileHeaderRenderer.thumbnailOverlays.some(overlay =>
         overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
       );
       if (hasShortsBadge) {
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 6c (tileRenderer overlay)');
-          console.log('[SHORTS_CHECK] ========================================');
-        }
+        if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 6 (tileRenderer overlay):', item.tileRenderer.contentId || 'unknown');
         return true;
       }
     }
     
-    // Method 7: Check title for #shorts
+    // Method 7: Check for "Shorts" or "#shorts" in video title (Tizen 5.5 fallback)
     const videoTitle = item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || '';
     if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 7 (title contains #shorts)');
-        console.log('[SHORTS_CHECK] Title:', videoTitle);
-        console.log('[SHORTS_CHECK] ========================================');
-      }
+      if (LOG_SHORTS && DEBUG_ENABLED) console.log('[SHORTS_DETECT] Method 7 (title contains #shorts):', item.tileRenderer.contentId || 'unknown');
       return true;
     }
     
-    // Method 8: Check duration
+    // Method 8: Check video length - shorts are typically under 90 seconds (YouTube Shorts max is 60s but allow buffer)
+    // Duration can be in multiple locations
     let lengthText = null;
     
+    // Location 1: thumbnailOverlays in header (Tizen 5.5 format)
     const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
     if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
       const timeOverlay = thumbnailOverlays.find(o => o.thumbnailOverlayTimeStatusRenderer);
@@ -855,6 +756,7 @@ function isShortItem(item) {
       }
     }
     
+    // Location 2: metadata lines (fallback)
     if (!lengthText) {
       lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
         i => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
@@ -862,42 +764,43 @@ function isShortItem(item) {
     }
     
     if (lengthText) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_CHECK]   Duration text:', lengthText);
-      }
-      
+      // Check if it's a short duration (under 90 seconds, format like "0:15", "0:45", "1:29")
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
         
-        if (LOG_SHORTS && DEBUG_ENABLED) {
-          console.log('[SHORTS_CHECK]   Duration:', totalSeconds, 'seconds');
-        }
-        
         if (totalSeconds <= 90) {
           if (LOG_SHORTS && DEBUG_ENABLED) {
-            console.log('[SHORTS_CHECK] ✂️ IS SHORT - Method 8 (duration ≤90s)');
-            console.log('[SHORTS_CHECK] ========================================');
+            console.log('[SHORTS_DETECT] Method 8 (duration ≤90s):', item.tileRenderer.contentId || 'unknown');
+            console.log('[SHORTS_DETECT]   Duration:', lengthText, '(' + totalSeconds + 's)');
+            console.log('[SHORTS_DETECT]   Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || 'unknown');
           }
           return true;
         }
       }
     }
     
-    // ⭐ DIAGNOSTIC: Dump full structure if we still don't know
-    if (LOG_SHORTS && DEBUG_ENABLED) {
-      console.log('[SHORTS_CHECK] ⚠️ Could not determine if short');
-      console.log('[SHORTS_CHECK] Full tileRenderer structure (first 1000 chars):');
-      console.log(JSON.stringify(item.tileRenderer).substring(0, 1000));
+    // Log full structure if we checked a tileRenderer but didn't find it was a short
+    if (LOG_SHORTS && DEBUG_ENABLED && item.tileRenderer.contentId) {
+      console.log('[SHORTS_DETECT] Checked tileRenderer but NOT a short:', item.tileRenderer.contentId);
+      
+      // ⭐ DIAGNOSTIC: Dump the full structure to help identify shorts on Tizen 5.5
+      console.log('[SHORTS_DIAGNOSTIC] Full item structure for:', item.tileRenderer.contentId);
+      console.log('[SHORTS_DIAGNOSTIC] contentType:', item.tileRenderer.contentType);
+      console.log('[SHORTS_DIAGNOSTIC] onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand || {}));
+      console.log('[SHORTS_DIAGNOSTIC] Has header?:', !!item.tileRenderer.header);
+      if (item.tileRenderer.header) {
+        console.log('[SHORTS_DIAGNOSTIC] Header keys:', Object.keys(item.tileRenderer.header));
+        if (item.tileRenderer.header.tileHeaderRenderer) {
+          console.log('[SHORTS_DIAGNOSTIC] tileHeaderRenderer keys:', Object.keys(item.tileRenderer.header.tileHeaderRenderer));
+        }
+      }
+      console.log('[SHORTS_DIAGNOSTIC] Full tileRenderer (first 500 chars):', JSON.stringify(item.tileRenderer).substring(0, 500));
     }
   }
   
-  if (LOG_SHORTS && DEBUG_ENABLED) {
-    console.log('[SHORTS_CHECK] ❌ NOT A SHORT');
-    console.log('[SHORTS_CHECK] ========================================');
-  }
   return false;
 }
 
