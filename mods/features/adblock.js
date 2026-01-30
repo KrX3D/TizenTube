@@ -13,15 +13,14 @@ function directFilterArray(arr, page, context = '') {
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
-  // Check if this page should be filtered (EXACT match required)
-  const shouldHideWatched = hideWatchedEnabled && 
-    (configPages.includes(page) ||
-     (page === 'playlist' && configRead('enableHideWatchedInPlaylists')));
+  // Check if we should filter watched videos on this page (EXACT match)
+  const shouldHideWatched = hideWatchedEnabled && configPages.includes(page);
   
+  // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
   
   // Skip if nothing to do
-  if (!shouldHideWatched && !shouldFilterShorts) {
+  if (!shouldFilterShorts && !shouldHideWatched) {
     return arr;
   }
   
@@ -37,26 +36,26 @@ function directFilterArray(arr, page, context = '') {
                         item.videoRenderer || 
                         item.gridVideoRenderer ||
                         item.compactVideoRenderer ||
+                        item.playlistVideoRenderer ||
                         item.richItemRenderer?.content?.videoRenderer;
     
     if (!isVideoItem) return true;
     
-    // Filter shorts first
+    // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
       return false;
     }
     
-    // Filter watched videos
+    // ⭐ STEP 2: Filter watched videos (only if enabled for this page)
     if (shouldHideWatched) {
       const progressBar = findProgressBar(item);
       
-      // Keep videos without progress bar (unwatched/new videos)
-      if (!progressBar) {
-        return true;
-      }
+      // ⭐ CRITICAL FIX: Don't return true for no progress bar!
+      // Just skip to the threshold check - if no progress bar, percentWatched = 0
+      // which is below any reasonable threshold, so it will be kept anyway
       
-      const percentWatched = Number(progressBar.percentDurationWatched || 0);
+      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
       
       // Hide if watched above threshold
       if (percentWatched >= threshold) {
@@ -70,7 +69,7 @@ function directFilterArray(arr, page, context = '') {
   
   // Log summary
   if (debugEnabled && (hiddenCount > 0 || shortsCount > 0)) {
-    console.log('[DIRECT_FILTER] Page:', page, '| Watched:', hiddenCount, '| Shorts:', shortsCount, '| ' + originalLength + '→' + filtered.length);
+    console.log('[FILTER] ' + context + ' | Page:', page, '| ' + originalLength + '→' + filtered.length, '| Watched:', hiddenCount, '| Shorts:', shortsCount);
   }
   
   return filtered;
@@ -107,7 +106,25 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasShelves) {
-      // Filter shelves recursively first
+      const shortsEnabled = configRead('enableShorts');
+      
+      // ⭐ FIRST: Remove Shorts shelves by title (before recursive filtering)
+      if (!shortsEnabled) {
+        for (let i = obj.length - 1; i >= 0; i--) {
+          const shelf = obj[i];
+          if (shelf?.shelfRenderer) {
+            const shelfTitle = shelf.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
+            if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
+              if (debugEnabled) {
+                console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
+              }
+              obj.splice(i, 1);
+            }
+          }
+        }
+      }
+      
+      // Filter shelves recursively
       for (const key in obj) {
         if (obj.hasOwnProperty(key)) {
           const value = obj[key];
@@ -1131,81 +1148,9 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  if (!Array.isArray(items)) {
-    return items;
-  }
-  
-  const debugEnabled = configRead('enableDebugConsole');
+  // Simply delegate to directFilterArray - no code duplication!
   const page = getCurrentPage();
-  const shortsEnabled = configRead('enableShorts');
-  const hideWatchedEnabled = configRead('enableHideWatchedVideos');
-  const configPages = configRead('hideWatchedVideosPages') || [];
-  const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-  
-  // Determine if we should filter watched videos on this page
-  let shouldHideWatched = false;
-  if (hideWatchedEnabled) {
-    if (page === 'playlist' || page === 'playlists') {
-      shouldHideWatched = configRead('enableHideWatchedInPlaylists');
-    } else {
-      shouldHideWatched = configPages.includes(page);
-    }
-  }
-  
-  // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldFilterShorts = !shortsEnabled;
-  
-  // If nothing to filter, return original array
-  if (!shouldFilterShorts && !shouldHideWatched) {
-    return items;
-  }
-  
-  let hiddenCount = 0;
-  let shortsCount = 0;
-  
-  const filtered = items.filter(item => {
-    if (!item) return false;
-    
-    // Skip non-video items
-    if (item.tileRenderer?.contentType && 
-        item.tileRenderer.contentType !== 'TILE_CONTENT_TYPE_VIDEO') {
-      return true;
-    }
-    
-    // ⭐ CRITICAL: Check for shorts FIRST (before progress bar)
-    // Shorts often don't have progress bars, so we must filter them first
-    if (shouldFilterShorts && isShortItem(item)) {
-      shortsCount++;
-      return false;
-    }
-    
-    // ⭐ THEN check watched videos (only if enabled for this page)
-    if (shouldHideWatched) {
-      const progressBar = findProgressBar(item);
-      
-      // Keep videos without progress bar (unwatched/new videos)
-      // This is safe now because shorts were already filtered above
-      //if (!progressBar) {
-        //return true;
-      //}
-      
-      const percentWatched = Number(progressBar.percentDurationWatched || 0);
-      
-      // Hide if watched above threshold
-      if (percentWatched >= threshold) {
-        hiddenCount++;
-        return false;
-      }
-    }
-    
-    return true;
-  });
-  
-  if (debugEnabled && (hiddenCount > 0 || shortsCount > 0)) {
-    console.log('[HIDE] Page:', page, '| Watched:', hiddenCount, '| Shorts:', shortsCount, '| ' + items.length + '→' + filtered.length);
-  }
-  
-  return filtered;
+  return directFilterArray(items, page, 'hideVideo');
 }
 
 function findProgressBar(item) {

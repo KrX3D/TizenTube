@@ -48,7 +48,6 @@ const defaultConfig = {
       'more',
       'watch'
   ],
-  enableHideWatchedInPlaylists: true,
   enablePlaylistContinueButton: true,
   enableHideEndScreenCards: false,
   enableYouThereRenderer: false,
