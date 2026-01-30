@@ -491,11 +491,12 @@ JSON.parse = function () {
 
   // ⭐ FIXED: Removed redundant window.location.hash.includes('list=') check
   // We already know the page type from getCurrentPage()
-  if (r?.contents?.singleColumnBrowseResultsRenderer) {
+  if (r?.contents?.singleColumnBrowseResultsRenderer && window.location.hash.includes('list=')) {
+  //if (r?.contents?.singleColumnBrowseResultsRenderer) {
     const page = getCurrentPage();
     
     // Only process if it's actually a playlist page
-    if (page === 'playlist') {
+    //if (page === 'playlist') {
       if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
         console.log('[PLAYLIST] Entered playlist');
@@ -516,7 +517,7 @@ JSON.parse = function () {
       if (LOG_WATCHED && DEBUG_ENABLED) {    
         console.log('[PLAYLIST] ========================================');
       }
-    }
+    //}
   }
   
   // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
