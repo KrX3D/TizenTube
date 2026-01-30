@@ -36,14 +36,6 @@ if (typeof window !== 'undefined') {
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
-  // ⭐ CRITICAL: Check if this array was already filtered
-  if (arr.__alreadyFiltered) {
-    if (DEBUG_ENABLED && LOG_WATCHED) {
-      console.log('[FILTER] Skipping already-filtered array:', context);
-    }
-    //return arr;
-  }
-  
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -82,7 +74,6 @@ function directFilterArray(arr, page, context = '') {
                         item.gridVideoRenderer ||
                         item.compactVideoRenderer ||
                         item.richItemRenderer?.content?.videoRenderer;
-                        // item.playlistVideoRenderer ||
     
     if (!isVideoItem) return true;
     
@@ -120,14 +111,6 @@ function directFilterArray(arr, page, context = '') {
     }
     
     return true;
-  });
-  
-  // ⭐ CRITICAL: Mark this array to prevent duplicate filtering
-  Object.defineProperty(filtered, '__alreadyFiltered', {
-    value: true,
-    enumerable: false,
-    writable: false,
-    configurable: false  // ⭐ ADDED: Prevents property from being deleted
   });
   
   // Log summary
@@ -441,23 +424,63 @@ JSON.parse = function () {
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
 
-  
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer) {
     const page = getCurrentPage();
     
-    if (page === 'subscriptions') {
+    if (page === 'subscriptions' && !r.__tizentubeProcessedSubs) {
+      r.__tizentubeProcessedSubs = true;
       
       if (LOG_WATCHED && DEBUG_ENABLED) {
         console.log('[SUBSCRIPTIONS] ========================================');
-        console.log('[SUBSCRIPTIONS] Detected subscriptions page');
-        console.log('[SUBSCRIPTIONS] Applying direct filtering...');
+        console.log('[SUBSCRIPTIONS] Processing subscriptions page');
       }
       
-      // Scan and filter ALL arrays in the secondary nav
-      scanAndFilterAllArrays(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer, page);
+      const sections = r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections || [];
       
       if (LOG_WATCHED && DEBUG_ENABLED) {
-        console.log('[SUBSCRIPTIONS] Direct filtering complete');
+        console.log('[SUBSCRIPTIONS] Sections found:', sections.length);
+      }
+      
+      sections.forEach((section, idx) => {
+        if (!section.tvSecondaryNavSectionRenderer?.items) return;
+        
+        const items = section.tvSecondaryNavSectionRenderer.items;
+        
+        items.forEach((item, itemIdx) => {
+          // Skip navigation links (compactLinkRenderer)
+          if (item.compactLinkRenderer) {
+            if (LOG_WATCHED && DEBUG_ENABLED) {
+              console.log(`[SUBSCRIPTIONS] Section ${idx}, Item ${itemIdx}: NAV LINK (skipping)`);
+            }
+            return;
+          }
+          
+          const content = item.tvSecondaryNavItemRenderer?.content;
+          
+          // Process shelf content
+          if (content?.shelfRenderer) {
+            if (LOG_WATCHED && DEBUG_ENABLED) {
+              console.log(`[SUBSCRIPTIONS] Section ${idx}, Item ${itemIdx}: SHELF`);
+            }
+            processShelves([content], false);
+          }
+          // Process rich grid content
+          else if (content?.richGridRenderer?.contents) {
+            if (LOG_WATCHED && DEBUG_ENABLED) {
+              console.log(`[SUBSCRIPTIONS] Section ${idx}, Item ${itemIdx}: RICH GRID (${content.richGridRenderer.contents.length} items)`);
+            }
+            const filtered = directFilterArray(
+              content.richGridRenderer.contents,
+              page,
+              `subscriptions-section-${idx}-item-${itemIdx}`
+            );
+            content.richGridRenderer.contents = filtered;
+          }
+        });
+      });
+      
+      if (LOG_WATCHED && DEBUG_ENABLED) {
+        console.log('[SUBSCRIPTIONS] Processing complete');
         console.log('[SUBSCRIPTIONS] ========================================');
       }
     }
@@ -524,18 +547,43 @@ JSON.parse = function () {
   if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
     
-    if (LOG_WATCHED && DEBUG_ENABLED) {
-      console.log('[PLAYLIST_PAGE] ========================================');
-      console.log('[PLAYLIST_PAGE] Page:', page);
-      console.log('[PLAYLIST_PAGE] Applying direct filtering to tabs...');
-    }
-    
-    // Scan and filter ALL arrays in all tabs
-    scanAndFilterAllArrays(r.contents.twoColumnBrowseResultsRenderer, page);
-    
-    if (LOG_WATCHED && DEBUG_ENABLED) {
-      console.log('[PLAYLIST_PAGE] Direct filtering complete');
-      console.log('[PLAYLIST_PAGE] ========================================');
+    // ONLY process if it's actually a playlist page
+    if (!r.__tizentubeProcessedPlaylist) {
+      r.__tizentubeProcessedPlaylist = true;
+      
+      if (LOG_WATCHED && DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] ========================================');
+        console.log('[PLAYLIST_PAGE] Page:', page);
+        console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
+      }
+      
+      r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
+        // Check tabRenderer → sectionListRenderer
+        if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
+          if (LOG_WATCHED && DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - processing ${tab.tabRenderer.content.sectionListRenderer.contents.length} sections`);
+          }
+          processShelves(tab.tabRenderer.content.sectionListRenderer.contents);
+        }
+        
+        // Check richGridRenderer (some playlists use this)
+        if (tab.tabRenderer?.content?.richGridRenderer?.contents) {
+          if (LOG_WATCHED && DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGrid with ${tab.tabRenderer.content.richGridRenderer.contents.length} items`);
+          }
+          const filtered = directFilterArray(
+            tab.tabRenderer.content.richGridRenderer.contents,
+            page,
+            `playlist-tab-${tabIndex}`
+          );
+          tab.tabRenderer.content.richGridRenderer.contents = filtered;
+        }
+      });
+      
+      if (LOG_WATCHED && DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] Processing complete');
+        console.log('[PLAYLIST_PAGE] ========================================');
+      }
     }
   }
 
@@ -884,6 +932,17 @@ function isShortItem(item) {
           }
           return true;
         }
+      }
+    }
+
+    // ⭐ Method 9: Check for Shorts in navigation endpoint (Tizen 5.5)
+    if (item.tileRenderer?.onSelectCommand) {
+      const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
+      if (cmdStr.includes('reelWatch') || cmdStr.includes('/shorts/')) {
+        if (DEBUG_ENABLED && LOG_SHORTS) {
+          console.log('[SHORTS_DETECT] Method 9 (nav command):', videoId);
+        }
+        return true;
       }
     }
     
