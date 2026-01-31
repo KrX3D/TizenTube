@@ -544,90 +544,79 @@ JSON.parse = function () {
   }
   
   // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
-  if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
-    const page = getCurrentPage();
+  // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
+if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
+  const page = getCurrentPage();
+  
+  if (!r.__tizentubeProcessedPlaylist) {
+    r.__tizentubeProcessedPlaylist = true;
     
-    if (!r.__tizentubeProcessedPlaylist) {
-      r.__tizentubeProcessedPlaylist = true;
+    if (DEBUG_ENABLED) {
+      console.log('[PLAYLIST_PAGE] ========================================');
+      console.log('[PLAYLIST_PAGE] Processing:', page);
+      console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
+    }
+    
+    r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
+      if (!tab.tabRenderer?.content) return;
       
-      if (DEBUG_ENABLED) {
-        console.log('[PLAYLIST_PAGE] ========================================');
-        console.log('[PLAYLIST_PAGE] ENTERED PLAYLIST HANDLER');
-        console.log('[PLAYLIST_PAGE] Page detected as:', page);
-        console.log('[PLAYLIST_PAGE] URL:', window.location.href);
-        console.log('[PLAYLIST_PAGE] Number of tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
-      }
-      
-      r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
+      // Handle sectionListRenderer → playlistVideoListRenderer
+      if (tab.tabRenderer.content.sectionListRenderer?.contents) {
+        const sections = tab.tabRenderer.content.sectionListRenderer.contents;
+        
         if (DEBUG_ENABLED) {
-          console.log(`[PLAYLIST_PAGE] --- Processing Tab ${tabIndex} ---`);
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: ${sections.length} sections`);
         }
         
-        // Log what's available in this tab
-        if (DEBUG_ENABLED) {
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} has tabRenderer:`, !!tab.tabRenderer);
-          if (tab.tabRenderer) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} content keys:`, Object.keys(tab.tabRenderer.content || {}));
-          }
-        }
-        
-        // Check sectionListRenderer
-        if (tab.tabRenderer?.content?.sectionListRenderer?.contents) {
-          const sections = tab.tabRenderer.content.sectionListRenderer.contents;
-          if (DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - sectionListRenderer with ${sections.length} sections`);
+        sections.forEach((section, sIdx) => {
+          // Look for playlistVideoListRenderer (this is what playlists use!)
+          if (section.playlistVideoListRenderer?.contents) {
+            const videos = section.playlistVideoListRenderer.contents;
             
-            // Log first section structure
-            if (sections[0]) {
-              console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First section keys:`, Object.keys(sections[0]));
+            if (DEBUG_ENABLED) {
+              console.log(`[PLAYLIST_PAGE] Section ${sIdx}: playlistVideoListRenderer with ${videos.length} videos`);
+            }
+            
+            // Filter the videos directly
+            const filtered = directFilterArray(videos, page, `playlist-section-${sIdx}`);
+            section.playlistVideoListRenderer.contents = filtered;
+            
+            if (DEBUG_ENABLED) {
+              console.log(`[PLAYLIST_PAGE] Filtered: ${videos.length} → ${filtered.length}`);
             }
           }
-          
-          processShelves(sections);
-        }
-        
-        // Check richGridRenderer
-        if (tab.tabRenderer?.content?.richGridRenderer?.contents) {
-          const items = tab.tabRenderer.content.richGridRenderer.contents;
-          if (DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - richGridRenderer with ${items.length} items`);
+          // Also handle itemSectionRenderer if present
+          else if (section.itemSectionRenderer?.contents) {
+            const items = section.itemSectionRenderer.contents;
             
-            // Log first item structure
-            if (items[0]) {
-              console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - First item keys:`, Object.keys(items[0]));
+            if (DEBUG_ENABLED) {
+              console.log(`[PLAYLIST_PAGE] Section ${sIdx}: itemSectionRenderer with ${items.length} items`);
             }
+            
+            const filtered = directFilterArray(items, page, `playlist-items-${sIdx}`);
+            section.itemSectionRenderer.contents = filtered;
           }
-
-          const filtered = directFilterArray(
-            items,
-            page,
-            `playlist-tab-${tabIndex}`
-          );
-          tab.tabRenderer.content.richGridRenderer.contents = filtered;
+        });
+      }
+      
+      // Handle richGridRenderer (alternative structure)
+      if (tab.tabRenderer.content.richGridRenderer?.contents) {
+        const items = tab.tabRenderer.content.richGridRenderer.contents;
+        
+        if (DEBUG_ENABLED) {
+          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: richGrid with ${items.length} items`);
         }
         
-        // Check if there's content but we didn't recognize it
-        if (tab.tabRenderer?.content && 
-            !tab.tabRenderer.content.sectionListRenderer && 
-            !tab.tabRenderer.content.richGridRenderer) {
-          if (DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - UNRECOGNIZED CONTENT STRUCTURE!`);
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Content keys:`, Object.keys(tab.tabRenderer.content));
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex} - Full content (first 500 chars):`, JSON.stringify(tab.tabRenderer.content).substring(0, 500));
-          }
-        }
-      });
-      
-      if (DEBUG_ENABLED) {
-        console.log('[PLAYLIST_PAGE] Processing complete');
-        console.log('[PLAYLIST_PAGE] ========================================');
+        const filtered = directFilterArray(items, page, `playlist-grid-${tabIndex}`);
+        tab.tabRenderer.content.richGridRenderer.contents = filtered;
       }
-    } else {
-      if (DEBUG_ENABLED) {
-        console.log('[PLAYLIST_PAGE] Already processed, skipping');
-      }
+    });
+    
+    if (DEBUG_ENABLED) {
+      console.log('[PLAYLIST_PAGE] ========================================');
     }
   }
+}
 
   // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
