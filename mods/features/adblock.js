@@ -5,8 +5,8 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = true;   // Set false to disable shorts logging  
-const LOG_WATCHED = false;  // Set false to disable watched video logging
+const LOG_SHORTS = false;   // Set false to disable shorts logging  
+const LOG_WATCHED = true;  // Set false to disable watched video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
 // Updated automatically via config change events
@@ -55,14 +55,24 @@ function directFilterArray(arr, page, context = '') {
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
   
+  // ⭐ Check if this is a playlist page
+  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  
   // ⭐ DEBUG: Log configuration
   if (DEBUG_ENABLED && (shouldFilterShorts || shouldHideWatched)) {
-    console.log('[FILTER_START #' + callId + '] Context:', context, '| Page:', page, '| Items:', arr.length);
-    console.log('[FILTER_CONFIG #' + callId + '] Threshold:', threshold + '%', '| Hide watched:', shouldHideWatched, '| Filter shorts:', shouldFilterShorts);
+    console.log('[FILTER_START #' + callId + '] ========================================');
+    console.log('[FILTER_START #' + callId + '] Context:', context);
+    console.log('[FILTER_START #' + callId + '] Page:', page);
+    console.log('[FILTER_START #' + callId + '] Is Playlist:', isPlaylistPage);
+    console.log('[FILTER_START #' + callId + '] Total items:', arr.length);
+    console.log('[FILTER_CONFIG #' + callId + '] Threshold:', threshold + '%');
+    console.log('[FILTER_CONFIG #' + callId + '] Hide watched:', shouldHideWatched);
+    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldFilterShorts);
   }
   
   let hiddenCount = 0;
   let shortsCount = 0;
+  let noProgressBarCount = 0;
   const originalLength = arr.length;
   
   const filtered = arr.filter(item => {
@@ -73,6 +83,7 @@ function directFilterArray(arr, page, context = '') {
                         item.videoRenderer || 
                         item.gridVideoRenderer ||
                         item.compactVideoRenderer ||
+                        item.playlistVideoRenderer ||
                         item.richItemRenderer?.content?.videoRenderer;
     
     if (!isVideoItem) return true;
@@ -80,6 +91,8 @@ function directFilterArray(arr, page, context = '') {
     const videoId = item.tileRenderer?.contentId || 
                    item.videoRenderer?.videoId || 
                    item.playlistVideoRenderer?.videoId ||
+                   item.gridVideoRenderer?.videoId ||
+                   item.compactVideoRenderer?.videoId ||
                    'unknown';
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
@@ -95,12 +108,28 @@ function directFilterArray(arr, page, context = '') {
     // ⭐ STEP 2: Filter watched videos (only if enabled for this page)
     if (shouldHideWatched) {
       const progressBar = findProgressBar(item);
+      
+      // ⭐ PLAYLIST SPECIAL HANDLING: Only filter if progress bar EXISTS
+      if (isPlaylistPage) {
+        if (!progressBar) {
+          // No progress bar = unwatched = KEEP IT
+          noProgressBarCount++;
+          
+          if (LOG_WATCHED && DEBUG_ENABLED) {
+            console.log('[FILTER #' + callId + '] ✓ KEEPING (playlist, no progress):', videoId);
+          }
+          return true;
+        }
+      }
+      
+      // Calculate progress percentage
       const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
       
       // ⭐ DEBUG: Log each decision
       if (LOG_WATCHED && DEBUG_ENABLED) {
         const hasProgressBar = !!progressBar;
-        console.log('[FILTER #' + callId + '] Video:', videoId, '| Has progress:', hasProgressBar, '| Progress:', percentWatched + '%', '| Threshold:', threshold + '%', '| Will hide:', percentWatched >= threshold);
+        const decision = percentWatched >= threshold ? '❌ HIDING' : '✓ KEEPING';
+        console.log('[FILTER #' + callId + '] ' + decision + ':', videoId, '| Progress:', percentWatched + '%', '| Threshold:', threshold + '%');
       }
       
       // Hide if watched above threshold
@@ -113,10 +142,18 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
-  // Log summary
+  // ⭐ Enhanced summary logging
   if (DEBUG_ENABLED) {
-    console.log('[FILTER_END #' + callId + '] Result:', originalLength + '→' + filtered.length, '| Watched removed:', hiddenCount, '| Shorts removed:', shortsCount);
-    console.log('========================================');
+    console.log('[FILTER_END #' + callId + '] ========================================');
+    console.log('[FILTER_END #' + callId + '] Original count:', originalLength);
+    console.log('[FILTER_END #' + callId + '] Final count:', filtered.length);
+    console.log('[FILTER_END #' + callId + '] Removed total:', (originalLength - filtered.length));
+    console.log('[FILTER_END #' + callId + '] ├─ Watched removed:', hiddenCount);
+    console.log('[FILTER_END #' + callId + '] ├─ Shorts removed:', shortsCount);
+    if (isPlaylistPage) {
+      console.log('[FILTER_END #' + callId + '] └─ Unwatched kept (no progress):', noProgressBarCount);
+    }
+    console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
   return filtered;
