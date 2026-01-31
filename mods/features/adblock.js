@@ -402,8 +402,11 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     const page = getCurrentPage();
+    
     if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION]', page, '- Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
+      console.log('[CONTINUATION] ========================================');
+      console.log('[CONTINUATION] Page:', page);
+      console.log('[CONTINUATION] Processing', r.continuationContents.sectionListContinuation.contents.length, 'sections');
     }
 
     if (window._lastLoggedPage !== page) {
@@ -417,8 +420,50 @@ JSON.parse = function () {
       window._lastLoggedPage = page;
     }
     
-    // This is where individual channel content loads!
-    processShelves(r.continuationContents.sectionListContinuation.contents);
+    // ⭐ Handle playlist continuations specially
+    if (page === 'playlist' || page === 'playlists') {
+      const sections = r.continuationContents.sectionListContinuation.contents;
+      
+      if (DEBUG_ENABLED) {
+        console.log('[CONTINUATION] Playlist continuation detected');
+      }
+      
+      sections.forEach((section, sIdx) => {
+        // Handle playlistVideoListRenderer
+        if (section.playlistVideoListRenderer?.contents) {
+          const videos = section.playlistVideoListRenderer.contents;
+          
+          if (DEBUG_ENABLED) {
+            console.log(`[CONTINUATION] Section ${sIdx}: playlistVideoListRenderer with ${videos.length} videos`);
+          }
+          
+          const filtered = directFilterArray(videos, page, `playlist-continuation-${sIdx}`);
+          section.playlistVideoListRenderer.contents = filtered;
+          
+          if (DEBUG_ENABLED) {
+            console.log(`[CONTINUATION] Filtered: ${videos.length} → ${filtered.length}`);
+          }
+        }
+        // Handle itemSectionRenderer
+        else if (section.itemSectionRenderer?.contents) {
+          const items = section.itemSectionRenderer.contents;
+          
+          if (DEBUG_ENABLED) {
+            console.log(`[CONTINUATION] Section ${sIdx}: itemSectionRenderer with ${items.length} items`);
+          }
+          
+          const filtered = directFilterArray(items, page, `playlist-continuation-items-${sIdx}`);
+          section.itemSectionRenderer.contents = filtered;
+        }
+      });
+    } else {
+      // For non-playlist pages, use processShelves as before
+      processShelves(r.continuationContents.sectionListContinuation.contents);
+    }
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CONTINUATION] ========================================');
+    }
   }
   
   // Handle onResponseReceivedActions (lazy-loaded channel tabs)
@@ -581,79 +626,25 @@ JSON.parse = function () {
   }
   
   // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
-  // Handle twoColumnBrowseResultsRenderer (playlist pages like WL, LL)
-if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
-  const page = getCurrentPage();
-  
-  if (!r.__tizentubeProcessedPlaylist) {
-    r.__tizentubeProcessedPlaylist = true;
+  if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
+    const page = getCurrentPage();
     
-    if (DEBUG_ENABLED) {
-      console.log('[PLAYLIST_PAGE] ========================================');
-      console.log('[PLAYLIST_PAGE] Processing:', page);
-      console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
-    }
-    
-    r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
-      if (!tab.tabRenderer?.content) return;
+    // ⭐ SKIP FILTERING PLAYLISTS ON INITIAL LOAD
+    // Only log that we detected it, but don't filter
+    if (!r.__tizentubeProcessedPlaylist) {
+      r.__tizentubeProcessedPlaylist = true;
       
-      // Handle sectionListRenderer → playlistVideoListRenderer
-      if (tab.tabRenderer.content.sectionListRenderer?.contents) {
-        const sections = tab.tabRenderer.content.sectionListRenderer.contents;
-        
-        if (DEBUG_ENABLED) {
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: ${sections.length} sections`);
-        }
-        
-        sections.forEach((section, sIdx) => {
-          // Look for playlistVideoListRenderer (this is what playlists use!)
-          if (section.playlistVideoListRenderer?.contents) {
-            const videos = section.playlistVideoListRenderer.contents;
-            
-            if (DEBUG_ENABLED) {
-              console.log(`[PLAYLIST_PAGE] Section ${sIdx}: playlistVideoListRenderer with ${videos.length} videos`);
-            }
-            
-            // Filter the videos directly
-            const filtered = directFilterArray(videos, page, `playlist-section-${sIdx}`);
-            section.playlistVideoListRenderer.contents = filtered;
-            
-            if (DEBUG_ENABLED) {
-              console.log(`[PLAYLIST_PAGE] Filtered: ${videos.length} → ${filtered.length}`);
-            }
-          }
-          // Also handle itemSectionRenderer if present
-          else if (section.itemSectionRenderer?.contents) {
-            const items = section.itemSectionRenderer.contents;
-            
-            if (DEBUG_ENABLED) {
-              console.log(`[PLAYLIST_PAGE] Section ${sIdx}: itemSectionRenderer with ${items.length} items`);
-            }
-            
-            const filtered = directFilterArray(items, page, `playlist-items-${sIdx}`);
-            section.itemSectionRenderer.contents = filtered;
-          }
-        });
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] ========================================');
+        console.log('[PLAYLIST_PAGE] Initial playlist load detected');
+        console.log('[PLAYLIST_PAGE] Page:', page);
+        console.log('[PLAYLIST_PAGE] Skipping filtering (will filter on scroll/continuation)');
+        console.log('[PLAYLIST_PAGE] ========================================');
       }
       
-      // Handle richGridRenderer (alternative structure)
-      if (tab.tabRenderer.content.richGridRenderer?.contents) {
-        const items = tab.tabRenderer.content.richGridRenderer.contents;
-        
-        if (DEBUG_ENABLED) {
-          console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: richGrid with ${items.length} items`);
-        }
-        
-        const filtered = directFilterArray(items, page, `playlist-grid-${tabIndex}`);
-        tab.tabRenderer.content.richGridRenderer.contents = filtered;
-      }
-    });
-    
-    if (DEBUG_ENABLED) {
-      console.log('[PLAYLIST_PAGE] ========================================');
+      // ⭐ DON'T FILTER - just mark as processed and exit
     }
   }
-}
 
   // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
@@ -740,8 +731,8 @@ if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
-  //const criticalPages = ['subscriptions', 'library', 'history'];
+  //const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
   
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
