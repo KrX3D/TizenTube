@@ -760,6 +760,48 @@ JSON.parse = function () {
     //}
   }
 
+  // ⭐ DIAGNOSTIC: Log ALL response structures for playlists
+  const currentPage = getCurrentPage();
+  if ((currentPage === 'playlist' || currentPage === 'playlists') && DEBUG_ENABLED) {
+    console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
+    console.log('[PLAYLIST_DIAGNOSTIC] Response structure:');
+    console.log('[PLAYLIST_DIAGNOSTIC] Top-level keys:', Object.keys(r));
+    
+    // Check all possible continuation structures
+    if (r.continuationContents) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ✓ Has continuationContents');
+      console.log('[PLAYLIST_DIAGNOSTIC] continuationContents keys:', Object.keys(r.continuationContents));
+    }
+    
+    if (r.onResponseReceivedActions) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ✓ Has onResponseReceivedActions');
+      console.log('[PLAYLIST_DIAGNOSTIC] Actions count:', r.onResponseReceivedActions.length);
+      r.onResponseReceivedActions.forEach((action, idx) => {
+        console.log(`[PLAYLIST_DIAGNOSTIC] Action ${idx} keys:`, Object.keys(action));
+      });
+    }
+    
+    if (r.onResponseReceivedEndpoints) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ✓ Has onResponseReceivedEndpoints');
+      console.log('[PLAYLIST_DIAGNOSTIC] Endpoints:', r.onResponseReceivedEndpoints.length);
+    }
+    
+    if (r.contents) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ✓ Has contents');
+      console.log('[PLAYLIST_DIAGNOSTIC] contents keys:', Object.keys(r.contents));
+    }
+    
+    // Log if this is marked as processed
+    if (r.__tizentubeProcessedPlaylist) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Already marked as processed');
+    }
+    if (r.__universalFilterApplied) {
+      console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Universal filter already applied');
+    }
+    
+    console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
+  }
+
   return r;
 };
 
