@@ -402,11 +402,8 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     const page = getCurrentPage();
-    
     if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION] ========================================');
-      console.log('[CONTINUATION] Page:', page);
-      console.log('[CONTINUATION] Processing', r.continuationContents.sectionListContinuation.contents.length, 'sections');
+      console.log('[CONTINUATION]', page, '- Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
     }
 
     if (window._lastLoggedPage !== page) {
@@ -420,77 +417,53 @@ JSON.parse = function () {
       window._lastLoggedPage = page;
     }
     
-    // ⭐ Handle playlist continuations specially
-    if (page === 'playlist' || page === 'playlists') {
-      const sections = r.continuationContents.sectionListContinuation.contents;
-      
-      if (DEBUG_ENABLED) {
-        console.log('[CONTINUATION] Playlist continuation detected');
-      }
-      
-      sections.forEach((section, sIdx) => {
-        // Handle playlistVideoListRenderer
-        if (section.playlistVideoListRenderer?.contents) {
-          const videos = section.playlistVideoListRenderer.contents;
-          
-          if (DEBUG_ENABLED) {
-            console.log(`[CONTINUATION] Section ${sIdx}: playlistVideoListRenderer with ${videos.length} videos`);
-          }
-          
-          const filtered = directFilterArray(videos, page, `playlist-continuation-${sIdx}`);
-          section.playlistVideoListRenderer.contents = filtered;
-          
-          if (DEBUG_ENABLED) {
-            console.log(`[CONTINUATION] Filtered: ${videos.length} → ${filtered.length}`);
-          }
-        }
-        // Handle itemSectionRenderer
-        else if (section.itemSectionRenderer?.contents) {
-          const items = section.itemSectionRenderer.contents;
-          
-          if (DEBUG_ENABLED) {
-            console.log(`[CONTINUATION] Section ${sIdx}: itemSectionRenderer with ${items.length} items`);
-          }
-          
-          const filtered = directFilterArray(items, page, `playlist-continuation-items-${sIdx}`);
-          section.itemSectionRenderer.contents = filtered;
-        }
-      });
-    } else {
-      // For non-playlist pages, use processShelves as before
-      processShelves(r.continuationContents.sectionListContinuation.contents);
-    }
-    
-    if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION] ========================================');
-    }
+    // This is where individual channel content loads!
+    processShelves(r.continuationContents.sectionListContinuation.contents);
   }
   
-  // Handle onResponseReceivedActions (lazy-loaded channel tabs)
+  // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
     
     if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION] ========================================');
-      console.log('[CONTINUATION] Page:', page);
-      console.log('[CONTINUATION] Actions:', r.onResponseReceivedActions.length);
+      console.log('[ON_RESPONSE] ========================================');
+      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
+      // Handle appendContinuationItemsAction (playlist scroll continuation)
       if (action.appendContinuationItemsAction?.continuationItems) {
+        const items = action.appendContinuationItemsAction.continuationItems;
+        
         if (DEBUG_ENABLED) {
-          console.log('[CONTINUATION] Processing action', idx);
+          console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
+          console.log(`[ON_RESPONSE] Items:`, items.length);
+          if (items[0]) {
+            console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
+          }
         }
         
-        // Filter the continuation items directly
-        const items = action.appendContinuationItemsAction.continuationItems;
-        const filtered = directFilterArray(items, page, 'continuation[' + idx + ']');
-        action.appendContinuationItemsAction.continuationItems = filtered;
+        // Check if this is playlist video continuation
+        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
+        
+        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
+          if (DEBUG_ENABLED) {
+            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
+          }
+          
+          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        } else {
+          // For non-playlist continuation, use direct filter
+          const filtered = directFilterArray(items, page, `continuation-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        }
       }
     });
     
     if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION] ========================================');
+      console.log('[ON_RESPONSE] ========================================');
     }
   }
 
@@ -629,20 +602,56 @@ JSON.parse = function () {
   if (r?.contents?.twoColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
     
-    // ⭐ SKIP FILTERING PLAYLISTS ON INITIAL LOAD
-    // Only log that we detected it, but don't filter
     if (!r.__tizentubeProcessedPlaylist) {
       r.__tizentubeProcessedPlaylist = true;
       
       if (DEBUG_ENABLED) {
         console.log('[PLAYLIST_PAGE] ========================================');
-        console.log('[PLAYLIST_PAGE] Initial playlist load detected');
-        console.log('[PLAYLIST_PAGE] Page:', page);
-        console.log('[PLAYLIST_PAGE] Skipping filtering (will filter on scroll/continuation)');
-        console.log('[PLAYLIST_PAGE] ========================================');
+        console.log('[PLAYLIST_PAGE] Processing:', page);
+        console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
       }
       
-      // ⭐ DON'T FILTER - just mark as processed and exit
+      r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
+        if (!tab.tabRenderer?.content) return;
+        
+        // Handle sectionListRenderer
+        if (tab.tabRenderer.content.sectionListRenderer?.contents) {
+          const sections = tab.tabRenderer.content.sectionListRenderer.contents;
+          
+          if (DEBUG_ENABLED) {
+            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: ${sections.length} sections`);
+          }
+          
+          sections.forEach((section, sIdx) => {
+            // Handle playlistVideoListRenderer
+            if (section.playlistVideoListRenderer?.contents) {
+              const videos = section.playlistVideoListRenderer.contents;
+              
+              if (DEBUG_ENABLED) {
+                console.log(`[PLAYLIST_PAGE] Section ${sIdx}: playlistVideoListRenderer - ${videos.length} videos`);
+              }
+              
+              const filtered = directFilterArray(videos, page, `playlist-initial-${sIdx}`);
+              section.playlistVideoListRenderer.contents = filtered;
+            }
+            // Handle itemSectionRenderer  
+            else if (section.itemSectionRenderer?.contents) {
+              const items = section.itemSectionRenderer.contents;
+              
+              if (DEBUG_ENABLED) {
+                console.log(`[PLAYLIST_PAGE] Section ${sIdx}: itemSectionRenderer - ${items.length} items`);
+              }
+              
+              const filtered = directFilterArray(items, page, `playlist-items-${sIdx}`);
+              section.itemSectionRenderer.contents = filtered;
+            }
+          });
+        }
+      });
+      
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] ========================================');
+      }
     }
   }
 
@@ -731,8 +740,8 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  //const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
-  const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
   
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
