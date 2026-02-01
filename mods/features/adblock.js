@@ -269,6 +269,11 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
   }
 }
 
+// ⭐ AUTO-LOAD STATE: Must be outside JSON.parse to persist across responses
+let autoLoadInProgress = false;
+let autoLoadAttempts = 0;
+const MAX_AUTO_LOAD_ATTEMPTS = 100;
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -770,11 +775,6 @@ JSON.parse = function () {
     
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
   }
-
-  // ⭐ PLAYLIST AUTO-LOADER: Automatically scroll to load all videos, then filter
-  let autoLoadInProgress = false;
-  let autoLoadAttempts = 0;
-  const MAX_AUTO_LOAD_ATTEMPTS = 100; // Safety limit (100 batches = ~1500 videos max)
 
   function startPlaylistAutoLoad() {
     if (autoLoadInProgress) {
