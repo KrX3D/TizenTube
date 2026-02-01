@@ -409,6 +409,29 @@ JSON.parse = function () {
     if (!r.__tizentubeProcessedBrowse) {
       r.__tizentubeProcessedBrowse = true;
       
+      // ⭐ CHECK IF THIS IS A PLAYLIST PAGE
+      if (currentPage === 'playlist' || currentPage === 'playlists') {
+        r.__universalFilterApplied = true;  // Prevent universal filter
+        
+        if (DEBUG_ENABLED) {
+          console.log('[TVBROWSE_PLAYLIST] ========================================');
+          console.log('[TVBROWSE_PLAYLIST] Playlist detected in tvBrowseRenderer!');
+          console.log('[TVBROWSE_PLAYLIST] Page:', currentPage);
+          console.log('[TVBROWSE_PLAYLIST] Starting auto-load process...');
+          console.log('[TVBROWSE_PLAYLIST] ========================================');
+        }
+        
+        // Start auto-loader
+        setTimeout(() => {
+          console.log('[DEBUG_TVBROWSE] setTimeout fired! Starting auto-load...');
+          startPlaylistAutoLoad();
+        }, 1000);
+        
+        // Skip all processing for playlists - auto-loader handles it
+        return r;
+      }
+      
+      // ⭐ NON-PLAYLIST PAGES: Normal processing
       if (DEBUG_ENABLED) {
           console.log('[BROWSE] ==============tvBrowseRenderer============');
           console.log('[BROWSE] Page:', currentPage);
