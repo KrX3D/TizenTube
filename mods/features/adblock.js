@@ -761,7 +761,6 @@ JSON.parse = function () {
   }
 
   // ⭐ DIAGNOSTIC: Log ALL response structures for playlists
-  const currentPage = getCurrentPage();
   if ((currentPage === 'playlist' || currentPage === 'playlists') && DEBUG_ENABLED) {
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
     console.log('[PLAYLIST_DIAGNOSTIC] Response structure:');
