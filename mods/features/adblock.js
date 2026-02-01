@@ -607,51 +607,21 @@ JSON.parse = function () {
       
       if (DEBUG_ENABLED) {
         console.log('[PLAYLIST_PAGE] ========================================');
-        console.log('[PLAYLIST_PAGE] Processing:', page);
-        console.log('[PLAYLIST_PAGE] Tabs:', r.contents.twoColumnBrowseResultsRenderer.tabs.length);
-      }
-      
-      r.contents.twoColumnBrowseResultsRenderer.tabs.forEach((tab, tabIndex) => {
-        if (!tab.tabRenderer?.content) return;
-        
-        // Handle sectionListRenderer
-        if (tab.tabRenderer.content.sectionListRenderer?.contents) {
-          const sections = tab.tabRenderer.content.sectionListRenderer.contents;
-          
-          if (DEBUG_ENABLED) {
-            console.log(`[PLAYLIST_PAGE] Tab ${tabIndex}: ${sections.length} sections`);
-          }
-          
-          sections.forEach((section, sIdx) => {
-            // Handle playlistVideoListRenderer
-            if (section.playlistVideoListRenderer?.contents) {
-              const videos = section.playlistVideoListRenderer.contents;
-              
-              if (DEBUG_ENABLED) {
-                console.log(`[PLAYLIST_PAGE] Section ${sIdx}: playlistVideoListRenderer - ${videos.length} videos`);
-              }
-              
-              const filtered = directFilterArray(videos, page, `playlist-initial-${sIdx}`);
-              section.playlistVideoListRenderer.contents = filtered;
-            }
-            // Handle itemSectionRenderer  
-            else if (section.itemSectionRenderer?.contents) {
-              const items = section.itemSectionRenderer.contents;
-              
-              if (DEBUG_ENABLED) {
-                console.log(`[PLAYLIST_PAGE] Section ${sIdx}: itemSectionRenderer - ${items.length} items`);
-              }
-              
-              const filtered = directFilterArray(items, page, `playlist-items-${sIdx}`);
-              section.itemSectionRenderer.contents = filtered;
-            }
-          });
-        }
-      });
-      
-      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_PAGE] Initial playlist load detected');
+        console.log('[PLAYLIST_PAGE] Page:', page);
+        console.log('[PLAYLIST_PAGE] Starting auto-load process...');
         console.log('[PLAYLIST_PAGE] ========================================');
       }
+      
+      // ⭐ SKIP FILTERING - Let initial videos through
+      // Auto-loader will handle filtering after all videos load
+      
+      // ⭐ Trigger auto-load after a short delay (let UI render first)
+      setTimeout(() => {
+        if (page === 'playlist' || page === 'playlists') {
+          startPlaylistAutoLoad();
+        }
+      }, 1000);
     }
   }
 
@@ -799,6 +769,93 @@ JSON.parse = function () {
     }
     
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
+  }
+
+  // ⭐ PLAYLIST AUTO-LOADER: Automatically scroll to load all videos, then filter
+  let autoLoadInProgress = false;
+  let autoLoadAttempts = 0;
+  const MAX_AUTO_LOAD_ATTEMPTS = 100; // Safety limit (100 batches = ~1500 videos max)
+
+  function startPlaylistAutoLoad() {
+    if (autoLoadInProgress) {
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_AUTOLOAD] Already in progress, skipping');
+      }
+      return;
+    }
+    
+    autoLoadInProgress = true;
+    autoLoadAttempts = 0;
+    
+    if (DEBUG_ENABLED) {
+      console.log('[PLAYLIST_AUTOLOAD] ========================================');
+      console.log('[PLAYLIST_AUTOLOAD] Starting auto-load process');
+      console.log('[PLAYLIST_AUTOLOAD] ========================================');
+    }
+    
+    let lastVideoCount = 0;
+    let stableCount = 0;
+    
+    const autoLoadInterval = setInterval(() => {
+      autoLoadAttempts++;
+      
+      // Safety: Stop after too many attempts
+      if (autoLoadAttempts > MAX_AUTO_LOAD_ATTEMPTS) {
+        if (DEBUG_ENABLED) {
+          console.log('[PLAYLIST_AUTOLOAD] Max attempts reached, stopping');
+        }
+        clearInterval(autoLoadInterval);
+        autoLoadInProgress = false;
+        return;
+      }
+      
+      // Count current videos
+      const videoElements = document.querySelectorAll('ytlr-tile-renderer');
+      const currentCount = videoElements.length;
+      
+      if (DEBUG_ENABLED && autoLoadAttempts % 5 === 0) {
+        console.log(`[PLAYLIST_AUTOLOAD] Attempt ${autoLoadAttempts}: ${currentCount} videos loaded`);
+      }
+      
+      // Scroll to bottom to trigger loading
+      window.scrollTo(0, document.body.scrollHeight);
+      
+      // Check if video count has stabilized (no new videos loading)
+      if (currentCount === lastVideoCount) {
+        stableCount++;
+        
+        // If count stable for 3 checks, we're done
+        if (stableCount >= 3) {
+          if (DEBUG_ENABLED) {
+            console.log('[PLAYLIST_AUTOLOAD] ========================================');
+            console.log('[PLAYLIST_AUTOLOAD] All videos loaded!');
+            console.log('[PLAYLIST_AUTOLOAD] Total videos:', currentCount);
+            console.log('[PLAYLIST_AUTOLOAD] Now applying filters...');
+            console.log('[PLAYLIST_AUTOLOAD] ========================================');
+          }
+          
+          clearInterval(autoLoadInterval);
+          autoLoadInProgress = false;
+          
+          // Scroll back to top
+          window.scrollTo(0, 0);
+          
+          // Force a page refresh to apply filters
+          // This will re-run all the filtering logic on the now-complete playlist
+          setTimeout(() => {
+            const page = getCurrentPage();
+            scanAndFilterAllArrays(document, page);
+            
+            if (DEBUG_ENABLED) {
+              console.log('[PLAYLIST_AUTOLOAD] Filtering complete!');
+            }
+          }, 500);
+        }
+      } else {
+        stableCount = 0;
+        lastVideoCount = currentCount;
+      }
+    }, 500); // Check every 500ms
   }
 
   return r;
