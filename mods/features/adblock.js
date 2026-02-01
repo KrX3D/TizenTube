@@ -864,7 +864,7 @@ JSON.parse = function () {
       //console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Universal filter already applied');
     }
     
-    console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
+    //console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
   }
 
   return r;
