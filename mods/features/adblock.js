@@ -273,6 +273,91 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
 let autoLoadInProgress = false;
 let autoLoadAttempts = 0;
 const MAX_AUTO_LOAD_ATTEMPTS = 100;
+let skipUniversalFilter = false;  // ⭐ NEW: Global flag to skip filtering during auto-load
+
+// ⭐ AUTO-LOADER FUNCTION: Must be in global scope so setTimeout can access it
+function startPlaylistAutoLoad() {
+  if (autoLoadInProgress) {
+    if (DEBUG_ENABLED) {
+      console.log('[PLAYLIST_AUTOLOAD] Already in progress, skipping');
+    }
+    return;
+  }
+  
+  autoLoadInProgress = true;
+  autoLoadAttempts = 0;
+  skipUniversalFilter = true;  // ⭐ ADD THIS - prevents filtering during auto-load
+  
+  if (DEBUG_ENABLED) {
+    console.log('[PLAYLIST_AUTOLOAD] ========================================');
+    console.log('[PLAYLIST_AUTOLOAD] Starting auto-load process');
+    console.log('[PLAYLIST_AUTOLOAD] ========================================');
+  }
+  
+  let lastVideoCount = 0;
+  let stableCount = 0;
+  
+  const autoLoadInterval = setInterval(() => {
+    autoLoadAttempts++;
+    
+    // Safety: Stop after too many attempts
+    if (autoLoadAttempts > MAX_AUTO_LOAD_ATTEMPTS) {
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_AUTOLOAD] Max attempts reached, stopping');
+      }
+      clearInterval(autoLoadInterval);
+      autoLoadInProgress = false;
+      return;
+    }
+    
+    // Count current videos
+    const videoElements = document.querySelectorAll('ytlr-tile-renderer');
+    const currentCount = videoElements.length;
+    
+    if (DEBUG_ENABLED && autoLoadAttempts % 5 === 0) {
+      console.log(`[PLAYLIST_AUTOLOAD] Attempt ${autoLoadAttempts}: ${currentCount} videos loaded`);
+    }
+    
+    // Scroll to bottom to trigger loading
+    window.scrollTo(0, document.body.scrollHeight);
+    
+    // Check if video count has stabilized (no new videos loading)
+    if (currentCount === lastVideoCount) {
+      stableCount++;
+      
+      // If count stable for 3 checks, we're done
+      if (stableCount >= 3) {
+        if (DEBUG_ENABLED) {
+          console.log('[PLAYLIST_AUTOLOAD] ========================================');
+          console.log('[PLAYLIST_AUTOLOAD] All videos loaded!');
+          console.log('[PLAYLIST_AUTOLOAD] Total videos:', currentCount);
+          console.log('[PLAYLIST_AUTOLOAD] Now applying filters...');
+          console.log('[PLAYLIST_AUTOLOAD] ========================================');
+        }
+        
+        clearInterval(autoLoadInterval);
+        autoLoadInProgress = false;
+        skipUniversalFilter = false;  // ⭐ ADD THIS - re-enable filtering
+        
+        // Scroll back to top
+        window.scrollTo(0, 0);
+        
+        // Force a page refresh to apply filters
+        setTimeout(() => {
+          const page = getCurrentPage();
+          scanAndFilterAllArrays(document, page);
+          
+          if (DEBUG_ENABLED) {
+            console.log('[PLAYLIST_AUTOLOAD] Filtering complete!');
+          }
+        }, 500);
+      }
+    } else {
+      stableCount = 0;
+      lastVideoCount = currentCount;
+    }
+  }, 500);
+}
 
 const origParse = JSON.parse;
 JSON.parse = function () {
@@ -718,8 +803,8 @@ JSON.parse = function () {
   const currentPage = getCurrentPage();
   const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
-  
-  if (criticalPages.includes(currentPage) && !r.__universalFilterApplied) {
+
+  if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
     r.__universalFilterApplied = true;
     
     //if (DEBUG_ENABLED) {
@@ -774,88 +859,6 @@ JSON.parse = function () {
     }
     
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
-  }
-
-  function startPlaylistAutoLoad() {
-    if (autoLoadInProgress) {
-      if (DEBUG_ENABLED) {
-        console.log('[PLAYLIST_AUTOLOAD] Already in progress, skipping');
-      }
-      return;
-    }
-    
-    autoLoadInProgress = true;
-    autoLoadAttempts = 0;
-    
-    if (DEBUG_ENABLED) {
-      console.log('[PLAYLIST_AUTOLOAD] ========================================');
-      console.log('[PLAYLIST_AUTOLOAD] Starting auto-load process');
-      console.log('[PLAYLIST_AUTOLOAD] ========================================');
-    }
-    
-    let lastVideoCount = 0;
-    let stableCount = 0;
-    
-    const autoLoadInterval = setInterval(() => {
-      autoLoadAttempts++;
-      
-      // Safety: Stop after too many attempts
-      if (autoLoadAttempts > MAX_AUTO_LOAD_ATTEMPTS) {
-        if (DEBUG_ENABLED) {
-          console.log('[PLAYLIST_AUTOLOAD] Max attempts reached, stopping');
-        }
-        clearInterval(autoLoadInterval);
-        autoLoadInProgress = false;
-        return;
-      }
-      
-      // Count current videos
-      const videoElements = document.querySelectorAll('ytlr-tile-renderer');
-      const currentCount = videoElements.length;
-      
-      if (DEBUG_ENABLED && autoLoadAttempts % 5 === 0) {
-        console.log(`[PLAYLIST_AUTOLOAD] Attempt ${autoLoadAttempts}: ${currentCount} videos loaded`);
-      }
-      
-      // Scroll to bottom to trigger loading
-      window.scrollTo(0, document.body.scrollHeight);
-      
-      // Check if video count has stabilized (no new videos loading)
-      if (currentCount === lastVideoCount) {
-        stableCount++;
-        
-        // If count stable for 3 checks, we're done
-        if (stableCount >= 3) {
-          if (DEBUG_ENABLED) {
-            console.log('[PLAYLIST_AUTOLOAD] ========================================');
-            console.log('[PLAYLIST_AUTOLOAD] All videos loaded!');
-            console.log('[PLAYLIST_AUTOLOAD] Total videos:', currentCount);
-            console.log('[PLAYLIST_AUTOLOAD] Now applying filters...');
-            console.log('[PLAYLIST_AUTOLOAD] ========================================');
-          }
-          
-          clearInterval(autoLoadInterval);
-          autoLoadInProgress = false;
-          
-          // Scroll back to top
-          window.scrollTo(0, 0);
-          
-          // Force a page refresh to apply filters
-          // This will re-run all the filtering logic on the now-complete playlist
-          setTimeout(() => {
-            const page = getCurrentPage();
-            scanAndFilterAllArrays(document, page);
-            
-            if (DEBUG_ENABLED) {
-              console.log('[PLAYLIST_AUTOLOAD] Filtering complete!');
-            }
-          }, 500);
-        }
-      } else {
-        stableCount = 0;
-        lastVideoCount = currentCount;
-      }
-    }, 500); // Check every 500ms
   }
 
   return r;
