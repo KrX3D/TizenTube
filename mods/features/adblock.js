@@ -609,6 +609,7 @@ JSON.parse = function () {
     
     if (!r.__tizentubeProcessedPlaylist) {
       r.__tizentubeProcessedPlaylist = true;
+      r.__universalFilterApplied = true;  // ⭐ ADD THIS LINE - prevents universal filter from running
       
       if (DEBUG_ENABLED) {
         console.log('[PLAYLIST_PAGE] ========================================');
@@ -739,7 +740,6 @@ JSON.parse = function () {
   if ((currentPage === 'playlist' || currentPage === 'playlists') && DEBUG_ENABLED) {
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
     console.log('[PLAYLIST_DIAGNOSTIC] Response structure:');
-    console.log('[PLAYLIST_DIAGNOSTIC] Top-level keys:', Object.keys(r));
     
     // Check all possible continuation structures
     if (r.continuationContents) {
