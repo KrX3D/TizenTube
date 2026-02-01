@@ -142,18 +142,14 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
-  // ⭐ Enhanced summary logging
-  if (DEBUG_ENABLED) {
-    console.log('[FILTER_END #' + callId + '] ========================================');
-    console.log('[FILTER_END #' + callId + '] Original count:', originalLength);
-    console.log('[FILTER_END #' + callId + '] Final count:', filtered.length);
-    console.log('[FILTER_END #' + callId + '] Removed total:', (originalLength - filtered.length));
-    console.log('[FILTER_END #' + callId + '] ├─ Watched removed:', hiddenCount);
-    console.log('[FILTER_END #' + callId + '] ├─ Shorts removed:', shortsCount);
-    if (isPlaylistPage) {
-      console.log('[FILTER_END #' + callId + '] └─ Unwatched kept (no progress):', noProgressBarCount);
+  // ⭐ PLAYLIST SAFEGUARD: Keep at least 1 video visible to allow scrolling
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
+    // Keep the last video so user can scroll to load more
+    const lastVideo = arr[arr.length - 1];
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping last video to enable scrolling');
     }
-    console.log('[FILTER_END #' + callId + '] ========================================');
+    return [lastVideo];
   }
   
   return filtered;
