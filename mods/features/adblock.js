@@ -709,8 +709,14 @@ JSON.parse = function () {
       
       // ⭐ Trigger auto-load after a short delay (let UI render first)
       setTimeout(() => {
+        console.log('[DEBUG] setTimeout fired! page:', page);  // ⭐ DEBUG
+        console.log('[DEBUG] getCurrentPage():', getCurrentPage());  // ⭐ DEBUG
         if (page === 'playlist' || page === 'playlists') {
+          console.log('[DEBUG] About to call startPlaylistAutoLoad()');  // ⭐ DEBUG
           startPlaylistAutoLoad();
+          console.log('[DEBUG] startPlaylistAutoLoad() called');  // ⭐ DEBUG
+        } else {
+          console.log('[DEBUG] NOT calling startPlaylistAutoLoad, page is:', page);  // ⭐ DEBUG
         }
       }, 1000);
     }
@@ -823,8 +829,8 @@ JSON.parse = function () {
 
   // ⭐ DIAGNOSTIC: Log ALL response structures for playlists
   if ((currentPage === 'playlist' || currentPage === 'playlists') && DEBUG_ENABLED) {
-    console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
-    console.log('[PLAYLIST_DIAGNOSTIC] Response structure:');
+    //console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
+    //console.log('[PLAYLIST_DIAGNOSTIC] Response structure:');
     
     // Check all possible continuation structures
     if (r.continuationContents) {
@@ -855,7 +861,7 @@ JSON.parse = function () {
       console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Already marked as processed');
     }
     if (r.__universalFilterApplied) {
-      console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Universal filter already applied');
+      //console.log('[PLAYLIST_DIAGNOSTIC] ⚠ Universal filter already applied');
     }
     
     console.log('[PLAYLIST_DIAGNOSTIC] ========================================');
