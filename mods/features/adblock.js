@@ -142,14 +142,51 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
-  // ⭐ PLAYLIST SAFEGUARD: Keep at least 1 video visible to allow scrolling
-  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
-    // Keep the last video so user can scroll to load more
-    const lastVideo = arr[arr.length - 1];
-    if (DEBUG_ENABLED) {
-      console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping last video to enable scrolling');
+  // ⭐ Enhanced summary logging
+  if (DEBUG_ENABLED) {
+    console.log('[FILTER_END #' + callId + '] ========================================');
+    console.log('[FILTER_END #' + callId + '] Original count:', originalLength);
+    console.log('[FILTER_END #' + callId + '] Final count:', filtered.length);
+    console.log('[FILTER_END #' + callId + '] Removed total:', (originalLength - filtered.length));
+    console.log('[FILTER_END #' + callId + '] ├─ Watched removed:', hiddenCount);
+    console.log('[FILTER_END #' + callId + '] ├─ Shorts removed:', shortsCount);
+    if (isPlaylistPage) {
+      console.log('[FILTER_END #' + callId + '] └─ Unwatched kept (no progress):', noProgressBarCount);
     }
+    console.log('[FILTER_END #' + callId + '] ========================================');
+  }
+  
+  // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
+    // Keep the last watched video so user can scroll to load more
+    const lastVideo = arr[arr.length - 1];
+    
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping 1 video to enable scrolling');
+    }
+    
+    // Mark this video as a "scroll helper" so we can remove it later
+    if (!window._playlistScrollHelpers) {
+      window._playlistScrollHelpers = [];
+    }
+    window._playlistScrollHelpers.push(lastVideo);
+    
+    // Schedule cleanup check (remove scroll helper after 2 seconds of no new videos)
+    setTimeout(() => {
+      cleanupScrollHelpers();
+    }, 2000);
+    
     return [lastVideo];
+  }
+  
+  // ⭐ If we got REAL unwatched videos, remove any scroll helpers
+  if (isPlaylistPage && filtered.length > 0 && window._playlistScrollHelpers?.length > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_END #' + callId + '] ✓ Found unwatched videos - will cleanup scroll helpers');
+    }
+    setTimeout(() => {
+      cleanupScrollHelpers();
+    }, 1500);
   }
   
   return filtered;
@@ -888,6 +925,49 @@ JSON.parse = function () {
 
   return r;
 };
+
+// ⭐ CLEANUP SCROLL HELPERS: Remove leftover watched videos when loading is complete
+function cleanupScrollHelpers() {
+  if (!window._playlistScrollHelpers || window._playlistScrollHelpers.length === 0) {
+    return;
+  }
+  
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') {
+    window._playlistScrollHelpers = [];
+    return;
+  }
+  
+  if (DEBUG_ENABLED) {
+    console.log('[CLEANUP] Attempting to remove', window._playlistScrollHelpers.length, 'scroll helper video(s)');
+  }
+  
+  // Find and remove scroll helper videos from DOM
+  const allVideos = document.querySelectorAll('ytlr-tile-renderer');
+  let removedCount = 0;
+  
+  allVideos.forEach(videoEl => {
+    // Check if this video element matches any scroll helper
+    // (You might need to adjust this selector based on actual DOM structure)
+    const videoData = videoEl.__data__ || {};
+    const isScrollHelper = window._playlistScrollHelpers.some(helper => {
+      const helperId = helper.tileRenderer?.contentId || helper.playlistVideoRenderer?.videoId;
+      const currentId = videoData.contentId || videoData.videoId;
+      return helperId === currentId;
+    });
+    
+    if (isScrollHelper) {
+      videoEl.style.display = 'none'; // Hide it
+      removedCount++;
+    }
+  });
+  
+  if (DEBUG_ENABLED) {
+    console.log('[CLEANUP] Removed', removedCount, 'scroll helper video(s)');
+  }
+  
+  window._playlistScrollHelpers = [];
+}
 
 window.JSON.parse = JSON.parse;
 for (const key in window._yttv) {
