@@ -928,49 +928,6 @@ JSON.parse = function () {
   return r;
 };
 
-// ⭐ CLEANUP SCROLL HELPERS: Remove leftover watched videos when loading is complete
-function cleanupScrollHelpers() {
-  if (!window._playlistScrollHelpers || window._playlistScrollHelpers.length === 0) {
-    return;
-  }
-  
-  const page = getCurrentPage();
-  if (page !== 'playlist' && page !== 'playlists') {
-    window._playlistScrollHelpers = [];
-    return;
-  }
-  
-  if (DEBUG_ENABLED) {
-    console.log('[CLEANUP] Attempting to remove', window._playlistScrollHelpers.length, 'scroll helper video(s)');
-  }
-  
-  // Find and remove scroll helper videos from DOM
-  const allVideos = document.querySelectorAll('ytlr-tile-renderer');
-  let removedCount = 0;
-  
-  allVideos.forEach(videoEl => {
-    // Check if this video element matches any scroll helper
-    // (You might need to adjust this selector based on actual DOM structure)
-    const videoData = videoEl.__data__ || {};
-    const isScrollHelper = window._playlistScrollHelpers.some(helper => {
-      const helperId = helper.tileRenderer?.contentId || helper.playlistVideoRenderer?.videoId;
-      const currentId = videoData.contentId || videoData.videoId;
-      return helperId === currentId;
-    });
-    
-    if (isScrollHelper) {
-      videoEl.style.display = 'none'; // Hide it
-      removedCount++;
-    }
-  });
-  
-  if (DEBUG_ENABLED) {
-    console.log('[CLEANUP] Removed', removedCount, 'scroll helper video(s)');
-  }
-  
-  window._playlistScrollHelpers = [];
-}
-
 window.JSON.parse = JSON.parse;
 for (const key in window._yttv) {
   if (window._yttv[key] && window._yttv[key].JSON && window._yttv[key].JSON.parse) {
