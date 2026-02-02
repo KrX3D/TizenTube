@@ -75,6 +75,11 @@ function directFilterArray(arr, page, context = '') {
   let noProgressBarCount = 0;
   const originalLength = arr.length;
   
+  // ⭐ Initialize scroll helpers tracker
+  if (!window._playlistScrollHelpers) {
+    window._playlistScrollHelpers = new Set();
+  }
+  
   const filtered = arr.filter(item => {
     if (!item) return true;
     
@@ -94,6 +99,15 @@ function directFilterArray(arr, page, context = '') {
                    item.gridVideoRenderer?.videoId ||
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
+    
+    // ⭐ REMOVE previous scroll helpers
+    if (isPlaylistPage && window._playlistScrollHelpers.has(videoId)) {
+      if (DEBUG_ENABLED) {
+        console.log('[FILTER #' + callId + '] 🧹 REMOVING scroll helper:', videoId);
+      }
+      window._playlistScrollHelpers.delete(videoId);
+      return false; // Remove it!
+    }
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
@@ -160,33 +174,21 @@ function directFilterArray(arr, page, context = '') {
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
     // Keep the last watched video so user can scroll to load more
     const lastVideo = arr[arr.length - 1];
+    const lastVideoId = lastVideo.tileRenderer?.contentId || 
+                       lastVideo.videoRenderer?.videoId || 
+                       lastVideo.playlistVideoRenderer?.videoId ||
+                       lastVideo.gridVideoRenderer?.videoId ||
+                       lastVideo.compactVideoRenderer?.videoId ||
+                       'unknown';
     
     if (DEBUG_ENABLED) {
-      console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping 1 video to enable scrolling');
+      console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping 1 video to enable scrolling:', lastVideoId);
     }
     
-    // Mark this video as a "scroll helper" so we can remove it later
-    if (!window._playlistScrollHelpers) {
-      window._playlistScrollHelpers = [];
-    }
-    window._playlistScrollHelpers.push(lastVideo);
-    
-    // Schedule cleanup check (remove scroll helper after 2 seconds of no new videos)
-    setTimeout(() => {
-      cleanupScrollHelpers();
-    }, 2000);
+    // Mark this video ID as a scroll helper
+    window._playlistScrollHelpers.add(lastVideoId);
     
     return [lastVideo];
-  }
-  
-  // ⭐ If we got REAL unwatched videos, remove any scroll helpers
-  if (isPlaylistPage && filtered.length > 0 && window._playlistScrollHelpers?.length > 0) {
-    if (DEBUG_ENABLED) {
-      console.log('[FILTER_END #' + callId + '] ✓ Found unwatched videos - will cleanup scroll helpers');
-    }
-    setTimeout(() => {
-      cleanupScrollHelpers();
-    }, 1500);
   }
   
   return filtered;
