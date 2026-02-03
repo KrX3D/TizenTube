@@ -217,18 +217,6 @@ function directFilterArray(arr, page, context = '') {
       if (DEBUG_ENABLED) {
         console.log('[CLEANUP] No remaining videos on continuation; cleared helpers.');
       }
-<<<<<<< codex/update-package.json-version-to-1.16.700
-    }
-    return [];
-  }
-
-  // If only helpers remain on any playlist pass, clear them to avoid blanks
-  if (isPlaylistPage && filtered.length === 0 && window._playlistScrollHelpers.size > 0) {
-    window._playlistScrollHelpers.clear();
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Only helpers remained; cleared helper set.');
-=======
->>>>>>> main
     }
     return [];
   }
