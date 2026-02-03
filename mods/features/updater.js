@@ -50,7 +50,11 @@ function checkForUpdates(showNoUpdateToast) {
                 showModal(
                     {
                         title: 'Update Available',
-                        subtitle: `A new version of TizenTube Cobalt is available: ${latestVersion}\nCurrent version: ${currentAppVersion}\nRelease Date: ${new Date(releaseDate * 1000).toLocaleString()}\nRelease Notes:\n${release.body}`,
+                        subtitle: `A new version of TizenTube Cobalt is available: ${latestVersion}
+Current version: ${currentAppVersion}
+Release Date: ${new Date(releaseDate * 1000).toLocaleString()}
+Release Notes:
+${release.body}`,
                     },
                     overlayPanelItemListRenderer([
                         buttonItem(
