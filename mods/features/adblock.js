@@ -185,37 +185,94 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ NEW: If we found REAL unwatched videos, cleanup all scroll helpers from DOM
   if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched videos! Removing', window._playlistScrollHelpers.size, 'scroll helpers from DOM');
+      console.log('[CLEANUP] ========================================');
+      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched videos!');
+      console.log('[CLEANUP] Scroll helpers to remove:', window._playlistScrollHelpers.size);
+      console.log('[CLEANUP] Helper IDs:', Array.from(window._playlistScrollHelpers));
     }
     
     // Hide all scroll helpers using DOM manipulation
     setTimeout(() => {
       let removedCount = 0;
-      window._playlistScrollHelpers.forEach(videoId => {
-        // Find ALL elements with this video ID
-        const selectors = [
-          `ytlr-tile-renderer[data-content-id="${videoId}"]`,
-          `ytlr-playlist-video-renderer[data-video-id="${videoId}"]`,
-          `[video-id="${videoId}"]`,
-          `[data-video-id="${videoId}"]`
-        ];
-        
-        selectors.forEach(selector => {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach(el => {
-            if (el.style.display !== 'none') {
-              el.style.display = 'none';
-              removedCount++;
-              if (DEBUG_ENABLED) {
-                console.log('[CLEANUP] Hiding scroll helper element:', videoId, selector);
-              }
-            }
-          });
+      
+      window._playlistScrollHelpers.forEach(helperId => {
+        // Check if this helper is actually in the current filtered array
+        const isInFiltered = filtered.some(item => {
+          const itemId = item.tileRenderer?.contentId || 
+                        item.videoRenderer?.videoId || 
+                        item.playlistVideoRenderer?.videoId ||
+                        item.gridVideoRenderer?.videoId ||
+                        item.compactVideoRenderer?.videoId;
+          return itemId === helperId;
         });
+        
+        if (isInFiltered) {
+          // This helper is in the filtered array - check if it's watched
+          const helperItem = filtered.find(item => {
+            const itemId = item.tileRenderer?.contentId || 
+                          item.videoRenderer?.videoId || 
+                          item.playlistVideoRenderer?.videoId ||
+                          item.gridVideoRenderer?.videoId ||
+                          item.compactVideoRenderer?.videoId;
+            return itemId === helperId;
+          });
+          
+          const progressBar = findProgressBar(helperItem);
+          const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+          
+          if (DEBUG_ENABLED) {
+            console.log('[CLEANUP] Helper', helperId, 'is in filtered array | Progress:', percentWatched + '%', '| Will', (percentWatched >= threshold ? 'REMOVE' : 'KEEP'));
+          }
+          
+          if (percentWatched >= threshold) {
+            // It's watched - remove from filtered array
+            const index = filtered.findIndex(item => {
+              const itemId = item.tileRenderer?.contentId || 
+                            item.videoRenderer?.videoId || 
+                            item.playlistVideoRenderer?.videoId ||
+                            item.gridVideoRenderer?.videoId ||
+                            item.compactVideoRenderer?.videoId;
+              return itemId === helperId;
+            });
+            if (index !== -1) {
+              filtered.splice(index, 1);
+              removedCount++;
+            }
+          }
+        } else {
+          // Helper not in current batch - try to hide from DOM
+          if (DEBUG_ENABLED) {
+            console.log('[CLEANUP] Helper', helperId, 'NOT in current batch - attempting DOM removal');
+          }
+          
+          const selectors = [
+            `ytlr-tile-renderer[data-content-id="${helperId}"]`,
+            `ytlr-playlist-video-renderer[data-video-id="${helperId}"]`,
+            `[video-id="${helperId}"]`,
+            `[data-video-id="${helperId}"]`
+          ];
+          
+          let foundInDom = false;
+          selectors.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+              if (el.style.display !== 'none') {
+                el.style.display = 'none';
+                foundInDom = true;
+                removedCount++;
+              }
+            });
+          });
+          
+          if (DEBUG_ENABLED && !foundInDom) {
+            console.log('[CLEANUP] Helper', helperId, 'not found in DOM with any selector');
+          }
+        }
       });
       
       if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] Removed', removedCount, 'scroll helper elements from DOM');
+        console.log('[CLEANUP] Total removed:', removedCount);
+        console.log('[CLEANUP] ========================================');
       }
       
       // Clear the set
