@@ -100,13 +100,27 @@ function directFilterArray(arr, page, context = '') {
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
     
-    // ⭐ REMOVE previous scroll helpers
+    // ⭐ REMOVE previous scroll helpers (ONLY if they're watched)
     if (isPlaylistPage && window._playlistScrollHelpers.has(videoId)) {
-      if (DEBUG_ENABLED) {
-        console.log('[FILTER #' + callId + '] 🧹 REMOVING scroll helper:', videoId);
+      // Check if this scroll helper is actually watched
+      const progressBar = findProgressBar(item);
+      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+      
+      if (percentWatched >= threshold) {
+        // It's watched - remove it
+        if (DEBUG_ENABLED) {
+          console.log('[FILTER #' + callId + '] 🧹 REMOVING watched scroll helper:', videoId, '| Progress:', percentWatched + '%');
+        }
+        window._playlistScrollHelpers.delete(videoId);
+        return false; // Remove it!
+      } else {
+        // It's unwatched - keep it and remove from helper set
+        if (DEBUG_ENABLED) {
+          console.log('[FILTER #' + callId + '] ✓ KEEPING unwatched scroll helper:', videoId, '| Progress:', percentWatched + '%');
+        }
+        window._playlistScrollHelpers.delete(videoId);
+        // Don't return false - let it continue and be kept as a normal unwatched video
       }
-      window._playlistScrollHelpers.delete(videoId);
-      return false; // Remove it!
     }
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
