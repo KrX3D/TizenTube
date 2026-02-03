@@ -30,12 +30,31 @@ function checkForUpdates(showNoUpdateToast) {
             const latestVersion = release.tag_name.replace('v', '');
             const releaseDate = new Date(release.published_at).getTime() / 1000;
 
+            let architecture;
+            let downloadUrl;
+
+            if (window.h5vcc.tizentube.GetArchitecture) {
+                architecture = window.h5vcc.tizentube.GetArchitecture();
+            }
+
+            if (architecture) {
+                if (architecture === 'arm64-v8a') {
+                    downloadUrl = release.assets.find(asset => asset.name.includes('arm64.apk')).browser_download_url;
+                } else {
+                    downloadUrl = release.assets.find(asset => asset.name.includes('arm.apk')).browser_download_url;
+                }
+            } else downloadUrl = release.assets[0].browser_download_url;
+
             if (latestVersion !== currentAppVersion) {
                 console.info(`New version available: ${latestVersion} (current: ${currentAppVersion})`);
                 showModal(
                     {
                         title: 'Update Available',
-                        subtitle: `A new version of TizenTube Cobalt is available: ${latestVersion}\nCurrent version: ${currentAppVersion}\nRelease Date: ${new Date(releaseDate * 1000).toLocaleString()}\nRelease Notes:\n${release.body}`,
+                        subtitle: `A new version of TizenTube Cobalt is available: ${latestVersion}
+Current version: ${currentAppVersion}
+Release Date: ${new Date(releaseDate * 1000).toLocaleString()}
+Release Notes:
+${release.body}`,
                     },
                     overlayPanelItemListRenderer([
                         buttonItem(
@@ -45,7 +64,7 @@ function checkForUpdates(showNoUpdateToast) {
                                 {
                                     customAction: {
                                         action: 'UPDATE_DOWNLOAD',
-                                        parameters: release.assets[0].browser_download_url
+                                        parameters: downloadUrl
                                     }
                                 },
                                 {

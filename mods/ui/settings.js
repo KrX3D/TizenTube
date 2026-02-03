@@ -3,6 +3,8 @@ import { showModal, buttonItem, overlayPanelItemListRenderer, scrollPaneRenderer
 import { getUserLanguageOptionName } from '../features/moreSubtitles.js';
 import qrcode from 'qrcode-npm';
 
+const qrcodes = {};
+
 export default function modernUI(update, parameters) {
     const settings = [
         {
@@ -51,12 +53,15 @@ export default function modernUI(update, parameters) {
                     link: 'https://tizentube.6513006.xyz',
                 }
             ].map((option) => {
-                const qr = qrcode.qrcode(6, 'H');
-                qr.addData(option.link);
-                qr.make();
+                if (!qrcodes[option.name]) {
+                    const qr = qrcode.qrcode(6, 'H');
+                    qr.addData(option.link);
+                    qr.make();
 
-                const qrDataImgTag = qr.createImgTag(8, 8);
-                const qrDataUrl = qrDataImgTag.match(/src="([^"]+)"/)[1];
+                    const qrDataImgTag = qr.createImgTag(8, 8);
+                    const qrDataUrl = qrDataImgTag.match(/src="([^"]+)"/)[1];
+                    qrcodes[option.name] = qrDataUrl;
+                }
                 return {
                     name: option.name,
                     icon: 'OPEN_IN_NEW',
@@ -66,7 +71,7 @@ export default function modernUI(update, parameters) {
                         subtitle: option.link,
                         content: overlayPanelItemListRenderer([
                             overlayMessageRenderer(`You can visit the ${option.name} page by scanning the QR code below.`),
-                            QrCodeRenderer(qrDataUrl)
+                            QrCodeRenderer(qrcodes[option.name])
                         ])
                     }
                 }
@@ -369,6 +374,11 @@ export default function modernUI(update, parameters) {
                         }
                     })
                 },
+                window.h5vcc && window.h5vcc.tizentube && window.h5vcc.tizentube.SetFrameRate ? {
+                    name: 'Auto Frame Rate',
+                    icon: 'SLOW_MOTION_VIDEO',
+                    value: 'autoFrameRate'
+                } : null
             ]
         },
         {
@@ -924,6 +934,7 @@ export function optionShow(parameters, update) {
         return;
     }
     const buttons = [];
+    const options = (parameters.options || []).filter(Boolean);
 
     // Check if this is the legacy sponsorBlockManualSkips (array-based) or new boolean-based options
     const isArrayBasedOptions = parameters.arrayToEdit !== undefined;
@@ -931,7 +942,7 @@ export function optionShow(parameters, update) {
     if (isArrayBasedOptions) {
         // Legacy handling for sponsorBlockManualSkips
         const value = configRead(parameters.arrayToEdit);
-        for (const option of parameters.options) {
+        for (const option of options) {
             buttons.push(
                 buttonItem(
                     { title: option.name, subtitle: option.subtitle },
@@ -971,7 +982,7 @@ export function optionShow(parameters, update) {
         }
     } else {
         let index = 0;
-        for (const option of parameters.options) {
+        for (const option of options) {
             if (option.compactLinkRenderer) {
                 buttons.push(option);
                 index++;
