@@ -274,11 +274,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-<<<<<<< codex/update-package.json-version-to-1.16.700
     console.log('[Console] Visual Console v780 - NEWEST FIRST');
-=======
-    console.log('[Console] Visual Console v770 - NEWEST FIRST');
->>>>>>> main
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
