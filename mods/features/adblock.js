@@ -118,13 +118,14 @@ function directFilterArray(arr, page, context = '') {
       console.log('[CLEANUP] Helper IDs to remove:', Array.from(window._playlistScrollHelpers));
     }
     
-    // Remove from DOM
-    setTimeout(() => {
-      removeHelpersFromDOM(new Set(window._playlistScrollHelpers));
-    }, 100);
+    // ⭐ IMPORTANT: Copy the Set BEFORE clearing it
+    const helpersToRemove = new Set(window._playlistScrollHelpers);
+    window._playlistScrollHelpers.clear(); // Clear immediately
     
-    // Clear the set
-    window._playlistScrollHelpers.clear();
+    // Remove from DOM (using the copy)
+    setTimeout(() => {
+      removeHelpersFromDOM(helpersToRemove);
+    }, 100);
   }
   
   // ⭐ DEBUG: Log configuration
