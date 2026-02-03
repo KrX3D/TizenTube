@@ -129,3 +129,7 @@ export const configChangeEmitter = {
     });
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.configChangeEmitter = configChangeEmitter;
+}
