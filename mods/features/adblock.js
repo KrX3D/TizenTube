@@ -100,29 +100,6 @@ function directFilterArray(arr, page, context = '') {
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
     
-    // ⭐ REMOVE previous scroll helpers (ONLY if they're watched)
-    if (isPlaylistPage && window._playlistScrollHelpers.has(videoId)) {
-      // Check if this scroll helper is actually watched
-      const progressBar = findProgressBar(item);
-      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
-      
-      if (percentWatched >= threshold) {
-        // It's watched - remove it
-        if (DEBUG_ENABLED) {
-          console.log('[FILTER #' + callId + '] 🧹 REMOVING watched scroll helper:', videoId, '| Progress:', percentWatched + '%');
-        }
-        window._playlistScrollHelpers.delete(videoId);
-        return false; // Remove it!
-      } else {
-        // It's unwatched - keep it and remove from helper set
-        if (DEBUG_ENABLED) {
-          console.log('[FILTER #' + callId + '] ✓ KEEPING unwatched scroll helper:', videoId, '| Progress:', percentWatched + '%');
-        }
-        window._playlistScrollHelpers.delete(videoId);
-        // Don't return false - let it continue and be kept as a normal unwatched video
-      }
-    }
-    
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
@@ -203,6 +180,47 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.add(lastVideoId);
     
     return [lastVideo];
+  }
+  
+  // ⭐ NEW: If we found REAL unwatched videos, cleanup all scroll helpers from DOM
+  if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched videos! Removing', window._playlistScrollHelpers.size, 'scroll helpers from DOM');
+    }
+    
+    // Hide all scroll helpers using DOM manipulation
+    setTimeout(() => {
+      let removedCount = 0;
+      window._playlistScrollHelpers.forEach(videoId => {
+        // Find ALL elements with this video ID
+        const selectors = [
+          `ytlr-tile-renderer[data-content-id="${videoId}"]`,
+          `ytlr-playlist-video-renderer[data-video-id="${videoId}"]`,
+          `[video-id="${videoId}"]`,
+          `[data-video-id="${videoId}"]`
+        ];
+        
+        selectors.forEach(selector => {
+          const elements = document.querySelectorAll(selector);
+          elements.forEach(el => {
+            if (el.style.display !== 'none') {
+              el.style.display = 'none';
+              removedCount++;
+              if (DEBUG_ENABLED) {
+                console.log('[CLEANUP] Hiding scroll helper element:', videoId, selector);
+              }
+            }
+          });
+        });
+      });
+      
+      if (DEBUG_ENABLED) {
+        console.log('[CLEANUP] Removed', removedCount, 'scroll helper elements from DOM');
+      }
+      
+      // Clear the set
+      window._playlistScrollHelpers.clear();
+    }, 100);
   }
   
   return filtered;
