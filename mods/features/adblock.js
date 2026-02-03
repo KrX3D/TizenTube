@@ -196,78 +196,41 @@ function directFilterArray(arr, page, context = '') {
       let removedCount = 0;
       
       window._playlistScrollHelpers.forEach(helperId => {
-        // Check if this helper is actually in the current filtered array
-        const isInFiltered = filtered.some(item => {
-          const itemId = item.tileRenderer?.contentId || 
-                        item.videoRenderer?.videoId || 
-                        item.playlistVideoRenderer?.videoId ||
-                        item.gridVideoRenderer?.videoId ||
-                        item.compactVideoRenderer?.videoId;
-          return itemId === helperId;
-        });
+        if (DEBUG_ENABLED) {
+          console.log('[CLEANUP] Attempting to remove helper:', helperId);
+        }
         
-        if (isInFiltered) {
-          // This helper is in the filtered array - check if it's watched
-          const helperItem = filtered.find(item => {
-            const itemId = item.tileRenderer?.contentId || 
-                          item.videoRenderer?.videoId || 
-                          item.playlistVideoRenderer?.videoId ||
-                          item.gridVideoRenderer?.videoId ||
-                          item.compactVideoRenderer?.videoId;
-            return itemId === helperId;
-          });
+        // Find ALL ytlr-tile-renderer elements and check each one
+        const allTiles = document.querySelectorAll('ytlr-tile-renderer');
+        
+        if (DEBUG_ENABLED) {
+          console.log('[CLEANUP] Found', allTiles.length, 'total tiles in DOM');
+        }
+        
+        allTiles.forEach(tile => {
+          // Check if this tile's video ID matches the helper
+          const tileVideoId = tile.getAttribute('data-content-id') || 
+                            tile.getAttribute('video-id') ||
+                            tile.getAttribute('data-video-id');
           
-          const progressBar = findProgressBar(helperItem);
-          const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
-          
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Helper', helperId, 'is in filtered array | Progress:', percentWatched + '%', '| Will', (percentWatched >= threshold ? 'REMOVE' : 'KEEP'));
-          }
-          
-          if (percentWatched >= threshold) {
-            // It's watched - remove from filtered array
-            const index = filtered.findIndex(item => {
-              const itemId = item.tileRenderer?.contentId || 
-                            item.videoRenderer?.videoId || 
-                            item.playlistVideoRenderer?.videoId ||
-                            item.gridVideoRenderer?.videoId ||
-                            item.compactVideoRenderer?.videoId;
-              return itemId === helperId;
-            });
-            if (index !== -1) {
-              filtered.splice(index, 1);
+          // Also try to find video ID in inner content
+          if (!tileVideoId) {
+            const innerText = tile.innerHTML;
+            if (innerText.includes(helperId)) {
+              if (DEBUG_ENABLED) {
+                console.log('[CLEANUP] Found helper', helperId, 'by innerHTML search');
+              }
+              tile.style.display = 'none';
               removedCount++;
             }
+          } else if (tileVideoId === helperId) {
+            if (DEBUG_ENABLED) {
+              console.log('[CLEANUP] Found helper', helperId, 'by attribute:', tileVideoId);
+            }
+            tile.style.display = 'none';
+            removedCount++;
           }
-        } else {
-          // Helper not in current batch - try to hide from DOM
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Helper', helperId, 'NOT in current batch - attempting DOM removal');
-          }
-          
-          const selectors = [
-            `ytlr-tile-renderer[data-content-id="${helperId}"]`,
-            `ytlr-playlist-video-renderer[data-video-id="${helperId}"]`,
-            `[video-id="${helperId}"]`,
-            `[data-video-id="${helperId}"]`
-          ];
-          
-          let foundInDom = false;
-          selectors.forEach(selector => {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => {
-              if (el.style.display !== 'none') {
-                el.style.display = 'none';
-                foundInDom = true;
-                removedCount++;
-              }
-            });
-          });
-          
-          if (DEBUG_ENABLED && !foundInDom) {
-            console.log('[CLEANUP] Helper', helperId, 'not found in DOM with any selector');
-          }
-        }
+        });
       });
       
       if (DEBUG_ENABLED) {
@@ -277,7 +240,7 @@ function directFilterArray(arr, page, context = '') {
       
       // Clear the set
       window._playlistScrollHelpers.clear();
-    }, 100);
+    }, 500); // Increased timeout to 500ms
   }
   
   return filtered;
