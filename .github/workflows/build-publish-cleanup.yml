@@ -202,6 +202,8 @@ jobs:
           else
             git commit -m "chore(build): update built files in dist/ from CI [skip ci]"
             echo "Pushing updated built files to repo..."
+            git fetch origin main
+            git rebase origin/main
             git push origin HEAD:main
           fi
 
