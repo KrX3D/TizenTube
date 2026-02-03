@@ -63,26 +63,13 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers = new Set();
   }
   
-  // ⭐ CRITICAL: Remove scroll helpers from incoming data if we have any real content
-  if (isPlaylistPage && window._playlistScrollHelpers.size > 0) {
-    const getVideoId = (item) => item?.tileRenderer?.contentId || 
-      item?.videoRenderer?.videoId || 
-      item?.playlistVideoRenderer?.videoId ||
-      item?.gridVideoRenderer?.videoId ||
-      item?.compactVideoRenderer?.videoId ||
-      'unknown';
-    
-    // Check if this batch has ANY non-helper videos
-    const nonHelperItems = arr.filter(item => !window._playlistScrollHelpers.has(getVideoId(item)));
-    
-    if (nonHelperItems.length > 0) {
-      // We have real content! Filter out all helpers and clear the set
-      arr = nonHelperItems;
-      if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] Removed', window._playlistScrollHelpers.size, 'scroll helpers from data (found', nonHelperItems.length, 'real videos)');
-      }
-      window._playlistScrollHelpers.clear();
+  // ⭐ CRITICAL: When a new batch arrives, clear old helpers
+  // Each batch is separate - old helpers won't be in new data
+  if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && context.includes('playlist-scroll')) {
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] New batch arrived - clearing', window._playlistScrollHelpers.size, 'old helper(s)');
     }
+    window._playlistScrollHelpers.clear();
   }
   
   // ⭐ DEBUG: Log configuration
@@ -202,6 +189,14 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.add(lastVideoId);
     
     return [lastVideo];
+  }
+  
+  // ⭐ NEW: If we found unwatched videos, ensure old helpers are cleared
+  if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Found unwatched videos - clearing', window._playlistScrollHelpers.size, 'helper(s)');
+    }
+    window._playlistScrollHelpers.clear();
   }
   
   return filtered;
