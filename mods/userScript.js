@@ -1,3 +1,5 @@
+import { configWrite } from "./config.js";
+
 // Visual Console for TV - FIXED VERSION v10
 // This creates an on-screen console you can see on your TV
 // With WORKING auto-scroll and keyboard controls
@@ -175,13 +177,18 @@
         enabled = !enabled;
         consoleVisible = enabled;
         
-        // Update localStorage FIRST
+        // Update config FIRST
         try {
-            const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
-            config.enableDebugConsole = enabled;
-            window.localStorage[CONFIG_KEY] = JSON.stringify(config);
+            configWrite('enableDebugConsole', enabled);
         } catch (e) {
             console.error('[Console] Failed to save config:', e);
+            try {
+                const config = JSON.parse(window.localStorage[CONFIG_KEY] || '{}');
+                config.enableDebugConsole = enabled;
+                window.localStorage[CONFIG_KEY] = JSON.stringify(config);
+            } catch (fallbackError) {
+                console.error('[Console] Failed to save config fallback:', fallbackError);
+            }
         }
         
         // Update UI
@@ -197,19 +204,8 @@
             }
         }
         
-        // ⭐ NEW: Dispatch event AFTER localStorage is updated
+        // ⭐ NEW: Log after state update
         setTimeout(() => {
-            if (window.configChangeEmitter) {
-                window.configChangeEmitter.dispatchEvent(
-                    new CustomEvent('configChange', { 
-                        detail: { 
-                            key: 'enableDebugConsole', 
-                            value: enabled 
-                        } 
-                    })
-                );
-            }
-            
             // ⭐ NEW: Log to help user understand what happened
             console.log('[Console] Console ' + (enabled ? 'ENABLED ✓' : 'DISABLED ✗') + ' via BLUE button');
             console.log('[Console] Settings UI will update next time you open it');
@@ -265,15 +261,20 @@
         
         // Only update DOM if console is visible
         if (consoleDiv && consoleVisible) {
+            const previousScrollTop = consoleDiv.scrollTop;
+            const previousScrollHeight = consoleDiv.scrollHeight;
             consoleDiv.innerHTML = logs.join('');
             if (window.consoleAutoScroll) {
                 consoleDiv.scrollTop = 0;
+            } else {
+                const heightDelta = consoleDiv.scrollHeight - previousScrollHeight;
+                consoleDiv.scrollTop = previousScrollTop + heightDelta;
             }
         }
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v680 - NEWEST FIRST');
+    console.log('[Console] Visual Console v760 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
