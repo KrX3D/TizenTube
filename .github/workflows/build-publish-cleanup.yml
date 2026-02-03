@@ -88,7 +88,6 @@
 
 name: Build, publish and cleanup old npm versions
 
-<<<<<<< codex/update-package.json-version-to-1.16.700
 on:
   push:
     branches:
@@ -98,17 +97,6 @@ on:
   release:
     types: [published]
   workflow_dispatch:
-=======
-on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - '.github/**'
-  release:
-    types: [published]
-  workflow_dispatch:
->>>>>>> main
 
 # Allow this workflow to push back changes to the repo
 permissions:
@@ -208,7 +196,6 @@ jobs:
           # stage dist files (use -f because dist/ is in .gitignore)
           git add -f dist/userScript.js dist/service.js
 
-<<<<<<< codex/update-package.json-version-to-1.16.700
           # commit only if staged changes exist
           if git diff --cached --quiet; then
             echo "No changes to built files in dist/ — skipping commit."
@@ -221,20 +208,6 @@ jobs:
             git rebase origin/main
             git push origin HEAD:main
           fi
-=======
-          # commit only if staged changes exist
-          if git diff --cached --quiet; then
-            echo "No changes to built files in dist/ — skipping commit."
-          else
-            git commit -m "chore(build): update built files in dist/ from CI [skip ci]"
-            echo "Pushing updated built files to repo..."
-            git fetch origin main
-            git status --porcelain
-            git reset --hard
-            git rebase origin/main
-            git push origin HEAD:main
-          fi
->>>>>>> main
 
       # --------------------
       # NPM AUTH
@@ -438,19 +411,11 @@ jobs:
           # Build URL list (comma-separated)
           URLS=""
                     
-<<<<<<< codex/update-package.json-version-to-1.16.700
           # npm package URLs
           URLS+="${NPM_BASE}@latest,"
           URLS+="${NPM_BASE}@latest/package.json,"
           URLS+="${NPM_BASE}@latest/dist/userScript.js,"
           URLS+="${NPM_BASE}@latest/dist/service.js,"
-=======
-          # npm package URLs
-          URLS+="${NPM_BASE}@latest,"
-          URLS+="${NPM_BASE}@latest/package.json,"
-          URLS+="${NPM_BASE}@latest/dist/userScript.js,"
-          URLS+="${NPM_BASE}@latest/dist/service.js,"
->>>>>>> main
 
           URLS+="${NPM_BASE}@*/package.json,"
           URLS+="${NPM_BASE}@*/dist/userScript.js,"
@@ -462,7 +427,6 @@ jobs:
           
           URLS+="${NPM_BASE}@*,"
           
-<<<<<<< codex/update-package.json-version-to-1.16.700
           # GitHub repo URLs - main branch
           URLS+="${GH_BASE}@main,"
           URLS+="${GH_BASE}@main/package.json,"
@@ -480,25 +444,6 @@ jobs:
           URLS+="${GH_BASE}@latest/package.json,"
           URLS+="${GH_BASE}@latest/dist/userScript.js,"
           URLS+="${GH_BASE}@latest/dist/service.js,"
-=======
-          # GitHub repo URLs - main branch
-          URLS+="${GH_BASE}@main,"
-          URLS+="${GH_BASE}@main/package.json,"
-          URLS+="${GH_BASE}@main/dist/userScript.js,"
-          URLS+="${GH_BASE}@main/dist/service.js,"
-          
-          # GitHub repo URLs - master branch
-          URLS+="${GH_BASE}@master,"
-          URLS+="${GH_BASE}@master/package.json,"
-          URLS+="${GH_BASE}@master/dist/userScript.js,"
-          URLS+="${GH_BASE}@master/dist/service.js,"
-
-          # GitHub repo URLs - latest branch
-          URLS+="${GH_BASE}@latest,"
-          URLS+="${GH_BASE}@latest/package.json,"
-          URLS+="${GH_BASE}@latest/dist/userScript.js,"
-          URLS+="${GH_BASE}@latest/dist/service.js,"
->>>>>>> main
           
           URLS+="${GH_BASE}/package.json,"
           URLS+="${GH_BASE}/dist/userScript.js,"
@@ -519,3 +464,4 @@ jobs:
       
       - name: Cache purge complete
         run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"
+
