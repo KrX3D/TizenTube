@@ -190,7 +190,7 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
-  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !context.includes('playlist-scroll')) {
     // Keep the last watched video so user can scroll to load more
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
@@ -208,6 +208,17 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.add(lastVideoId);
     
     return [lastVideo];
+  }
+
+  // If we're in a playlist scroll continuation and nothing remains, clear helpers
+  if (isPlaylistPage && filtered.length === 0 && context.includes('playlist-scroll')) {
+    if (window._playlistScrollHelpers.size > 0) {
+      window._playlistScrollHelpers.clear();
+      if (DEBUG_ENABLED) {
+        console.log('[CLEANUP] No remaining videos on continuation; cleared helpers.');
+      }
+    }
+    return [];
   }
   
   // ⭐ NEW: If we're on playlist and have helpers, always try to clean them up

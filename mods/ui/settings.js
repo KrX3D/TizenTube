@@ -934,6 +934,7 @@ export function optionShow(parameters, update) {
         return;
     }
     const buttons = [];
+    const options = (parameters.options || []).filter(Boolean);
 
     // Check if this is the legacy sponsorBlockManualSkips (array-based) or new boolean-based options
     const isArrayBasedOptions = parameters.arrayToEdit !== undefined;
@@ -941,7 +942,7 @@ export function optionShow(parameters, update) {
     if (isArrayBasedOptions) {
         // Legacy handling for sponsorBlockManualSkips
         const value = configRead(parameters.arrayToEdit);
-        for (const option of parameters.options) {
+        for (const option of options) {
             buttons.push(
                 buttonItem(
                     { title: option.name, subtitle: option.subtitle },
@@ -981,7 +982,7 @@ export function optionShow(parameters, update) {
         }
     } else {
         let index = 0;
-        for (const option of parameters.options) {
+        for (const option of options) {
             if (option.compactLinkRenderer) {
                 buttons.push(option);
                 index++;
