@@ -3,6 +3,8 @@ import { showModal, buttonItem, overlayPanelItemListRenderer, scrollPaneRenderer
 import { getUserLanguageOptionName } from '../features/moreSubtitles.js';
 import qrcode from 'qrcode-npm';
 
+const qrcodes = {};
+
 export default function modernUI(update, parameters) {
     const settings = [
         {
