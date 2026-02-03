@@ -51,12 +51,15 @@ export default function modernUI(update, parameters) {
                     link: 'https://tizentube.6513006.xyz',
                 }
             ].map((option) => {
-                const qr = qrcode.qrcode(6, 'H');
-                qr.addData(option.link);
-                qr.make();
+                if (!qrcodes[option.name]) {
+                    const qr = qrcode.qrcode(6, 'H');
+                    qr.addData(option.link);
+                    qr.make();
 
-                const qrDataImgTag = qr.createImgTag(8, 8);
-                const qrDataUrl = qrDataImgTag.match(/src="([^"]+)"/)[1];
+                    const qrDataImgTag = qr.createImgTag(8, 8);
+                    const qrDataUrl = qrDataImgTag.match(/src="([^"]+)"/)[1];
+                    qrcodes[option.name] = qrDataUrl;
+                }
                 return {
                     name: option.name,
                     icon: 'OPEN_IN_NEW',
@@ -66,7 +69,7 @@ export default function modernUI(update, parameters) {
                         subtitle: option.link,
                         content: overlayPanelItemListRenderer([
                             overlayMessageRenderer(`You can visit the ${option.name} page by scanning the QR code below.`),
-                            QrCodeRenderer(qrDataUrl)
+                            QrCodeRenderer(qrcodes[option.name])
                         ])
                     }
                 }
@@ -369,6 +372,11 @@ export default function modernUI(update, parameters) {
                         }
                     })
                 },
+                window.h5vcc && window.h5vcc.tizentube && window.h5vcc.tizentube.SetFrameRate ? {
+                    name: 'Auto Frame Rate',
+                    icon: 'SLOW_MOTION_VIDEO',
+                    value: 'autoFrameRate'
+                } : null
             ]
         },
         {
