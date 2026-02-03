@@ -182,102 +182,71 @@ function directFilterArray(arr, page, context = '') {
     return [lastVideo];
   }
   
-  // ⭐ NEW: If we found REAL unwatched videos, cleanup all scroll helpers from DOM
-  if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] ========================================');
-      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched videos!');
-      console.log('[CLEANUP] Scroll helpers to remove:', window._playlistScrollHelpers.size);
-      console.log('[CLEANUP] Helper IDs:', Array.from(window._playlistScrollHelpers));
-    }
+  // ⭐ NEW: If we're on playlist and have helpers, always try to clean them up
+  if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && filtered.length > 0) {
+    // Only cleanup if we found unwatched videos OR if this looks like we're done loading
+    const shouldCleanup = noProgressBarCount > 0 || context.includes('playlist-scroll');
     
-    // Hide all scroll helpers using DOM manipulation
-    setTimeout(() => {
-      let removedCount = 0;
-      
-      window._playlistScrollHelpers.forEach(helperId => {
-        // Check if this helper is actually in the current filtered array
-        const isInFiltered = filtered.some(item => {
-          const itemId = item.tileRenderer?.contentId || 
-                        item.videoRenderer?.videoId || 
-                        item.playlistVideoRenderer?.videoId ||
-                        item.gridVideoRenderer?.videoId ||
-                        item.compactVideoRenderer?.videoId;
-          return itemId === helperId;
-        });
-        
-        if (isInFiltered) {
-          // This helper is in the filtered array - check if it's watched
-          const helperItem = filtered.find(item => {
-            const itemId = item.tileRenderer?.contentId || 
-                          item.videoRenderer?.videoId || 
-                          item.playlistVideoRenderer?.videoId ||
-                          item.gridVideoRenderer?.videoId ||
-                          item.compactVideoRenderer?.videoId;
-            return itemId === helperId;
-          });
-          
-          const progressBar = findProgressBar(helperItem);
-          const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
-          
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Helper', helperId, 'is in filtered array | Progress:', percentWatched + '%', '| Will', (percentWatched >= threshold ? 'REMOVE' : 'KEEP'));
-          }
-          
-          if (percentWatched >= threshold) {
-            // It's watched - remove from filtered array
-            const index = filtered.findIndex(item => {
-              const itemId = item.tileRenderer?.contentId || 
-                            item.videoRenderer?.videoId || 
-                            item.playlistVideoRenderer?.videoId ||
-                            item.gridVideoRenderer?.videoId ||
-                            item.compactVideoRenderer?.videoId;
-              return itemId === helperId;
-            });
-            if (index !== -1) {
-              filtered.splice(index, 1);
-              removedCount++;
-            }
-          }
-        } else {
-          // Helper not in current batch - try to hide from DOM
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Helper', helperId, 'NOT in current batch - attempting DOM removal');
-          }
-          
-          const selectors = [
-            `ytlr-tile-renderer[data-content-id="${helperId}"]`,
-            `ytlr-playlist-video-renderer[data-video-id="${helperId}"]`,
-            `[video-id="${helperId}"]`,
-            `[data-video-id="${helperId}"]`
-          ];
-          
-          let foundInDom = false;
-          selectors.forEach(selector => {
-            const elements = document.querySelectorAll(selector);
-            elements.forEach(el => {
-              if (el.style.display !== 'none') {
-                el.style.display = 'none';
-                foundInDom = true;
-                removedCount++;
-              }
-            });
-          });
-          
-          if (DEBUG_ENABLED && !foundInDom) {
-            console.log('[CLEANUP] Helper', helperId, 'not found in DOM with any selector');
-          }
-        }
-      });
-      
+    if (shouldCleanup) {
       if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] Total removed:', removedCount);
         console.log('[CLEANUP] ========================================');
+        console.log('[CLEANUP] Triggering cleanup');
+        console.log('[CLEANUP] Unwatched videos found:', noProgressBarCount);
+        console.log('[CLEANUP] Scroll helpers to remove:', window._playlistScrollHelpers.size);
+        console.log('[CLEANUP] Helper IDs:', Array.from(window._playlistScrollHelpers));
       }
       
-      // Clear the set
-      window._playlistScrollHelpers.clear();
-    }, 100);
+      // Hide all scroll helpers using DOM manipulation
+      setTimeout(() => {
+        let removedCount = 0;
+        
+        window._playlistScrollHelpers.forEach(helperId => {
+          if (DEBUG_ENABLED) {
+            console.log('[CLEANUP] Attempting to remove helper:', helperId);
+          }
+          
+          // Find ALL ytlr-tile-renderer elements and check each one
+          const allTiles = document.querySelectorAll('ytlr-tile-renderer');
+          
+          if (DEBUG_ENABLED) {
+            console.log('[CLEANUP] Found', allTiles.length, 'total tiles in DOM');
+          }
+          
+          allTiles.forEach(tile => {
+            // Check if this tile's video ID matches the helper
+            const tileVideoId = tile.getAttribute('data-content-id') || 
+                              tile.getAttribute('video-id') ||
+                              tile.getAttribute('data-video-id');
+            
+            // Also try to find video ID in inner content
+            if (!tileVideoId) {
+              const innerText = tile.innerHTML;
+              if (innerText.includes(helperId)) {
+                if (DEBUG_ENABLED) {
+                  console.log('[CLEANUP] Found helper', helperId, 'by innerHTML search - REMOVING');
+                }
+                tile.remove(); // ⭐ CHANGED: Use .remove() instead of display:none
+                removedCount++;
+              }
+            } else if (tileVideoId === helperId) {
+              if (DEBUG_ENABLED) {
+                console.log('[CLEANUP] Found helper', helperId, 'by attribute:', tileVideoId, '- REMOVING');
+              }
+              tile.remove(); // ⭐ CHANGED: Use .remove() instead of display:none
+              removedCount++;
+            }
+          });
+        });
+        
+        if (DEBUG_ENABLED) {
+          console.log('[CLEANUP] Total removed:', removedCount);
+          console.log('[CLEANUP] ========================================');
+        }
+        
+        // Clear the set
+        window._playlistScrollHelpers.clear();
+      }, 500);
+    }
   }
   
   return filtered;
