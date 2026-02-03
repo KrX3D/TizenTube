@@ -63,12 +63,67 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers = new Set();
   }
   
+  // ⭐ Helper function to remove videos from DOM
+  const removeHelpersFromDOM = (helperIds) => {
+    if (helperIds.size === 0) return;
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] ========================================');
+      console.log('[CLEANUP] Removing helpers from DOM:', Array.from(helperIds));
+    }
+    
+    let removedCount = 0;
+    const allTiles = document.querySelectorAll('ytlr-tile-renderer');
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Searching through', allTiles.length, 'tiles');
+    }
+    
+    allTiles.forEach(tile => {
+      // Try multiple ways to get video ID
+      const tileVideoId = tile.getAttribute('data-content-id') || 
+                         tile.getAttribute('video-id') ||
+                         tile.getAttribute('data-video-id');
+      
+      if (tileVideoId && helperIds.has(tileVideoId)) {
+        if (DEBUG_ENABLED) {
+          console.log('[CLEANUP] Removing tile with ID:', tileVideoId);
+        }
+        tile.remove();
+        removedCount++;
+      } else if (!tileVideoId) {
+        // Try innerHTML search as fallback
+        helperIds.forEach(helperId => {
+          if (tile.innerHTML.includes(helperId)) {
+            if (DEBUG_ENABLED) {
+              console.log('[CLEANUP] Removing tile by innerHTML match:', helperId);
+            }
+            tile.remove();
+            removedCount++;
+          }
+        });
+      }
+    });
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Total tiles removed:', removedCount);
+      console.log('[CLEANUP] ========================================');
+    }
+  };
+  
   // ⭐ CRITICAL: When a new batch arrives, clear old helpers
-  // Each batch is separate - old helpers won't be in new data
   if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && context.includes('playlist-scroll')) {
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] New batch arrived - clearing', window._playlistScrollHelpers.size, 'old helper(s)');
+      console.log('[CLEANUP] New batch arrived - will remove', window._playlistScrollHelpers.size, 'old helper(s)');
+      console.log('[CLEANUP] Helper IDs to remove:', Array.from(window._playlistScrollHelpers));
     }
+    
+    // Remove from DOM
+    setTimeout(() => {
+      removeHelpersFromDOM(new Set(window._playlistScrollHelpers));
+    }, 100);
+    
+    // Clear the set
     window._playlistScrollHelpers.clear();
   }
   
@@ -183,10 +238,15 @@ function directFilterArray(arr, page, context = '') {
     
     if (DEBUG_ENABLED) {
       console.log('[FILTER_END #' + callId + '] ⚠️ ALL FILTERED - Keeping 1 video to enable scrolling:', lastVideoId);
+      console.log('[FILTER_END #' + callId + '] Current helpers in Set:', Array.from(window._playlistScrollHelpers));
     }
     
     // Mark this video ID as a scroll helper
     window._playlistScrollHelpers.add(lastVideoId);
+    
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_END #' + callId + '] After adding helper, Set contains:', Array.from(window._playlistScrollHelpers));
+    }
     
     return [lastVideo];
   }
@@ -194,8 +254,16 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ NEW: If we found unwatched videos, ensure old helpers are cleared
   if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Found unwatched videos - clearing', window._playlistScrollHelpers.size, 'helper(s)');
+      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched videos - will remove', window._playlistScrollHelpers.size, 'helper(s)');
+      console.log('[CLEANUP] Helper IDs to remove:', Array.from(window._playlistScrollHelpers));
     }
+    
+    // Remove from DOM
+    setTimeout(() => {
+      removeHelpersFromDOM(new Set(window._playlistScrollHelpers));
+    }, 100);
+    
+    // Clear the set
     window._playlistScrollHelpers.clear();
   }
   
