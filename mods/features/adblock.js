@@ -58,6 +58,33 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ Check if this is a playlist page
   const isPlaylistPage = (page === 'playlist' || page === 'playlists');
   
+  // ⭐ Initialize scroll helpers tracker
+  if (!window._playlistScrollHelpers) {
+    window._playlistScrollHelpers = new Set();
+  }
+  
+  // ⭐ CRITICAL: Remove scroll helpers from incoming data if we have any real content
+  if (isPlaylistPage && window._playlistScrollHelpers.size > 0) {
+    const getVideoId = (item) => item?.tileRenderer?.contentId || 
+      item?.videoRenderer?.videoId || 
+      item?.playlistVideoRenderer?.videoId ||
+      item?.gridVideoRenderer?.videoId ||
+      item?.compactVideoRenderer?.videoId ||
+      'unknown';
+    
+    // Check if this batch has ANY non-helper videos
+    const nonHelperItems = arr.filter(item => !window._playlistScrollHelpers.has(getVideoId(item)));
+    
+    if (nonHelperItems.length > 0) {
+      // We have real content! Filter out all helpers and clear the set
+      arr = nonHelperItems;
+      if (DEBUG_ENABLED) {
+        console.log('[CLEANUP] Removed', window._playlistScrollHelpers.size, 'scroll helpers from data (found', nonHelperItems.length, 'real videos)');
+      }
+      window._playlistScrollHelpers.clear();
+    }
+  }
+  
   // ⭐ DEBUG: Log configuration
   if (DEBUG_ENABLED && (shouldFilterShorts || shouldHideWatched)) {
     console.log('[FILTER_START #' + callId + '] ========================================');
@@ -75,31 +102,6 @@ function directFilterArray(arr, page, context = '') {
   let noProgressBarCount = 0;
   const originalLength = arr.length;
   
-  // ⭐ Initialize scroll helpers tracker
-  if (!window._playlistScrollHelpers) {
-    window._playlistScrollHelpers = new Set();
-  }
-  
-  const getVideoId = (item) => item?.tileRenderer?.contentId || 
-    item?.videoRenderer?.videoId || 
-    item?.playlistVideoRenderer?.videoId ||
-    item?.gridVideoRenderer?.videoId ||
-    item?.compactVideoRenderer?.videoId ||
-    'unknown';
-
-  // Remove scroll helpers if newer content is present
-  if (isPlaylistPage && window._playlistScrollHelpers.size > 0) {
-    const helperIds = window._playlistScrollHelpers;
-    const nonHelperItems = arr.filter(item => !helperIds.has(getVideoId(item)));
-    if (nonHelperItems.length > 0) {
-      arr = arr.filter(item => !helperIds.has(getVideoId(item)));
-      helperIds.clear();
-      if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] Removed scroll helpers from data (new items detected).');
-      }
-    }
-  }
-
   const filtered = arr.filter(item => {
     if (!item) return true;
     
@@ -113,7 +115,12 @@ function directFilterArray(arr, page, context = '') {
     
     if (!isVideoItem) return true;
     
-    const videoId = getVideoId(item);
+    const videoId = item.tileRenderer?.contentId || 
+                   item.videoRenderer?.videoId || 
+                   item.playlistVideoRenderer?.videoId ||
+                   item.gridVideoRenderer?.videoId ||
+                   item.compactVideoRenderer?.videoId ||
+                   'unknown';
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
@@ -162,19 +169,6 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
-  // If only helper items remain after scroll continuation, remove them entirely
-  if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && context.includes('playlist-scroll')) {
-    const helperIds = window._playlistScrollHelpers;
-    const filteredWithoutHelpers = filtered.filter(item => !helperIds.has(getVideoId(item)));
-    if (filteredWithoutHelpers.length === 0) {
-      helperIds.clear();
-      if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] All remaining items are helpers; removing them.');
-      }
-      return [];
-    }
-  }
-
   // ⭐ Enhanced summary logging
   if (DEBUG_ENABLED) {
     console.log('[FILTER_END #' + callId + '] ========================================');
@@ -190,7 +184,7 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
-  if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !context.includes('playlist-scroll')) {
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
     // Keep the last watched video so user can scroll to load more
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
@@ -208,84 +202,6 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.add(lastVideoId);
     
     return [lastVideo];
-  }
-
-  // If we're in a playlist scroll continuation and nothing remains, clear helpers
-  if (isPlaylistPage && filtered.length === 0 && context.includes('playlist-scroll')) {
-    if (window._playlistScrollHelpers.size > 0) {
-      window._playlistScrollHelpers.clear();
-      if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] No remaining videos on continuation; cleared helpers.');
-      }
-    }
-    return [];
-  }
-  
-  // ⭐ NEW: If we're on playlist and have helpers, always try to clean them up
-  if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && filtered.length > 0) {
-    // Cleanup when new items are loaded or on playlist scroll continuation
-    const shouldCleanup = noProgressBarCount > 0 || context.includes('playlist-scroll') || filtered.length > 0;
-    
-    if (shouldCleanup) {
-      if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] ========================================');
-        console.log('[CLEANUP] Triggering cleanup');
-        console.log('[CLEANUP] Unwatched videos found:', noProgressBarCount);
-        console.log('[CLEANUP] Scroll helpers to remove:', window._playlistScrollHelpers.size);
-        console.log('[CLEANUP] Helper IDs:', Array.from(window._playlistScrollHelpers));
-      }
-      
-      // Hide all scroll helpers using DOM manipulation
-      setTimeout(() => {
-        let removedCount = 0;
-        
-        window._playlistScrollHelpers.forEach(helperId => {
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Attempting to remove helper:', helperId);
-          }
-          
-          // Find ALL ytlr-tile-renderer elements and check each one
-          const allTiles = document.querySelectorAll('ytlr-tile-renderer');
-          
-          if (DEBUG_ENABLED) {
-            console.log('[CLEANUP] Found', allTiles.length, 'total tiles in DOM');
-          }
-          
-          allTiles.forEach(tile => {
-            // Check if this tile's video ID matches the helper
-            const tileVideoId = tile.getAttribute('data-content-id') || 
-                              tile.getAttribute('video-id') ||
-                              tile.getAttribute('data-video-id');
-            
-            // Also try to find video ID in inner content
-            if (!tileVideoId) {
-              const innerText = tile.innerHTML;
-              if (innerText.includes(helperId)) {
-                if (DEBUG_ENABLED) {
-                  console.log('[CLEANUP] Found helper', helperId, 'by innerHTML search - REMOVING');
-                }
-                tile.remove(); // ⭐ CHANGED: Use .remove() instead of display:none
-                removedCount++;
-              }
-            } else if (tileVideoId === helperId) {
-              if (DEBUG_ENABLED) {
-                console.log('[CLEANUP] Found helper', helperId, 'by attribute:', tileVideoId, '- REMOVING');
-              }
-              tile.remove(); // ⭐ CHANGED: Use .remove() instead of display:none
-              removedCount++;
-            }
-          });
-        });
-        
-        if (DEBUG_ENABLED) {
-          console.log('[CLEANUP] Total removed:', removedCount);
-          console.log('[CLEANUP] ========================================');
-        }
-        
-        // Clear the set
-        window._playlistScrollHelpers.clear();
-      }, 500);
-    }
   }
   
   return filtered;
