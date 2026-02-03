@@ -217,6 +217,7 @@ function directFilterArray(arr, page, context = '') {
       if (DEBUG_ENABLED) {
         console.log('[CLEANUP] No remaining videos on continuation; cleared helpers.');
       }
+<<<<<<< codex/update-package.json-version-to-1.16.700
     }
     return [];
   }
@@ -226,6 +227,8 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.clear();
     if (DEBUG_ENABLED) {
       console.log('[CLEANUP] Only helpers remained; cleared helper set.');
+=======
+>>>>>>> main
     }
     return [];
   }
