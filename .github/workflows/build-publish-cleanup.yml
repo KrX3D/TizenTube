@@ -96,6 +96,7 @@ on:
       - '.github/**'
   release:
     types: [published]
+  workflow_dispatch:
 
 # Allow this workflow to push back changes to the repo
 permissions:
@@ -407,6 +408,7 @@ jobs:
           URLS=""
                     
           # npm package URLs
+          URLS+="${NPM_BASE}@latest,"
           URLS+="${NPM_BASE}@latest/package.json,"
           URLS+="${NPM_BASE}@latest/dist/userScript.js,"
           URLS+="${NPM_BASE}@latest/dist/service.js,"
@@ -422,16 +424,19 @@ jobs:
           URLS+="${NPM_BASE}@*,"
           
           # GitHub repo URLs - main branch
+          URLS+="${GH_BASE}@main,"
           URLS+="${GH_BASE}@main/package.json,"
           URLS+="${GH_BASE}@main/dist/userScript.js,"
           URLS+="${GH_BASE}@main/dist/service.js,"
           
           # GitHub repo URLs - master branch
+          URLS+="${GH_BASE}@master,"
           URLS+="${GH_BASE}@master/package.json,"
           URLS+="${GH_BASE}@master/dist/userScript.js,"
           URLS+="${GH_BASE}@master/dist/service.js,"
 
           # GitHub repo URLs - latest branch
+          URLS+="${GH_BASE}@latest,"
           URLS+="${GH_BASE}@latest/package.json,"
           URLS+="${GH_BASE}@latest/dist/userScript.js,"
           URLS+="${GH_BASE}@latest/dist/service.js,"
