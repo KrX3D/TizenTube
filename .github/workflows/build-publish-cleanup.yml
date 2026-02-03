@@ -96,6 +96,7 @@ on:
       - '.github/**'
   release:
     types: [published]
+  workflow_dispatch:
 
 # Allow this workflow to push back changes to the repo
 permissions:
