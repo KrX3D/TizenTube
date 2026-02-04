@@ -33,7 +33,7 @@ if (typeof window !== 'undefined') {
   }, 100);
 }
 
-// ⭐ Add this CSS at the TOP of the file, after imports
+// ⭐ CSS to hide playlist helpers
 if (typeof window !== 'undefined' && !document.getElementById('playlist-helper-hider')) {
   const style = document.createElement('style');
   style.id = 'playlist-helper-hider';
@@ -57,7 +57,7 @@ if (typeof window !== 'undefined' && !window._playlistHelperMonitor) {
             console.log('[MONITOR] Hiding helper:', tileVideoId);
           }
         } else if (!tileVideoId) {
-          // Check innerHTML
+          // Check innerHTML as fallback
           window._playlistScrollHelpers.forEach(helperId => {
             if (tile.innerHTML.includes(helperId)) {
               tile.classList.add('tizentube-playlist-helper');
@@ -69,44 +69,7 @@ if (typeof window !== 'undefined' && !window._playlistHelperMonitor) {
         }
       });
     }
-  }, 250); // Check every 250ms
-}
-
-// ⭐ Replace the removePlaylistHelpersFromDOM function with this:
-function removePlaylistHelpersFromDOM(helperIds) {
-  console.log('[CLEANUP_DOM] Marking', helperIds.size, 'helpers as hidden');
-  
-  if (helperIds.size === 0) {
-    console.log('[CLEANUP_DOM] No helpers to hide, exiting');
-    return;
-  }
-  
-  let hiddenCount = 0;
-  const allTiles = document.querySelectorAll('ytlr-tile-renderer');
-  
-  console.log('[CLEANUP_DOM] Found', allTiles.length, 'tiles in DOM');
-  
-  allTiles.forEach((tile) => {
-    const tileVideoId = tile.getAttribute('data-content-id') || 
-                       tile.getAttribute('video-id') ||
-                       tile.getAttribute('data-video-id');
-    
-    if (tileVideoId && helperIds.has(tileVideoId)) {
-      console.log('[CLEANUP_DOM] ✓ Hiding helper:', tileVideoId);
-      tile.classList.add('tizentube-playlist-helper');
-      hiddenCount++;
-    } else if (!tileVideoId) {
-      helperIds.forEach(helperId => {
-        if (tile.innerHTML.includes(helperId)) {
-          console.log('[CLEANUP_DOM] ✓ Hiding helper by innerHTML:', helperId);
-          tile.classList.add('tizentube-playlist-helper');
-          hiddenCount++;
-        }
-      });
-    }
-  });
-  
-  console.log('[CLEANUP_DOM] Total tiles hidden:', hiddenCount);
+  }, 250);
 }
 
 function directFilterArray(arr, page, context = '') {
@@ -140,21 +103,12 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ CRITICAL: When a new batch arrives, clear old helpers
+  // The monitor will hide them automatically via CSS
   if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && context.includes('playlist-scroll')) {
-    console.log('[CLEANUP] New batch - copying', window._playlistScrollHelpers.size, 'helpers:', Array.from(window._playlistScrollHelpers));
-    
-    // ⭐ IMPORTANT: Copy the Set BEFORE clearing it
-    const helpersToRemove = new Set(window._playlistScrollHelpers);
-    console.log('[CLEANUP] Copied to helpersToRemove:', helpersToRemove.size, 'items');
-    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] New batch - clearing', window._playlistScrollHelpers.size, 'old helpers:', Array.from(window._playlistScrollHelpers));
+    }
     window._playlistScrollHelpers.clear();
-    console.log('[CLEANUP] Cleared main Set. Scheduling DOM removal...');
-    
-    // Remove from DOM (using the copy)
-    setTimeout(() => {
-      console.log('[CLEANUP] setTimeout executing now!');
-      removePlaylistHelpersFromDOM(helpersToRemove);
-    }, 500); // Increased to 500ms
   }
   
   // ⭐ DEBUG: Log configuration
@@ -257,7 +211,6 @@ function directFilterArray(arr, page, context = '') {
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
-    // Keep the last watched video so user can scroll to load more
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
                        lastVideo.videoRenderer?.videoId || 
@@ -266,33 +219,28 @@ function directFilterArray(arr, page, context = '') {
                        lastVideo.compactVideoRenderer?.videoId ||
                        'unknown';
     
-    console.log('[HELPER] ALL FILTERED - Adding helper:', lastVideoId);
-    console.log('[HELPER] Current Set before add:', Array.from(window._playlistScrollHelpers));
+    if (DEBUG_ENABLED) {
+      console.log('[HELPER] ALL FILTERED - Adding helper:', lastVideoId);
+      console.log('[HELPER] Set before add:', Array.from(window._playlistScrollHelpers));
+    }
     
     // Mark this video ID as a scroll helper
     window._playlistScrollHelpers.add(lastVideoId);
     
-    console.log('[HELPER] Current Set after add:', Array.from(window._playlistScrollHelpers));
+    if (DEBUG_ENABLED) {
+      console.log('[HELPER] Set after add:', Array.from(window._playlistScrollHelpers));
+    }
     
     return [lastVideo];
   }
   
-  // ⭐ NEW: If we found unwatched videos, ensure old helpers are cleared
+  // ⭐ If we found unwatched videos, clear all helpers
+  // The monitor will stop hiding them automatically
   if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
-    console.log('[CLEANUP] Found unwatched - copying', window._playlistScrollHelpers.size, 'helpers:', Array.from(window._playlistScrollHelpers));
-    
-    // ⭐ IMPORTANT: Copy the Set BEFORE clearing it
-    const helpersToRemove = new Set(window._playlistScrollHelpers);
-    console.log('[CLEANUP] Copied to helpersToRemove:', helpersToRemove.size, 'items');
-    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._playlistScrollHelpers.size, 'helpers:', Array.from(window._playlistScrollHelpers));
+    }
     window._playlistScrollHelpers.clear();
-    console.log('[CLEANUP] Cleared main Set. Scheduling DOM removal...');
-    
-    // Remove from DOM (using the copy)
-    setTimeout(() => {
-      console.log('[CLEANUP] setTimeout executing now!');
-      removePlaylistHelpersFromDOM(helpersToRemove);
-    }, 500);
   }
   
   return filtered;
