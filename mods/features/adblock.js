@@ -33,44 +33,8 @@ if (typeof window !== 'undefined') {
   }, 100);
 }
 
-// ⭐ CSS to hide playlist helpers
-if (typeof window !== 'undefined' && !document.getElementById('playlist-helper-hider')) {
-  const style = document.createElement('style');
-  style.id = 'playlist-helper-hider';
-  style.textContent = '.tizentube-playlist-helper { display: none !important; }';
-  document.head.appendChild(style);
-}
-
-// ⭐ Monitor and continuously hide helpers
-if (typeof window !== 'undefined' && !window._playlistHelperMonitor) {
-  window._playlistHelperMonitor = setInterval(() => {
-    if (window._playlistScrollHelpers && window._playlistScrollHelpers.size > 0) {
-      const allTiles = document.querySelectorAll('ytlr-tile-renderer:not(.tizentube-playlist-helper)');
-      allTiles.forEach(tile => {
-        const tileVideoId = tile.getAttribute('data-content-id') || 
-                           tile.getAttribute('video-id') ||
-                           tile.getAttribute('data-video-id');
-        
-        if (tileVideoId && window._playlistScrollHelpers.has(tileVideoId)) {
-          tile.classList.add('tizentube-playlist-helper');
-          if (DEBUG_ENABLED) {
-            console.log('[MONITOR] Hiding helper:', tileVideoId);
-          }
-        } else if (!tileVideoId) {
-          // Check innerHTML as fallback
-          window._playlistScrollHelpers.forEach(helperId => {
-            if (tile.innerHTML.includes(helperId)) {
-              tile.classList.add('tizentube-playlist-helper');
-              if (DEBUG_ENABLED) {
-                console.log('[MONITOR] Hiding helper by innerHTML:', helperId);
-              }
-            }
-          });
-        }
-      });
-    }
-  }, 250);
-}
+// ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
+// Trying to hide them causes empty space and layout issues
 
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
@@ -102,12 +66,18 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers = new Set();
   }
   
-  // ⭐ CRITICAL: When a new batch arrives, clear old helpers
-  // The monitor will hide them automatically via CSS
-  if (isPlaylistPage && window._playlistScrollHelpers.size > 0 && context.includes('playlist-scroll')) {
+  // ⭐ CRITICAL: When a new batch arrives, INSERT old helper videos into the batch
+  // This way they get filtered out cleanly with the rest!
+  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos && window._lastHelperVideos.length > 0) {
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] New batch - clearing', window._playlistScrollHelpers.size, 'old helpers:', Array.from(window._playlistScrollHelpers));
+      console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
     }
+    
+    // Add old helpers to the START of the new batch
+    arr.unshift(...window._lastHelperVideos);
+    
+    // Clear the stored helpers
+    window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
   }
   
@@ -220,27 +190,32 @@ function directFilterArray(arr, page, context = '') {
                        'unknown';
     
     if (DEBUG_ENABLED) {
-      console.log('[HELPER] ALL FILTERED - Adding helper:', lastVideoId);
-      console.log('[HELPER] Set before add:', Array.from(window._playlistScrollHelpers));
+      console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
     }
     
-    // Mark this video ID as a scroll helper
+    // ⭐ STORE the actual video object so we can insert it into next batch
+    if (!window._lastHelperVideos) {
+      window._lastHelperVideos = [];
+    }
+    window._lastHelperVideos.push(lastVideo);
     window._playlistScrollHelpers.add(lastVideoId);
     
     if (DEBUG_ENABLED) {
-      console.log('[HELPER] Set after add:', Array.from(window._playlistScrollHelpers));
+      console.log('[HELPER] Stored helper for next batch. Total helpers:', window._lastHelperVideos.length);
     }
     
     return [lastVideo];
   }
   
-  // ⭐ If we found unwatched videos, clear all helpers
-  // The monitor will stop hiding them automatically
-  if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0 && window._playlistScrollHelpers.size > 0) {
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._playlistScrollHelpers.size, 'helpers:', Array.from(window._playlistScrollHelpers));
+  // ⭐ If we found unwatched videos, clear stored helpers (we don't need them anymore)
+  if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0) {
+    if (window._lastHelperVideos && window._lastHelperVideos.length > 0) {
+      if (DEBUG_ENABLED) {
+        console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._lastHelperVideos.length, 'stored helpers');
+      }
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
     }
-    window._playlistScrollHelpers.clear();
   }
   
   return filtered;
