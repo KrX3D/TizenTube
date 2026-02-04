@@ -33,55 +33,80 @@ if (typeof window !== 'undefined') {
   }, 100);
 }
 
-// ⭐ Helper function to remove videos from DOM - MUST BE OUTSIDE directFilterArray
+// ⭐ Add this CSS at the TOP of the file, after imports
+if (typeof window !== 'undefined' && !document.getElementById('playlist-helper-hider')) {
+  const style = document.createElement('style');
+  style.id = 'playlist-helper-hider';
+  style.textContent = '.tizentube-playlist-helper { display: none !important; }';
+  document.head.appendChild(style);
+}
+
+// ⭐ Monitor and continuously hide helpers
+if (typeof window !== 'undefined' && !window._playlistHelperMonitor) {
+  window._playlistHelperMonitor = setInterval(() => {
+    if (window._playlistScrollHelpers && window._playlistScrollHelpers.size > 0) {
+      const allTiles = document.querySelectorAll('ytlr-tile-renderer:not(.tizentube-playlist-helper)');
+      allTiles.forEach(tile => {
+        const tileVideoId = tile.getAttribute('data-content-id') || 
+                           tile.getAttribute('video-id') ||
+                           tile.getAttribute('data-video-id');
+        
+        if (tileVideoId && window._playlistScrollHelpers.has(tileVideoId)) {
+          tile.classList.add('tizentube-playlist-helper');
+          if (DEBUG_ENABLED) {
+            console.log('[MONITOR] Hiding helper:', tileVideoId);
+          }
+        } else if (!tileVideoId) {
+          // Check innerHTML
+          window._playlistScrollHelpers.forEach(helperId => {
+            if (tile.innerHTML.includes(helperId)) {
+              tile.classList.add('tizentube-playlist-helper');
+              if (DEBUG_ENABLED) {
+                console.log('[MONITOR] Hiding helper by innerHTML:', helperId);
+              }
+            }
+          });
+        }
+      });
+    }
+  }, 250); // Check every 250ms
+}
+
+// ⭐ Replace the removePlaylistHelpersFromDOM function with this:
 function removePlaylistHelpersFromDOM(helperIds) {
-  console.log('[CLEANUP_DOM] Function called with', helperIds.size, 'helpers');
+  console.log('[CLEANUP_DOM] Marking', helperIds.size, 'helpers as hidden');
   
   if (helperIds.size === 0) {
-    console.log('[CLEANUP_DOM] No helpers to remove, exiting');
+    console.log('[CLEANUP_DOM] No helpers to hide, exiting');
     return;
   }
   
-  if (DEBUG_ENABLED) {
-    console.log('[CLEANUP_DOM] ========================================');
-    console.log('[CLEANUP_DOM] Removing helpers from DOM:', Array.from(helperIds));
-  }
-  
-  let removedCount = 0;
+  let hiddenCount = 0;
   const allTiles = document.querySelectorAll('ytlr-tile-renderer');
   
   console.log('[CLEANUP_DOM] Found', allTiles.length, 'tiles in DOM');
   
-  allTiles.forEach((tile, index) => {
-    // Try multiple ways to get video ID
+  allTiles.forEach((tile) => {
     const tileVideoId = tile.getAttribute('data-content-id') || 
                        tile.getAttribute('video-id') ||
                        tile.getAttribute('data-video-id');
     
-    if (DEBUG_ENABLED && index < 3) {
-      console.log('[CLEANUP_DOM] Sample tile', index, 'ID:', tileVideoId || 'NO ID');
-    }
-    
     if (tileVideoId && helperIds.has(tileVideoId)) {
-      console.log('[CLEANUP_DOM] ✓ FOUND helper tile:', tileVideoId, '- REMOVING');
-      tile.remove();
-      removedCount++;
+      console.log('[CLEANUP_DOM] ✓ Hiding helper:', tileVideoId);
+      tile.classList.add('tizentube-playlist-helper');
+      hiddenCount++;
     } else if (!tileVideoId) {
-      // Try innerHTML search as fallback
       helperIds.forEach(helperId => {
         if (tile.innerHTML.includes(helperId)) {
-          console.log('[CLEANUP_DOM] ✓ FOUND helper by innerHTML:', helperId, '- REMOVING');
-          tile.remove();
-          removedCount++;
+          console.log('[CLEANUP_DOM] ✓ Hiding helper by innerHTML:', helperId);
+          tile.classList.add('tizentube-playlist-helper');
+          hiddenCount++;
         }
       });
     }
   });
   
-  console.log('[CLEANUP_DOM] Total tiles removed:', removedCount);
-  if (DEBUG_ENABLED) {
-    console.log('[CLEANUP_DOM] ========================================');
-  }
+  console.log('[CLEANUP_DOM] Total tiles hidden:', hiddenCount);
 }
 
 function directFilterArray(arr, page, context = '') {
