@@ -76,7 +76,8 @@ function directFilterArray(arr, page, context = '') {
 
   // ⭐ FIXED: Trigger cleanup on ANY new batch, not just 'playlist-scroll'
   // Check if we're processing a continuation (new batch loaded)
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && originalLength > 0) {
+  //if (isPlaylistPage && window._lastHelperVideos.length > 0 && originalLength > 0) {
+  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos.length > 0) {
     if (DEBUG_ENABLED) {
       console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
     }
