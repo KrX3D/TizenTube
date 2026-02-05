@@ -37,11 +37,6 @@ if (typeof window !== 'undefined') {
 // Trying to hide them causes empty space and layout issues
 
 function directFilterArray(arr, page, context = '') {
-  // ⭐ DIAGNOSTIC: Log what context we're getting
-  if (isPlaylistPage && DEBUG_ENABLED) {
-    console.log('[CONTEXT_DEBUG] context:', context, '| has lastHelperVideos:', !!window._lastHelperVideos?.length);
-  }
-
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
   const shortsEnabled = configRead('enableShorts');
@@ -73,10 +68,9 @@ function directFilterArray(arr, page, context = '') {
   if (!window._lastHelperVideos) {
     window._lastHelperVideos = [];
   }
-
-  // ⭐ FIXED: Trigger cleanup on ANY new batch, not just 'playlist-scroll'
-  // Check if we're processing a continuation (new batch loaded)
-  //if (isPlaylistPage && window._lastHelperVideos.length > 0 && originalLength > 0) {
+  
+  // ⭐ CRITICAL: When a new batch arrives, INSERT old helper videos into the batch
+  // This way they get filtered out cleanly with the rest!
   if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos.length > 0) {
     if (DEBUG_ENABLED) {
       console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
@@ -269,14 +263,10 @@ function directFilterArray(arr, page, context = '') {
     window._lastHelperVideos = [lastVideo];
     window._playlistScrollHelpers.clear();
     window._playlistScrollHelpers.add(lastVideoId);
-
+    
     if (DEBUG_ENABLED) {
       console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     }
-
-    // ⭐ MARK the helper so it doesn't actually render
-    // Add a special flag so YouTube skips rendering it
-    //lastVideo.__tizentubeScrollHelper = true;
     
     return [lastVideo];
   }
@@ -498,15 +488,6 @@ function startPlaylistAutoLoad() {
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
-  
-  // ⭐ ADD THIS: Log playlist scroll data
-  if (r?.onResponseReceivedActions) {
-    const page = getCurrentPage();
-    if (page === 'playlist' || page === 'playlists') {
-      //console.log('[JSON_DATA] Full response:', JSON.stringify(r, null, 2));
-    }
-  }
-
   const adBlockEnabled = configRead('enableAdBlock');
 
   if (r.adPlacements && adBlockEnabled) {
