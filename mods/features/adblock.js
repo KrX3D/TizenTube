@@ -76,12 +76,46 @@ function directFilterArray(arr, page, context = '') {
       console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
     }
     
+    // Store the helper IDs before clearing
+    const helperIdsToRemove = window._lastHelperVideos.map(video => 
+      video.tileRenderer?.contentId || 
+      video.videoRenderer?.videoId || 
+      video.playlistVideoRenderer?.videoId ||
+      video.gridVideoRenderer?.videoId ||
+      video.compactVideoRenderer?.videoId ||
+      'unknown'
+    );
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Will remove from DOM:', helperIdsToRemove);
+    }
+    
     // Add old helpers to the START of the new batch
     arr.unshift(...window._lastHelperVideos);
     
     // Clear the stored helpers
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
+    
+    // ⭐ ALSO remove from DOM (they're already rendered from previous batch)
+    setTimeout(() => {
+      helperIdsToRemove.forEach(videoId => {
+        const tiles = document.querySelectorAll('ytlr-tile-renderer');
+        tiles.forEach(tile => {
+          // Check if this tile matches the helper
+          const tileVideoId = tile.getAttribute('data-content-id') || 
+                             tile.getAttribute('video-id') ||
+                             tile.getAttribute('data-video-id');
+          
+          if (tileVideoId === videoId || tile.innerHTML.includes(videoId)) {
+            if (DEBUG_ENABLED) {
+              console.log('[CLEANUP_DOM] Removing old helper from screen:', videoId);
+            }
+            tile.remove();
+          }
+        });
+      });
+    }, 100);
   }
   
   // ⭐ DEBUG: Log configuration
