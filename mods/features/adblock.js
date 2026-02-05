@@ -99,23 +99,51 @@ function directFilterArray(arr, page, context = '') {
     
     // ⭐ ALSO remove from DOM (they're already rendered from previous batch)
     setTimeout(() => {
-      helperIdsToRemove.forEach(videoId => {
-        const tiles = document.querySelectorAll('ytlr-tile-renderer');
-        tiles.forEach(tile => {
-          // Check if this tile matches the helper
+      console.log('[CLEANUP_DOM] Starting DOM cleanup...');
+      const allTiles = document.querySelectorAll('ytlr-tile-renderer');
+      console.log('[CLEANUP_DOM] Found', allTiles.length, 'total tiles in DOM');
+      
+      let removedCount = 0;
+      
+      helperIdsToRemove.forEach(helperId => {
+        console.log('[CLEANUP_DOM] Searching for helper:', helperId);
+        let foundForThisHelper = false;
+        
+        allTiles.forEach((tile, index) => {
+          // Try multiple ways to get video ID
           const tileVideoId = tile.getAttribute('data-content-id') || 
                              tile.getAttribute('video-id') ||
                              tile.getAttribute('data-video-id');
           
-          if (tileVideoId === videoId || tile.innerHTML.includes(videoId)) {
-            if (DEBUG_ENABLED) {
-              console.log('[CLEANUP_DOM] Removing old helper from screen:', videoId);
-            }
+          // Log first 3 tiles to see what attributes they have
+          if (index < 3) {
+            console.log('[CLEANUP_DOM] Sample tile', index, '- ID from attributes:', tileVideoId || 'NONE');
+            console.log('[CLEANUP_DOM] Sample tile', index, '- All attributes:', Array.from(tile.attributes).map(a => a.name + '=' + a.value.substring(0, 50)));
+          }
+          
+          // Check by attribute
+          if (tileVideoId === helperId) {
+            console.log('[CLEANUP_DOM] ✓ FOUND by attribute! Removing:', helperId);
             tile.remove();
+            removedCount++;
+            foundForThisHelper = true;
+          }
+          // Check by innerHTML (fallback)
+          else if (tile.innerHTML.includes(helperId)) {
+            console.log('[CLEANUP_DOM] ✓ FOUND by innerHTML! Removing:', helperId);
+            tile.remove();
+            removedCount++;
+            foundForThisHelper = true;
           }
         });
+        
+        if (!foundForThisHelper) {
+          console.log('[CLEANUP_DOM] ✗ NOT FOUND:', helperId);
+        }
       });
-    }, 100);
+      
+      console.log('[CLEANUP_DOM] Removed', removedCount, 'tiles from DOM');
+    }, 500); // Increased to 500ms
   }
   
   // ⭐ DEBUG: Log configuration
