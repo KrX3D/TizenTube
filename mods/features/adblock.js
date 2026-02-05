@@ -65,12 +65,15 @@ function directFilterArray(arr, page, context = '') {
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
   }
+  if (!window._lastHelperVideos) {
+    window._lastHelperVideos = [];
+  }
   
   // ⭐ CRITICAL: When a new batch arrives, INSERT old helper videos into the batch
   // This way they get filtered out cleanly with the rest!
-  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos && window._lastHelperVideos.length > 0) {
+  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos.length > 0) {
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
+      console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
     }
     
     // Add old helpers to the START of the new batch
@@ -194,14 +197,13 @@ function directFilterArray(arr, page, context = '') {
     }
     
     // ⭐ STORE the actual video object so we can insert it into next batch
-    if (!window._lastHelperVideos) {
-      window._lastHelperVideos = [];
-    }
-    window._lastHelperVideos.push(lastVideo);
+    // REPLACE the array (don't push) - we only want ONE helper at a time!
+    window._lastHelperVideos = [lastVideo];
+    window._playlistScrollHelpers.clear();
     window._playlistScrollHelpers.add(lastVideoId);
     
     if (DEBUG_ENABLED) {
-      console.log('[HELPER] Stored helper for next batch. Total helpers:', window._lastHelperVideos.length);
+      console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     }
     
     return [lastVideo];
@@ -211,7 +213,7 @@ function directFilterArray(arr, page, context = '') {
   if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0) {
     if (window._lastHelperVideos && window._lastHelperVideos.length > 0) {
       if (DEBUG_ENABLED) {
-        console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._lastHelperVideos.length, 'stored helpers');
+        console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._lastHelperVideos.length, 'stored helper(s)');
       }
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
