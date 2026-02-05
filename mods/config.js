@@ -62,6 +62,7 @@ const defaultConfig = {
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE'],
   enableUpdater: true,
   autoFrameRate: false,
+  autoFrameRatePauseVideoFor: 0,
   enableDebugConsole: false,
   debugConsolePosition: 'bottom-right', // top-left, top-right, bottom-left, bottom-right, center
   debugConsoleHeight: '500'
