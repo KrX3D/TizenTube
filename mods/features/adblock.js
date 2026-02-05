@@ -276,7 +276,7 @@ function directFilterArray(arr, page, context = '') {
 
     // ⭐ MARK the helper so it doesn't actually render
     // Add a special flag so YouTube skips rendering it
-    lastVideo.__tizentubeScrollHelper = true;
+    //lastVideo.__tizentubeScrollHelper = true;
     
     return [lastVideo];
   }
