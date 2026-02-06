@@ -155,11 +155,11 @@ function execute_once_dom_loaded() {
     // ========================================================================
     
     if (evt.keyCode === 403 || evt.keyCode === 115) { // RED = Scroll UP
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             console.log('[Console] RED pressed - Scrolling UP');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.scrollConsoleUp === 'function') {
                 window.scrollConsoleUp();
             }
@@ -167,11 +167,11 @@ function execute_once_dom_loaded() {
         return false;
     }
     else if (evt.keyCode === 404 || evt.keyCode === 172) { // GREEN = Scroll DOWN
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             console.log('[Console] GREEN pressed - Scrolling DOWN');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.scrollConsoleDown === 'function') {
                 window.scrollConsoleDown();
             }
@@ -179,11 +179,11 @@ function execute_once_dom_loaded() {
         return false;
     }
     else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Jump to TOP
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             console.log('[Console] YELLOW pressed - Jump to TOP');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.enableConsoleAutoScroll === 'function') {
                 window.enableConsoleAutoScroll();
             }
@@ -191,11 +191,11 @@ function execute_once_dom_loaded() {
         return false;
     }
     else if (evt.keyCode === 406 || evt.keyCode === 191) { // BLUE = Toggle Console
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             console.log('[Console] BLUE pressed - Toggling console');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
             }
