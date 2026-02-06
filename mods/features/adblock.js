@@ -272,10 +272,6 @@ function directFilterArray(arr, page, context = '') {
     if (DEBUG_ENABLED) {
       console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     }
-
-    // ⭐ MARK the helper so it doesn't actually render
-    // Add a special flag so YouTube skips rendering it
-    lastVideo.__tizentubeScrollHelper = true;
     
     return [lastVideo];
   }
