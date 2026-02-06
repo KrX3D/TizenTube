@@ -35,7 +35,6 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
-
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
@@ -68,10 +67,15 @@ function directFilterArray(arr, page, context = '') {
   if (!window._lastHelperVideos) {
     window._lastHelperVideos = [];
   }
+  
+  // ⭐ DIAGNOSTIC: Log what context we're getting (AFTER isPlaylistPage is defined!)
+  if (isPlaylistPage && DEBUG_ENABLED) {
+    console.log('[CONTEXT_DEBUG] context:', context, '| has lastHelperVideos:', !!window._lastHelperVideos?.length, '| arr.length:', arr.length);
+  }
 
-  // ⭐ CRITICAL: When a new batch arrives, INSERT old helper videos into the batch
-  // This way they get filtered out cleanly with the rest!
-  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos.length > 0) {
+  // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
+  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+    console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
     if (DEBUG_ENABLED) {
       console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
     }
