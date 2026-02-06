@@ -68,10 +68,10 @@ function directFilterArray(arr, page, context = '') {
   if (!window._lastHelperVideos) {
     window._lastHelperVideos = [];
   }
-  
-  // ⭐ FIXED: Trigger cleanup on ANY new batch, not just 'playlist-scroll'
-  // Check if we're processing a continuation (new batch loaded)
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && originalLength > 0) {
+
+  // ⭐ CRITICAL: When a new batch arrives, INSERT old helper videos into the batch
+  // This way they get filtered out cleanly with the rest!
+  if (isPlaylistPage && context.includes('playlist-scroll') && window._lastHelperVideos.length > 0) {
     if (DEBUG_ENABLED) {
       console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
     }
