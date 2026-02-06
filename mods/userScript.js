@@ -134,6 +134,13 @@ import { configWrite } from "./config.js";
         consoleDiv.scrollTo(0, 0);
     };
 
+    window.deleteConsoleLastLog = function() {
+        if (!consoleDiv || !enabled || !consoleVisible) return;
+        if (logs.length === 0) return;
+        logs.pop();
+        consoleDiv.innerHTML = logs.join('');
+    };
+
     function updateBorder() {
         if (consoleDiv) {
             consoleDiv.style.borderColor = window.consoleAutoScroll ? '#0f0' : '#f80';
@@ -274,13 +281,13 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v10 - NEWEST FIRST');
+    console.log('[Console] Visual Console v25 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
     console.log('[Console]   RED button - Scroll UP (older logs)');
     console.log('[Console]   GREEN button - Scroll DOWN (newer logs)');
-    console.log('[Console]   YELLOW button - Jump to TOP (newest)');
+    console.log('[Console]   YELLOW button - Delete last log line');
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
     console.log('[Console] ========================================');
