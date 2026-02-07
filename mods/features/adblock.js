@@ -129,8 +129,17 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.clear();
   }
 
-  // ⭐ NEW: Check if this is the LAST batch (no more continuations)
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+  // ⭐ DIAGNOSTIC: Log what we're checking
+  if (isPlaylistPage && DEBUG_ENABLED) {
+    console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');
+    console.log('>>>>>> Has helpers:', window._lastHelperVideos?.length || 0);
+    console.log('>>>>>> Array length:', arr.length);
+    console.log('>>>>>> Context:', context);
+  }
+
+  // ⭐ NEW: Check if this is the LAST batch FIRST (before clearing helpers)
+  let isLastBatch = false;
+  if (isPlaylistPage && arr.length > 0) {
     // Check if response has continuation token
     const hasContinuation = arr.some(item => 
       item.continuationItemRenderer || 
@@ -139,31 +148,67 @@ function directFilterArray(arr, page, context = '') {
     
     console.log('--------------------------------->> LAST PAGE CHECK');
     console.log('--------------------------------->> Array length:', arr.length);
-    console.log('--------------------------------->> Has continuation:', hasContinuation);
-    console.log('--------------------------------->> Sample items:', arr.slice(0, 2).map(i => Object.keys(i)));
+    console.log('--------------------------------->> Has continuation item:', hasContinuation);
+    console.log('--------------------------------->> First 2 item types:', arr.slice(0, 2).map(i => Object.keys(i).join(',')));
+    console.log('--------------------------------->> Last 2 item types:', arr.slice(-2).map(i => Object.keys(i).join(',')));
     
-    if (!hasContinuation && arr.length < 15) {
-      // This is the LAST batch - clean up ALL helpers!
+    if (!hasContinuation) {
       console.log('--------------------------------->> ⭐⭐⭐ LAST BATCH DETECTED! ⭐⭐⭐');
-      console.log('--------------------------------->> Clearing all helpers');
-      console.log('--------------------------------->> Current helpers:', window._lastHelperVideos.length);
-      
-      window._lastHelperVideos = [];
-      window._playlistScrollHelpers.clear();
-      
-      // Also clear the removed helpers tracker
-      if (window._playlistRemovedHelpers) {
-        window._playlistRemovedHelpers.clear();
-      }
-      if (window._playlistRemovedHelperQueue) {
-        window._playlistRemovedHelperQueue = [];
-      }
-      
-      console.log('--------------------------------->> Cleanup complete!');
+      isLastBatch = true;
     } else {
-      console.log('--------------------------------->> NOT last page (has continuation or full batch)');
+      console.log('--------------------------------->> NOT last page (has continuation item)');
     }
     console.log('--------------------------------->> END LAST PAGE CHECK');
+  }
+
+  // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
+  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+    console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    
+    // Store the helper IDs before clearing
+    const helperIdsToRemove = window._lastHelperVideos.map(video => 
+      video.tileRenderer?.contentId || 
+      video.videoRenderer?.videoId || 
+      video.playlistVideoRenderer?.videoId ||
+      video.gridVideoRenderer?.videoId ||
+      video.compactVideoRenderer?.videoId ||
+      'unknown'
+    );
+    
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
+      console.log('[CLEANUP] Helper IDs:', helperIdsToRemove);
+    }
+    
+    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
+    // This way they get filtered out cleanly with the rest!
+    arr.unshift(...window._lastHelperVideos);
+    
+    // Track as removed (for fallback filtering)
+    trackRemovedPlaylistHelpers(helperIdsToRemove);
+    
+    // Clear the stored helpers (UNLESS this is the last batch)
+    if (isLastBatch) {
+      console.log('--------------------------------->> NOT clearing helpers (last batch - will clean after filtering)');
+    } else {
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+      console.log('[CLEANUP] Helpers cleared for next batch');
+    }
+  }
+
+  // ⭐ Clean up after filtering if last batch
+  if (isLastBatch && isPlaylistPage) {
+    console.log('--------------------------------->> FINAL CLEANUP (last batch)');
+    window._lastHelperVideos = [];
+    window._playlistScrollHelpers.clear();
+    if (window._playlistRemovedHelpers) {
+      window._playlistRemovedHelpers.clear();
+    }
+    if (window._playlistRemovedHelperQueue) {
+      window._playlistRemovedHelperQueue = [];
+    }
+    console.log('--------------------------------->> All helpers cleared!');
   }
   
   // ⭐ DEBUG: Log configuration
@@ -438,6 +483,10 @@ let skipUniversalFilter = false;  // ⭐ NEW: Global flag to skip filtering duri
 
 // ⭐ AUTO-LOADER FUNCTION: Must be in global scope so setTimeout can access it
 function startPlaylistAutoLoad() {
+  console.log('▶▶▶▶▶▶▶▶▶▶ AUTO-LOAD CALLED ◀◀◀◀◀◀◀◀◀◀');
+  console.log('▶▶▶ Current page:', getCurrentPage());
+  console.log('▶▶▶ autoLoadInProgress:', autoLoadInProgress);
+  
   if (autoLoadInProgress) {
     if (DEBUG_ENABLED) {
       console.log('[PLAYLIST_AUTOLOAD] Already in progress, skipping');
@@ -1360,6 +1409,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
       console.log('[PAGE_DEBUG] Page changed to:', page);
       console.log('[PAGE_DEBUG] URL:', window.location.href);
       console.log('[PAGE_DEBUG] Hash:', window.location.hash);
+      console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
+      console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
       console.log('[PAGE_DEBUG] ========================================');
     }
     window._lastLoggedPage = page;
@@ -1380,6 +1431,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+          console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
+          console.log('$$$$$$$$$$$ Title:', shelfTitle);
+          console.log('$$$$$$$$$$$ Page:', page);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
