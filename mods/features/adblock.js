@@ -99,7 +99,7 @@ function directFilterArray(arr, page, context = '') {
   }
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
-if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
     console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
     
     // Store the helper IDs before clearing
@@ -127,6 +127,43 @@ if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
     // Clear the stored helpers
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
+  }
+
+  // ⭐ NEW: Check if this is the LAST batch (no more continuations)
+  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+    // Check if response has continuation token
+    const hasContinuation = arr.some(item => 
+      item.continuationItemRenderer || 
+      item.playlistVideoListContinuationRenderer
+    );
+    
+    console.log('--------------------------------->> LAST PAGE CHECK');
+    console.log('--------------------------------->> Array length:', arr.length);
+    console.log('--------------------------------->> Has continuation:', hasContinuation);
+    console.log('--------------------------------->> Sample items:', arr.slice(0, 2).map(i => Object.keys(i)));
+    
+    if (!hasContinuation && arr.length < 15) {
+      // This is the LAST batch - clean up ALL helpers!
+      console.log('--------------------------------->> ⭐⭐⭐ LAST BATCH DETECTED! ⭐⭐⭐');
+      console.log('--------------------------------->> Clearing all helpers');
+      console.log('--------------------------------->> Current helpers:', window._lastHelperVideos.length);
+      
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+      
+      // Also clear the removed helpers tracker
+      if (window._playlistRemovedHelpers) {
+        window._playlistRemovedHelpers.clear();
+      }
+      if (window._playlistRemovedHelperQueue) {
+        window._playlistRemovedHelperQueue = [];
+      }
+      
+      console.log('--------------------------------->> Cleanup complete!');
+    } else {
+      console.log('--------------------------------->> NOT last page (has continuation or full batch)');
+    }
+    console.log('--------------------------------->> END LAST PAGE CHECK');
   }
   
   // ⭐ DEBUG: Log configuration
@@ -666,6 +703,19 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
       console.log('[ON_RESPONSE] Page:', page);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
+    }
+  
+    // ⭐ NEW: Log playlist structure with MARKER
+    if (page === 'playlist' || page === 'playlists') {
+      console.log('#####################>>> PLAYLIST STRUCTURE DETECTED <<<#####################');
+      console.log('#####################>>> Response keys:', Object.keys(r));
+      console.log('#####################>>> Has contents:', !!r.contents);
+      console.log('#####################>>> Has continuationContents:', !!r.continuationContents);
+      console.log('#####################>>> Has onResponseReceivedActions:', !!r.onResponseReceivedActions);
+      if (r.contents) {
+        console.log('#####################>>> contents keys:', Object.keys(r.contents));
+      }
+      console.log('#####################>>> END PLAYLIST STRUCTURE <<<#####################');
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
