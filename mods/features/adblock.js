@@ -99,11 +99,8 @@ function directFilterArray(arr, page, context = '') {
   }
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
     console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
-    }
     
     // Store the helper IDs before clearing
     const helperIdsToRemove = window._lastHelperVideos.map(video => 
@@ -115,67 +112,21 @@ function directFilterArray(arr, page, context = '') {
       'unknown'
     );
     
-    trackRemovedPlaylistHelpers(helperIdsToRemove);
-
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Will remove from DOM:', helperIdsToRemove);
+      console.log('[CLEANUP] Inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
+      console.log('[CLEANUP] Helper IDs:', helperIdsToRemove);
     }
     
-    // Keep helpers out of the new batch data; remove them from the DOM instead.
+    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
+    // This way they get filtered out cleanly with the rest!
+    arr.unshift(...window._lastHelperVideos);
+    
+    // Track as removed (for fallback filtering)
+    trackRemovedPlaylistHelpers(helperIdsToRemove);
     
     // Clear the stored helpers
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
-    
-    // ⭐ ALSO remove from DOM (they're already rendered from previous batch)
-    setTimeout(() => {
-      console.log('[CLEANUP_DOM] Starting DOM cleanup...');
-      const allTiles = document.querySelectorAll('ytlr-tile-renderer');
-      console.log('[CLEANUP_DOM] Found', allTiles.length, 'total tiles in DOM');
-      
-      let removedCount = 0;
-      
-      helperIdsToRemove.forEach(helperId => {
-        console.log('[CLEANUP_DOM] Searching for helper:', helperId);
-        let foundForThisHelper = false;
-        
-        allTiles.forEach((tile, index) => {
-          // Try multiple ways to get video ID
-          const tileVideoId = tile.getAttribute('data-content-id') || 
-                             tile.getAttribute('video-id') ||
-                             tile.getAttribute('data-video-id');
-          
-          // Log first 3 tiles to see what attributes they have
-          if (index < 3) {
-            console.log('[CLEANUP_DOM] Sample tile', index, '- ID from attributes:', tileVideoId || 'NONE');
-            console.log('[CLEANUP_DOM] Sample tile', index, '- All attributes:', Array.from(tile.attributes).map(a => a.name + '=' + a.value.substring(0, 50)));
-          }
-          
-          // Check by attribute
-          if (tileVideoId === helperId) {
-            console.log('[CLEANUP_DOM] ✓ FOUND by attribute! Removing:', helperId);
-            tile.remove();
-            window.dispatchEvent(new Event('resize'));
-            removedCount++;
-            foundForThisHelper = true;
-          }
-          // Check by innerHTML (fallback)
-          else if (tile.innerHTML.includes(helperId)) {
-            console.log('[CLEANUP_DOM] ✓ FOUND by innerHTML! Removing:', helperId);
-            tile.remove();
-            window.dispatchEvent(new Event('resize'));
-            removedCount++;
-            foundForThisHelper = true;
-          }
-        });
-        
-        if (!foundForThisHelper) {
-          console.log('[CLEANUP_DOM] ✗ NOT FOUND:', helperId);
-        }
-      });
-      
-      console.log('[CLEANUP_DOM] Removed', removedCount, 'tiles from DOM');
-    }, 500); // Increased to 500ms
   }
   
   // ⭐ DEBUG: Log configuration

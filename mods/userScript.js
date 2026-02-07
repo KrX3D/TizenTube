@@ -137,8 +137,12 @@ import { configWrite } from "./config.js";
     window.deleteConsoleLastLog = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         if (logs.length === 0) return;
-        logs.pop();
+        
+        // Delete 3 logs from the TOP (newest logs, since we use unshift)
+        logs.splice(0, 3);
+        
         consoleDiv.innerHTML = logs.join('');
+        // NO logging here - silent operation
     };
 
     function updateBorder() {
@@ -281,7 +285,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v30 - NEWEST FIRST');
+    console.log('[Console] Visual Console v40 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
