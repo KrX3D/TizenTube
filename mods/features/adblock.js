@@ -57,6 +57,7 @@ function trackRemovedPlaylistHelpers(helperIds) {
     window._playlistRemovedHelpers.delete(oldest);
   }
 }
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
@@ -93,41 +94,23 @@ function directFilterArray(arr, page, context = '') {
     window._playlistRemovedHelpers = new Set();
   }
   
-  // ⭐ DIAGNOSTIC: Log what context we're getting (AFTER isPlaylistPage is defined!)
-  if (isPlaylistPage && DEBUG_ENABLED) {
-    console.log('[CONTEXT_DEBUG] context:', context, '| has lastHelperVideos:', !!window._lastHelperVideos?.length, '| arr.length:', arr.length);
-  }
-
   // ⭐ DIAGNOSTIC: Log what we're checking
   if (isPlaylistPage && DEBUG_ENABLED) {
     console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');
     console.log('>>>>>> Has helpers:', window._lastHelperVideos?.length || 0);
     console.log('>>>>>> Array length:', arr.length);
     console.log('>>>>>> Context:', context);
+    console.log('>>>>>> Last batch flag:', window._isLastPlaylistBatch);
   }
 
-  // ⭐ NEW: Check if this is the LAST batch FIRST (before clearing helpers)
+  // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
-  if (isPlaylistPage && arr.length > 0) {
-    // Check if response has continuation token
-    const hasContinuation = arr.some(item => 
-      item.continuationItemRenderer || 
-      item.playlistVideoListContinuationRenderer
-    );
-    
-    console.log('--------------------------------->> LAST PAGE CHECK');
-    console.log('--------------------------------->> Array length:', arr.length);
-    console.log('--------------------------------->> Has continuation item:', hasContinuation);
-    console.log('--------------------------------->> First 2 item types:', arr.slice(0, 2).map(i => Object.keys(i).join(',')));
-    console.log('--------------------------------->> Last 2 item types:', arr.slice(-2).map(i => Object.keys(i).join(',')));
-    
-    if (!hasContinuation) {
-      console.log('--------------------------------->> ⭐⭐⭐ LAST BATCH DETECTED! ⭐⭐⭐');
-      isLastBatch = true;
-    } else {
-      console.log('--------------------------------->> NOT last page (has continuation item)');
-    }
-    console.log('--------------------------------->> END LAST PAGE CHECK');
+  if (isPlaylistPage && window._isLastPlaylistBatch === true) {
+    console.log('--------------------------------->> Using last batch flag from response');
+    console.log('--------------------------------->> This IS the last batch!');
+    isLastBatch = true;
+    // Clear the flag
+    window._isLastPlaylistBatch = false;
   }
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
@@ -164,20 +147,6 @@ function directFilterArray(arr, page, context = '') {
       window._playlistScrollHelpers.clear();
       console.log('[CLEANUP] Helpers cleared for next batch');
     }
-  }
-
-  // ⭐ Clean up after filtering if last batch
-  if (isLastBatch && isPlaylistPage) {
-    console.log('--------------------------------->> FINAL CLEANUP (last batch)');
-    window._lastHelperVideos = [];
-    window._playlistScrollHelpers.clear();
-    if (window._playlistRemovedHelpers) {
-      window._playlistRemovedHelpers.clear();
-    }
-    if (window._playlistRemovedHelperQueue) {
-      window._playlistRemovedHelperQueue = [];
-    }
-    console.log('--------------------------------->> All helpers cleared!');
   }
   
   // ⭐ DEBUG: Log configuration
@@ -227,6 +196,9 @@ function directFilterArray(arr, page, context = '') {
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
+      
+      // ⭐ ADD VISUAL MARKER
+      console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
 
       if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[FILTER #' + callId + '] REMOVED SHORT:', videoId);
@@ -279,6 +251,9 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] Removed total:', (originalLength - filtered.length));
     console.log('[FILTER_END #' + callId + '] ├─ Watched removed:', hiddenCount);
     console.log('[FILTER_END #' + callId + '] ├─ Shorts removed:', shortsCount);
+    if (shortsCount > 0) {
+      console.log('✂️✂️✂️ TOTAL SHORTS FILTERED THIS BATCH:', shortsCount);
+    }
     if (isPlaylistPage) {
       console.log('[FILTER_END #' + callId + '] └─ Unwatched kept (no progress):', noProgressBarCount);
     }
@@ -286,7 +261,7 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
-  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
                        lastVideo.videoRenderer?.videoId || 
@@ -331,6 +306,21 @@ function directFilterArray(arr, page, context = '') {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
+  }
+  
+  // ⭐ Clean up after filtering if last batch
+  if (isLastBatch && isPlaylistPage) {
+    console.log('--------------------------------->> FINAL CLEANUP (last batch detected)');
+    console.log('--------------------------------->> Clearing all helpers and trackers');
+    window._lastHelperVideos = [];
+    window._playlistScrollHelpers.clear();
+    if (window._playlistRemovedHelpers) {
+      window._playlistRemovedHelpers.clear();
+    }
+    if (window._playlistRemovedHelperQueue) {
+      window._playlistRemovedHelperQueue = [];
+    }
+    console.log('--------------------------------->> All helpers cleared!');
   }
   
   return filtered;
@@ -711,6 +701,33 @@ JSON.parse = function () {
     
     // This is where individual channel content loads!
     processShelves(r.continuationContents.sectionListContinuation.contents);
+  }
+
+  // Handle PLAYLIST continuations (different from section continuations!)
+  if (r?.continuationContents?.playlistVideoListContinuation?.contents) {
+    const page = getCurrentPage();
+    
+    // ⭐ CHECK FOR LAST PAGE HERE (where we have full response)
+    const hasContinuation = !!r.continuationContents.playlistVideoListContinuation.continuations;
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('═══ PLAYLIST CONTINUATION DETECTED');
+    console.log('═══ Page:', page);
+    console.log('═══ Has continuation token:', hasContinuation);
+    console.log('═══ Continuations object:', r.continuationContents.playlistVideoListContinuation.continuations);
+    console.log('═══ Videos in batch:', r.continuationContents.playlistVideoListContinuation.contents.length);
+    
+    if (!hasContinuation) {
+      console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
+      // Set flag for directFilterArray to read
+      window._isLastPlaylistBatch = true;
+    } else {
+      console.log('═══ More batches to come...');
+      window._isLastPlaylistBatch = false;
+    }
+    console.log('═══════════════════════════════════════════════════════');
+    
+    // Continue with normal processing via universal filter
   }
   
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
@@ -1399,6 +1416,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
+        console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
           console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
           console.log('$$$$$$$$$$$ Title:', shelfTitle);
