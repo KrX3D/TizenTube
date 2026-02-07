@@ -121,8 +121,7 @@ function directFilterArray(arr, page, context = '') {
       console.log('[CLEANUP] Will remove from DOM:', helperIdsToRemove);
     }
     
-    // Add old helpers to the START of the new batch
-    arr.unshift(...window._lastHelperVideos);
+    // Keep helpers out of the new batch data; remove them from the DOM instead.
     
     // Clear the stored helpers
     window._lastHelperVideos = [];
@@ -156,6 +155,7 @@ function directFilterArray(arr, page, context = '') {
           if (tileVideoId === helperId) {
             console.log('[CLEANUP_DOM] ✓ FOUND by attribute! Removing:', helperId);
             tile.remove();
+            window.dispatchEvent(new Event('resize'));
             removedCount++;
             foundForThisHelper = true;
           }
@@ -163,6 +163,7 @@ function directFilterArray(arr, page, context = '') {
           else if (tile.innerHTML.includes(helperId)) {
             console.log('[CLEANUP_DOM] ✓ FOUND by innerHTML! Removing:', helperId);
             tile.remove();
+            window.dispatchEvent(new Event('resize'));
             removedCount++;
             foundForThisHelper = true;
           }
@@ -368,14 +369,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       if (!shortsEnabled) {
         for (let i = obj.length - 1; i >= 0; i--) {
           const shelf = obj[i];
-          if (shelf?.shelfRenderer) {
-            const shelfTitle = shelf.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
-            if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
-              if (LOG_SHORTS && DEBUG_ENABLED) {
-                console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
-              }
-              obj.splice(i, 1);
+          const shelfTitle = getShelfTitle(shelf);
+          if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+            if (LOG_SHORTS && DEBUG_ENABLED) {
+              console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
+            obj.splice(i, 1);
           }
         }
       }

@@ -178,14 +178,14 @@ function execute_once_dom_loaded() {
         }
         return false;
     }
-    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Jump to TOP
+    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete last log line
         evt.preventDefault();
         evt.stopPropagation();
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            console.log('[Console] YELLOW pressed - Jump to TOP');
-            if (typeof window.enableConsoleAutoScroll === 'function') {
-                window.enableConsoleAutoScroll();
+            console.log('[Console] YELLOW pressed - Delete last log line');
+            if (typeof window.deleteConsoleLastLog === 'function') {
+                window.deleteConsoleLastLog();
             }
         }
         return false;
