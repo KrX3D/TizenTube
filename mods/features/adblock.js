@@ -98,37 +98,6 @@ function directFilterArray(arr, page, context = '') {
     console.log('[CONTEXT_DEBUG] context:', context, '| has lastHelperVideos:', !!window._lastHelperVideos?.length, '| arr.length:', arr.length);
   }
 
-  // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
-    
-    // Store the helper IDs before clearing
-    const helperIdsToRemove = window._lastHelperVideos.map(video => 
-      video.tileRenderer?.contentId || 
-      video.videoRenderer?.videoId || 
-      video.playlistVideoRenderer?.videoId ||
-      video.gridVideoRenderer?.videoId ||
-      video.compactVideoRenderer?.videoId ||
-      'unknown'
-    );
-    
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
-      console.log('[CLEANUP] Helper IDs:', helperIdsToRemove);
-    }
-    
-    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
-    // This way they get filtered out cleanly with the rest!
-    arr.unshift(...window._lastHelperVideos);
-    
-    // Track as removed (for fallback filtering)
-    trackRemovedPlaylistHelpers(helperIdsToRemove);
-    
-    // Clear the stored helpers
-    window._lastHelperVideos = [];
-    window._playlistScrollHelpers.clear();
-  }
-
   // ⭐ DIAGNOSTIC: Log what we're checking
   if (isPlaylistPage && DEBUG_ENABLED) {
     console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');

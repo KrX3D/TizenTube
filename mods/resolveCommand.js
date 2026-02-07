@@ -177,7 +177,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v60');
+            console.log('[Console] Visual Console v70');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
@@ -188,7 +188,7 @@ function customAction(action, parameters) {
             if (consoleDiv) {
                 consoleDiv.style.display = 'block';
                 consoleDiv.style.zIndex = '999999';
-                console.log('✓ Console DIV found and forced visible');
+                console.log('✓ Console DIV found and forced visible')
                 showToast('Console', 'Console should be visible now');
             } else {
                 console.error('✗ Console DIV not found!');
