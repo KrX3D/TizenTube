@@ -61,6 +61,33 @@ function trackRemovedPlaylistHelpers(helperIds) {
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
+  // ⭐ Check if this is a playlist page
+  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  
+  // ⭐ FILTER MODE: Only show videos from our collected list
+  const filterIds = getFilteredVideoIds();
+  
+  if (isPlaylistPage && filterIds) {
+    console.log('[FILTER_MODE] 🔄 Active - filtering to', filterIds.size, 'unwatched videos');
+    
+    const filtered = arr.filter(item => {
+      const videoId = item.tileRenderer?.contentId || 
+                     item.videoRenderer?.videoId || 
+                     item.playlistVideoRenderer?.videoId ||
+                     item.gridVideoRenderer?.videoId ||
+                     item.compactVideoRenderer?.videoId;
+      
+      const keep = filterIds.has(videoId);
+      if (!keep && videoId) {
+        console.log('[FILTER_MODE] 🔄 Hiding (not in unwatched list):', videoId);
+      }
+      return keep;
+    });
+    
+    console.log('[FILTER_MODE] 🔄 Kept', filtered.length, 'of', arr.length, 'videos');
+    return filtered;
+  }
+  
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -80,9 +107,6 @@ function directFilterArray(arr, page, context = '') {
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
   
-  // ⭐ Check if this is a playlist page
-  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
-  
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
@@ -101,6 +125,7 @@ function directFilterArray(arr, page, context = '') {
     console.log('>>>>>> Array length:', arr.length);
     console.log('>>>>>> Context:', context);
     console.log('>>>>>> Last batch flag:', window._isLastPlaylistBatch);
+    console.log('>>>>>> Collection mode:', isInCollectionMode());
   }
 
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
@@ -254,6 +279,14 @@ function directFilterArray(arr, page, context = '') {
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
+    
+    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
+    if (filterIds) {
+      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
+      return [];  // Return empty - we're showing only specific videos
+    }
+    
+    // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
                       lastVideo.videoRenderer?.videoId || 
@@ -278,6 +311,24 @@ function directFilterArray(arr, page, context = '') {
     console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     
     return [lastVideo];
+  }
+  
+  // ⭐ COLLECTION MODE: Track unwatched videos
+  if (isPlaylistPage && isInCollectionMode()) {
+    // Collect all unwatched video IDs from this batch
+    filtered.forEach(item => {
+      const videoId = item.tileRenderer?.contentId || 
+                     item.videoRenderer?.videoId || 
+                     item.playlistVideoRenderer?.videoId ||
+                     item.gridVideoRenderer?.videoId ||
+                     item.compactVideoRenderer?.videoId;
+      
+      if (videoId && !window._collectedUnwatched.includes(videoId)) {
+        window._collectedUnwatched.push(videoId);
+      }
+    });
+    
+    console.log('[COLLECTION] 🔄 Batch complete. Total unwatched collected:', window._collectedUnwatched.length);
   }
   
   // ⭐ If we found unwatched videos, clear stored helpers (we don't need them anymore)
@@ -511,6 +562,74 @@ function startPlaylistAutoLoad() {
   }, 500);
 }
 
+// ⭐ PLAYLIST COLLECTION MODE: Store unwatched videos, then reload filtered
+const PLAYLIST_STORAGE_KEY = 'tizentube_playlist_unwatched';
+
+function isInCollectionMode() {
+  const stored = localStorage.getItem(PLAYLIST_STORAGE_KEY);
+  if (!stored) return false;
+  
+  try {
+    const data = JSON.parse(stored);
+    // Collection mode expires after 5 minutes
+    if (Date.now() - data.timestamp > 5 * 60 * 1000) {
+      localStorage.removeItem(PLAYLIST_STORAGE_KEY);
+      return false;
+    }
+    return data.mode === 'collecting';
+  } catch {
+    return false;
+  }
+}
+
+function getFilteredVideoIds() {
+  const stored = localStorage.getItem(PLAYLIST_STORAGE_KEY);
+  if (!stored) return null;
+  
+  try {
+    const data = JSON.parse(stored);
+    if (data.mode === 'filtering' && data.videoIds) {
+      return new Set(data.videoIds);
+    }
+  } catch {}
+  return null;
+}
+
+function startCollectionMode() {
+  console.log('🔄🔄🔄 STARTING COLLECTION MODE');
+  localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify({
+    mode: 'collecting',
+    timestamp: Date.now(),
+    videoIds: []
+  }));
+  
+  // Reload page to start fresh
+  window.location.reload();
+}
+
+function finishCollectionAndFilter(unwatchedIds) {
+  console.log('🔄🔄🔄 COLLECTION COMPLETE - Switching to filter mode');
+  console.log('🔄 Total unwatched videos:', unwatchedIds.length);
+  
+  localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify({
+    mode: 'filtering',
+    timestamp: Date.now(),
+    videoIds: unwatchedIds
+  }));
+  
+  // Reload page in filter mode
+  window.location.reload();
+}
+
+function exitFilterMode() {
+  console.log('🔄🔄🔄 EXITING FILTER MODE');
+  localStorage.removeItem(PLAYLIST_STORAGE_KEY);
+  window.location.reload();
+}
+
+// ⭐ Track collected unwatched videos during collection mode
+window._collectedUnwatched = window._collectedUnwatched || [];
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -704,6 +823,17 @@ JSON.parse = function () {
       console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
       // Set flag for directFilterArray to read
       window._isLastPlaylistBatch = true;
+
+      // ⭐ CHECK: Are we in collection mode?
+      if (isInCollectionMode()) {
+        console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
+        console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
+        
+        // Switch to filter mode after a delay (let current batch render)
+        setTimeout(() => {
+          finishCollectionAndFilter(window._collectedUnwatched);
+        }, 2000);
+      }
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
@@ -2120,30 +2250,51 @@ function detectPlaylistButtons() {
   const possibleSelectors = [
     'ytlr-playlist-header-renderer',
     'ytlr-playlist-panel-renderer',
+    'ytlr-browse-feed-actions-renderer',
     '[class*="playlist-header"]',
     '[class*="playlist-info"]',
-    'ytlr-browse-feed-actions-renderer'
+    '[class*="actions"]'
   ];
   
   possibleSelectors.forEach(selector => {
     const element = document.querySelector(selector);
     if (element) {
-      console.log('🎛️ FOUND:', selector);
-      console.log('🎛️ Element:', element);
-      console.log('🎛️ HTML:', element.outerHTML.substring(0, 500));
+      console.log('🎛️ FOUND CONTAINER:', selector);
+      console.log('🎛️ Element tag:', element.tagName);
+      console.log('🎛️ Classes:', element.className);
+      console.log('🎛️ HTML (first 500 chars):', element.outerHTML.substring(0, 500));
+      console.log('🎛️ ---');
     }
   });
   
-  // Also search for buttons
+  // Search for ALL buttons
   const buttons = document.querySelectorAll('button, ytlr-button-renderer, [role="button"]');
-  console.log('🎛️ Total buttons found:', buttons.length);
+  console.log('🎛️🎛️ Total button elements found:', buttons.length);
   
   buttons.forEach((btn, idx) => {
-    const text = btn.textContent || btn.innerText || '';
-    if (text.toLowerCase().includes('play') || text.toLowerCase().includes('shuffle') || text.toLowerCase().includes('repeat')) {
-      console.log('🎛️ Playlist button', idx, ':', text.trim());
-      console.log('🎛️ Parent:', btn.parentElement?.tagName);
-    }
+    const text = (btn.textContent || btn.innerText || '').trim();
+    const tag = btn.tagName;
+    const classes = btn.className || '';
+    const parent = btn.parentElement?.tagName || 'none';
+    const grandparent = btn.parentElement?.parentElement?.tagName || 'none';
+    
+    // Log ALL buttons with full details
+    console.log(`🎛️ Button ${idx}:`);
+    console.log(`🎛️   Tag: ${tag}`);
+    console.log(`🎛️   Text: "${text.substring(0, 50)}"`);
+    console.log(`🎛️   Classes: ${classes.substring(0, 100)}`);
+    console.log(`🎛️   Parent: ${parent} → ${grandparent}`);
+    console.log(`🎛️   Is video tile: ${tag === 'YTLR-TILE-RENDERER' || classes.includes('tile')}`);
+    console.log('🎛️   ---');
+  });
+  
+  // Also search specifically for playlist action buttons
+  console.log('🎛️🎛️ Searching for playlist-specific buttons:');
+  const playlistButtons = document.querySelectorAll('[class*="play"], [class*="shuffle"], [class*="repeat"]');
+  console.log('🎛️ Found', playlistButtons.length, 'playlist-action elements');
+  
+  playlistButtons.forEach((btn, idx) => {
+    console.log(`🎛️ Playlist action ${idx}:`, btn.tagName, '-', (btn.textContent || '').trim().substring(0, 50));
   });
   
   console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
@@ -2154,4 +2305,84 @@ if (typeof window !== 'undefined') {
   setTimeout(() => {
     detectPlaylistButtons();
   }, 3000); // Run 3 seconds after page load
+}
+
+// ⭐ ADD UI BUTTON to start collection mode
+function addCollectionModeButton() {
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') return;
+  
+  // Check if button already exists
+  if (document.getElementById('tizentube-collection-btn')) return;
+  
+  // Check current mode
+  const inCollection = isInCollectionMode();
+  const filterIds = getFilteredVideoIds();
+  
+  console.log('🔘 Adding collection mode button');
+  console.log('🔘 Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
+  
+  // Create button
+  const btn = document.createElement('button');
+  btn.id = 'tizentube-collection-btn';
+  btn.style.cssText = `
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    z-index: 9999;
+    padding: 15px 25px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 3px solid white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+  `;
+  
+  // Set button text and color based on mode
+  if (inCollection) {
+    btn.textContent = '🔄 COLLECTING...';
+    btn.style.backgroundColor = '#ff9800';
+    btn.style.color = 'white';
+  } else if (filterIds) {
+    btn.textContent = '✅ FILTER MODE (Click to Exit)';
+    btn.style.backgroundColor = '#4caf50';
+    btn.style.color = 'white';
+    btn.onclick = () => {
+      if (confirm('Exit filter mode and show all videos?')) {
+        exitFilterMode();
+      }
+    };
+  } else {
+    btn.textContent = '🔄 Collect Unwatched';
+    btn.style.backgroundColor = '#2196f3';
+    btn.style.color = 'white';
+    btn.onclick = () => {
+      if (confirm('Start collection mode?\n\nThis will:\n1. Auto-scroll through entire playlist\n2. Collect all unwatched videos\n3. Reload showing ONLY unwatched\n\nContinue?')) {
+        startCollectionMode();
+      }
+    };
+  }
+  
+  document.body.appendChild(btn);
+  console.log('🔘 Button added to page');
+}
+
+// Run button detection when page loads or changes
+if (typeof window !== 'undefined') {
+  // Initial load
+  setTimeout(() => {
+    addCollectionModeButton();
+  }, 3000);
+  
+  // Watch for URL changes (playlist navigation)
+  let lastHref = window.location.href;
+  setInterval(() => {
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      setTimeout(() => {
+        addCollectionModeButton();
+      }, 2000);
+    }
+  }, 1000);
 }
