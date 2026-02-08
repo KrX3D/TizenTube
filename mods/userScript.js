@@ -268,7 +268,7 @@ import { configWrite } from "./config.js";
         const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${timestamp}] ${message}</div>`;
         
         logs.unshift(logEntry);
-        //if (logs.length > 150) logs.pop();
+        if (logs.length > 600) logs.pop();
         
         // Only update DOM if console is visible
         if (consoleDiv && consoleVisible) {
@@ -285,7 +285,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v140 - NEWEST FIRST');
+    console.log('[Console] Visual Console v150 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');

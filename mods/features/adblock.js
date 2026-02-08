@@ -1527,8 +1527,7 @@ function isShortItem(item) {
         const totalSeconds = minutes * 60 + seconds;
         
         if (totalSeconds <= 90) {
-          //if (DEBUG_ENABLED && LOG_SHORTS) {
-          if (DEBUG_ENABLED) {
+          if (DEBUG_ENABLED && LOG_SHORTS) {
             console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s)');
             console.log('[SHORTS_DIAGNOSTIC] Duration:', totalSeconds, 'seconds');
             console.log('[SHORTS_DIAGNOSTIC] ========================================');
@@ -1538,10 +1537,29 @@ function isShortItem(item) {
       }
     }
   }
+
+  // Method 9: Check if URL path contains reelItemRenderer or shorts patterns
+  if (item.richItemRenderer?.content?.reelItemRenderer) {
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 9 (reelItemRenderer)');
+    }
+    return true;
+  }
+
+  // Method 10: Check thumbnail aspect ratio (shorts are vertical ~9:16)
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
+    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+    if (thumb && thumb.height > thumb.width) {
+      if (DEBUG_ENABLED) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 10 (vertical thumbnail)');
+        console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
+      }
+      return true;
+    }
+  }
   
   // NOT A SHORT
-  //if (DEBUG_ENABLED && LOG_SHORTS) {
-  if (DEBUG_ENABLED) {
+  if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
     console.log('[SHORTS_DIAGNOSTIC] ========================================');
   }
@@ -2246,57 +2264,48 @@ function detectPlaylistButtons() {
   
   console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
   
-  // Look for common playlist UI structures
-  const possibleSelectors = [
-    'ytlr-playlist-header-renderer',
-    'ytlr-playlist-panel-renderer',
-    'ytlr-browse-feed-actions-renderer',
-    '[class*="playlist-header"]',
-    '[class*="playlist-info"]',
-    '[class*="actions"]'
-  ];
+  // Look for button container
+  const container = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
+                    document.querySelector('[class*="TXB27d"]');
   
-  possibleSelectors.forEach(selector => {
-    const element = document.querySelector(selector);
-    if (element) {
-      console.log('🎛️ FOUND CONTAINER:', selector);
-      console.log('🎛️ Element tag:', element.tagName);
-      console.log('🎛️ Classes:', element.className);
-      console.log('🎛️ HTML (first 500 chars):', element.outerHTML.substring(0, 500));
-      console.log('🎛️ ---');
-    }
-  });
+  if (container) {
+    console.log('🎛️ FOUND CONTAINER:', container.tagName, container.className);
+  } else {
+    console.log('🎛️ NO CONTAINER FOUND');
+  }
   
-  // Search for ALL buttons
+  // Search for buttons ONLY in playlist area (not player controls)
   const buttons = document.querySelectorAll('button, ytlr-button-renderer, [role="button"]');
   console.log('🎛️🎛️ Total button elements found:', buttons.length);
   
+  let playlistButtonCount = 0;
   buttons.forEach((btn, idx) => {
     const text = (btn.textContent || btn.innerText || '').trim();
     const tag = btn.tagName;
-    const classes = btn.className || '';
     const parent = btn.parentElement?.tagName || 'none';
-    const grandparent = btn.parentElement?.parentElement?.tagName || 'none';
     
-    // Log ALL buttons with full details
-    console.log(`🎛️ Button ${idx}:`);
-    console.log(`🎛️   Tag: ${tag}`);
-    console.log(`🎛️   Text: "${text.substring(0, 50)}"`);
-    console.log(`🎛️   Classes: ${classes.substring(0, 100)}`);
-    console.log(`🎛️   Parent: ${parent} → ${grandparent}`);
-    console.log(`🎛️   Is video tile: ${tag === 'YTLR-TILE-RENDERER' || classes.includes('tile')}`);
-    console.log('🎛️   ---');
+    // Skip player controls
+    const isPlayerControl = parent === 'YTLR-PLAYER-ACTION-CONTAINER' || 
+                           btn.closest('ytlr-player-action-container') ||
+                           btn.closest('[class*="player"]');
+    
+    if (isPlayerControl) {
+      console.log(`🎛️ Button ${idx}: [PLAYER CONTROL - SKIPPED]`);
+      return;
+    }
+    
+    // Log playlist buttons
+    if (text) {
+      playlistButtonCount++;
+      console.log(`🎛️ Playlist Button ${playlistButtonCount}:`);
+      console.log(`🎛️   Tag: ${tag}`);
+      console.log(`🎛️   Text: "${text.substring(0, 50)}"`);
+      console.log(`🎛️   Parent: ${parent}`);
+      console.log('🎛️   ---');
+    }
   });
   
-  // Also search specifically for playlist action buttons
-  console.log('🎛️🎛️ Searching for playlist-specific buttons:');
-  const playlistButtons = document.querySelectorAll('[class*="play"], [class*="shuffle"], [class*="repeat"]');
-  console.log('🎛️ Found', playlistButtons.length, 'playlist-action elements');
-  
-  playlistButtons.forEach((btn, idx) => {
-    console.log(`🎛️ Playlist action ${idx}:`, btn.tagName, '-', (btn.textContent || '').trim().substring(0, 50));
-  });
-  
+  console.log('🎛️ Total PLAYLIST buttons:', playlistButtonCount);
   console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
 }
 
@@ -2317,21 +2326,18 @@ function addPlaylistControlButtons() {
   
   console.log('🎛️🎛️🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
   
-  // Find the button container
-  // Looking for the parent of YTLR-BUTTON-RENDERER elements
-  const existingButtons = document.querySelectorAll('ytlr-button-renderer');
-  if (existingButtons.length === 0) {
-    console.log('🎛️ No existing buttons found, retrying later...');
-    return;
-  }
+  // Find button container by class
+  const possibleContainers = [
+    document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd'),
+    document.querySelector('[class*="TXB27d"]'),
+    document.querySelector('ytlr-browse-feed-actions-renderer')
+  ];
   
-  // Find the container (usually a DIV or ytlr-browse-feed-actions-renderer)
   let buttonContainer = null;
-  for (const btn of existingButtons) {
-    const text = (btn.textContent || '').toLowerCase();
-    if (text.includes('play') || text.includes('abspielen') || text.includes('shuffle') || text.includes('repeat') || text.includes('wiederhol')) {
-      buttonContainer = btn.parentElement;
-      console.log('🎛️ Found button container:', buttonContainer.tagName, buttonContainer.className);
+  for (const container of possibleContainers) {
+    if (container) {
+      buttonContainer = container;
+      console.log('🎛️ Found button container:', container.tagName, container.className);
       break;
     }
   }
@@ -2340,6 +2346,15 @@ function addPlaylistControlButtons() {
     console.log('🎛️ Could not find button container, retrying...');
     return;
   }
+  
+  // Find an existing button to clone structure
+  const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
+  if (!existingBtn) {
+    console.log('🎛️ No existing button to clone, retrying...');
+    return;
+  }
+  
+  console.log('🎛️ Cloning button structure from:', existingBtn.textContent.trim().substring(0, 30));
   
   // Mark as injected
   const marker = document.createElement('div');
@@ -2353,58 +2368,65 @@ function addPlaylistControlButtons() {
   
   console.log('🎛️ Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
   
-  // ⭐ BUTTON 1: Collection Mode Toggle
-  const collectionBtn = document.createElement('ytlr-button-renderer');
-  collectionBtn.className = existingButtons[0].className; // Copy classes from existing buttons
+  // ⭐ CLONE existing button and modify it
+  const collectionBtn = existingBtn.cloneNode(true);
   
+  // Find the text element inside
+  const textElement = collectionBtn.querySelector('.vlElK, [class*="vlElK"]');
+  if (!textElement) {
+    console.log('🎛️ ERROR: Could not find text element in button');
+    return;
+  }
+  
+  // Modify based on mode
   if (inCollection) {
-    collectionBtn.innerHTML = `
-      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #ff9800;">
-        <div class="vlElK zyJon-ve">🔄 Collecting...</div>
-      </button>
-    `;
+    textElement.textContent = '🔄 Collecting...';
+    const btnElement = collectionBtn.querySelector('button');
+    if (btnElement) btnElement.style.backgroundColor = '#ff9800';
   } else if (filterIds) {
-    collectionBtn.innerHTML = `
-      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #4caf50;">
-        <div class="vlElK zyJon-ve">✅ Exit Filter Mode</div>
-      </button>
-    `;
-    collectionBtn.onclick = () => {
+    textElement.textContent = '✅ Exit Filter Mode';
+    const btnElement = collectionBtn.querySelector('button');
+    if (btnElement) btnElement.style.backgroundColor = '#4caf50';
+    
+    // Add click handler
+    collectionBtn.addEventListener('click', () => {
+      console.log('🎛️ Exit filter clicked');
       exitFilterMode();
-    };
+    });
   } else {
-    collectionBtn.innerHTML = `
-      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #2196f3;">
-        <div class="vlElK zyJon-ve">🔄 Collect Unwatched</div>
-      </button>
-    `;
-    collectionBtn.onclick = () => {
+    textElement.textContent = '🔄 Collect Unwatched';
+    const btnElement = collectionBtn.querySelector('button');
+    if (btnElement) btnElement.style.backgroundColor = '#2196f3';
+    
+    // Add click handler
+    collectionBtn.addEventListener('click', () => {
       console.log('🎛️ Collection button clicked!');
       startCollectionMode();
-    };
+    });
   }
+  
+  // Insert into container
+  buttonContainer.appendChild(collectionBtn);
+  console.log('🎛️ Added collection button');
   
   // ⭐ BUTTON 2: Play Next Unwatched (only in filter mode)
   if (filterIds && filterIds.size > 0) {
-    const playNextBtn = document.createElement('ytlr-button-renderer');
-    playNextBtn.className = existingButtons[0].className;
-    playNextBtn.innerHTML = `
-      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #9c27b0;">
-        <div class="vlElK zyJon-ve">▶️ Play Next Unwatched</div>
-      </button>
-    `;
-    playNextBtn.onclick = () => {
-      console.log('🎛️ Play next unwatched clicked!');
-      playNextUnwatchedVideo();
-    };
-    
-    buttonContainer.appendChild(playNextBtn);
-    console.log('🎛️ Added "Play Next Unwatched" button');
+    const playNextBtn = existingBtn.cloneNode(true);
+    const textEl = playNextBtn.querySelector('.vlElK, [class*="vlElK"]');
+    if (textEl) {
+      textEl.textContent = '▶️ Play Next Unwatched';
+      const btnEl = playNextBtn.querySelector('button');
+      if (btnEl) btnEl.style.backgroundColor = '#9c27b0';
+      
+      playNextBtn.addEventListener('click', () => {
+        console.log('🎛️ Play next unwatched clicked!');
+        playNextUnwatchedVideo();
+      });
+      
+      buttonContainer.appendChild(playNextBtn);
+      console.log('🎛️ Added "Play Next Unwatched" button');
+    }
   }
-  
-  // Insert collection button
-  buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ Added collection mode button');
   
   console.log('🎛️🎛️🎛️ BUTTONS INJECTED SUCCESSFULLY');
 }
