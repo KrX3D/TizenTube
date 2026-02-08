@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = false;   // Set false to disable shorts logging  
+const LOG_SHORTS = true;   // Set false to disable shorts logging  
 const LOG_WATCHED = true;  // Set false to disable watched video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
@@ -264,35 +264,26 @@ function directFilterArray(arr, page, context = '') {
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
-                       lastVideo.videoRenderer?.videoId || 
-                       lastVideo.playlistVideoRenderer?.videoId ||
-                       lastVideo.gridVideoRenderer?.videoId ||
-                       lastVideo.compactVideoRenderer?.videoId ||
-                       'unknown';
+                      lastVideo.videoRenderer?.videoId || 
+                      lastVideo.playlistVideoRenderer?.videoId ||
+                      lastVideo.gridVideoRenderer?.videoId ||
+                      lastVideo.compactVideoRenderer?.videoId ||
+                      'unknown';
     
-    if (DEBUG_ENABLED) {
-      console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
+    console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
+    
+    // ⭐ MARK the helper with a special title so we can identify it visually
+    if (lastVideo.tileRenderer?.metadata?.tileMetadataRenderer?.title) {
+      const originalTitle = lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText;
+      lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = '⏩ SCROLL HELPER - ' + originalTitle;
     }
     
-    // ⭐ STORE the actual video object so we can insert it into next batch
-    // REPLACE the array (don't push) - we only want ONE helper at a time!
+    // Store it
     window._lastHelperVideos = [lastVideo];
     window._playlistScrollHelpers.clear();
     window._playlistScrollHelpers.add(lastVideoId);
-    if (window._playlistRemovedHelpers) {
-      window._playlistRemovedHelpers.delete(lastVideoId);
-      if (window._playlistRemovedHelperQueue) {
-        window._playlistRemovedHelperQueue = window._playlistRemovedHelperQueue.filter(id => id !== lastVideoId);
-      }
-    }
-
-    if (DEBUG_ENABLED) {
-      console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
-    }
-
-    // ⭐ MARK the helper so it doesn't actually render
-    // Add a special flag so YouTube skips rendering it
-    lastVideo.__tizentubeScrollHelper = true;
+    
+    console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     
     return [lastVideo];
   }
@@ -1117,6 +1108,63 @@ function isShortItem(item) {
                  item.gridVideoRenderer?.videoId ||
                  item.compactVideoRenderer?.videoId ||
                  'unknown';
+
+  
+  // ⭐ COMPREHENSIVE DIAGNOSTIC for subscription shorts that look like videos
+  const page = getCurrentPage();
+  if ((page === 'subscriptions' || page.includes('channel'))) {
+    // Log EVERY video to find what shorts have in common
+    const hasVideoRenderer = !!item.videoRenderer;
+    const hasGridRenderer = !!item.gridVideoRenderer;
+    const hasTileRenderer = !!item.tileRenderer;
+    const hasRichItem = !!item.richItemRenderer;
+    
+    console.log('🔬🔬🔬 VIDEO ANALYSIS:', videoId);
+    console.log('🔬 Renderer type:', hasVideoRenderer ? 'videoRenderer' : hasGridRenderer ? 'gridRenderer' : hasTileRenderer ? 'tileRenderer' : hasRichItem ? 'richItem' : 'unknown');
+    
+    // Check navigationEndpoint
+    if (item.videoRenderer?.navigationEndpoint) {
+      const nav = item.videoRenderer.navigationEndpoint;
+      console.log('🔬 Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
+    }
+    
+    if (item.gridVideoRenderer?.navigationEndpoint) {
+      const nav = item.gridVideoRenderer.navigationEndpoint;
+      console.log('🔬 Grid - Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Grid - Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 Grid - URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
+    }
+    
+    // Check overlays
+    const overlays = item.videoRenderer?.thumbnailOverlays || 
+                     item.gridVideoRenderer?.thumbnailOverlays || 
+                     item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+    
+    console.log('🔬 Overlay count:', overlays.length);
+    overlays.forEach((overlay, idx) => {
+      if (overlay.thumbnailOverlayTimeStatusRenderer) {
+        console.log('🔬 Overlay', idx, 'style:', overlay.thumbnailOverlayTimeStatusRenderer.style);
+        console.log('🔬 Overlay', idx, 'text:', overlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText);
+      }
+    });
+    
+    // Check badges
+    if (item.videoRenderer?.badges) {
+      console.log('🔬 Badges:', item.videoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    if (item.gridVideoRenderer?.badges) {
+      console.log('🔬 Grid badges:', item.gridVideoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    
+    // Check viewCountText for "views" vs other patterns
+    const viewCount = item.videoRenderer?.viewCountText?.simpleText || 
+                     item.gridVideoRenderer?.viewCountText?.simpleText || '';
+    console.log('🔬 View count text:', viewCount);
+    
+    console.log('🔬🔬🔬 END ANALYSIS');
+  }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ========================================');
@@ -1400,6 +1448,22 @@ function processShelves(shelves, shouldAddPreviews = true) {
       console.log('[PAGE_DEBUG] ========================================');
     }
     window._lastLoggedPage = page;
+  }
+
+  // ⭐ ADD DIAGNOSTIC LOGGING
+  if (DEBUG_ENABLED && (page === 'subscriptions' || page.includes('channel'))) {
+    console.log('$$$$$$$$$$$ SHELF PROCESSING START $$$$$$$$$$$');
+    console.log('$$$$$$$$$$$ Page:', page);
+    console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
+    console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
+    
+    // ⭐ NEW: Log ALL shelf titles
+    console.log('📚📚📚 ALL SHELF TITLES:');
+    shelves.forEach((shelf, idx) => {
+      const title = getShelfTitle(shelf);
+      console.log('📚 Shelf', idx, ':', title || '(no title)');
+    });
+    console.log('📚📚📚 END SHELF TITLES');
   }
   
   let totalItemsBefore = 0;
@@ -2025,4 +2089,51 @@ function getCurrentPage() {
   }
   
   return detectedPage;
+}
+
+// ⭐ Detect and enhance playlist info area
+function detectPlaylistButtons() {
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') return;
+  
+  console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
+  
+  // Look for common playlist UI structures
+  const possibleSelectors = [
+    'ytlr-playlist-header-renderer',
+    'ytlr-playlist-panel-renderer',
+    '[class*="playlist-header"]',
+    '[class*="playlist-info"]',
+    'ytlr-browse-feed-actions-renderer'
+  ];
+  
+  possibleSelectors.forEach(selector => {
+    const element = document.querySelector(selector);
+    if (element) {
+      console.log('🎛️ FOUND:', selector);
+      console.log('🎛️ Element:', element);
+      console.log('🎛️ HTML:', element.outerHTML.substring(0, 500));
+    }
+  });
+  
+  // Also search for buttons
+  const buttons = document.querySelectorAll('button, ytlr-button-renderer, [role="button"]');
+  console.log('🎛️ Total buttons found:', buttons.length);
+  
+  buttons.forEach((btn, idx) => {
+    const text = btn.textContent || btn.innerText || '';
+    if (text.toLowerCase().includes('play') || text.toLowerCase().includes('shuffle') || text.toLowerCase().includes('repeat')) {
+      console.log('🎛️ Playlist button', idx, ':', text.trim());
+      console.log('🎛️ Parent:', btn.parentElement?.tagName);
+    }
+  });
+  
+  console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
+}
+
+// Run detection when page loads
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    detectPlaylistButtons();
+  }, 3000); // Run 3 seconds after page load
 }
