@@ -1279,33 +1279,49 @@ function isShortItem(item) {
       }
     }
     
-    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
-    if (willBeDetectedAsShort) {
-      console.log('🔬 === SHORTS DUMP ===');
-      console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'sec');
-      console.log('🔬 Page:', page);
+    // ⭐ LOG ALL VIDEOS to find difference between shorts and regular videos
+    console.log('🔬 === VIDEO DUMP ===');
+    console.log('🔬 Video ID:', videoId);
+    console.log('🔬 Duration:', durationSeconds || 'unknown', 'sec');
+    console.log('🔬 ⚠️ Is this a SHORT? (manually check)');
+
+    if (item.tileRenderer) {
+      console.log('🔬 contentType:', item.tileRenderer.contentType);
       
-      // ⭐ ONLY log the most critical fields
-      if (item.tileRenderer) {
-        console.log('🔬 contentType:', item.tileRenderer.contentType);
+      // Thumbnail
+      if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
+        const t = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+        console.log('🔬 Thumbnail:', t.width, 'x', t.height);
+      }
+      
+      // Title
+      console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
+      
+      // onSelectCommand
+      if (item.tileRenderer.onSelectCommand) {
+        console.log('🔬 onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
         
-        // Thumbnail
-        if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
-          const t = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
-          console.log('🔬 Thumbnail:', t.width, 'x', t.height);
-        }
-        
-        // ⭐ THIS IS THE KEY FIELD!
-        if (item.tileRenderer.onSelectCommand) {
-          console.log('🔬 onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
-          console.log('🔬 onSelectCommand JSON:');
-          console.log(JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+        // watchEndpoint details
+        if (item.tileRenderer.onSelectCommand.watchEndpoint) {
+          console.log('🔬 watchEndpoint:', JSON.stringify(item.tileRenderer.onSelectCommand.watchEndpoint, null, 2));
         }
       }
       
-      console.log('🔬 === END DUMP ===');
+      // Metadata lines
+      if (item.tileRenderer.metadata?.tileMetadataRenderer?.lines) {
+        console.log('🔬 Metadata lines count:', item.tileRenderer.metadata.tileMetadataRenderer.lines.length);
+        item.tileRenderer.metadata.tileMetadataRenderer.lines.forEach((line, idx) => {
+          const lineStr = JSON.stringify(line, null, 2);
+          if (lineStr.length > 300) {
+            console.log(`🔬 Line ${idx} (truncated):`, lineStr.substring(0, 300));
+          } else {
+            console.log(`🔬 Line ${idx}:`, lineStr);
+          }
+        });
+      }
     }
+
+    console.log('🔬 === END ===');
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
@@ -2305,14 +2321,18 @@ function addPlaylistControlButtons() {
   }
   
   console.log('🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
-  
+
   const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                           document.querySelector('[class*="TXB27d"]');
-  
+
   if (!buttonContainer) {
     console.log('🎛️ No button container found');
     return;
   }
+
+  console.log('🎛️ Container display:', window.getComputedStyle(buttonContainer).display);
+  console.log('🎛️ Container visibility:', window.getComputedStyle(buttonContainer).visibility);
+  console.log('🎛️ Container position:', buttonContainer.getBoundingClientRect());
   
   const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
   if (!existingBtn) {
@@ -2354,48 +2374,39 @@ function addPlaylistControlButtons() {
   
   textElement.textContent = newText;
   console.log('🎛️ Set text to:', newText);
-  
+
   // ⭐ Make button VERY visible for debugging
   const ytlrButton = collectionBtn.querySelector('ytlr-button');
   if (ytlrButton) {
-    ytlrButton.style.backgroundColor = '#ff0000'; // Bright red
-    ytlrButton.style.border = '5px solid yellow';
-    console.log('🎛️ Set button to RED with YELLOW border');
+    ytlrButton.style.backgroundColor = '#ff0000 !important'; // Bright red
+    ytlrButton.style.border = '5px solid yellow !important';
+    ytlrButton.style.display = 'block !important';
+    ytlrButton.style.visibility = 'visible !important';
+    ytlrButton.style.opacity = '1 !important';
+    console.log('🎛️ Set button styling');
   }
   
-  // Add click handler
-  if (!inCollection) {
-    collectionBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      console.log('🎛️ Button clicked!');
-      if (filterIds) {
-        exitFilterMode();
-      } else {
-        startCollectionMode();
-      }
-    });
-  }
+  // Also style the parent renderer
+  collectionBtn.style.display = 'block !important';
+  collectionBtn.style.visibility = 'visible !important';
+  collectionBtn.style.opacity = '1 !important';
   
   // Append to container
   buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ ✅ Button added to container');
+  console.log('🎛️ ✅ Button appended');
   
-  // ⭐ BUTTON 2: Play Next (only in filter mode)
-  if (filterIds && filterIds.size > 0) {
-    const playBtn = existingBtn.cloneNode(true);
-    const playTextEl = playBtn.querySelector('yt-formatted-string');
-    if (playTextEl) {
-      playTextEl.textContent = '▶️ Play Next';
-      playBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        playNextUnwatchedVideo();
-      });
-      buttonContainer.appendChild(playBtn);
-      console.log('🎛️ ✅ Play Next button added');
+  // ⭐ FORCE REFLOW/REPAINT
+  setTimeout(() => {
+    const rect = collectionBtn.getBoundingClientRect();
+    console.log('🎛️ Button position:', rect.top, rect.left, rect.width, rect.height);
+    console.log('🎛️ Button visible in viewport:', rect.width > 0 && rect.height > 0);
+    
+    // Force focus to make it visible
+    if (collectionBtn.focus) {
+      collectionBtn.focus();
+      console.log('🎛️ Focused button');
     }
-  }
+  }, 500);
   
   console.log('🎛️ INJECTION COMPLETE');
 }
