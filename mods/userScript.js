@@ -139,7 +139,7 @@ import { configWrite } from "./config.js";
         if (logs.length === 0) return;
         
         // Delete 15 logs from the TOP (newest logs, since we use unshift)
-        logs.splice(0, 15);
+        logs.splice(0, 3);
         
         consoleDiv.innerHTML = logs.join('');
         // NO logging here - silent operation
@@ -285,7 +285,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v150 - NEWEST FIRST');
+    console.log('[Console] Visual Console v160 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');

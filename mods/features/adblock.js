@@ -1238,7 +1238,7 @@ function isShortItem(item) {
 
   const page = getCurrentPage();
   
-  // ⭐ FULL STRUCTURE DUMP for subscriptions/channels
+  // ⭐ SPLIT JSON DUMP for subscriptions/channels
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
     // Check if this will be detected as a short by Method 8 (duration)
@@ -1280,32 +1280,47 @@ function isShortItem(item) {
       console.log('🔬 Duration:', durationSeconds, 'seconds');
       console.log('🔬 Page:', page);
       
-      // Dump FULL JSON structure
-      console.log('🔬 FULL ITEM JSON:');
-      console.log(JSON.stringify(item, null, 2));
-      
-      // Extract key fields
-      if (item.videoRenderer) {
-        console.log('🔬 📹 videoRenderer detected');
-        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
-      }
-      
-      if (item.gridVideoRenderer) {
-        console.log('🔬 📊 gridVideoRenderer detected');
-        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
-      }
+      // ⭐ Log specific important fields FIRST (before full JSON)
+      console.log('🔬 === KEY FIELDS ===');
       
       if (item.tileRenderer) {
-        console.log('🔬 🔲 tileRenderer detected');
-        console.log('🔬 Content type:', item.tileRenderer.contentType);
-        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+        console.log('🔬 contentType:', item.tileRenderer.contentType);
+        console.log('🔬 title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
+        
+        // Navigation endpoint
+        if (item.tileRenderer.onSelectCommand) {
+          console.log('🔬 onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
+          console.log('🔬 Has watchEndpoint:', !!item.tileRenderer.onSelectCommand.watchEndpoint);
+          console.log('🔬 Has reelWatchEndpoint:', !!item.tileRenderer.onSelectCommand.reelWatchEndpoint);
+          
+          // Check the command string
+          const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
+          console.log('🔬 Command contains "reelWatch":', cmdStr.includes('reelWatch'));
+          console.log('🔬 Command contains "/shorts/":', cmdStr.includes('/shorts/'));
+        }
+        
+        // Thumbnail dimensions
+        if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
+          const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+          console.log('🔬 Thumbnail dimensions:', thumb.width, 'x', thumb.height);
+          console.log('🔬 Is vertical (height > width):', thumb.height > thumb.width);
+        }
+      }
+      
+      // ⭐ SPLIT FULL JSON into chunks
+      console.log('🔬 === FULL JSON (SPLIT) ===');
+      const fullJson = JSON.stringify(item, null, 2);
+      const chunkSize = 800; // Characters per chunk
+      const chunks = Math.ceil(fullJson.length / chunkSize);
+      
+      console.log('🔬 Total JSON size:', fullJson.length, 'chars | Chunks:', chunks);
+      
+      for (let i = 0; i < chunks; i++) {
+        const start = i * chunkSize;
+        const end = Math.min(start + chunkSize, fullJson.length);
+        const chunk = fullJson.substring(start, end);
+        console.log(`🔬 JSON chunk ${i + 1}/${chunks}:`);
+        console.log(chunk);
       }
       
       console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');

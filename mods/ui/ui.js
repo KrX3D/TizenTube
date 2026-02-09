@@ -178,7 +178,7 @@ function execute_once_dom_loaded() {
         }
         return false;
     }
-    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete 3 logs
+    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete logs
         evt.preventDefault();
         evt.stopPropagation();
         evt.stopImmediatePropagation();
