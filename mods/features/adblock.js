@@ -62,7 +62,7 @@ function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
   // ⭐ Check if this is a playlist page
-  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  const isPlaylistPage = (page === 'playlist');
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
@@ -1163,7 +1163,7 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
 
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
@@ -1551,28 +1551,6 @@ function isShortItem(item) {
         console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
       }
       return true;
-    }
-  }
-  
-  // Method 11: Check for low-resolution thumbnails (Tizen 5.5 shorts appear as 640x360)
-  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
-    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
-    if (thumb) {
-      const width = thumb.width;
-      const height = thumb.height;
-      
-      // Tizen 5.5 shorts seem to have 640x360 or similar low-res thumbnails
-      // Regular videos typically have 1280x720 or higher
-      const isLowRes = (width === 640 && height === 360) || (width <= 640 && height <= 480);
-      
-      if (isLowRes) {
-        if (DEBUG_ENABLED && LOG_SHORTS) {
-          console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 11 (low-res thumbnail - Tizen 5.5)');
-          console.log('[SHORTS_DIAGNOSTIC] Dimensions:', width, 'x', height);
-          console.log('[SHORTS_DIAGNOSTIC] ========================================');
-        }
-        return true;
-      }
     }
   }
 
@@ -2376,6 +2354,14 @@ function addPlaylistControlButtons() {
   
   textElement.textContent = newText;
   console.log('🎛️ Set text to:', newText);
+  
+  // ⭐ Make button VERY visible for debugging
+  const ytlrButton = collectionBtn.querySelector('ytlr-button');
+  if (ytlrButton) {
+    ytlrButton.style.backgroundColor = '#ff0000'; // Bright red
+    ytlrButton.style.border = '5px solid yellow';
+    console.log('🎛️ Set button to RED with YELLOW border');
+  }
   
   // Add click handler
   if (!inCollection) {
