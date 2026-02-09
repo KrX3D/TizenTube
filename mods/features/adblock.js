@@ -1281,55 +1281,30 @@ function isShortItem(item) {
     
     // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
     if (willBeDetectedAsShort) {
-      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 === SHORTS DUMP ===');
       console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'seconds');
+      console.log('🔬 Duration:', durationSeconds, 'sec');
       console.log('🔬 Page:', page);
       
-      // ⭐ Log specific important fields FIRST (before full JSON)
-      console.log('🔬 === KEY FIELDS ===');
-      
+      // ⭐ ONLY log the most critical fields
       if (item.tileRenderer) {
         console.log('🔬 contentType:', item.tileRenderer.contentType);
-        console.log('🔬 title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
         
-        // Navigation endpoint
+        // Thumbnail
+        if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
+          const t = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+          console.log('🔬 Thumbnail:', t.width, 'x', t.height);
+        }
+        
+        // ⭐ THIS IS THE KEY FIELD!
         if (item.tileRenderer.onSelectCommand) {
           console.log('🔬 onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
-          console.log('🔬 Has watchEndpoint:', !!item.tileRenderer.onSelectCommand.watchEndpoint);
-          console.log('🔬 Has reelWatchEndpoint:', !!item.tileRenderer.onSelectCommand.reelWatchEndpoint);
-          
-          // Check the command string
-          const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
-          console.log('🔬 Command contains "reelWatch":', cmdStr.includes('reelWatch'));
-          console.log('🔬 Command contains "/shorts/":', cmdStr.includes('/shorts/'));
-        }
-        
-        // Thumbnail dimensions
-        if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
-          const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
-          console.log('🔬 Thumbnail dimensions:', thumb.width, 'x', thumb.height);
-          console.log('🔬 Is vertical (height > width):', thumb.height > thumb.width);
+          console.log('🔬 onSelectCommand JSON:');
+          console.log(JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
         }
       }
       
-      // ⭐ SPLIT FULL JSON into chunks
-      console.log('🔬 === FULL JSON (SPLIT) ===');
-      const fullJson = JSON.stringify(item, null, 2);
-      const chunkSize = 800; // Characters per chunk
-      const chunks = Math.ceil(fullJson.length / chunkSize);
-      
-      console.log('🔬 Total JSON size:', fullJson.length, 'chars | Chunks:', chunks);
-      
-      for (let i = 0; i < chunks; i++) {
-        const start = i * chunkSize;
-        const end = Math.min(start + chunkSize, fullJson.length);
-        const chunk = fullJson.substring(start, end);
-        console.log(`🔬 JSON chunk ${i + 1}/${chunks}:`);
-        console.log(chunk);
-      }
-      
-      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 === END DUMP ===');
     }
   }
   
@@ -1579,6 +1554,28 @@ function isShortItem(item) {
     }
   }
   
+  // Method 11: Check for low-resolution thumbnails (Tizen 5.5 shorts appear as 640x360)
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
+    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+    if (thumb) {
+      const width = thumb.width;
+      const height = thumb.height;
+      
+      // Tizen 5.5 shorts seem to have 640x360 or similar low-res thumbnails
+      // Regular videos typically have 1280x720 or higher
+      const isLowRes = (width === 640 && height === 360) || (width <= 640 && height <= 480);
+      
+      if (isLowRes) {
+        if (DEBUG_ENABLED && LOG_SHORTS) {
+          console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 11 (low-res thumbnail - Tizen 5.5)');
+          console.log('[SHORTS_DIAGNOSTIC] Dimensions:', width, 'x', height);
+          console.log('[SHORTS_DIAGNOSTIC] ========================================');
+        }
+        return true;
+      }
+    }
+  }
+
   // NOT A SHORT
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
@@ -2325,70 +2322,27 @@ function addPlaylistControlButtons() {
   const page = getCurrentPage();
   if (page !== 'playlist' && page !== 'playlists') return;
   
-  // Check if buttons already added
   if (document.getElementById('tizentube-collection-injected')) {
-    console.log('🎛️ Buttons already injected, skipping');
-    return;
+    return; // Already added
   }
   
-  console.log('🎛️🎛️🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
+  console.log('🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
   
-  // Find button container
   const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                           document.querySelector('[class*="TXB27d"]');
   
   if (!buttonContainer) {
-    console.log('🎛️ Could not find button container');
+    console.log('🎛️ No button container found');
     return;
   }
   
-  console.log('🎛️ Found button container:', buttonContainer.className);
-  
-  // Find an existing button
   const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
   if (!existingBtn) {
     console.log('🎛️ No existing button found');
     return;
   }
   
-  console.log('🎛️ Button tag:', existingBtn.tagName);
-  console.log('🎛️ Button text:', existingBtn.textContent.trim());
-  console.log('🎛️ Button class:', existingBtn.className);
-  
-  // ⭐ LOG FULL HTML in chunks
-  const fullHTML = existingBtn.outerHTML;
-  console.log('🎛️ Full HTML length:', fullHTML.length);
-  const chunks = Math.ceil(fullHTML.length / 500);
-  for (let i = 0; i < chunks; i++) {
-    console.log(`🎛️ HTML chunk ${i + 1}/${chunks}:`, fullHTML.substring(i * 500, (i + 1) * 500));
-  }
-  
-  // ⭐ DEEP SEARCH: Find where text actually is
-  console.log('🎛️ === DEEP SEARCH ===');
-  
-  function findTextNode(element, depth = 0) {
-    const indent = '  '.repeat(depth);
-    console.log(`🎛️ ${indent}Tag:`, element.tagName || element.nodeName);
-    if (element.className) console.log(`🎛️ ${indent}Class:`, element.className);
-    if (element.nodeType === 3) { // Text node
-      console.log(`🎛️ ${indent}TEXT NODE:`, element.textContent.trim());
-    }
-    if (element.textContent && element.textContent.trim() && element.children.length === 0) {
-      console.log(`🎛️ ${indent}LEAF TEXT:`, element.textContent.trim());
-    }
-    
-    for (let i = 0; i < element.childNodes.length; i++) {
-      if (depth < 5) { // Limit depth
-        findTextNode(element.childNodes[i], depth + 1);
-      }
-    }
-  }
-  
-  findTextNode(existingBtn);
-  console.log('🎛️ === END DEEP SEARCH ===');
-  
-  // ⭐ SIMPLE APPROACH: Just modify the text content directly
-  console.log('🎛️ Attempting simple clone and text replacement...');
+  console.log('🎛️ Found button to clone');
   
   // Mark as injected
   const marker = document.createElement('div');
@@ -2400,40 +2354,34 @@ function addPlaylistControlButtons() {
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
-  console.log('🎛️ Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
+  console.log('🎛️ Mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
   
-  // ⭐ Clone and replace ALL text content (simple approach)
+  // ⭐ Clone button
   const collectionBtn = existingBtn.cloneNode(true);
   
-  // Get current text
-  const oldText = collectionBtn.textContent.trim();
-  console.log('🎛️ Old text:', oldText);
+  // ⭐ TARGET: YT-FORMATTED-STRING (this is where the text is!)
+  const textElement = collectionBtn.querySelector('yt-formatted-string');
   
-  // Replace text using innerHTML search/replace
+  if (!textElement) {
+    console.log('🎛️ ERROR: Could not find yt-formatted-string');
+    return;
+  }
+  
+  console.log('🎛️ Found text element:', textElement.tagName);
+  
+  // Set new text based on mode
   const newText = inCollection ? '🔄 Collecting...' : 
                   filterIds ? '✅ Exit Filter' : 
                   '🔄 Collect Unwatched';
   
-  console.log('🎛️ New text:', newText);
-  
-  // Try to replace text in innerHTML
-  const oldHTML = collectionBtn.innerHTML;
-  const newHTML = oldHTML.replace(oldText, newText);
-  
-  if (oldHTML === newHTML) {
-    console.log('🎛️ ERROR: Text replacement failed - HTML unchanged');
-    console.log('🎛️ Trying textContent replacement...');
-    
-    // Last resort: use textContent (might break styling)
-    collectionBtn.textContent = newText;
-  } else {
-    collectionBtn.innerHTML = newHTML;
-    console.log('🎛️ Text replaced successfully');
-  }
+  textElement.textContent = newText;
+  console.log('🎛️ Set text to:', newText);
   
   // Add click handler
   if (!inCollection) {
-    collectionBtn.addEventListener('click', () => {
+    collectionBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       console.log('🎛️ Button clicked!');
       if (filterIds) {
         exitFilterMode();
@@ -2445,9 +2393,25 @@ function addPlaylistControlButtons() {
   
   // Append to container
   buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ ✅ Button appended to container');
+  console.log('🎛️ ✅ Button added to container');
   
-  console.log('🎛️🎛️🎛️ INJECTION COMPLETE');
+  // ⭐ BUTTON 2: Play Next (only in filter mode)
+  if (filterIds && filterIds.size > 0) {
+    const playBtn = existingBtn.cloneNode(true);
+    const playTextEl = playBtn.querySelector('yt-formatted-string');
+    if (playTextEl) {
+      playTextEl.textContent = '▶️ Play Next';
+      playBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        playNextUnwatchedVideo();
+      });
+      buttonContainer.appendChild(playBtn);
+      console.log('🎛️ ✅ Play Next button added');
+    }
+  }
+  
+  console.log('🎛️ INJECTION COMPLETE');
 }
 
 // ⭐ FUNCTION: Play the first unwatched video
