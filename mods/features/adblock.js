@@ -1363,6 +1363,16 @@ function isShortItem(item) {
     }
     return true;
   }
+  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
+  // Check if the video data contains a shorts URL anywhere
+  const itemStr = JSON.stringify(item);
+  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
   
   // Method 2: Check videoRenderer
   if (item.videoRenderer) {
@@ -2374,6 +2384,23 @@ function addPlaylistControlButtons() {
   
   textElement.textContent = newText;
   console.log('🎛️ Set text to:', newText);
+  
+  // ⭐ Make button focusable with TV remote
+  collectionBtn.setAttribute('tabindex', '0'); // Make focusable
+  collectionBtn.setAttribute('role', 'button'); // Announce as button
+  
+  // Find the inner button element and make it focusable too
+  const innerButton = collectionBtn.querySelector('button, ytlr-button');
+  if (innerButton) {
+    innerButton.setAttribute('tabindex', '0');
+    innerButton.style.backgroundColor = '#ff0000'; // Bright red for visibility
+    innerButton.style.border = '3px solid yellow';
+    console.log('🎛️ Made inner button focusable and visible');
+  }
+  
+  // Style the outer renderer too
+  collectionBtn.style.backgroundColor = '#ff0000';
+  collectionBtn.style.border = '3px solid yellow';
 
   // ⭐ Make button VERY visible for debugging
   const ytlrButton = collectionBtn.querySelector('ytlr-button');
