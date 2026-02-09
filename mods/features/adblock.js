@@ -834,6 +834,12 @@ JSON.parse = function () {
           finishCollectionAndFilter(window._collectedUnwatched);
         }, 2000);
       }
+  
+      // ⭐ ADD THIS: Trigger button detection on last batch
+      setTimeout(() => {
+        detectPlaylistButtons();
+        addPlaylistControlButtons();
+      }, 2000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
@@ -1688,16 +1694,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
           itemsBefore = items.length;
           
-          if (DEBUG_ENABLED) {
-            if (items && items.length > 0 && items[0]) {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            } else {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            }
-          }
+          // if (DEBUG_ENABLED) {
+            // if (items && items.length > 0 && items[0]) {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            // } else {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            // }
+          // }
                   
           deArrowify(items);
           hqify(items);
@@ -1744,16 +1750,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.gridRenderer.items;
           itemsBefore = items.length;
 
-          if (DEBUG_ENABLED) {
-            if (items && items.length > 0 && items[0]) {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            } else {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            }
-          }
+          // if (DEBUG_ENABLED) {
+            // if (items && items.length > 0 && items[0]) {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            // } else {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            // }
+          // }
 
           deArrowify(items);
           hqify(items);
@@ -1789,16 +1795,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
           itemsBefore = items.length;
 
-          if (DEBUG_ENABLED) {
-            if (items && items.length > 0 && items[0]) {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            } else {
-              console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            }
-          }
+          // if (DEBUG_ENABLED) {
+            // if (items && items.length > 0 && items[0]) {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+            // } else {
+              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+            // }
+          // }
 
           deArrowify(items);
           hqify(items);
@@ -1835,16 +1841,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
         itemsBefore = contents.length;
 
-        if (DEBUG_ENABLED) {
-          if (contents && contents.length > 0 && contents[0]) {
-            console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
-            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
-            console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
-          } else {
-            console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-          }
-        }
+        // if (DEBUG_ENABLED) {
+          // if (contents && contents.length > 0 && contents[0]) {
+            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+            // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
+            // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
+            // console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
+          // } else {
+            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+          // }
+        // }
 
         deArrowify(contents);
         hqify(contents);
@@ -1899,16 +1905,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
         let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
 
-        if (DEBUG_ENABLED) {
-          if (items && items.length > 0 && items[0]) {
-            console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-            console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-            console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-            console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-          } else {
-            console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-          }
-        }
+        // if (DEBUG_ENABLED) {
+          // if (items && items.length > 0 && items[0]) {
+            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
+            // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
+            // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
+            // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
+          // } else {
+            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
+          // }
+        // }
 
         deArrowify(items);
         hqify(items);
@@ -2277,9 +2283,14 @@ function detectPlaylistButtons() {
   const page = getCurrentPage();
   if (page !== 'playlist' && page !== 'playlists') return;
   
-  console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
+  // ⭐ ONLY run if this is the last batch OR initial load
+  if (!window._isLastPlaylistBatch && window._playlistButtonsDetected) {
+    return; // Skip if already detected and not last batch
+  }
   
-  // Look for button container
+  console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
+  window._playlistButtonsDetected = true;
+  
   const container = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                     document.querySelector('[class*="TXB27d"]');
   
@@ -2287,40 +2298,18 @@ function detectPlaylistButtons() {
     console.log('🎛️ FOUND CONTAINER:', container.tagName, container.className);
   } else {
     console.log('🎛️ NO CONTAINER FOUND');
+    return;
   }
   
-  // Search for buttons ONLY in playlist area (not player controls)
-  const buttons = document.querySelectorAll('button, ytlr-button-renderer, [role="button"]');
-  console.log('🎛️🎛️ Total button elements found:', buttons.length);
+  // Only count buttons in the container
+  const buttons = container.querySelectorAll('ytlr-button-renderer');
+  console.log('🎛️ Playlist buttons in container:', buttons.length);
   
-  let playlistButtonCount = 0;
   buttons.forEach((btn, idx) => {
-    const text = (btn.textContent || btn.innerText || '').trim();
-    const tag = btn.tagName;
-    const parent = btn.parentElement?.tagName || 'none';
-    
-    // Skip player controls
-    const isPlayerControl = parent === 'YTLR-PLAYER-ACTION-CONTAINER' || 
-                           btn.closest('ytlr-player-action-container') ||
-                           btn.closest('[class*="player"]');
-    
-    if (isPlayerControl) {
-      console.log(`🎛️ Button ${idx}: [PLAYER CONTROL - SKIPPED]`);
-      return;
-    }
-    
-    // Log playlist buttons
-    if (text) {
-      playlistButtonCount++;
-      console.log(`🎛️ Playlist Button ${playlistButtonCount}:`);
-      console.log(`🎛️   Tag: ${tag}`);
-      console.log(`🎛️   Text: "${text.substring(0, 50)}"`);
-      console.log(`🎛️   Parent: ${parent}`);
-      console.log('🎛️   ---');
-    }
+    const text = (btn.textContent || '').trim();
+    console.log(`🎛️ Button ${idx + 1}: "${text}"`);
   });
   
-  console.log('🎛️ Total PLAYLIST buttons:', playlistButtonCount);
   console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
 }
 
@@ -2337,41 +2326,68 @@ function addPlaylistControlButtons() {
   if (page !== 'playlist' && page !== 'playlists') return;
   
   // Check if buttons already added
-  if (document.getElementById('tizentube-collection-injected')) return;
+  if (document.getElementById('tizentube-collection-injected')) {
+    console.log('🎛️ Buttons already injected, skipping');
+    return;
+  }
   
   console.log('🎛️🎛️🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
   
   // Find button container by class
-  const possibleContainers = [
-    document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd'),
-    document.querySelector('[class*="TXB27d"]'),
-    document.querySelector('ytlr-browse-feed-actions-renderer')
-  ];
-  
-  let buttonContainer = null;
-  for (const container of possibleContainers) {
-    if (container) {
-      buttonContainer = container;
-      console.log('🎛️ Found button container:', container.tagName, container.className);
-      break;
-    }
-  }
+  const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
+                          document.querySelector('[class*="TXB27d"]');
   
   if (!buttonContainer) {
     console.log('🎛️ Could not find button container, retrying...');
     return;
   }
   
-  // Find an existing button to clone structure
+  console.log('🎛️ Found button container:', buttonContainer.className);
+  
+  // Find an existing button to analyze
   const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
   if (!existingBtn) {
-    console.log('🎛️ No existing button to clone, retrying...');
+    console.log('🎛️ No existing button found, retrying...');
     return;
   }
   
-  console.log('🎛️ Cloning button structure from:', existingBtn.textContent.trim().substring(0, 30));
+  console.log('🎛️ Analyzing button structure...');
+  console.log('🎛️ Button HTML:', existingBtn.outerHTML.substring(0, 500));
+  console.log('🎛️ Button text:', existingBtn.textContent.trim());
   
-  // Mark as injected
+  // ⭐ INSPECT: Find ALL possible text elements
+  const possibleTextSelectors = [
+    '.vlElK',
+    '[class*="vlElK"]',
+    'div[class*="zyJon"]',
+    'button div',
+    'button span',
+    'button'
+  ];
+  
+  let textElement = null;
+  for (const selector of possibleTextSelectors) {
+    const el = existingBtn.querySelector(selector);
+    if (el && el.textContent.trim()) {
+      console.log('🎛️ Found text element with selector:', selector);
+      console.log('🎛️ Text element tag:', el.tagName);
+      console.log('🎛️ Text element class:', el.className);
+      console.log('🎛️ Text:', el.textContent.trim());
+      textElement = el;
+      break;
+    }
+  }
+  
+  if (!textElement) {
+    console.log('🎛️ ERROR: Could not find any text element in button');
+    console.log('🎛️ Button children:', existingBtn.children.length);
+    for (let i = 0; i < existingBtn.children.length; i++) {
+      console.log(`🎛️ Child ${i}:`, existingBtn.children[i].tagName, existingBtn.children[i].className);
+    }
+    return;
+  }
+  
+  // Mark as injected BEFORE creating buttons
   const marker = document.createElement('div');
   marker.id = 'tizentube-collection-injected';
   marker.style.display = 'none';
@@ -2383,67 +2399,42 @@ function addPlaylistControlButtons() {
   
   console.log('🎛️ Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
   
-  // ⭐ CLONE existing button and modify it
+  // ⭐ Create button using simple approach - just modify text
   const collectionBtn = existingBtn.cloneNode(true);
+  const newTextEl = collectionBtn.querySelector(textElement.tagName + (textElement.className ? '.' + textElement.className.split(' ')[0] : ''));
   
-  // Find the text element inside
-  const textElement = collectionBtn.querySelector('.vlElK, [class*="vlElK"]');
-  if (!textElement) {
-    console.log('🎛️ ERROR: Could not find text element in button');
+  if (!newTextEl) {
+    console.log('🎛️ ERROR: Could not find text element in cloned button');
     return;
   }
   
   // Modify based on mode
   if (inCollection) {
-    textElement.textContent = '🔄 Collecting...';
-    const btnElement = collectionBtn.querySelector('button');
-    if (btnElement) btnElement.style.backgroundColor = '#ff9800';
+    newTextEl.textContent = '🔄 Collecting...';
   } else if (filterIds) {
-    textElement.textContent = '✅ Exit Filter Mode';
-    const btnElement = collectionBtn.querySelector('button');
-    if (btnElement) btnElement.style.backgroundColor = '#4caf50';
-    
-    // Add click handler
-    collectionBtn.addEventListener('click', () => {
-      console.log('🎛️ Exit filter clicked');
-      exitFilterMode();
-    });
+    newTextEl.textContent = '✅ Exit Filter';
+    collectionBtn.addEventListener('click', () => exitFilterMode());
   } else {
-    textElement.textContent = '🔄 Collect Unwatched';
-    const btnElement = collectionBtn.querySelector('button');
-    if (btnElement) btnElement.style.backgroundColor = '#2196f3';
-    
-    // Add click handler
-    collectionBtn.addEventListener('click', () => {
-      console.log('🎛️ Collection button clicked!');
-      startCollectionMode();
-    });
+    newTextEl.textContent = '🔄 Collect Unwatched';
+    collectionBtn.addEventListener('click', () => startCollectionMode());
   }
   
-  // Insert into container
   buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ Added collection button');
+  console.log('🎛️ ✅ Collection button added successfully');
   
-  // ⭐ BUTTON 2: Play Next Unwatched (only in filter mode)
+  // ⭐ BUTTON 2: Play Next (only in filter mode)
   if (filterIds && filterIds.size > 0) {
-    const playNextBtn = existingBtn.cloneNode(true);
-    const textEl = playNextBtn.querySelector('.vlElK, [class*="vlElK"]');
-    if (textEl) {
-      textEl.textContent = '▶️ Play Next Unwatched';
-      const btnEl = playNextBtn.querySelector('button');
-      if (btnEl) btnEl.style.backgroundColor = '#9c27b0';
-      
-      playNextBtn.addEventListener('click', () => {
-        console.log('🎛️ Play next unwatched clicked!');
-        playNextUnwatchedVideo();
-      });
-      
-      buttonContainer.appendChild(playNextBtn);
-      console.log('🎛️ Added "Play Next Unwatched" button');
+    const playBtn = existingBtn.cloneNode(true);
+    const playTextEl = playBtn.querySelector(textElement.tagName + (textElement.className ? '.' + textElement.className.split(' ')[0] : ''));
+    if (playTextEl) {
+      playTextEl.textContent = '▶️ Play Next';
+      playBtn.addEventListener('click', () => playNextUnwatchedVideo());
+      buttonContainer.appendChild(playBtn);
+      console.log('🎛️ ✅ Play Next button added successfully');
     }
   }
   
-  console.log('🎛️🎛️🎛️ BUTTONS INJECTED SUCCESSFULLY');
+  console.log('🎛️🎛️🎛️ INJECTION COMPLETE');
 }
 
 // ⭐ FUNCTION: Play the first unwatched video
