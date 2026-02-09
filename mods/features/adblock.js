@@ -2333,106 +2333,119 @@ function addPlaylistControlButtons() {
   
   console.log('🎛️🎛️🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
   
-  // Find button container by class
+  // Find button container
   const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                           document.querySelector('[class*="TXB27d"]');
   
   if (!buttonContainer) {
-    console.log('🎛️ Could not find button container, retrying...');
+    console.log('🎛️ Could not find button container');
     return;
   }
   
   console.log('🎛️ Found button container:', buttonContainer.className);
   
-  // Find an existing button to analyze
+  // Find an existing button
   const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
   if (!existingBtn) {
-    console.log('🎛️ No existing button found, retrying...');
+    console.log('🎛️ No existing button found');
     return;
   }
   
-  console.log('🎛️ Analyzing button structure...');
-  console.log('🎛️ Button HTML:', existingBtn.outerHTML.substring(0, 500));
+  console.log('🎛️ Button tag:', existingBtn.tagName);
   console.log('🎛️ Button text:', existingBtn.textContent.trim());
+  console.log('🎛️ Button class:', existingBtn.className);
   
-  // ⭐ INSPECT: Find ALL possible text elements
-  const possibleTextSelectors = [
-    '.vlElK',
-    '[class*="vlElK"]',
-    'div[class*="zyJon"]',
-    'button div',
-    'button span',
-    'button'
-  ];
+  // ⭐ LOG FULL HTML in chunks
+  const fullHTML = existingBtn.outerHTML;
+  console.log('🎛️ Full HTML length:', fullHTML.length);
+  const chunks = Math.ceil(fullHTML.length / 500);
+  for (let i = 0; i < chunks; i++) {
+    console.log(`🎛️ HTML chunk ${i + 1}/${chunks}:`, fullHTML.substring(i * 500, (i + 1) * 500));
+  }
   
-  let textElement = null;
-  for (const selector of possibleTextSelectors) {
-    const el = existingBtn.querySelector(selector);
-    if (el && el.textContent.trim()) {
-      console.log('🎛️ Found text element with selector:', selector);
-      console.log('🎛️ Text element tag:', el.tagName);
-      console.log('🎛️ Text element class:', el.className);
-      console.log('🎛️ Text:', el.textContent.trim());
-      textElement = el;
-      break;
+  // ⭐ DEEP SEARCH: Find where text actually is
+  console.log('🎛️ === DEEP SEARCH ===');
+  
+  function findTextNode(element, depth = 0) {
+    const indent = '  '.repeat(depth);
+    console.log(`🎛️ ${indent}Tag:`, element.tagName || element.nodeName);
+    if (element.className) console.log(`🎛️ ${indent}Class:`, element.className);
+    if (element.nodeType === 3) { // Text node
+      console.log(`🎛️ ${indent}TEXT NODE:`, element.textContent.trim());
+    }
+    if (element.textContent && element.textContent.trim() && element.children.length === 0) {
+      console.log(`🎛️ ${indent}LEAF TEXT:`, element.textContent.trim());
+    }
+    
+    for (let i = 0; i < element.childNodes.length; i++) {
+      if (depth < 5) { // Limit depth
+        findTextNode(element.childNodes[i], depth + 1);
+      }
     }
   }
   
-  if (!textElement) {
-    console.log('🎛️ ERROR: Could not find any text element in button');
-    console.log('🎛️ Button children:', existingBtn.children.length);
-    for (let i = 0; i < existingBtn.children.length; i++) {
-      console.log(`🎛️ Child ${i}:`, existingBtn.children[i].tagName, existingBtn.children[i].className);
-    }
-    return;
-  }
+  findTextNode(existingBtn);
+  console.log('🎛️ === END DEEP SEARCH ===');
   
-  // Mark as injected BEFORE creating buttons
+  // ⭐ SIMPLE APPROACH: Just modify the text content directly
+  console.log('🎛️ Attempting simple clone and text replacement...');
+  
+  // Mark as injected
   const marker = document.createElement('div');
   marker.id = 'tizentube-collection-injected';
   marker.style.display = 'none';
   buttonContainer.appendChild(marker);
   
-  // Check current mode
+  // Check mode
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
   console.log('🎛️ Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
   
-  // ⭐ Create button using simple approach - just modify text
+  // ⭐ Clone and replace ALL text content (simple approach)
   const collectionBtn = existingBtn.cloneNode(true);
-  const newTextEl = collectionBtn.querySelector(textElement.tagName + (textElement.className ? '.' + textElement.className.split(' ')[0] : ''));
   
-  if (!newTextEl) {
-    console.log('🎛️ ERROR: Could not find text element in cloned button');
-    return;
-  }
+  // Get current text
+  const oldText = collectionBtn.textContent.trim();
+  console.log('🎛️ Old text:', oldText);
   
-  // Modify based on mode
-  if (inCollection) {
-    newTextEl.textContent = '🔄 Collecting...';
-  } else if (filterIds) {
-    newTextEl.textContent = '✅ Exit Filter';
-    collectionBtn.addEventListener('click', () => exitFilterMode());
+  // Replace text using innerHTML search/replace
+  const newText = inCollection ? '🔄 Collecting...' : 
+                  filterIds ? '✅ Exit Filter' : 
+                  '🔄 Collect Unwatched';
+  
+  console.log('🎛️ New text:', newText);
+  
+  // Try to replace text in innerHTML
+  const oldHTML = collectionBtn.innerHTML;
+  const newHTML = oldHTML.replace(oldText, newText);
+  
+  if (oldHTML === newHTML) {
+    console.log('🎛️ ERROR: Text replacement failed - HTML unchanged');
+    console.log('🎛️ Trying textContent replacement...');
+    
+    // Last resort: use textContent (might break styling)
+    collectionBtn.textContent = newText;
   } else {
-    newTextEl.textContent = '🔄 Collect Unwatched';
-    collectionBtn.addEventListener('click', () => startCollectionMode());
+    collectionBtn.innerHTML = newHTML;
+    console.log('🎛️ Text replaced successfully');
   }
   
+  // Add click handler
+  if (!inCollection) {
+    collectionBtn.addEventListener('click', () => {
+      console.log('🎛️ Button clicked!');
+      if (filterIds) {
+        exitFilterMode();
+      } else {
+        startCollectionMode();
+      }
+    });
+  }
+  
+  // Append to container
   buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ ✅ Collection button added successfully');
-  
-  // ⭐ BUTTON 2: Play Next (only in filter mode)
-  if (filterIds && filterIds.size > 0) {
-    const playBtn = existingBtn.cloneNode(true);
-    const playTextEl = playBtn.querySelector(textElement.tagName + (textElement.className ? '.' + textElement.className.split(' ')[0] : ''));
-    if (playTextEl) {
-      playTextEl.textContent = '▶️ Play Next';
-      playBtn.addEventListener('click', () => playNextUnwatchedVideo());
-      buttonContainer.appendChild(playBtn);
-      console.log('🎛️ ✅ Play Next button added successfully');
-    }
-  }
+  console.log('🎛️ ✅ Button appended to container');
   
   console.log('🎛️🎛️🎛️ INJECTION COMPLETE');
 }
