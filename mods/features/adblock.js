@@ -1244,11 +1244,9 @@ function isShortItem(item) {
 
   const page = getCurrentPage();
   
-  // ⭐ SPLIT JSON DUMP for subscriptions/channels
+  // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
-    // Check if this will be detected as a short by Method 8 (duration)
-    let willBeDetectedAsShort = false;
     let durationSeconds = null;
     
     if (item.tileRenderer) {
@@ -1274,54 +1272,28 @@ function isShortItem(item) {
           const minutes = parseInt(durationMatch[1], 10);
           const seconds = parseInt(durationMatch[2], 10);
           durationSeconds = minutes * 60 + seconds;
-          willBeDetectedAsShort = (durationSeconds <= 90);
         }
       }
     }
     
-    // ⭐ LOG ALL VIDEOS to find difference between shorts and regular videos
-    console.log('🔬 === VIDEO DUMP ===');
-    console.log('🔬 Video ID:', videoId);
-    console.log('🔬 Duration:', durationSeconds || 'unknown', 'sec');
-    console.log('🔬 ⚠️ Is this a SHORT? (manually check)');
-
-    if (item.tileRenderer) {
-      console.log('🔬 contentType:', item.tileRenderer.contentType);
+    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
+    if (durationSeconds && durationSeconds > 90) {
+      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
+      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
       
-      // Thumbnail
-      if (item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
-        const t = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
-        console.log('🔬 Thumbnail:', t.width, 'x', t.height);
+      // Check for shorts keywords in the entire item JSON
+      const itemJson = JSON.stringify(item);
+      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
+      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
+      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
+      
+      // Log title so you can identify it
+      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
+        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
       }
       
-      // Title
-      console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-      
-      // onSelectCommand
-      if (item.tileRenderer.onSelectCommand) {
-        console.log('🔬 onSelectCommand keys:', Object.keys(item.tileRenderer.onSelectCommand));
-        
-        // watchEndpoint details
-        if (item.tileRenderer.onSelectCommand.watchEndpoint) {
-          console.log('🔬 watchEndpoint:', JSON.stringify(item.tileRenderer.onSelectCommand.watchEndpoint, null, 2));
-        }
-      }
-      
-      // Metadata lines
-      if (item.tileRenderer.metadata?.tileMetadataRenderer?.lines) {
-        console.log('🔬 Metadata lines count:', item.tileRenderer.metadata.tileMetadataRenderer.lines.length);
-        item.tileRenderer.metadata.tileMetadataRenderer.lines.forEach((line, idx) => {
-          const lineStr = JSON.stringify(line, null, 2);
-          if (lineStr.length > 300) {
-            console.log(`🔬 Line ${idx} (truncated):`, lineStr.substring(0, 300));
-          } else {
-            console.log(`🔬 Line ${idx}:`, lineStr);
-          }
-        });
-      }
+      console.log('🔬 ---');
     }
-
-    console.log('🔬 === END ===');
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
@@ -2327,30 +2299,26 @@ function addPlaylistControlButtons() {
   if (page !== 'playlist' && page !== 'playlists') return;
   
   if (document.getElementById('tizentube-collection-injected')) {
-    return; // Already added
-  }
-  
-  console.log('🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
-
-  const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
-                          document.querySelector('[class*="TXB27d"]');
-
-  if (!buttonContainer) {
-    console.log('🎛️ No button container found');
     return;
   }
-
-  console.log('🎛️ Container display:', window.getComputedStyle(buttonContainer).display);
-  console.log('🎛️ Container visibility:', window.getComputedStyle(buttonContainer).visibility);
-  console.log('🎛️ Container position:', buttonContainer.getBoundingClientRect());
+  
+  console.log('🎛️ INJECTING BUTTONS');
+  
+  const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
+                          document.querySelector('[class*="TXB27d"]');
+  
+  if (!buttonContainer) {
+    console.log('🎛️ No container');
+    return;
+  }
   
   const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
   if (!existingBtn) {
-    console.log('🎛️ No existing button found');
+    console.log('🎛️ No existing button');
     return;
   }
   
-  console.log('🎛️ Found button to clone');
+  console.log('🎛️ Cloning button');
   
   // Mark as injected
   const marker = document.createElement('div');
@@ -2362,80 +2330,63 @@ function addPlaylistControlButtons() {
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
-  console.log('🎛️ Mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
-  
-  // ⭐ Clone button
+  // Clone button
   const collectionBtn = existingBtn.cloneNode(true);
   
-  // ⭐ TARGET: YT-FORMATTED-STRING (this is where the text is!)
+  // Find text element
   const textElement = collectionBtn.querySelector('yt-formatted-string');
-  
   if (!textElement) {
-    console.log('🎛️ ERROR: Could not find yt-formatted-string');
+    console.log('🎛️ ERROR: No text element');
     return;
   }
   
-  console.log('🎛️ Found text element:', textElement.tagName);
-  
-  // Set new text based on mode
+  // Set text
   const newText = inCollection ? '🔄 Collecting...' : 
                   filterIds ? '✅ Exit Filter' : 
                   '🔄 Collect Unwatched';
   
   textElement.textContent = newText;
-  console.log('🎛️ Set text to:', newText);
   
-  // ⭐ Make button focusable with TV remote
-  collectionBtn.setAttribute('tabindex', '0'); // Make focusable
-  collectionBtn.setAttribute('role', 'button'); // Announce as button
+  // ⭐ COPY EXACT STYLING from existing button
+  const existingStyle = window.getComputedStyle(existingBtn);
+  collectionBtn.style.cssText = existingBtn.style.cssText; // Copy inline styles
+  collectionBtn.style.backgroundColor = '#ff0000'; // Make it RED so we can see it
+  collectionBtn.style.border = '5px solid yellow';
+  collectionBtn.style.display = 'block';
+  collectionBtn.style.visibility = 'visible';
+  collectionBtn.style.opacity = '1';
+  collectionBtn.style.position = 'relative';
+  collectionBtn.style.zIndex = '9999';
   
-  // Find the inner button element and make it focusable too
-  const innerButton = collectionBtn.querySelector('button, ytlr-button');
-  if (innerButton) {
-    innerButton.setAttribute('tabindex', '0');
-    innerButton.style.backgroundColor = '#ff0000'; // Bright red for visibility
-    innerButton.style.border = '3px solid yellow';
-    console.log('🎛️ Made inner button focusable and visible');
+  // Make focusable
+  collectionBtn.setAttribute('tabindex', '0');
+  
+  // Add click handler
+  if (!inCollection) {
+    collectionBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🎛️ CLICKED!');
+      if (filterIds) {
+        exitFilterMode();
+      } else {
+        startCollectionMode();
+      }
+    });
   }
   
-  // Style the outer renderer too
-  collectionBtn.style.backgroundColor = '#ff0000';
-  collectionBtn.style.border = '3px solid yellow';
-
-  // ⭐ Make button VERY visible for debugging
-  const ytlrButton = collectionBtn.querySelector('ytlr-button');
-  if (ytlrButton) {
-    ytlrButton.style.backgroundColor = '#ff0000 !important'; // Bright red
-    ytlrButton.style.border = '5px solid yellow !important';
-    ytlrButton.style.display = 'block !important';
-    ytlrButton.style.visibility = 'visible !important';
-    ytlrButton.style.opacity = '1 !important';
-    console.log('🎛️ Set button styling');
-  }
-  
-  // Also style the parent renderer
-  collectionBtn.style.display = 'block !important';
-  collectionBtn.style.visibility = 'visible !important';
-  collectionBtn.style.opacity = '1 !important';
-  
-  // Append to container
+  // ⭐ APPEND (this adds AFTER existing buttons)
   buttonContainer.appendChild(collectionBtn);
-  console.log('🎛️ ✅ Button appended');
   
-  // ⭐ FORCE REFLOW/REPAINT
+  console.log('🎛️ Button added');
+  console.log('🎛️ Total buttons in container:', buttonContainer.querySelectorAll('ytlr-button-renderer').length);
+  
+  // Log position after a delay
   setTimeout(() => {
     const rect = collectionBtn.getBoundingClientRect();
-    console.log('🎛️ Button position:', rect.top, rect.left, rect.width, rect.height);
-    console.log('🎛️ Button visible in viewport:', rect.width > 0 && rect.height > 0);
-    
-    // Force focus to make it visible
-    if (collectionBtn.focus) {
-      collectionBtn.focus();
-      console.log('🎛️ Focused button');
-    }
+    console.log('🎛️ Button rect:', rect.top, rect.left, rect.width, rect.height);
+    console.log('🎛️ Container rect:', buttonContainer.getBoundingClientRect());
   }, 500);
-  
-  console.log('🎛️ INJECTION COMPLETE');
 }
 
 // ⭐ FUNCTION: Play the first unwatched video
