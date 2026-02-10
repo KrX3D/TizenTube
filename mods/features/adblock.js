@@ -835,11 +835,14 @@ JSON.parse = function () {
         }, 2000);
       }
   
-      // ⭐ ADD THIS: Trigger button detection on last batch
       setTimeout(() => {
         detectPlaylistButtons();
-        addPlaylistControlButtons();
       }, 2000);
+      
+      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
+      setTimeout(() => {
+        addPlaylistControlButtons();
+      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
@@ -1625,7 +1628,19 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ LOG FULL STRUCTURE for shelf 1 (the shorts shelf)
       if (idx === 1) {
         console.log('📚 🔍 FULL SHELF 1 STRUCTURE (shorts shelf):');
-        console.log('📚 Full JSON (first 1000 chars):', JSON.stringify(shelf, null, 2).substring(0, 1000));
+        const fullJson = JSON.stringify(shelf, null, 2);
+        console.log('📚 Total JSON length:', fullJson.length, 'chars');
+        
+        // Split into 2200-char chunks
+        const chunkSize = 2200;
+        const chunks = Math.ceil(fullJson.length / chunkSize);
+        
+        for (let i = 0; i < chunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, fullJson.length);
+          console.log(`📚 JSON Part ${i + 1}/${chunks}:`);
+          console.log(fullJson.substring(start, end));
+        }
       }
       
       // Check each renderer type
@@ -2314,12 +2329,24 @@ function addPlaylistControlButtons() {
     return;
   }
   
+  // ⭐ LOG CONTAINER SIZE
+  const containerRect = buttonContainer.getBoundingClientRect();
+  console.log('🎛️ CONTAINER SIZE:');
+  console.log('🎛️   X:', containerRect.left, 'Y:', containerRect.top);
+  console.log('🎛️   Width:', containerRect.width, 'Height:', containerRect.height);
+  
   // ⭐ COUNT ALL BUTTONS (including our injected one if it exists)
   const allButtons = Array.from(buttonContainer.querySelectorAll('ytlr-button-renderer'));
   const existingButtons = allButtons.filter(btn => btn.id !== 'tizentube-collection-btn');
   
-  console.log('🎛️ Total buttons found:', allButtons.length);
-  console.log('🎛️ Existing buttons (excluding ours):', existingButtons.length);
+  console.log('🎛️ FOUND BUTTONS:', existingButtons.length);
+  
+  // ⭐ LOG EACH BUTTON
+  existingButtons.forEach((btn, idx) => {
+    const rect = btn.getBoundingClientRect();
+    const text = (btn.textContent || '').trim();
+    console.log(`🎛️ Btn${idx}: "${text}" | X:${rect.left} Y:${rect.top} W:${rect.width} H:${rect.height}`);
+  });
   
   if (existingButtons.length === 0) {
     console.log('🎛️ No existing buttons');
@@ -2328,17 +2355,13 @@ function addPlaylistControlButtons() {
   
   // Use FIRST button as template
   const existingBtn = existingButtons[0];
-  console.log('🎛️ Cloning from first button');
   
   // Get position of LAST button
   const lastButton = existingButtons[existingButtons.length - 1];
   const lastButtonRect = lastButton.getBoundingClientRect();
   
-  console.log('🎛️ Last button position:');
-  console.log('🎛️   Y:', lastButtonRect.top);
-  console.log('🎛️   X:', lastButtonRect.left);
-  console.log('🎛️   Height:', lastButtonRect.height);
-  console.log('🎛️   Width:', lastButtonRect.width);
+  console.log('🎛️ LAST BUTTON (for positioning):');
+  console.log('🎛️   Y:', lastButtonRect.top, 'Height:', lastButtonRect.height);
   
   // Mark as injected
   const marker = document.createElement('div');
@@ -2368,7 +2391,7 @@ function addPlaylistControlButtons() {
   
   textElement.textContent = newText;
   
-  // ⭐ COPY EXACT STYLING from existing button
+  // ⭐ STYLING
   collectionBtn.style.cssText = existingBtn.style.cssText;
   collectionBtn.style.backgroundColor = '#ff0000';
   collectionBtn.style.border = '5px solid yellow';
@@ -2378,11 +2401,16 @@ function addPlaylistControlButtons() {
   collectionBtn.style.position = 'relative';
   collectionBtn.style.zIndex = '9999';
   
-  // ⭐ POSITION BELOW LAST BUTTON (double spacing for testing)
-  const spacing = lastButtonRect.height * 2; // Y * 2 for testing
+  // ⭐ POSITION BELOW LAST BUTTON (triple spacing for testing)
+  const spacing = lastButtonRect.height * 3; // Y * 3 for testing
   collectionBtn.style.marginTop = spacing + 'px';
   
-  console.log('🎛️ Setting margin-top:', spacing, 'px (height * 2)');
+  console.log('🎛️ Setting margin-top:', spacing, 'px');
+  
+  // ⭐ EXPAND CONTAINER HEIGHT
+  const newContainerHeight = containerRect.height + (lastButtonRect.height * 3);
+  buttonContainer.style.minHeight = newContainerHeight + 'px';
+  console.log('🎛️ Expanding container to:', newContainerHeight, 'px');
   
   // Make focusable
   collectionBtn.setAttribute('tabindex', '0');
@@ -2401,25 +2429,19 @@ function addPlaylistControlButtons() {
     });
   }
   
-  // Append to container
+  // Append
   buttonContainer.appendChild(collectionBtn);
-  
   console.log('🎛️ Button added');
   
-  // Log final count
-  const finalButtons = buttonContainer.querySelectorAll('ytlr-button-renderer');
-  console.log('🎛️ Final button count:', finalButtons.length);
-  
-  // Log position after render
+  // ⭐ LOG AFTER DELAY (when rendered)
   setTimeout(() => {
     const rect = collectionBtn.getBoundingClientRect();
-    console.log('🎛️ Our button position:');
-    console.log('🎛️   Y:', rect.top);
-    console.log('🎛️   X:', rect.left);
-    console.log('🎛️   Height:', rect.height);
-    console.log('🎛️   Width:', rect.width);
-    console.log('🎛️   Visible:', rect.height > 0 && rect.width > 0);
-  }, 500);
+    const finalContainer = buttonContainer.getBoundingClientRect();
+    console.log('🎛️ FINAL POSITIONS:');
+    console.log('🎛️ Container: W:', finalContainer.width, 'H:', finalContainer.height);
+    console.log('🎛️ Our button: X:', rect.left, 'Y:', rect.top, 'W:', rect.width, 'H:', rect.height);
+    console.log('🎛️ Visible:', rect.height > 0 && rect.width > 0);
+  }, 1000);
 }
 
 // ⭐ FUNCTION: Play the first unwatched video
