@@ -1243,7 +1243,7 @@ function isShortItem(item) {
                  'unknown';
 
   const page = getCurrentPage();
-  
+
   // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
@@ -1610,18 +1610,46 @@ function processShelves(shelves, shouldAddPreviews = true) {
     window._lastLoggedPage = page;
   }
 
-  // ⭐ ADD DIAGNOSTIC LOGGING
+  // ⭐ ENHANCED DIAGNOSTIC LOGGING for shelf titles
   if (DEBUG_ENABLED && (page === 'subscriptions' || page.includes('channel'))) {
     console.log('$$$$$$$$$$$ SHELF PROCESSING START $$$$$$$$$$$');
     console.log('$$$$$$$$$$$ Page:', page);
     console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
     console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
     
-    // ⭐ NEW: Log ALL shelf titles
     console.log('📚📚📚 ALL SHELF TITLES:');
     shelves.forEach((shelf, idx) => {
-      const title = getShelfTitle(shelf);
-      console.log('📚 Shelf', idx, ':', title || '(no title)');
+      console.log(`📚 Shelf ${idx}:`);
+      console.log('📚   Keys:', Object.keys(shelf));
+      console.log('📚   Has shelfRenderer:', !!shelf.shelfRenderer);
+      console.log('📚   Has richShelfRenderer:', !!shelf.richShelfRenderer);
+      console.log('📚   Has gridRenderer:', !!shelf.gridRenderer);
+      console.log('📚   Has richSectionRenderer:', !!shelf.richSectionRenderer);
+      
+      // Try to extract title manually from each type
+      if (shelf.shelfRenderer?.shelfHeaderRenderer?.title) {
+        const title = shelf.shelfRenderer.shelfHeaderRenderer.title;
+        console.log('📚   shelfRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      }
+      
+      if (shelf.richShelfRenderer?.title) {
+        const title = shelf.richShelfRenderer.title;
+        console.log('📚   richShelfRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      }
+      
+      if (shelf.gridRenderer?.header?.gridHeaderRenderer?.title) {
+        const title = shelf.gridRenderer.header.gridHeaderRenderer.title;
+        console.log('📚   gridRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      }
+      
+      if (shelf.richSectionRenderer?.content?.richShelfRenderer?.title) {
+        const title = shelf.richSectionRenderer.content.richShelfRenderer.title;
+        console.log('📚   richSectionRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      }
+      
+      // Use getShelfTitle function
+      const extractedTitle = getShelfTitle(shelf);
+      console.log('📚   Final extracted title:', extractedTitle || '(none)');
     });
     console.log('📚📚📚 END SHELF TITLES');
   }
@@ -1637,15 +1665,15 @@ function processShelves(shelves, shouldAddPreviews = true) {
       const shelve = shelves[i];
       if (!shelve) continue;
       
-      // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
+      // ⭐ Check if this is a Shorts shelf by title
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+        if (DEBUG_ENABLED) {
+          console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+        }
 
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-          console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
-          console.log('$$$$$$$$$$$ Title:', shelfTitle);
-          console.log('$$$$$$$$$$$ Page:', page);
+          console.log('✂️ REMOVING ENTIRE SHORTS SHELF:', shelfTitle);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
@@ -1666,17 +1694,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelfType = 'hList';
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
           itemsBefore = items.length;
-          
-          // if (DEBUG_ENABLED) {
-            // if (items && items.length > 0 && items[0]) {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            // } else {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            // }
-          // }
                   
           deArrowify(items);
           hqify(items);
@@ -1723,17 +1740,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
           let items = shelve.shelfRenderer.content.gridRenderer.items;
           itemsBefore = items.length;
 
-          // if (DEBUG_ENABLED) {
-            // if (items && items.length > 0 && items[0]) {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            // } else {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            // }
-          // }
-
           deArrowify(items);
           hqify(items);
           addLongPress(items);
@@ -1767,17 +1773,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
           shelfType = 'vList';
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
           itemsBefore = items.length;
-
-          // if (DEBUG_ENABLED) {
-            // if (items && items.length > 0 && items[0]) {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-              // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-              // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-              // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-            // } else {
-              // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-            // }
-          // }
 
           deArrowify(items);
           hqify(items);
@@ -1813,17 +1808,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelfType = 'richGrid';
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
         itemsBefore = contents.length;
-
-        // if (DEBUG_ENABLED) {
-          // if (contents && contents.length > 0 && contents[0]) {
-            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-            // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(contents[0], null, 2));
-            // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(contents[0]));
-            // console.log('[DEBUG_TIZEN] Is short:', isShortItem(contents[0]));
-          // } else {
-            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-          // }
-        // }
 
         deArrowify(contents);
         hqify(contents);
@@ -1877,17 +1861,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
         shelfType = 'topGrid';
         let items = shelve.gridRenderer.items;
         itemsBefore = items.length;
-
-        // if (DEBUG_ENABLED) {
-          // if (items && items.length > 0 && items[0]) {
-            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType);
-            // console.log('[DEBUG_TIZEN] Sample item:', JSON.stringify(items[0], null, 2));
-            // console.log('[DEBUG_TIZEN] Has progressBar:', !!findProgressBar(items[0]));
-            // console.log('[DEBUG_TIZEN] Is short:', isShortItem(items[0]));
-          // } else {
-            // console.log('[DEBUG_TIZEN] Shelf type:', shelfType, '(empty - no items to sample)');
-          // }
-        // }
 
         deArrowify(items);
         hqify(items);
@@ -2303,6 +2276,24 @@ function addPlaylistControlButtons() {
   }
   
   console.log('🎛️ INJECTING BUTTONS');
+
+  // ⭐ ADD: Inject CSS to keep button visible
+  if (!document.getElementById('tizentube-button-css')) {
+    const style = document.createElement('style');
+    style.id = 'tizentube-button-css';
+    style.textContent = `
+      #tizentube-collection-btn {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+        margin-top: 20px !important;
+        margin-bottom: 20px !important;
+      }
+    `;
+    document.head.appendChild(style);
+    console.log('🎛️ Injected CSS');
+  }
   
   const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                           document.querySelector('[class*="TXB27d"]');
@@ -2332,6 +2323,7 @@ function addPlaylistControlButtons() {
   
   // Clone button
   const collectionBtn = existingBtn.cloneNode(true);
+  collectionBtn.id = 'tizentube-collection-btn'; // ⭐ ADD ID for CSS targeting
   
   // Find text element
   const textElement = collectionBtn.querySelector('yt-formatted-string');
@@ -2344,20 +2336,21 @@ function addPlaylistControlButtons() {
   const newText = inCollection ? '🔄 Collecting...' : 
                   filterIds ? '✅ Exit Filter' : 
                   '🔄 Collect Unwatched';
-  
+
   textElement.textContent = newText;
-  
+
   // ⭐ COPY EXACT STYLING from existing button
-  const existingStyle = window.getComputedStyle(existingBtn);
-  collectionBtn.style.cssText = existingBtn.style.cssText; // Copy inline styles
-  collectionBtn.style.backgroundColor = '#ff0000'; // Make it RED so we can see it
+  collectionBtn.style.cssText = existingBtn.style.cssText;
+  collectionBtn.style.backgroundColor = '#ff0000';
   collectionBtn.style.border = '5px solid yellow';
   collectionBtn.style.display = 'block';
   collectionBtn.style.visibility = 'visible';
   collectionBtn.style.opacity = '1';
   collectionBtn.style.position = 'relative';
   collectionBtn.style.zIndex = '9999';
-  
+  collectionBtn.style.marginTop = '20px'; // ⭐ ADD SPACING from button above
+  collectionBtn.style.marginBottom = '20px';
+
   // Make focusable
   collectionBtn.setAttribute('tabindex', '0');
   
