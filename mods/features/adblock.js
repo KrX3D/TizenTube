@@ -1619,37 +1619,50 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     console.log('📚📚📚 ALL SHELF TITLES:');
     shelves.forEach((shelf, idx) => {
-      console.log(`📚 Shelf ${idx}:`);
-      console.log('📚   Keys:', Object.keys(shelf));
-      console.log('📚   Has shelfRenderer:', !!shelf.shelfRenderer);
-      console.log('📚   Has richShelfRenderer:', !!shelf.richShelfRenderer);
-      console.log('📚   Has gridRenderer:', !!shelf.gridRenderer);
-      console.log('📚   Has richSectionRenderer:', !!shelf.richSectionRenderer);
+      console.log(`📚 === Shelf ${idx} ===`);
+      console.log('📚 Top-level keys:', Object.keys(shelf));
       
-      // Try to extract title manually from each type
-      if (shelf.shelfRenderer?.shelfHeaderRenderer?.title) {
-        const title = shelf.shelfRenderer.shelfHeaderRenderer.title;
-        console.log('📚   shelfRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      // ⭐ LOG FULL STRUCTURE for shelf 1 (the shorts shelf)
+      if (idx === 1) {
+        console.log('📚 🔍 FULL SHELF 1 STRUCTURE (shorts shelf):');
+        console.log('📚 Full JSON (first 1000 chars):', JSON.stringify(shelf, null, 2).substring(0, 1000));
       }
       
-      if (shelf.richShelfRenderer?.title) {
-        const title = shelf.richShelfRenderer.title;
-        console.log('📚   richShelfRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      // Check each renderer type
+      if (shelf.shelfRenderer) {
+        console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
+        if (shelf.shelfRenderer.shelfHeaderRenderer) {
+          console.log('📚   shelfHeaderRenderer keys:', Object.keys(shelf.shelfRenderer.shelfHeaderRenderer));
+          console.log('📚   title object:', shelf.shelfRenderer.shelfHeaderRenderer.title);
+        }
+        if (shelf.shelfRenderer.title) {
+          console.log('📚   Direct title:', shelf.shelfRenderer.title);
+        }
+        if (shelf.shelfRenderer.content) {
+          console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
+        }
       }
       
-      if (shelf.gridRenderer?.header?.gridHeaderRenderer?.title) {
-        const title = shelf.gridRenderer.header.gridHeaderRenderer.title;
-        console.log('📚   gridRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      if (shelf.richShelfRenderer) {
+        console.log('📚 richShelfRenderer keys:', Object.keys(shelf.richShelfRenderer));
+        console.log('📚   title:', shelf.richShelfRenderer.title);
       }
       
-      if (shelf.richSectionRenderer?.content?.richShelfRenderer?.title) {
-        const title = shelf.richSectionRenderer.content.richShelfRenderer.title;
-        console.log('📚   richSectionRenderer title:', title.simpleText || (title.runs ? title.runs.map(r => r.text).join('') : 'no text'));
+      if (shelf.gridRenderer) {
+        console.log('📚 gridRenderer keys:', Object.keys(shelf.gridRenderer));
+        if (shelf.gridRenderer.header) {
+          console.log('📚   header keys:', Object.keys(shelf.gridRenderer.header));
+        }
+      }
+      
+      if (shelf.richSectionRenderer) {
+        console.log('📚 richSectionRenderer keys:', Object.keys(shelf.richSectionRenderer));
       }
       
       // Use getShelfTitle function
       const extractedTitle = getShelfTitle(shelf);
-      console.log('📚   Final extracted title:', extractedTitle || '(none)');
+      console.log('📚 Final extracted title:', extractedTitle || '(none)');
+      console.log('📚 ---');
     });
     console.log('📚📚📚 END SHELF TITLES');
   }
@@ -2276,7 +2289,7 @@ function addPlaylistControlButtons() {
   }
   
   console.log('🎛️ INJECTING BUTTONS');
-
+  
   // ⭐ ADD: Inject CSS to keep button visible
   if (!document.getElementById('tizentube-button-css')) {
     const style = document.createElement('style');
@@ -2287,8 +2300,6 @@ function addPlaylistControlButtons() {
         visibility: visible !important;
         opacity: 1 !important;
         position: relative !important;
-        margin-top: 20px !important;
-        margin-bottom: 20px !important;
       }
     `;
     document.head.appendChild(style);
@@ -2303,13 +2314,31 @@ function addPlaylistControlButtons() {
     return;
   }
   
-  const existingBtn = buttonContainer.querySelector('ytlr-button-renderer');
-  if (!existingBtn) {
-    console.log('🎛️ No existing button');
+  // ⭐ COUNT ALL BUTTONS (including our injected one if it exists)
+  const allButtons = Array.from(buttonContainer.querySelectorAll('ytlr-button-renderer'));
+  const existingButtons = allButtons.filter(btn => btn.id !== 'tizentube-collection-btn');
+  
+  console.log('🎛️ Total buttons found:', allButtons.length);
+  console.log('🎛️ Existing buttons (excluding ours):', existingButtons.length);
+  
+  if (existingButtons.length === 0) {
+    console.log('🎛️ No existing buttons');
     return;
   }
   
-  console.log('🎛️ Cloning button');
+  // Use FIRST button as template
+  const existingBtn = existingButtons[0];
+  console.log('🎛️ Cloning from first button');
+  
+  // Get position of LAST button
+  const lastButton = existingButtons[existingButtons.length - 1];
+  const lastButtonRect = lastButton.getBoundingClientRect();
+  
+  console.log('🎛️ Last button position:');
+  console.log('🎛️   Y:', lastButtonRect.top);
+  console.log('🎛️   X:', lastButtonRect.left);
+  console.log('🎛️   Height:', lastButtonRect.height);
+  console.log('🎛️   Width:', lastButtonRect.width);
   
   // Mark as injected
   const marker = document.createElement('div');
@@ -2323,7 +2352,7 @@ function addPlaylistControlButtons() {
   
   // Clone button
   const collectionBtn = existingBtn.cloneNode(true);
-  collectionBtn.id = 'tizentube-collection-btn'; // ⭐ ADD ID for CSS targeting
+  collectionBtn.id = 'tizentube-collection-btn';
   
   // Find text element
   const textElement = collectionBtn.querySelector('yt-formatted-string');
@@ -2336,9 +2365,9 @@ function addPlaylistControlButtons() {
   const newText = inCollection ? '🔄 Collecting...' : 
                   filterIds ? '✅ Exit Filter' : 
                   '🔄 Collect Unwatched';
-
+  
   textElement.textContent = newText;
-
+  
   // ⭐ COPY EXACT STYLING from existing button
   collectionBtn.style.cssText = existingBtn.style.cssText;
   collectionBtn.style.backgroundColor = '#ff0000';
@@ -2348,9 +2377,13 @@ function addPlaylistControlButtons() {
   collectionBtn.style.opacity = '1';
   collectionBtn.style.position = 'relative';
   collectionBtn.style.zIndex = '9999';
-  collectionBtn.style.marginTop = '20px'; // ⭐ ADD SPACING from button above
-  collectionBtn.style.marginBottom = '20px';
-
+  
+  // ⭐ POSITION BELOW LAST BUTTON (double spacing for testing)
+  const spacing = lastButtonRect.height * 2; // Y * 2 for testing
+  collectionBtn.style.marginTop = spacing + 'px';
+  
+  console.log('🎛️ Setting margin-top:', spacing, 'px (height * 2)');
+  
   // Make focusable
   collectionBtn.setAttribute('tabindex', '0');
   
@@ -2368,17 +2401,24 @@ function addPlaylistControlButtons() {
     });
   }
   
-  // ⭐ APPEND (this adds AFTER existing buttons)
+  // Append to container
   buttonContainer.appendChild(collectionBtn);
   
   console.log('🎛️ Button added');
-  console.log('🎛️ Total buttons in container:', buttonContainer.querySelectorAll('ytlr-button-renderer').length);
   
-  // Log position after a delay
+  // Log final count
+  const finalButtons = buttonContainer.querySelectorAll('ytlr-button-renderer');
+  console.log('🎛️ Final button count:', finalButtons.length);
+  
+  // Log position after render
   setTimeout(() => {
     const rect = collectionBtn.getBoundingClientRect();
-    console.log('🎛️ Button rect:', rect.top, rect.left, rect.width, rect.height);
-    console.log('🎛️ Container rect:', buttonContainer.getBoundingClientRect());
+    console.log('🎛️ Our button position:');
+    console.log('🎛️   Y:', rect.top);
+    console.log('🎛️   X:', rect.left);
+    console.log('🎛️   Height:', rect.height);
+    console.log('🎛️   Width:', rect.width);
+    console.log('🎛️   Visible:', rect.height > 0 && rect.width > 0);
   }, 500);
 }
 
