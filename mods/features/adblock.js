@@ -100,7 +100,7 @@ function directFilterArray(arr, page, context = '') {
   const callId = Math.random().toString(36).substr(2, 6);
   
   // ⭐ Check if this is a playlist page
-  const isPlaylistPage = (page === 'playlist');
+  isPlaylistPage = (page === 'playlist');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
