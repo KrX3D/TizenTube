@@ -96,7 +96,7 @@ import { configWrite } from "./config.js";
         
         const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
         const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 140);
-        console.log('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll);
+        originalLog('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -113,7 +113,7 @@ import { configWrite } from "./config.js";
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
         const newScroll = Math.max(0, consoleDiv.scrollTop - 140);
-        console.log('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll);
+        originalLog('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -153,7 +153,9 @@ import { configWrite } from "./config.js";
                 originalLog.apply(console, args);
                         // Only add to logs if console is enabled
                                 if (enabled) {
-                                            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'log');
+                                            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            addLog(msg, 'log');
+            if (window.remoteLogger?.log) window.remoteLogger.log('log', msg);
                                                     }
                                                         };
 
@@ -161,7 +163,9 @@ import { configWrite } from "./config.js";
         originalError.apply(console, args);
         // Only add to logs if console is enabled
         if (enabled) {
-            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error');
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            addLog(msg, 'error');
+            if (window.remoteLogger?.log) window.remoteLogger.log('error', msg);
         }
     };
 
@@ -169,7 +173,9 @@ import { configWrite } from "./config.js";
         originalWarn.apply(console, args);
         // Only add to logs if console is enabled
         if (enabled) {
-            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn');
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            addLog(msg, 'warn');
+            if (window.remoteLogger?.log) window.remoteLogger.log('warn', msg);
         }
     };
 
@@ -283,7 +289,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v370 - NEWEST FIRST');
+    console.log('[Console] Visual Console v380 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
@@ -297,6 +303,7 @@ import { configWrite } from "./config.js";
     updateBorder();
 })();
 
+import "./features/remoteLogging.js";
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';

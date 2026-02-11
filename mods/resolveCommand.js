@@ -177,7 +177,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v370');
+            console.log('[Console] Visual Console v380');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
@@ -193,6 +193,14 @@ function customAction(action, parameters) {
             } else {
                 console.error('✗ Console DIV not found!');
                 showToast('Console', 'ERROR: Console DIV not found');
+            }
+            break;
+        case 'TEST_REMOTE_LOGGING':
+            if (window.remoteLogger && typeof window.remoteLogger.test === 'function') {
+                window.remoteLogger.test();
+                showToast('Remote Logging', 'Test log sent (if URL is configured)');
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
             }
             break;
     }
