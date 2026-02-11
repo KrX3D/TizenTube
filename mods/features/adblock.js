@@ -891,9 +891,9 @@ JSON.parse = function () {
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
-      // Handle appendContinuationItemsAction (playlist scroll continuation)
+      // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        const items = action.appendContinuationItemsAction.continuationItems;
+        let items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -902,22 +902,13 @@ JSON.parse = function () {
             console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
           }
         }
-        
-        // Check if this is playlist video continuation
-        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
-        
-        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
-          if (DEBUG_ENABLED) {
-            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
-          }
-          
-          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
-          action.appendContinuationItemsAction.continuationItems = filtered;
-        } else {
-          // For non-playlist continuation, use direct filter
-          const filtered = directFilterArray(items, page, `continuation-${idx}`);
-          action.appendContinuationItemsAction.continuationItems = filtered;
-        }
+
+        // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
+        scanAndFilterAllArrays(items, page, `onResponse-${idx}`);
+
+        // Then direct-filter top-level arrays with videos.
+        const filtered = directFilterArray(items, page, `continuation-${idx}`);
+        action.appendContinuationItemsAction.continuationItems = filtered;
       }
     });
     
@@ -925,6 +916,7 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
     }
   }
+
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     if (DEBUG_ENABLED) {
@@ -1576,11 +1568,13 @@ function isShortItem(item) {
 function getShelfTitle(shelf) {
   const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
   const headerRendererTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title;
+  const topHeaderRendererTitle = shelf?.headerRenderer?.shelfHeaderRenderer?.title;
   const richShelfTitle = shelf?.richShelfRenderer?.title;
   const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
   const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
   // Tizen 5.5 channels/subscriptions path shown in your logs/screenshots.
   const avatarLockupTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
+  const topAvatarLockupTitle = shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
 
   const titleText = (title) => {
     if (!title) return '';
@@ -1589,15 +1583,32 @@ function getShelfTitle(shelf) {
     return '';
   };
 
-  return (
+  const direct = (
     titleText(shelfRendererTitle) ||
     titleText(headerRendererTitle) ||
+    titleText(topHeaderRendererTitle) ||
     titleText(richShelfTitle) ||
     titleText(richSectionTitle) ||
     titleText(gridHeaderTitle) ||
-    titleText(avatarLockupTitle)
+    titleText(avatarLockupTitle) ||
+    titleText(topAvatarLockupTitle)
   );
+
+  if (direct) return direct;
+
+  // Fallback: read "...title.runs[0].text" from nested header JSON if shape is odd.
+  const shelfJson = JSON.stringify(shelf);
+  const match = shelfJson.match(/"avatarLockupRenderer":\{[\s\S]*?"title":\{[\s\S]*?"runs":\[\{"text":"([^"]+)"\}/);
+  if (match?.[1]) {
+    if (DEBUG_ENABLED) {
+      console.log('[SHELF_TITLE] avatarLockup fallback title:', match[1]);
+    }
+    return match[1];
+  }
+
+  return '';
 }
+
 
 function processShelves(shelves, shouldAddPreviews = true) {  
   if (!Array.isArray(shelves)) {
@@ -2266,15 +2277,35 @@ function getCurrentPage() {
 }
 
 
-function addPlaylistControlButtons() {
+function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
-  const container = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
-  if (!container) return;
+  const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
+  if (!baseContainer) {
+    if (DEBUG_ENABLED && attempt === 1) {
+      console.log('[PLAYLIST_BUTTON] No button container found');
+    }
+    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
+    return;
+  }
 
-  const existingButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
-  if (existingButtons.length === 0) return;
+  const parentContainer = baseContainer.parentElement;
+  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
+  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
+
+  const useParent = parentButtons.length > baseButtons.length;
+  const container = useParent ? parentContainer : baseContainer;
+  const existingButtons = useParent ? parentButtons : baseButtons;
+
+  if (DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] Container selected:', useParent ? 'parent' : 'base', '| buttons:', existingButtons.length);
+  }
+
+  if (existingButtons.length === 0) {
+    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
+    return;
+  }
 
   const existingCustom = container.querySelector('#tizentube-collection-btn');
   if (existingCustom) existingCustom.remove();
@@ -2294,13 +2325,20 @@ function addPlaylistControlButtons() {
     label.textContent = '🔄 Refresh Filters';
   }
 
-  customBtn.style.marginTop = '24px';
+  customBtn.style.cssText = templateBtn.style.cssText;
   customBtn.style.position = 'relative';
+  customBtn.style.top = 'auto';
+  customBtn.style.left = 'auto';
+  customBtn.style.transform = 'none';
+  customBtn.style.display = 'block';
+  customBtn.style.visibility = 'visible';
+  customBtn.style.opacity = '1';
   customBtn.style.pointerEvents = 'auto';
+  customBtn.style.marginTop = '24px';
 
   const templateHeight = templateBtn.getBoundingClientRect().height || 72;
-  const minHeightNeeded = container.scrollHeight + templateHeight + 32;
-  container.style.minHeight = `${Math.max(minHeightNeeded, container.clientHeight + templateHeight)}px`;
+  const minHeightNeeded = container.scrollHeight + templateHeight + 40;
+  container.style.minHeight = `${Math.max(minHeightNeeded, container.clientHeight + templateHeight + 24)}px`;
   container.style.overflow = 'visible';
 
   customBtn.addEventListener('click', (evt) => {
@@ -2314,15 +2352,21 @@ function addPlaylistControlButtons() {
   });
 
   container.appendChild(customBtn);
+
+  if (DEBUG_ENABLED) {
+    const rect = customBtn.getBoundingClientRect();
+    console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height));
+  }
 }
 
+
 if (typeof window !== 'undefined') {
-  setTimeout(() => addPlaylistControlButtons(), 2500);
+  setTimeout(() => addPlaylistControlButtons(1), 2500);
   let lastPlaylistButtonHref = window.location.href;
   setInterval(() => {
     if (window.location.href !== lastPlaylistButtonHref) {
       lastPlaylistButtonHref = window.location.href;
-      setTimeout(() => addPlaylistControlButtons(), 1800);
+      setTimeout(() => addPlaylistControlButtons(1), 1800);
     }
   }, 1200);
 }

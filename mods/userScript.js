@@ -94,7 +94,8 @@ import { configWrite } from "./config.js";
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
+        const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
+        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -109,8 +110,7 @@ import { configWrite } from "./config.js";
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
-        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
+        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -279,7 +279,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v340 - NEWEST FIRST');
+    console.log('[Console] Visual Console v350 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
