@@ -262,7 +262,7 @@ import { configWrite } from "./config.js";
         const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${timestamp}] ${message}</div>`;
         
         logs.unshift(logEntry);
-        if (logs.length > 150) logs.pop();
+        if (logs.length > 600) logs.pop();
         
         // Only update DOM if console is visible
         if (consoleDiv && consoleVisible) {
