@@ -94,7 +94,6 @@ import { configWrite } from "./config.js";
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const before = consoleDiv.scrollTop;
         const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
         
         consoleDiv.scrollTop = newScroll;
@@ -110,7 +109,6 @@ import { configWrite } from "./config.js";
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const before = consoleDiv.scrollTop;
         const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
         const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
         
@@ -137,12 +135,8 @@ import { configWrite } from "./config.js";
     window.deleteConsoleLastLog = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         if (logs.length === 0) return;
-        
-        // Delete 15 logs from the TOP (newest logs, since we use unshift)
-        logs.splice(0, 3);
-        
+        logs.splice(0, Math.min(3, logs.length));
         consoleDiv.innerHTML = logs.join('');
-        // NO logging here - silent operation
     };
 
     function updateBorder() {
@@ -285,7 +279,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v300 - NEWEST FIRST');
+    console.log('[Console] Visual Console v330 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');

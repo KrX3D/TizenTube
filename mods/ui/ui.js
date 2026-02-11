@@ -159,7 +159,6 @@ function execute_once_dom_loaded() {
         evt.stopPropagation();
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            // REMOVED: console.log('[Console] RED pressed - Scrolling UP');
             if (typeof window.scrollConsoleUp === 'function') {
                 window.scrollConsoleUp();
             }
@@ -171,19 +170,17 @@ function execute_once_dom_loaded() {
         evt.stopPropagation();
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            // REMOVED: console.log('[Console] GREEN pressed - Scrolling DOWN');
             if (typeof window.scrollConsoleDown === 'function') {
                 window.scrollConsoleDown();
             }
         }
         return false;
     }
-    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete logs
+    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete last log line
         evt.preventDefault();
         evt.stopPropagation();
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            // REMOVED: console.log('[Console] YELLOW pressed - Delete last log line');
             if (typeof window.deleteConsoleLastLog === 'function') {
                 window.deleteConsoleLastLog();
             }
@@ -195,7 +192,6 @@ function execute_once_dom_loaded() {
         evt.stopPropagation();
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            // REMOVED: console.log('[Console] BLUE pressed - Toggling console');
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
             }
