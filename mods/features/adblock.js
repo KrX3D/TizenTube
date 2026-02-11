@@ -35,27 +35,19 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
-function trackRemovedPlaylistHelpers(helperIds) {
-  if (!window._playlistRemovedHelpers) {
-    window._playlistRemovedHelpers = new Set();
-  }
-  if (!window._playlistRemovedHelperQueue) {
-    window._playlistRemovedHelperQueue = [];
-  }
 
-  helperIds.forEach((helperId) => {
-    if (!helperId || helperId === 'unknown') return;
-    if (!window._playlistRemovedHelpers.has(helperId)) {
-      window._playlistRemovedHelpers.add(helperId);
-      window._playlistRemovedHelperQueue.push(helperId);
-    }
-  });
-
-  const MAX_REMOVED_HELPERS = 25;
-  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
-    const oldest = window._playlistRemovedHelperQueue.shift();
-    window._playlistRemovedHelpers.delete(oldest);
-  }
+function isPageConfigured(configPages, page) {
+  if (!Array.isArray(configPages) || configPages.length === 0) return true;
+  const normalized = configPages.map(p => String(p).toLowerCase());
+  const aliases = {
+    playlist: ['playlist'],
+    playlists: ['playlists'],
+    channel: ['channel', 'channels'],
+    channels: ['channel', 'channels'],
+    subscriptions: ['subscriptions', 'subscription']
+  };
+  const candidates = aliases[page] || [page];
+  return candidates.some(candidate => normalized.includes(candidate));
 }
 
 function directFilterArray(arr, page, context = '') {
@@ -94,7 +86,7 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
+  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
@@ -106,6 +98,9 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
+  
+  // ⭐ Check if this is a playlist page
+  const isPlaylistPage = (page === 'playlist');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -1566,16 +1561,6 @@ function isShortItem(item) {
 }
 
 function getShelfTitle(shelf) {
-  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
-  const headerRendererTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title;
-  const topHeaderRendererTitle = shelf?.headerRenderer?.shelfHeaderRenderer?.title;
-  const richShelfTitle = shelf?.richShelfRenderer?.title;
-  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
-  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
-  // Tizen 5.5 channels/subscriptions path shown in your logs/screenshots.
-  const avatarLockupTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
-  const topAvatarLockupTitle = shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
-
   const titleText = (title) => {
     if (!title) return '';
     if (title.simpleText) return title.simpleText;
@@ -1583,25 +1568,33 @@ function getShelfTitle(shelf) {
     return '';
   };
 
-  const direct = (
-    titleText(shelfRendererTitle) ||
-    titleText(headerRendererTitle) ||
-    titleText(topHeaderRendererTitle) ||
-    titleText(richShelfTitle) ||
-    titleText(richSectionTitle) ||
-    titleText(gridHeaderTitle) ||
-    titleText(avatarLockupTitle) ||
-    titleText(topAvatarLockupTitle)
-  );
+  const titlePaths = [
+    ['shelfRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.shelfHeaderRenderer?.title],
+    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title],
+    ['headerRenderer.shelfHeaderRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.title],
+    ['richShelfRenderer.title', shelf?.richShelfRenderer?.title],
+    ['richSectionRenderer.content.richShelfRenderer.title', shelf?.richSectionRenderer?.content?.richShelfRenderer?.title],
+    ['gridRenderer.header.gridHeaderRenderer.title', shelf?.gridRenderer?.header?.gridHeaderRenderer?.title],
+    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
+    ['headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
+  ];
 
-  if (direct) return direct;
+  for (const [path, rawTitle] of titlePaths) {
+    const text = titleText(rawTitle);
+    if (text) {
+      if (DEBUG_ENABLED && text.toLowerCase().includes('short')) {
+        console.log('[SHELF_TITLE] path=', path, '| title=', text);
+      }
+      return text;
+    }
+  }
 
-  // Fallback: read "...title.runs[0].text" from nested header JSON if shape is odd.
   const shelfJson = JSON.stringify(shelf);
   const match = shelfJson.match(/"avatarLockupRenderer":\{[\s\S]*?"title":\{[\s\S]*?"runs":\[\{"text":"([^"]+)"\}/);
   if (match?.[1]) {
     if (DEBUG_ENABLED) {
       console.log('[SHELF_TITLE] avatarLockup fallback title:', match[1]);
+      console.log('[SHELF_TITLE] avatarLockup fallback path: avatarLockupRenderer.title.runs[0].text');
     }
     return match[1];
   }
@@ -1620,7 +1613,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
-  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
+  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
   
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide watched:', shouldHideWatched, '| Shorts:', shortsEnabled);
@@ -1730,6 +1723,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         // ⭐ Also log when we DON'T remove (for debugging)
         if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
       }
       
@@ -2277,15 +2273,22 @@ function getCurrentPage() {
 }
 
 
+function logChunked(prefix, text, chunkSize = 1000) {
+  if (!text) return;
+  for (let i = 0; i < text.length; i += chunkSize) {
+    const part = text.slice(i, i + chunkSize);
+    console.log(`${prefix} [${Math.floor(i / chunkSize) + 1}]`, part);
+  }
+}
+
+
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
-    if (DEBUG_ENABLED && attempt === 1) {
-      console.log('[PLAYLIST_BUTTON] No button container found');
-    }
+    console.log('[PLAYLIST_BUTTON] No button container found (attempt ' + attempt + ')');
     if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
@@ -2294,15 +2297,21 @@ function addPlaylistControlButtons(attempt = 1) {
   const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
   const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
 
+  if (attempt === 1) {
+    logChunked('[PLAYLIST_BUTTON] baseContainer HTML', baseContainer.outerHTML || '');
+    if (parentContainer) {
+      logChunked('[PLAYLIST_BUTTON] parentContainer HTML', parentContainer.outerHTML || '');
+    }
+  }
+
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
   const existingButtons = useParent ? parentButtons : baseButtons;
 
-  if (DEBUG_ENABLED) {
-    console.log('[PLAYLIST_BUTTON] Container selected:', useParent ? 'parent' : 'base', '| buttons:', existingButtons.length);
-  }
+  console.log('[PLAYLIST_BUTTON] Container selected:', useParent ? 'parent' : 'base', '| buttons:', existingButtons.length);
 
   if (existingButtons.length === 0) {
+    console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
     if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
@@ -2334,7 +2343,8 @@ function addPlaylistControlButtons(attempt = 1) {
   customBtn.style.visibility = 'visible';
   customBtn.style.opacity = '1';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.marginTop = '24px';
+  customBtn.style.zIndex = '5';
+  customBtn.style.marginTop = '32px';
 
   const templateHeight = templateBtn.getBoundingClientRect().height || 72;
   const minHeightNeeded = container.scrollHeight + templateHeight + 40;
@@ -2353,10 +2363,12 @@ function addPlaylistControlButtons(attempt = 1) {
 
   container.appendChild(customBtn);
 
-  if (DEBUG_ENABLED) {
-    const rect = customBtn.getBoundingClientRect();
-    console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height));
+  if (attempt < 3) {
+    setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
   }
+
+  const rect = customBtn.getBoundingClientRect();
+  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| text=', (label?.textContent || '').trim());
 }
 
 
