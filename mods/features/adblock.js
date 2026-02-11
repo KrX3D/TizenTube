@@ -44,7 +44,7 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && configPages.includes(page);
+  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
@@ -328,9 +328,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       if (!shortsEnabled) {
         for (let i = obj.length - 1; i >= 0; i--) {
           const shelf = obj[i];
-          if (shelf?.shelfRenderer) {
-            const shelfTitle = shelf.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
-            if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
+          if (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer) {
+            const shelfTitle = getShelfTitle(shelf);
+            if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
               if (LOG_SHORTS && DEBUG_ENABLED) {
                 console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
               }
@@ -1249,6 +1249,32 @@ function isShortItem(item) {
   return false;
 }
 
+function getShelfTitle(shelf) {
+  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
+  const headerRendererTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title;
+  const richShelfTitle = shelf?.richShelfRenderer?.title;
+  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
+  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
+  // Tizen 5.5 channels/subscriptions path shown in your logs/screenshots.
+  const avatarLockupTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
+
+  const titleText = (title) => {
+    if (!title) return '';
+    if (title.simpleText) return title.simpleText;
+    if (Array.isArray(title.runs)) return title.runs.map(run => run.text).join('');
+    return '';
+  };
+
+  return (
+    titleText(shelfRendererTitle) ||
+    titleText(headerRendererTitle) ||
+    titleText(richShelfTitle) ||
+    titleText(richSectionTitle) ||
+    titleText(gridHeaderTitle) ||
+    titleText(avatarLockupTitle)
+  );
+}
+
 function processShelves(shelves, shouldAddPreviews = true) {  
   if (!Array.isArray(shelves)) {
     console.warn('[SHELF_PROCESS] processShelves called with non-array', { type: typeof shelves });
@@ -1288,9 +1314,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (!shelve) continue;
       
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
-      if (!shortsEnabled && shelve.shelfRenderer) {
-        const shelfTitle = shelve.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
-        if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
+      if (!shortsEnabled) {
+        const shelfTitle = getShelfTitle(shelve);
+        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
@@ -1894,4 +1920,66 @@ function getCurrentPage() {
   }
   
   return detectedPage;
+}
+
+
+function addPlaylistControlButtons() {
+  const page = getCurrentPage();
+  if (page !== 'playlist') return;
+
+  const container = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
+  if (!container) return;
+
+  const existingButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
+  if (existingButtons.length === 0) return;
+
+  const existingCustom = container.querySelector('#tizentube-collection-btn');
+  if (existingCustom) existingCustom.remove();
+
+  const templateBtn = existingButtons[existingButtons.length - 1];
+  const customBtn = templateBtn.cloneNode(true);
+  customBtn.id = 'tizentube-collection-btn';
+
+  Array.from(templateBtn.attributes).forEach((attr) => {
+    if (attr.name.startsWith('data-') || attr.name === 'tabindex' || attr.name === 'role') {
+      customBtn.setAttribute(attr.name, attr.value);
+    }
+  });
+
+  const label = customBtn.querySelector('yt-formatted-string');
+  if (label) {
+    label.textContent = '🔄 Refresh Filters';
+  }
+
+  customBtn.style.marginTop = '24px';
+  customBtn.style.position = 'relative';
+  customBtn.style.pointerEvents = 'auto';
+
+  const templateHeight = templateBtn.getBoundingClientRect().height || 72;
+  const minHeightNeeded = container.scrollHeight + templateHeight + 32;
+  container.style.minHeight = `${Math.max(minHeightNeeded, container.clientHeight + templateHeight)}px`;
+  container.style.overflow = 'visible';
+
+  customBtn.addEventListener('click', (evt) => {
+    evt.preventDefault();
+    evt.stopPropagation();
+    resolveCommand({
+      signalAction: {
+        signal: 'SOFT_RELOAD_PAGE'
+      }
+    });
+  });
+
+  container.appendChild(customBtn);
+}
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => addPlaylistControlButtons(), 2500);
+  let lastPlaylistButtonHref = window.location.href;
+  setInterval(() => {
+    if (window.location.href !== lastPlaylistButtonHref) {
+      lastPlaylistButtonHref = window.location.href;
+      setTimeout(() => addPlaylistControlButtons(), 1800);
+    }
+  }, 1200);
 }
