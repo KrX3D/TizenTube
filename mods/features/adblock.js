@@ -1730,6 +1730,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
       }
       
       let shelfType = 'unknown';
