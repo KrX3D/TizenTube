@@ -1569,8 +1569,8 @@ function getShelfTitle(shelf) {
   const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
   const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
   
-  // ⭐ NEW: Check avatarLockup path (where "Shorts" title is hidden on Tizen)
-  const avatarLockupTitle = shelf?.shelfRenderer?.header?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
+  // ⭐ FIXED: headerRenderer (not header!)
+  const avatarLockupTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
 
   const titleText = (title) => {
     if (!title) return '';
@@ -1578,13 +1578,28 @@ function getShelfTitle(shelf) {
     if (Array.isArray(title.runs)) return title.runs.map(run => run.text).join('');
     return '';
   };
+  
+  // ⭐ FALLBACK: Search for avatarLockupRenderer anywhere in the shelf JSON
+  let flexibleTitle = '';
+  if (!titleText(shelfRendererTitle) && !titleText(richShelfTitle) && !titleText(richSectionTitle) && !titleText(gridHeaderTitle) && !titleText(avatarLockupTitle)) {
+    const shelfJson = JSON.stringify(shelf);
+    if (shelfJson.includes('avatarLockupRenderer')) {
+      // Search for the pattern: "avatarLockupRenderer":{"title":{"runs":[{"text":"Shorts"}]
+      const match = shelfJson.match(/"avatarLockupRenderer":\{[^}]*"title":\{[^}]*"runs":\[\{"text":"([^"]+)"/);
+      if (match && match[1]) {
+        flexibleTitle = match[1];
+        console.log('🔍 Found title via flexible search:', flexibleTitle);
+      }
+    }
+  }
 
   return (
     titleText(shelfRendererTitle) ||
     titleText(richShelfTitle) ||
     titleText(richSectionTitle) ||
     titleText(gridHeaderTitle) ||
-    titleText(avatarLockupTitle) // ⭐ ADD THIS
+    titleText(avatarLockupTitle) ||
+    flexibleTitle
   );
 }
 
@@ -1700,8 +1715,15 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ Check if this is a Shorts shelf by title
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (DEBUG_ENABLED) {
-          console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+        
+        console.log('🔍 Shelf', i, 'title:', shelfTitle || '(no title)');
+        
+        // ⭐ Debug: Check all possible title paths
+        if (!shelfTitle && shelve.shelfRenderer?.header) {
+          console.log('🔍   Has header, keys:', Object.keys(shelve.shelfRenderer.header));
+          if (shelve.shelfRenderer.header.shelfHeaderRenderer) {
+            console.log('🔍   shelfHeaderRenderer keys:', Object.keys(shelve.shelfRenderer.header.shelfHeaderRenderer));
+          }
         }
 
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
@@ -2301,7 +2323,7 @@ if (typeof window !== 'undefined') {
 // ⭐ INJECT PLAYLIST CONTROL BUTTONS (with retry for slow-loading buttons)
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
-  if (page !== 'playlist' && page !== 'playlists') return;
+  if (page !== 'playlist') return; // ⭐ ONLY single playlists, NOT the playlists list page
   
   if (document.getElementById('tizentube-collection-injected')) {
     console.log('🎛️ Already injected');
@@ -2309,20 +2331,40 @@ function addPlaylistControlButtons(attempt = 1) {
   }
   
   console.log('🎛️ INJECTING BUTTONS (attempt', attempt + ')');
-  
+
   const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                           document.querySelector('[class*="TXB27d"]');
-  
+
   if (!buttonContainer) {
     console.log('🎛️ No container');
     return;
   }
-  
-  // Get all buttons
-  const allButtons = Array.from(buttonContainer.querySelectorAll('ytlr-button-renderer'));
-  const existingButtons = allButtons.filter(btn => btn.id !== 'tizentube-collection-btn');
-  
-  console.log('🎛️ Found', existingButtons.length, 'buttons');
+
+  // ⭐ LOG CONTAINER STRUCTURE
+  console.log('🎛️ Container HTML (first 500 chars):');
+  console.log(buttonContainer.innerHTML.substring(0, 500));
+  console.log('🎛️ Container children count:', buttonContainer.children.length);
+
+  // ⭐ LOG ALL CHILDREN
+  for (let i = 0; i < buttonContainer.children.length; i++) {
+    const child = buttonContainer.children[i];
+    console.log(`🎛️ Child ${i}: ${child.tagName} | class: ${child.className}`);
+  }
+
+  // ⭐ Try multiple selectors
+  const ytlrButtons = buttonContainer.querySelectorAll('ytlr-button-renderer');
+  const allDivs = buttonContainer.querySelectorAll('div[class*="button"]');
+  const allButtons = buttonContainer.querySelectorAll('button, [role="button"]');
+
+  console.log('🎛️ ytlr-button-renderer found:', ytlrButtons.length);
+  console.log('🎛️ div[class*="button"] found:', allDivs.length);
+  console.log('🎛️ button/role=button found:', allButtons.length);
+
+  // Use ytlr-button-renderer first, but log all
+  const allButtonRenderers = Array.from(ytlrButtons);
+  const existingButtons = allButtonRenderers.filter(btn => btn.id !== 'tizentube-collection-btn');
+
+  console.log('🎛️ Using ytlr-button-renderer:', existingButtons.length, 'buttons');
   
   // ⭐ If we only found 1 button but expect more, RETRY
   if (existingButtons.length === 1 && attempt < 5) {
@@ -2338,7 +2380,6 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
   
-  // ⭐ Inject CSS
   if (!document.getElementById('tizentube-button-css')) {
     const style = document.createElement('style');
     style.id = 'tizentube-button-css';
@@ -2347,9 +2388,18 @@ function addPlaylistControlButtons(attempt = 1) {
         display: block !important;
         visibility: visible !important;
         opacity: 1 !important;
+        position: relative !important;
+        z-index: 99999 !important;
+        pointer-events: auto !important;
+      }
+      
+      /* Ensure container doesn't clip our button */
+      .TXB27d.RuKowd.fitbrf.B3hoEd {
+        overflow: visible !important;
       }
     `;
     document.head.appendChild(style);
+    console.log('🎛️ Injected CSS with overflow fix');
   }
   
   // Log each button
@@ -2377,9 +2427,17 @@ function addPlaylistControlButtons(attempt = 1) {
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
-  // Clone button
+  // ⭐ Clone button and copy ALL attributes
   const collectionBtn = existingBtn.cloneNode(true);
   collectionBtn.id = 'tizentube-collection-btn';
+
+  // ⭐ Copy all data attributes that YouTube uses for focus management
+  Array.from(existingBtn.attributes).forEach(attr => {
+    if (attr.name.startsWith('data-') || attr.name === 'tabindex' || attr.name === 'role') {
+      collectionBtn.setAttribute(attr.name, attr.value);
+      console.log('🎛️ Copied attribute:', attr.name, '=', attr.value);
+    }
+  });
   
   const textElement = collectionBtn.querySelector('yt-formatted-string');
   if (!textElement) {
