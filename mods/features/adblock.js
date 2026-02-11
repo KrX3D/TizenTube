@@ -396,11 +396,21 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
         for (let i = obj.length - 1; i >= 0; i--) {
           const shelf = obj[i];
           const shelfTitle = getShelfTitle(shelf);
-          if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-            if (LOG_SHORTS && DEBUG_ENABLED) {
-              console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
+
+          // ⭐ EXACT MATCH: Only remove if title is EXACTLY "Shorts" (not "Daily Shorts" etc.)
+          if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
+            console.log('✂️✂️✂️ REMOVING SHELF WITH EXACT TITLE "SHORTS":', shelfTitle);
+            if (DEBUG_ENABLED) {
+              console.log('[SHELF_PROCESS] Removing Shorts shelf by exact title match');
             }
-            obj.splice(i, 1);
+            shelves.splice(i, 1);
+            shelvesRemoved++;
+            continue;
+          }
+
+          // ⭐ Also log when we DON'T remove (for debugging)
+          if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+            console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
           }
         }
       }
@@ -1665,12 +1675,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // Check each renderer type
       if (shelf.shelfRenderer) {
         console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
-        if (shelf.shelfRenderer.shelfHeaderRenderer) {
-          console.log('📚   shelfHeaderRenderer keys:', Object.keys(shelf.shelfRenderer.shelfHeaderRenderer));
-          console.log('📚   title object:', shelf.shelfRenderer.shelfHeaderRenderer.title);
-        }
-        if (shelf.shelfRenderer.title) {
-          console.log('📚   Direct title:', shelf.shelfRenderer.title);
+        if (shelf.shelfRenderer.headerRenderer) {
+          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
         }
         if (shelf.shelfRenderer.content) {
           console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
@@ -1718,22 +1724,20 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         console.log('🔍 Shelf', i, 'title:', shelfTitle || '(no title)');
         
-        // ⭐ Debug: Check all possible title paths
-        if (!shelfTitle && shelve.shelfRenderer?.header) {
-          console.log('🔍   Has header, keys:', Object.keys(shelve.shelfRenderer.header));
-          if (shelve.shelfRenderer.header.shelfHeaderRenderer) {
-            console.log('🔍   shelfHeaderRenderer keys:', Object.keys(shelve.shelfRenderer.header.shelfHeaderRenderer));
-          }
-        }
-
-        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-          console.log('✂️ REMOVING ENTIRE SHORTS SHELF:', shelfTitle);
+        // ⭐ EXACT MATCH: Only remove if title is EXACTLY "Shorts" (not "Daily Shorts" etc.)
+        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
+          console.log('✂️✂️✂️ REMOVING SHELF WITH EXACT TITLE "SHORTS":', shelfTitle);
           if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
+            console.log('[SHELF_PROCESS] Removing Shorts shelf by exact title match');
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
           continue;
+        }
+
+        // ⭐ Also log when we DON'T remove (for debugging)
+        if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
         }
       }
       
@@ -2340,46 +2344,58 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  // ⭐ LOG CONTAINER STRUCTURE
-  console.log('🎛️ Container HTML (first 500 chars):');
-  console.log(buttonContainer.innerHTML.substring(0, 500));
-  console.log('🎛️ Container children count:', buttonContainer.children.length);
+  console.log('🎛️ Container tag:', buttonContainer.tagName, 'class:', buttonContainer.className);
+  console.log('🎛️ Container children:', buttonContainer.children.length);
 
-  // ⭐ LOG ALL CHILDREN
-  for (let i = 0; i < buttonContainer.children.length; i++) {
-    const child = buttonContainer.children[i];
-    console.log(`🎛️ Child ${i}: ${child.tagName} | class: ${child.className}`);
+  // ⭐ SEARCH IN PARENT TOO (buttons might be siblings, not children)
+  const parent = buttonContainer.parentElement;
+  console.log('🎛️ Parent tag:', parent?.tagName, 'children:', parent?.children.length);
+
+  // ⭐ Search in BOTH container AND parent
+  const containerButtons = Array.from(buttonContainer.querySelectorAll('ytlr-button-renderer'));
+  const parentButtons = parent ? Array.from(parent.querySelectorAll('ytlr-button-renderer')) : [];
+
+  console.log('🎛️ Buttons in container:', containerButtons.length);
+  console.log('🎛️ Buttons in parent:', parentButtons.length);
+
+  // ⭐ Use whichever has more buttons
+  let existingButtons = containerButtons;
+  let targetContainer = buttonContainer;
+
+  if (parentButtons.length > containerButtons.length) {
+    console.log('🎛️ Using PARENT (has more buttons)');
+    existingButtons = parentButtons;
+    targetContainer = parent;
+  } else {
+    console.log('🎛️ Using CONTAINER');
   }
 
-  // ⭐ Try multiple selectors
-  const ytlrButtons = buttonContainer.querySelectorAll('ytlr-button-renderer');
-  const allDivs = buttonContainer.querySelectorAll('div[class*="button"]');
-  const allButtons = buttonContainer.querySelectorAll('button, [role="button"]');
+  // Filter out our injected button
+  existingButtons = existingButtons.filter(btn => btn.id !== 'tizentube-collection-btn');
 
-  console.log('🎛️ ytlr-button-renderer found:', ytlrButtons.length);
-  console.log('🎛️ div[class*="button"] found:', allDivs.length);
-  console.log('🎛️ button/role=button found:', allButtons.length);
+  console.log('🎛️ Total buttons found:', existingButtons.length);
 
-  // Use ytlr-button-renderer first, but log all
-  const allButtonRenderers = Array.from(ytlrButtons);
-  const existingButtons = allButtonRenderers.filter(btn => btn.id !== 'tizentube-collection-btn');
+  // Log each button
+  existingButtons.forEach((btn, idx) => {
+    const text = (btn.textContent || '').trim();
+    console.log(`🎛️ Btn${idx}: "${text}"`);
+  });
 
-  console.log('🎛️ Using ytlr-button-renderer:', existingButtons.length, 'buttons');
-  
-  // ⭐ If we only found 1 button but expect more, RETRY
+  // ⭐ If still only 1 button, retry
   if (existingButtons.length === 1 && attempt < 5) {
-    console.log('🎛️ Only 1 button found, waiting for more... (retry in 2s)');
+    console.log('🎛️ Only 1 button, retrying...');
     setTimeout(() => {
       addPlaylistControlButtons(attempt + 1);
     }, 2000);
     return;
   }
-  
+
   if (existingButtons.length === 0) {
-    console.log('🎛️ No buttons found');
+    console.log('🎛️ No buttons');
     return;
   }
   
+  // ⭐ Inject CSS
   if (!document.getElementById('tizentube-button-css')) {
     const style = document.createElement('style');
     style.id = 'tizentube-button-css';
@@ -2399,20 +2415,13 @@ function addPlaylistControlButtons(attempt = 1) {
       }
     `;
     document.head.appendChild(style);
-    console.log('🎛️ Injected CSS with overflow fix');
+    console.log('🎛️ Injected CSS');
   }
-  
-  // Log each button
-  existingButtons.forEach((btn, idx) => {
-    const rect = btn.getBoundingClientRect();
-    const text = (btn.textContent || '').trim();
-    console.log(`🎛️ Btn${idx}: "${text}" | Y:${Math.round(rect.top)} H:${Math.round(rect.height)}`);
-  });
   
   const existingBtn = existingButtons[0];
   const lastButton = existingButtons[existingButtons.length - 1];
   const lastButtonRect = lastButton.getBoundingClientRect();
-  const containerRect = buttonContainer.getBoundingClientRect();
+  const containerRect = targetContainer.getBoundingClientRect();
   
   console.log('🎛️ Container: H:', Math.round(containerRect.height));
   console.log('🎛️ Last button: Y:', Math.round(lastButtonRect.top), 'H:', Math.round(lastButtonRect.height));
@@ -2421,17 +2430,17 @@ function addPlaylistControlButtons(attempt = 1) {
   const marker = document.createElement('div');
   marker.id = 'tizentube-collection-injected';
   marker.style.display = 'none';
-  buttonContainer.appendChild(marker);
+  targetContainer.appendChild(marker);
   
   // Check mode
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
-  // ⭐ Clone button and copy ALL attributes
+  // Clone button and copy ALL attributes
   const collectionBtn = existingBtn.cloneNode(true);
   collectionBtn.id = 'tizentube-collection-btn';
 
-  // ⭐ Copy all data attributes that YouTube uses for focus management
+  // Copy all data attributes that YouTube uses for focus management
   Array.from(existingBtn.attributes).forEach(attr => {
     if (attr.name.startsWith('data-') || attr.name === 'tabindex' || attr.name === 'role') {
       collectionBtn.setAttribute(attr.name, attr.value);
@@ -2459,16 +2468,16 @@ function addPlaylistControlButtons(attempt = 1) {
   collectionBtn.style.visibility = 'visible';
   collectionBtn.style.opacity = '1';
   
-  // ⭐ Calculate proper spacing
+  // Calculate proper spacing
   const buttonSpacing = lastButtonRect.height * 0.2; // 20% gap between buttons
   const totalSpacing = lastButtonRect.height + buttonSpacing;
   
   collectionBtn.style.marginTop = totalSpacing + 'px';
   console.log('🎛️ Margin-top:', Math.round(totalSpacing), 'px');
   
-  // ⭐ Expand container to fit new button
+  // Expand container to fit new button
   const neededHeight = (lastButtonRect.bottom - containerRect.top) + lastButtonRect.height + buttonSpacing + 20;
-  buttonContainer.style.minHeight = neededHeight + 'px';
+  targetContainer.style.minHeight = neededHeight + 'px';
   console.log('🎛️ Expanding container to:', Math.round(neededHeight), 'px');
   
   collectionBtn.setAttribute('tabindex', '0');
@@ -2486,12 +2495,12 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   }
   
-  buttonContainer.appendChild(collectionBtn);
+  targetContainer.appendChild(collectionBtn);
   console.log('🎛️ ✅ Button added');
   
   setTimeout(() => {
     const rect = collectionBtn.getBoundingClientRect();
-    const finalContainer = buttonContainer.getBoundingClientRect();
+    const finalContainer = targetContainer.getBoundingClientRect();
     console.log('🎛️ FINAL: Button Y:', Math.round(rect.top), '| Container H:', Math.round(finalContainer.height));
     console.log('🎛️ Button inside container:', rect.top >= finalContainer.top && rect.bottom <= finalContainer.bottom);
   }, 500);
