@@ -829,9 +829,9 @@ export default function modernUI(update, parameters) {
                                 value: ''
                             },
                             {
-                                name: 'Local PC sample: http://192.168.1.100:8765/log',
+                                name: 'Local PC sample: http://192.168.70.124:8765/log',
                                 key: 'remoteLoggingUrl',
-                                value: 'http://192.168.1.100:8765/log'
+                                value: 'http://192.168.70.124:8765/log'
                             }
                         ]
                     },
