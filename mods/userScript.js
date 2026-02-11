@@ -94,8 +94,8 @@ import { configWrite } from "./config.js";
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const before = consoleDiv.scrollTop;
-        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
+        const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
+        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -110,9 +110,7 @@ import { configWrite } from "./config.js";
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
         
-        const before = consoleDiv.scrollTop;
-        const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
-        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
+        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
         
         consoleDiv.scrollTop = newScroll;
         consoleDiv.scroll(0, newScroll);
@@ -132,6 +130,13 @@ import { configWrite } from "./config.js";
         consoleDiv.scrollTop = 0;
         consoleDiv.scroll(0, 0);
         consoleDiv.scrollTo(0, 0);
+    };
+
+    window.deleteConsoleLastLog = function() {
+        if (!consoleDiv || !enabled || !consoleVisible) return;
+        if (logs.length === 0) return;
+        logs.splice(0, Math.min(3, logs.length));
+        consoleDiv.innerHTML = logs.join('');
     };
 
     function updateBorder() {
@@ -274,13 +279,13 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v10 - NEWEST FIRST');
+    console.log('[Console] Visual Console v350 - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
     console.log('[Console]   RED button - Scroll UP (older logs)');
     console.log('[Console]   GREEN button - Scroll DOWN (newer logs)');
-    console.log('[Console]   YELLOW button - Jump to TOP (newest)');
+    console.log('[Console]   YELLOW button - Delete last log line');
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
     console.log('[Console] ========================================');
