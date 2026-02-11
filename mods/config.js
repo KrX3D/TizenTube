@@ -66,8 +66,8 @@ const defaultConfig = {
   enableDebugConsole: false,
   debugConsolePosition: 'bottom-right', // top-left, top-right, bottom-left, bottom-right, center
   debugConsoleHeight: '500',
-  enableRemoteLogging: false,
-  remoteLoggingUrl: '',
+  enableRemoteLogging: true,
+  remoteLoggingUrl: 'http://192.168.70.124:8765/log',
   remoteLoggingBatchSize: 10
 };
 
