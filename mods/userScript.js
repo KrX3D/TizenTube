@@ -306,7 +306,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v380 - NEWEST FIRST');
+    console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
@@ -316,6 +316,27 @@ import { configWrite } from "./config.js";
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
     console.log('[Console] ========================================');
+
+    // Show startup version toast (best effort for ~5s by repeating once)
+    const versionToastCmd = {
+        openPopupAction: {
+            popupType: 'TOAST',
+            popupDurationSeconds: 5,
+            popup: {
+                overlayToastRenderer: {
+                    title: { simpleText: 'TizenTube started' },
+                    subtitle: { simpleText: 'Version ' + APP_VERSION }
+                }
+            }
+        }
+    };
+
+    setTimeout(() => {
+        try { resolveCommand(versionToastCmd); } catch (_) {}
+        setTimeout(() => {
+            try { resolveCommand(versionToastCmd); } catch (_) {}
+        }, 2500);
+    }, 1200);
     
     updateBorder();
 })();
@@ -345,3 +366,6 @@ import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
+
+import resolveCommand from "./resolveCommand.js";
+import { APP_VERSION, APP_VERSION_LABEL } from "./version.js";

@@ -79,3 +79,40 @@ console.log('WS receiver listening on :9001');
 ```
 
 Make sure TV and PC are on the same LAN and inbound ports are open in your firewall.
+
+
+### Ports used by this setup
+- **8765/TCP**: example HTTP receiver (legacy sample in app defaults)
+- **9000/TCP**: HTTP receiver sample in this README
+- **9001/TCP**: WebSocket receiver sample in this README
+
+### Windows PowerShell firewall commands
+> Run PowerShell as Administrator.
+
+Open inbound rules:
+```powershell
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000" -Direction Inbound -Protocol TCP -LocalPort 9000 -Action Allow
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"   -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
+```
+
+Test local listeners (replace ports as needed):
+```powershell
+Test-NetConnection -ComputerName 127.0.0.1 -Port 8765
+Test-NetConnection -ComputerName 127.0.0.1 -Port 9000
+Test-NetConnection -ComputerName 127.0.0.1 -Port 9001
+```
+
+Test from another LAN device/PC to your host:
+```powershell
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 8765
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 9000
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 9001
+```
+
+Close/remove rules later:
+```powershell
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765"
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000"
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"
+```
