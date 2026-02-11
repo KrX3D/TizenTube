@@ -65,7 +65,10 @@ const defaultConfig = {
   autoFrameRatePauseVideoFor: 0,
   enableDebugConsole: false,
   debugConsolePosition: 'bottom-right', // top-left, top-right, bottom-left, bottom-right, center
-  debugConsoleHeight: '500'
+  debugConsoleHeight: '500',
+  enableRemoteLogging: true,
+  remoteLoggingUrl: 'http://192.168.70.124:8765/log',
+  remoteLoggingBatchSize: 10
 };
 
 let localConfig;
