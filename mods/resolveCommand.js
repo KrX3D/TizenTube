@@ -188,7 +188,7 @@ function customAction(action, parameters) {
             if (consoleDiv) {
                 consoleDiv.style.display = 'block';
                 consoleDiv.style.zIndex = '999999';
-                console.log('✓ Console DIV found and forced visible');
+                console.log('✓ Console DIV found and forced visible')
                 showToast('Console', 'Console should be visible now');
             } else {
                 console.error('✗ Console DIV not found!');
