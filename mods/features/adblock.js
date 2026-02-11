@@ -1582,6 +1582,10 @@ function getShelfTitle(shelf) {
   // ⭐ FIXED: headerRenderer (not header!)
   const avatarLockupTitle = shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title;
 
+  console.log('[SHORTS_DIAGNOSTIC] ========================================');
+  console.log('[SHORTS_DIAGNOSTIC] ==================>', avatarLockupTitle);
+  console.log('[SHORTS_DIAGNOSTIC] ========================================');
+
   const titleText = (title) => {
     if (!title) return '';
     if (title.simpleText) return title.simpleText;
@@ -1626,7 +1630,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
   if (DEBUG_ENABLED) {
-    console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide:', shouldHideWatched, '| Shorts:', shortsEnabled);
+    console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide watched:', shouldHideWatched, '| Shorts:', shortsEnabled);
   }
 
   if (window._lastLoggedPage !== page) {
@@ -1718,21 +1722,16 @@ function processShelves(shelves, shouldAddPreviews = true) {
       const shelve = shelves[i];
       if (!shelve) continue;
       
-      // ⭐ Check if this is a Shorts shelf by title
+      // ⭐ Check if this is a Shorts shelf by title (ONLY when shorts disabled)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
         
-        console.log('🔍 Shelf', i, 'title:', shelfTitle || '(no title)');
-        
-        // ⭐ EXACT MATCH: Only remove if title is EXACTLY "Shorts" (not "Daily Shorts" etc.)
+        // EXACT MATCH: Only remove if title is EXACTLY "Shorts"
         if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
-          console.log('✂️✂️✂️ REMOVING SHELF WITH EXACT TITLE "SHORTS":', shelfTitle);
-          if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Removing Shorts shelf by exact title match');
-          }
+          console.log('✂️✂️✂️ REMOVING SHELF - EXACT TITLE "SHORTS":', shelfTitle);
           shelves.splice(i, 1);
           shelvesRemoved++;
-          continue;
+          continue; // Skip to next shelf
         }
 
         // ⭐ Also log when we DON'T remove (for debugging)
@@ -1758,10 +1757,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
           addLongPress(items);
           if (shouldAddPreviews) addPreviews(items);
           
+          // ⭐ SHORTS FILTERING
           if (!shortsEnabled) {
+            // Check if this is a shorts shelf by type
             if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
               if (DEBUG_ENABLED) {
-                  console.log('[SHELF_PROCESS] Removing entire SHORTS shelf');
+                console.log('[SHELF_PROCESS] Removing entire SHORTS shelf (by type)');
               }
               shelves.splice(i, 1);
               shelvesRemoved++;
@@ -1775,6 +1776,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             totalShortsRemoved += (beforeShortFilter - items.length);
           }
           
+          // ⭐ WATCHED FILTERING (always runs, independent of shorts)
           const beforeHide = items.length;
           items = hideVideo(items);
           totalHidden += (beforeHide - items.length);
@@ -1784,7 +1786,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
+              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1818,7 +1820,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
+              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1852,7 +1854,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
+              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1887,7 +1889,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         if (contents.length === 0) {
           if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
+            console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
@@ -1940,7 +1942,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         if (items.length === 0) {
           if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
+            console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
@@ -1966,7 +1968,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
       continue;
     }
     
-    // Check all possible shelf types for empty content
     let isEmpty = false;
     
     if (shelve.shelfRenderer?.content?.horizontalListRenderer?.items) {
@@ -1983,13 +1984,13 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     if (isEmpty) {
       if (DEBUG_ENABLED) {
-        console.log('[SHELF_CLEANUP] Removing empty shelf at final cleanup');
+        console.log('[SHELF_CLEANUP] Removing empty shelf');
       }
       shelves.splice(i, 1);
     }
   }
   
-  // Single summary line
+  // Summary
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Done:', totalItemsBefore, '→', totalItemsAfter, '| Hidden:', totalHidden, '| Shorts:', totalShortsRemoved, '| Removed:', shelvesRemoved, 'shelves');
   }
