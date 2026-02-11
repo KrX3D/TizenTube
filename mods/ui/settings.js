@@ -809,6 +809,33 @@ export default function modernUI(update, parameters) {
                         ]
                     },
                     {
+                        name: 'Remote Logging',
+                        icon: 'LANGUAGE',
+                        value: 'enableRemoteLogging'
+                    },
+                    {
+                        name: 'Remote Log URL Preset',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-url',
+                        menuHeader: {
+                            title: 'Remote Log URL',
+                            subtitle: 'Pick target endpoint for remote log export'
+                        },
+                        options: [
+                            {
+                                name: 'Disabled (empty URL)',
+                                key: 'remoteLoggingUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Local PC sample: http://192.168.1.100:8765/log',
+                                key: 'remoteLoggingUrl',
+                                value: 'http://192.168.1.100:8765/log'
+                            }
+                        ]
+                    },
+                    {
                         name: '🧪 Test Console',
                         icon: 'SETTINGS',
                         value: null,
@@ -823,6 +850,22 @@ export default function modernUI(update, parameters) {
                                         {
                                             customAction: {
                                                 action: 'FORCE_SHOW_CONSOLE'
+                                            }
+                                        },
+                                        {
+                                            signalAction: {
+                                                signal: 'POPUP_BACK'
+                                            }
+                                        }
+                                    ]
+                                ),
+                                buttonItem(
+                                    { title: 'Test Remote Logging' },
+                                    { icon: 'LANGUAGE' },
+                                    [
+                                        {
+                                            customAction: {
+                                                action: 'TEST_REMOTE_LOGGING'
                                             }
                                         },
                                         {
