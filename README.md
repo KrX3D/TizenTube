@@ -26,3 +26,56 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 - [DeArrow](https://dearrow.ajay.app/) Support
 - Customizable Themes (Custom Coloring)
 - More to come, if you [request](https://github.com/reisxd/TizenTube/issues/new) it!
+
+## Remote Logging (HTTP + WebSocket)
+
+TizenTube can stream console logs to a receiver on your LAN.
+
+### Settings
+In **Developer Options → Remote Logging** configure:
+- Enable/Disable
+- Transport: `http`, `ws`, or `both`
+- HTTP endpoint (example: `http://192.168.1.50:9000/log`)
+- WebSocket endpoint (example: `ws://192.168.1.50:9001`)
+- Optional auth token
+- Test actions in **Test Console**
+
+### Run a local HTTP receiver (Python)
+```python
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class H(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.end_headers()
+
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(n).decode('utf-8', errors='replace')
+        print(body)
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+HTTPServer(('0.0.0.0', 9000), H).serve_forever()
+```
+
+### Run a local WebSocket receiver (Node.js)
+```js
+// npm i ws
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 9001 });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    console.log(String(msg));
+  });
+});
+
+console.log('WS receiver listening on :9001');
+```
+
+Make sure TV and PC are on the same LAN and inbound ports are open in your firewall.
