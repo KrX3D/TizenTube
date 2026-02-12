@@ -847,7 +847,7 @@ export default function modernUI(update, parameters) {
                         menuId: 'tt-remote-log-url',
                         menuHeader: {
                             title: 'Remote HTTP Endpoint',
-                            subtitle: 'Use LAN IP of your PC, e.g. http://192.168.1.50:9000/log'
+                            subtitle: 'Use LAN IP of your PC, e.g. http://192.168.70.124:9000/log'
                         },
                         options: [
                             {
@@ -856,9 +856,9 @@ export default function modernUI(update, parameters) {
                                 value: ''
                             },
                             {
-                                name: 'Preset: http://192.168.1.50:9000/log',
+                                name: 'Preset: http://192.168.70.124:9000/log',
                                 key: 'remoteLoggingUrl',
-                                value: 'http://192.168.1.50:9000/log'
+                                value: 'http://192.168.70.124:9000/log'
                             },
                             {
                                 name: 'Set HTTP endpoint (input)',
@@ -886,7 +886,7 @@ export default function modernUI(update, parameters) {
                         menuId: 'tt-remote-log-ws-url',
                         menuHeader: {
                             title: 'Remote WebSocket Endpoint',
-                            subtitle: 'Use LAN IP of your PC, e.g. ws://192.168.1.50:9001'
+                            subtitle: 'Use LAN IP of your PC, e.g. ws://192.168.70.124:9001'
                         },
                         options: [
                             {
@@ -895,9 +895,9 @@ export default function modernUI(update, parameters) {
                                 value: ''
                             },
                             {
-                                name: 'Preset: ws://192.168.1.50:9001',
+                                name: 'Preset: ws://192.168.70.124:9001',
                                 key: 'remoteLoggingWsUrl',
-                                value: 'ws://192.168.1.50:9001'
+                                value: 'ws://192.168.70.124:9001'
                             },
                             {
                                 name: 'Set WebSocket endpoint (input)',
