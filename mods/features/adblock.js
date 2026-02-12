@@ -1113,6 +1113,33 @@ function isShortItem(item) {
     let willBeDetectedAsShort = false;
     let durationSeconds = null;
 
+    if (item.tileRenderer) {
+      let lengthText = null;
+      
+      const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
+      if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+        const timeOverlay = thumbnailOverlays.find(o => o?.thumbnailOverlayTimeStatusRenderer);
+        if (timeOverlay) {
+          lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+        }
+      }
+      
+      if (!lengthText) {
+        lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+          i => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
+        )?.lineItemRenderer?.text?.simpleText;
+      }
+      
+      if (lengthText) {
+        const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
+        if (durationMatch) {
+          const minutes = parseInt(durationMatch[1], 10);
+          const seconds = parseInt(durationMatch[2], 10);
+          durationSeconds = minutes * 60 + seconds;
+          willBeDetectedAsShort = (durationSeconds <= 90);
+        }
+      }
+    }
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
