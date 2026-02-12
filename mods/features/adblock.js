@@ -35,28 +35,34 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
+function trackRemovedPlaylistHelpers(helperIds) {
+  if (!window._playlistRemovedHelpers) {
+    window._playlistRemovedHelpers = new Set();
+  }
+  if (!window._playlistRemovedHelperQueue) {
+    window._playlistRemovedHelperQueue = [];
+  }
 
-function isPageConfigured(configPages, page) {
-  if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  const normalized = configPages.map(p => String(p).toLowerCase());
-  const aliases = {
-    playlist: ['playlist'],
-    playlists: ['playlists'],
-    channel: ['channel', 'channels'],
-    channels: ['channel', 'channels'],
-    subscriptions: ['subscriptions', 'subscription']
-  };
-  const candidates = aliases[page] || [page];
-  return candidates.some(candidate => normalized.includes(candidate));
+  helperIds.forEach((helperId) => {
+    if (!helperId || helperId === 'unknown') return;
+    if (!window._playlistRemovedHelpers.has(helperId)) {
+      window._playlistRemovedHelpers.add(helperId);
+      window._playlistRemovedHelperQueue.push(helperId);
+    }
+  });
+
+  const MAX_REMOVED_HELPERS = 25;
+  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
+    const oldest = window._playlistRemovedHelperQueue.shift();
+    window._playlistRemovedHelpers.delete(oldest);
+  }
 }
 
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
-  let isPlaylistPage;
-
   // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist');
+  const isPlaylistPage = (page === 'playlist');
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
@@ -88,7 +94,7 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
+  const shouldHideWatched = hideWatchedEnabled && configPages.includes(page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
@@ -100,9 +106,6 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
-  
-  // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -392,22 +395,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       if (!shortsEnabled) {
         for (let i = obj.length - 1; i >= 0; i--) {
           const shelf = obj[i];
-          if (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer) {
-            const shelfTitle = getShelfTitle(shelf);
-            if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
-              if (LOG_SHORTS && DEBUG_ENABLED) {
-                console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
-              }
-              obj.splice(i, 1);
+          const shelfTitle = getShelfTitle(shelf);
+          if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+            if (LOG_SHORTS && DEBUG_ENABLED) {
+              console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
-            shelves.splice(i, 1);
-            shelvesRemoved++;
-            continue;
-          }
-
-          // ⭐ Also log when we DON'T remove (for debugging)
-          if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-            console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
+            obj.splice(i, 1);
           }
         }
       }
@@ -867,11 +860,10 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
-    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
+      console.log('[ON_RESPONSE] Page:', page);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -889,9 +881,9 @@ JSON.parse = function () {
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
-      // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
+      // Handle appendContinuationItemsAction (playlist scroll continuation)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        let items = action.appendContinuationItemsAction.continuationItems;
+        const items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -900,13 +892,22 @@ JSON.parse = function () {
             console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
           }
         }
-
-        // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
-        scanAndFilterAllArrays(items, effectivePage, `onResponse-${idx}`);
-
-        // Then direct-filter top-level arrays with videos.
-        const filtered = directFilterArray(items, effectivePage, `continuation-${idx}`);
-        action.appendContinuationItemsAction.continuationItems = filtered;
+        
+        // Check if this is playlist video continuation
+        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
+        
+        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
+          if (DEBUG_ENABLED) {
+            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
+          }
+          
+          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        } else {
+          // For non-playlist continuation, use direct filter
+          const filtered = directFilterArray(items, page, `continuation-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        }
       }
     });
     
@@ -914,7 +915,6 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
     }
   }
-
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     if (DEBUG_ENABLED) {
@@ -1564,6 +1564,11 @@ function isShortItem(item) {
 }
 
 function getShelfTitle(shelf) {
+  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
+  const richShelfTitle = shelf?.richShelfRenderer?.title;
+  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
+  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
+
   const titleText = (title) => {
     if (!title) return '';
     if (title.simpleText) return title.simpleText;
@@ -1571,40 +1576,13 @@ function getShelfTitle(shelf) {
     return '';
   };
 
-  const titlePaths = [
-    ['shelfRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.shelfHeaderRenderer?.title],
-    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title],
-    ['headerRenderer.shelfHeaderRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.title],
-    ['richShelfRenderer.title', shelf?.richShelfRenderer?.title],
-    ['richSectionRenderer.content.richShelfRenderer.title', shelf?.richSectionRenderer?.content?.richShelfRenderer?.title],
-    ['gridRenderer.header.gridHeaderRenderer.title', shelf?.gridRenderer?.header?.gridHeaderRenderer?.title],
-    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
-    ['headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
-  ];
-
-  for (const [path, rawTitle] of titlePaths) {
-    const text = titleText(rawTitle);
-    if (text) {
-      if (DEBUG_ENABLED && text.toLowerCase().includes('short')) {
-        console.log('[SHELF_TITLE] path=', path, '| title=', text);
-      }
-      return text;
-    }
-  }
-
-  const shelfJson = JSON.stringify(shelf);
-  const match = shelfJson.match(/"avatarLockupRenderer":\{[\s\S]*?"title":\{[\s\S]*?"runs":\[\{"text":"([^"]+)"\}/);
-  if (match?.[1]) {
-    if (DEBUG_ENABLED) {
-      console.log('[SHELF_TITLE] avatarLockup fallback title:', match[1]);
-      console.log('[SHELF_TITLE] avatarLockup fallback path: avatarLockupRenderer.title.runs[0].text');
-    }
-    return match[1];
-  }
-
-  return '';
+  return (
+    titleText(shelfRendererTitle) ||
+    titleText(richShelfTitle) ||
+    titleText(richSectionTitle) ||
+    titleText(gridHeaderTitle)
+  );
 }
-
 
 function processShelves(shelves, shouldAddPreviews = true) {  
   if (!Array.isArray(shelves)) {
@@ -1616,10 +1594,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
-  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
+  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
   if (DEBUG_ENABLED) {
-    console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide watched:', shouldHideWatched, '| Shorts:', shortsEnabled);
+    console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide:', shouldHideWatched, '| Shorts:', shortsEnabled);
   }
 
   if (window._lastLoggedPage !== page) {
@@ -1668,8 +1646,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // Check each renderer type
       if (shelf.shelfRenderer) {
         console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
-        if (shelf.shelfRenderer.headerRenderer) {
-          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
+        if (shelf.shelfRenderer.shelfHeaderRenderer) {
+          console.log('📚   shelfHeaderRenderer keys:', Object.keys(shelf.shelfRenderer.shelfHeaderRenderer));
+          console.log('📚   title object:', shelf.shelfRenderer.shelfHeaderRenderer.title);
+        }
+        if (shelf.shelfRenderer.title) {
+          console.log('📚   Direct title:', shelf.shelfRenderer.title);
         }
         if (shelf.shelfRenderer.content) {
           console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
@@ -1711,39 +1693,21 @@ function processShelves(shelves, shouldAddPreviews = true) {
       const shelve = shelves[i];
       if (!shelve) continue;
       
-      // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
+      // ⭐ Check if this is a Shorts shelf by title
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
+        if (DEBUG_ENABLED) {
+          console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+        }
+
+        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+          console.log('✂️ REMOVING ENTIRE SHORTS SHELF:', shelfTitle);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
-          continue; // Skip to next shelf
-        }
-
-        // ⭐ Also log when we DON'T remove (for debugging)
-        if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+          continue;
         }
       }
       
@@ -1764,12 +1728,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           addLongPress(items);
           if (shouldAddPreviews) addPreviews(items);
           
-          // ⭐ SHORTS FILTERING
           if (!shortsEnabled) {
-            // Check if this is a shorts shelf by type
             if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
               if (DEBUG_ENABLED) {
-                console.log('[SHELF_PROCESS] Removing entire SHORTS shelf (by type)');
+                  console.log('[SHELF_PROCESS] Removing entire SHORTS shelf');
               }
               shelves.splice(i, 1);
               shelvesRemoved++;
@@ -1783,7 +1745,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
             totalShortsRemoved += (beforeShortFilter - items.length);
           }
           
-          // ⭐ WATCHED FILTERING (always runs, independent of shorts)
           const beforeHide = items.length;
           items = hideVideo(items);
           totalHidden += (beforeHide - items.length);
@@ -1793,7 +1754,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
+              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1827,7 +1788,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
+              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1861,7 +1822,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           if (items.length === 0) {
             if (DEBUG_ENABLED) {
-              console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
+              console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
             }
             shelves.splice(i, 1);
             shelvesRemoved++;
@@ -1896,7 +1857,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         if (contents.length === 0) {
           if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
+            console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
@@ -1949,7 +1910,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         if (items.length === 0) {
           if (DEBUG_ENABLED) {
-            console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
+            console.log('[SHELF_PROCESS] Shelf now empty, removing shelf completely');
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
@@ -1975,6 +1936,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       continue;
     }
     
+    // Check all possible shelf types for empty content
     let isEmpty = false;
     
     if (shelve.shelfRenderer?.content?.horizontalListRenderer?.items) {
@@ -1991,13 +1953,13 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     if (isEmpty) {
       if (DEBUG_ENABLED) {
-        console.log('[SHELF_CLEANUP] Removing empty shelf');
+        console.log('[SHELF_CLEANUP] Removing empty shelf at final cleanup');
       }
       shelves.splice(i, 1);
     }
   }
   
-  // Summary
+  // Single summary line
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Done:', totalItemsBefore, '→', totalItemsAfter, '| Hidden:', totalHidden, '| Shorts:', totalShortsRemoved, '| Removed:', shelvesRemoved, 'shelves');
   }
@@ -2290,109 +2252,267 @@ function getCurrentPage() {
   return detectedPage;
 }
 
-
-function logChunked(prefix, text, chunkSize = 1000) {
-  if (!text) return;
-  for (let i = 0; i < text.length; i += chunkSize) {
-    const part = text.slice(i, i + chunkSize);
-    console.log(`${prefix} [${Math.floor(i / chunkSize) + 1}]`, part);
-  }
-}
-
-
-function addPlaylistControlButtons(attempt = 1) {
+// ⭐ Detect and enhance playlist info area
+function detectPlaylistButtons() {
   const page = getCurrentPage();
-  if (page !== 'playlist') return;
-
-  const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
-  if (!baseContainer) {
-    if (DEBUG_ENABLED) console.log('[PLAYLIST_BUTTON] No button container found (attempt ' + attempt + ')');
-    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
+  if (page !== 'playlist' && page !== 'playlists') return;
+  
+  // ⭐ ONLY run if this is the last batch OR initial load
+  if (!window._isLastPlaylistBatch && window._playlistButtonsDetected) {
+    return; // Skip if already detected and not last batch
+  }
+  
+  console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
+  window._playlistButtonsDetected = true;
+  
+  const container = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
+                    document.querySelector('[class*="TXB27d"]');
+  
+  if (container) {
+    console.log('🎛️ FOUND CONTAINER:', container.tagName, container.className);
+  } else {
+    console.log('🎛️ NO CONTAINER FOUND');
     return;
   }
-
-  const parentContainer = baseContainer.parentElement;
-  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer')).filter(btn => btn.id !== 'tizentube-collection-btn');
-  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')).filter(btn => btn.id !== 'tizentube-collection-btn') : [];
-
-  const useParent = parentButtons.length > baseButtons.length;
-  const container = useParent ? parentContainer : baseContainer;
-  const existingButtons = useParent ? parentButtons : baseButtons;
-
-  if (!container || existingButtons.length === 0) {
-    if (DEBUG_ENABLED) console.log('[PLAYLIST_BUTTON] No native buttons in selected container (attempt ' + attempt + ')');
-    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
-    return;
-  }
-
-  if (document.getElementById('tizentube-collection-btn')) {
-    return;
-  }
-
-  const templateBtn = existingButtons[0];
-  const lastBtn = existingButtons[existingButtons.length - 1];
-  const customBtn = templateBtn.cloneNode(true);
-  customBtn.id = 'tizentube-collection-btn';
-
-  Array.from(templateBtn.attributes).forEach((attr) => {
-    customBtn.setAttribute(attr.name, attr.value);
+  
+  // Only count buttons in the container
+  const buttons = container.querySelectorAll('ytlr-button-renderer');
+  console.log('🎛️ Playlist buttons in container:', buttons.length);
+  
+  buttons.forEach((btn, idx) => {
+    const text = (btn.textContent || '').trim();
+    console.log(`🎛️ Button ${idx + 1}: "${text}"`);
   });
-
-  const label = customBtn.querySelector('yt-formatted-string');
-  if (label) {
-    label.textContent = '🔄 Refresh Filter';
-  }
-
-  customBtn.style.cssText = templateBtn.style.cssText;
-  customBtn.style.display = '';
-  customBtn.style.visibility = '';
-  customBtn.style.opacity = '';
-  customBtn.style.position = '';
-  customBtn.style.transform = '';
-  customBtn.style.marginTop = '14px';
-  customBtn.style.pointerEvents = 'auto';
-  customBtn.style.zIndex = '3';
-  customBtn.setAttribute('tabindex', '0');
-
-  customBtn.addEventListener('click', (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
-    resolveCommand({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
-  });
-
-  if (!document.getElementById('tizentube-playlist-btn-style')) {
-    const style = document.createElement('style');
-    style.id = 'tizentube-playlist-btn-style';
-    style.textContent = '#tizentube-collection-btn{display:block!important;min-height:64px!important;}';
-    document.head.appendChild(style);
-  }
-
-  lastBtn.insertAdjacentElement('afterend', customBtn);
-
-  const lastRect = lastBtn.getBoundingClientRect();
-  const customRect = customBtn.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const overflowBottom = Math.max(0, customRect.bottom - containerRect.bottom);
-  if (overflowBottom > 0) {
-    container.style.minHeight = `${container.clientHeight + overflowBottom + 24}px`;
-    container.style.overflow = 'visible';
-  }
-
-  if (DEBUG_ENABLED) {
-    console.log('[PLAYLIST_BUTTON] container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| lastY=', Math.round(lastRect.top), '| newY=', Math.round(customRect.top));
-  }
+  
+  console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
 }
 
-
+// Run detection when page loads
 if (typeof window !== 'undefined') {
-  setTimeout(() => addPlaylistControlButtons(1), 2500);
-  let lastPlaylistButtonHref = window.location.href;
+  setTimeout(() => {
+    detectPlaylistButtons();
+  }, 3000); // Run 3 seconds after page load
+}
+
+// ⭐ INJECT PLAYLIST CONTROL BUTTONS (YouTube TV native style)
+function addPlaylistControlButtons() {
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') return;
+  
+  if (document.getElementById('tizentube-collection-injected')) {
+    return;
+  }
+  
+  console.log('🎛️ INJECTING BUTTONS');
+  
+  // ⭐ ADD: Inject CSS to keep button visible
+  if (!document.getElementById('tizentube-button-css')) {
+    const style = document.createElement('style');
+    style.id = 'tizentube-button-css';
+    style.textContent = `
+      #tizentube-collection-btn {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        position: relative !important;
+      }
+    `;
+    document.head.appendChild(style);
+    console.log('🎛️ Injected CSS');
+  }
+  
+  const buttonContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
+                          document.querySelector('[class*="TXB27d"]');
+  
+  if (!buttonContainer) {
+    console.log('🎛️ No container');
+    return;
+  }
+  
+  // ⭐ LOG CONTAINER SIZE
+  const containerRect = buttonContainer.getBoundingClientRect();
+  console.log('🎛️ CONTAINER SIZE:');
+  console.log('🎛️   X:', containerRect.left, 'Y:', containerRect.top);
+  console.log('🎛️   Width:', containerRect.width, 'Height:', containerRect.height);
+  
+  // ⭐ COUNT ALL BUTTONS (including our injected one if it exists)
+  const allButtons = Array.from(buttonContainer.querySelectorAll('ytlr-button-renderer'));
+  const existingButtons = allButtons.filter(btn => btn.id !== 'tizentube-collection-btn');
+  
+  console.log('🎛️ FOUND BUTTONS:', existingButtons.length);
+  
+  // ⭐ LOG EACH BUTTON
+  existingButtons.forEach((btn, idx) => {
+    const rect = btn.getBoundingClientRect();
+    const text = (btn.textContent || '').trim();
+    console.log(`🎛️ Btn${idx}: "${text}" | X:${rect.left} Y:${rect.top} W:${rect.width} H:${rect.height}`);
+  });
+  
+  if (existingButtons.length === 0) {
+    console.log('🎛️ No existing buttons');
+    return;
+  }
+  
+  // Use FIRST button as template
+  const existingBtn = existingButtons[0];
+  
+  // Get position of LAST button
+  const lastButton = existingButtons[existingButtons.length - 1];
+  const lastButtonRect = lastButton.getBoundingClientRect();
+  
+  console.log('🎛️ LAST BUTTON (for positioning):');
+  console.log('🎛️   Y:', lastButtonRect.top, 'Height:', lastButtonRect.height);
+  
+  // Mark as injected
+  const marker = document.createElement('div');
+  marker.id = 'tizentube-collection-injected';
+  marker.style.display = 'none';
+  buttonContainer.appendChild(marker);
+  
+  // Check mode
+  const inCollection = isInCollectionMode();
+  const filterIds = getFilteredVideoIds();
+  
+  // Clone button
+  const collectionBtn = existingBtn.cloneNode(true);
+  collectionBtn.id = 'tizentube-collection-btn';
+  
+  // Find text element
+  const textElement = collectionBtn.querySelector('yt-formatted-string');
+  if (!textElement) {
+    console.log('🎛️ ERROR: No text element');
+    return;
+  }
+  
+  // Set text
+  const newText = inCollection ? '🔄 Collecting...' : 
+                  filterIds ? '✅ Exit Filter' : 
+                  '🔄 Collect Unwatched';
+  
+  textElement.textContent = newText;
+  
+  // ⭐ STYLING
+  collectionBtn.style.cssText = existingBtn.style.cssText;
+  collectionBtn.style.backgroundColor = '#ff0000';
+  collectionBtn.style.border = '5px solid yellow';
+  collectionBtn.style.display = 'block';
+  collectionBtn.style.visibility = 'visible';
+  collectionBtn.style.opacity = '1';
+  collectionBtn.style.position = 'relative';
+  collectionBtn.style.zIndex = '9999';
+  
+  // ⭐ POSITION BELOW LAST BUTTON (triple spacing for testing)
+  const spacing = lastButtonRect.height * 3; // Y * 3 for testing
+  collectionBtn.style.marginTop = spacing + 'px';
+  
+  console.log('🎛️ Setting margin-top:', spacing, 'px');
+  
+  // ⭐ EXPAND CONTAINER HEIGHT
+  const newContainerHeight = containerRect.height + (lastButtonRect.height * 3);
+  buttonContainer.style.minHeight = newContainerHeight + 'px';
+  console.log('🎛️ Expanding container to:', newContainerHeight, 'px');
+  
+  // Make focusable
+  collectionBtn.setAttribute('tabindex', '0');
+  
+  // Add click handler
+  if (!inCollection) {
+    collectionBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🎛️ CLICKED!');
+      if (filterIds) {
+        exitFilterMode();
+      } else {
+        startCollectionMode();
+      }
+    });
+  }
+  
+  // Append
+  buttonContainer.appendChild(collectionBtn);
+  console.log('🎛️ Button added');
+  
+  // ⭐ LOG AFTER DELAY (when rendered)
+  setTimeout(() => {
+    const rect = collectionBtn.getBoundingClientRect();
+    const finalContainer = buttonContainer.getBoundingClientRect();
+    console.log('🎛️ FINAL POSITIONS:');
+    console.log('🎛️ Container: W:', finalContainer.width, 'H:', finalContainer.height);
+    console.log('🎛️ Our button: X:', rect.left, 'Y:', rect.top, 'W:', rect.width, 'H:', rect.height);
+    console.log('🎛️ Visible:', rect.height > 0 && rect.width > 0);
+  }, 1000);
+}
+
+// ⭐ FUNCTION: Play the first unwatched video
+function playNextUnwatchedVideo() {
+  // Find all video tiles on the page
+  const tiles = document.querySelectorAll('ytlr-tile-renderer');
+  
+  if (tiles.length === 0) {
+    console.log('▶️ No videos found on page');
+    return;
+  }
+  
+  console.log('▶️ Found', tiles.length, 'video tiles, playing first one...');
+  
+  // Click the first tile (they're already filtered to unwatched)
+  const firstTile = tiles[0];
+  
+  // Try multiple click methods for TV compatibility
+  if (firstTile.click) {
+    firstTile.click();
+  } else if (firstTile.querySelector('a')) {
+    firstTile.querySelector('a').click();
+  } else {
+    // Simulate enter key press
+    const event = new KeyboardEvent('keydown', { keyCode: 13, which: 13 });
+    firstTile.dispatchEvent(event);
+  }
+  
+  console.log('▶️ Clicked first video tile');
+}
+
+// Run button injection when page loads or changes
+if (typeof window !== 'undefined') {
+  // Try multiple times as DOM loads
+  const tryInject = () => {
+    setTimeout(() => addPlaylistControlButtons(), 2000);
+    setTimeout(() => addPlaylistControlButtons(), 4000);
+    setTimeout(() => addPlaylistControlButtons(), 6000);
+  };
+  
+  // Initial load
+  tryInject();
+  
+  // Watch for URL changes (playlist navigation)
+  let lastHref = window.location.href;
   setInterval(() => {
-    if (window.location.href !== lastPlaylistButtonHref) {
-      lastPlaylistButtonHref = window.location.href;
-      const existing = document.getElementById('tizentube-collection-btn');
-      if (existing) existing.remove();
-      setTimeout(() => addPlaylistControlButtons(1), 1800);
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      // Remove injection marker so buttons can be re-added
+      const marker = document.getElementById('tizentube-collection-injected');
+      if (marker) marker.remove();
+      tryInject();
     }
-  }, 1200);
+  }, 1000);
+}
+
+// Run button detection when page loads or changes
+if (typeof window !== 'undefined') {
+  // Initial load
+  setTimeout(() => {
+    addCollectionModeButton();
+  }, 3000);
+  
+  // Watch for URL changes (playlist navigation)
+  let lastHref = window.location.href;
+  setInterval(() => {
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      setTimeout(() => {
+        addCollectionModeButton();
+      }, 2000);
+    }
+  }, 1000);
 }
