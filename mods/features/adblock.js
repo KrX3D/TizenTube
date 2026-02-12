@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = false;   // Set false to disable shorts logging  
+const LOG_SHORTS = true;   // Set false to disable shorts logging  
 const LOG_WATCHED = true;  // Set false to disable watched video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
@@ -35,6 +35,29 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
+function trackRemovedPlaylistHelpers(helperIds) {
+  if (!window._playlistRemovedHelpers) {
+    window._playlistRemovedHelpers = new Set();
+  }
+  if (!window._playlistRemovedHelperQueue) {
+    window._playlistRemovedHelperQueue = [];
+  }
+
+  helperIds.forEach((helperId) => {
+    if (!helperId || helperId === 'unknown') return;
+    if (!window._playlistRemovedHelpers.has(helperId)) {
+      window._playlistRemovedHelpers.add(helperId);
+      window._playlistRemovedHelperQueue.push(helperId);
+    }
+  });
+
+  const MAX_REMOVED_HELPERS = 25;
+  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
+    const oldest = window._playlistRemovedHelperQueue.shift();
+    window._playlistRemovedHelpers.delete(oldest);
+  }
+}
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
@@ -67,18 +90,32 @@ function directFilterArray(arr, page, context = '') {
   if (!window._lastHelperVideos) {
     window._lastHelperVideos = [];
   }
+  if (!window._playlistRemovedHelpers) {
+    window._playlistRemovedHelpers = new Set();
+  }
   
-  // ⭐ DIAGNOSTIC: Log what context we're getting (AFTER isPlaylistPage is defined!)
+  // ⭐ DIAGNOSTIC: Log what we're checking
   if (isPlaylistPage && DEBUG_ENABLED) {
-    console.log('[CONTEXT_DEBUG] context:', context, '| has lastHelperVideos:', !!window._lastHelperVideos?.length, '| arr.length:', arr.length);
+    console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');
+    console.log('>>>>>> Has helpers:', window._lastHelperVideos?.length || 0);
+    console.log('>>>>>> Array length:', arr.length);
+    console.log('>>>>>> Context:', context);
+    console.log('>>>>>> Last batch flag:', window._isLastPlaylistBatch);
+  }
+
+  // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
+  let isLastBatch = false;
+  if (isPlaylistPage && window._isLastPlaylistBatch === true) {
+    console.log('--------------------------------->> Using last batch flag from response');
+    console.log('--------------------------------->> This IS the last batch!');
+    isLastBatch = true;
+    // Clear the flag
+    window._isLastPlaylistBatch = false;
   }
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
     console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] New batch - inserting', window._lastHelperVideos.length, 'old helper(s) into batch for filtering');
-    }
     
     // Store the helper IDs before clearing
     const helperIdsToRemove = window._lastHelperVideos.map(video => 
@@ -91,63 +128,25 @@ function directFilterArray(arr, page, context = '') {
     );
     
     if (DEBUG_ENABLED) {
-      console.log('[CLEANUP] Will remove from DOM:', helperIdsToRemove);
+      console.log('[CLEANUP] Inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
+      console.log('[CLEANUP] Helper IDs:', helperIdsToRemove);
     }
     
-    // Add old helpers to the START of the new batch
+    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
+    // This way they get filtered out cleanly with the rest!
     arr.unshift(...window._lastHelperVideos);
     
-    // Clear the stored helpers
-    window._lastHelperVideos = [];
-    window._playlistScrollHelpers.clear();
+    // Track as removed (for fallback filtering)
+    trackRemovedPlaylistHelpers(helperIdsToRemove);
     
-    // ⭐ ALSO remove from DOM (they're already rendered from previous batch)
-    setTimeout(() => {
-      console.log('[CLEANUP_DOM] Starting DOM cleanup...');
-      const allTiles = document.querySelectorAll('ytlr-tile-renderer');
-      console.log('[CLEANUP_DOM] Found', allTiles.length, 'total tiles in DOM');
-      
-      let removedCount = 0;
-      
-      helperIdsToRemove.forEach(helperId => {
-        console.log('[CLEANUP_DOM] Searching for helper:', helperId);
-        let foundForThisHelper = false;
-        
-        allTiles.forEach((tile, index) => {
-          // Try multiple ways to get video ID
-          const tileVideoId = tile.getAttribute('data-content-id') || 
-                             tile.getAttribute('video-id') ||
-                             tile.getAttribute('data-video-id');
-          
-          // Log first 3 tiles to see what attributes they have
-          if (index < 3) {
-            console.log('[CLEANUP_DOM] Sample tile', index, '- ID from attributes:', tileVideoId || 'NONE');
-            console.log('[CLEANUP_DOM] Sample tile', index, '- All attributes:', Array.from(tile.attributes).map(a => a.name + '=' + a.value.substring(0, 50)));
-          }
-          
-          // Check by attribute
-          if (tileVideoId === helperId) {
-            console.log('[CLEANUP_DOM] ✓ FOUND by attribute! Removing:', helperId);
-            tile.remove();
-            removedCount++;
-            foundForThisHelper = true;
-          }
-          // Check by innerHTML (fallback)
-          else if (tile.innerHTML.includes(helperId)) {
-            console.log('[CLEANUP_DOM] ✓ FOUND by innerHTML! Removing:', helperId);
-            tile.remove();
-            removedCount++;
-            foundForThisHelper = true;
-          }
-        });
-        
-        if (!foundForThisHelper) {
-          console.log('[CLEANUP_DOM] ✗ NOT FOUND:', helperId);
-        }
-      });
-      
-      console.log('[CLEANUP_DOM] Removed', removedCount, 'tiles from DOM');
-    }, 500); // Increased to 500ms
+    // Clear the stored helpers (UNLESS this is the last batch)
+    if (isLastBatch) {
+      console.log('--------------------------------->> NOT clearing helpers (last batch - will clean after filtering)');
+    } else {
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+      console.log('[CLEANUP] Helpers cleared for next batch');
+    }
   }
   
   // ⭐ DEBUG: Log configuration
@@ -186,10 +185,20 @@ function directFilterArray(arr, page, context = '') {
                    item.gridVideoRenderer?.videoId ||
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
+
+    if (isPlaylistPage && window._playlistRemovedHelpers.has(videoId)) {
+      if (DEBUG_ENABLED) {
+        console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId);
+      }
+      return false;
+    }
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldFilterShorts && isShortItem(item)) {
       shortsCount++;
+      
+      // ⭐ ADD VISUAL MARKER
+      console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
 
       if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[FILTER #' + callId + '] REMOVED SHORT:', videoId);
@@ -242,6 +251,9 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] Removed total:', (originalLength - filtered.length));
     console.log('[FILTER_END #' + callId + '] ├─ Watched removed:', hiddenCount);
     console.log('[FILTER_END #' + callId + '] ├─ Shorts removed:', shortsCount);
+    if (shortsCount > 0) {
+      console.log('✂️✂️✂️ TOTAL SHORTS FILTERED THIS BATCH:', shortsCount);
+    }
     if (isPlaylistPage) {
       console.log('[FILTER_END #' + callId + '] └─ Unwatched kept (no progress):', noProgressBarCount);
     }
@@ -249,32 +261,29 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
-  if (isPlaylistPage && filtered.length === 0 && arr.length > 0) {
+  if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     const lastVideo = arr[arr.length - 1];
     const lastVideoId = lastVideo.tileRenderer?.contentId || 
-                       lastVideo.videoRenderer?.videoId || 
-                       lastVideo.playlistVideoRenderer?.videoId ||
-                       lastVideo.gridVideoRenderer?.videoId ||
-                       lastVideo.compactVideoRenderer?.videoId ||
-                       'unknown';
+                      lastVideo.videoRenderer?.videoId || 
+                      lastVideo.playlistVideoRenderer?.videoId ||
+                      lastVideo.gridVideoRenderer?.videoId ||
+                      lastVideo.compactVideoRenderer?.videoId ||
+                      'unknown';
     
-    if (DEBUG_ENABLED) {
-      console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
+    console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
+    
+    // ⭐ MARK the helper with a special title so we can identify it visually
+    if (lastVideo.tileRenderer?.metadata?.tileMetadataRenderer?.title) {
+      const originalTitle = lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText;
+      lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = '⏩ SCROLL HELPER - ' + originalTitle;
     }
     
-    // ⭐ STORE the actual video object so we can insert it into next batch
-    // REPLACE the array (don't push) - we only want ONE helper at a time!
+    // Store it
     window._lastHelperVideos = [lastVideo];
     window._playlistScrollHelpers.clear();
     window._playlistScrollHelpers.add(lastVideoId);
-
-    if (DEBUG_ENABLED) {
-      console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
-    }
-
-    // ⭐ MARK the helper so it doesn't actually render
-    // Add a special flag so YouTube skips rendering it
-    lastVideo.__tizentubeScrollHelper = true;
+    
+    console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
     
     return [lastVideo];
   }
@@ -288,6 +297,21 @@ function directFilterArray(arr, page, context = '') {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
+  }
+  
+  // ⭐ Clean up after filtering if last batch
+  if (isLastBatch && isPlaylistPage) {
+    console.log('--------------------------------->> FINAL CLEANUP (last batch detected)');
+    console.log('--------------------------------->> Clearing all helpers and trackers');
+    window._lastHelperVideos = [];
+    window._playlistScrollHelpers.clear();
+    if (window._playlistRemovedHelpers) {
+      window._playlistRemovedHelpers.clear();
+    }
+    if (window._playlistRemovedHelperQueue) {
+      window._playlistRemovedHelperQueue = [];
+    }
+    console.log('--------------------------------->> All helpers cleared!');
   }
   
   return filtered;
@@ -328,14 +352,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       if (!shortsEnabled) {
         for (let i = obj.length - 1; i >= 0; i--) {
           const shelf = obj[i];
-          if (shelf?.shelfRenderer) {
-            const shelfTitle = shelf.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
-            if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
-              if (LOG_SHORTS && DEBUG_ENABLED) {
-                console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
-              }
-              obj.splice(i, 1);
+          const shelfTitle = getShelfTitle(shelf);
+          if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+            if (LOG_SHORTS && DEBUG_ENABLED) {
+              console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
+            obj.splice(i, 1);
           }
         }
       }
@@ -411,6 +433,10 @@ let skipUniversalFilter = false;  // ⭐ NEW: Global flag to skip filtering duri
 
 // ⭐ AUTO-LOADER FUNCTION: Must be in global scope so setTimeout can access it
 function startPlaylistAutoLoad() {
+  console.log('▶▶▶▶▶▶▶▶▶▶ AUTO-LOAD CALLED ◀◀◀◀◀◀◀◀◀◀');
+  console.log('▶▶▶ Current page:', getCurrentPage());
+  console.log('▶▶▶ autoLoadInProgress:', autoLoadInProgress);
+  
   if (autoLoadInProgress) {
     if (DEBUG_ENABLED) {
       console.log('[PLAYLIST_AUTOLOAD] Already in progress, skipping');
@@ -667,6 +693,33 @@ JSON.parse = function () {
     // This is where individual channel content loads!
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
+
+  // Handle PLAYLIST continuations (different from section continuations!)
+  if (r?.continuationContents?.playlistVideoListContinuation?.contents) {
+    const page = getCurrentPage();
+    
+    // ⭐ CHECK FOR LAST PAGE HERE (where we have full response)
+    const hasContinuation = !!r.continuationContents.playlistVideoListContinuation.continuations;
+    
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('═══ PLAYLIST CONTINUATION DETECTED');
+    console.log('═══ Page:', page);
+    console.log('═══ Has continuation token:', hasContinuation);
+    console.log('═══ Continuations object:', r.continuationContents.playlistVideoListContinuation.continuations);
+    console.log('═══ Videos in batch:', r.continuationContents.playlistVideoListContinuation.contents.length);
+    
+    if (!hasContinuation) {
+      console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
+      // Set flag for directFilterArray to read
+      window._isLastPlaylistBatch = true;
+    } else {
+      console.log('═══ More batches to come...');
+      window._isLastPlaylistBatch = false;
+    }
+    console.log('═══════════════════════════════════════════════════════');
+    
+    // Continue with normal processing via universal filter
+  }
   
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
@@ -676,6 +729,19 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
       console.log('[ON_RESPONSE] Page:', page);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
+    }
+  
+    // ⭐ NEW: Log playlist structure with MARKER
+    if (page === 'playlist' || page === 'playlists') {
+      console.log('#####################>>> PLAYLIST STRUCTURE DETECTED <<<#####################');
+      console.log('#####################>>> Response keys:', Object.keys(r));
+      console.log('#####################>>> Has contents:', !!r.contents);
+      console.log('#####################>>> Has continuationContents:', !!r.continuationContents);
+      console.log('#####################>>> Has onResponseReceivedActions:', !!r.onResponseReceivedActions);
+      if (r.contents) {
+        console.log('#####################>>> contents keys:', Object.keys(r.contents));
+      }
+      console.log('#####################>>> END PLAYLIST STRUCTURE <<<#####################');
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
@@ -1042,6 +1108,63 @@ function isShortItem(item) {
                  item.gridVideoRenderer?.videoId ||
                  item.compactVideoRenderer?.videoId ||
                  'unknown';
+
+  
+  // ⭐ COMPREHENSIVE DIAGNOSTIC for subscription shorts that look like videos
+  const page = getCurrentPage();
+  if ((page === 'subscriptions' || page.includes('channel'))) {
+    // Log EVERY video to find what shorts have in common
+    const hasVideoRenderer = !!item.videoRenderer;
+    const hasGridRenderer = !!item.gridVideoRenderer;
+    const hasTileRenderer = !!item.tileRenderer;
+    const hasRichItem = !!item.richItemRenderer;
+    
+    console.log('🔬🔬🔬 VIDEO ANALYSIS:', videoId);
+    console.log('🔬 Renderer type:', hasVideoRenderer ? 'videoRenderer' : hasGridRenderer ? 'gridRenderer' : hasTileRenderer ? 'tileRenderer' : hasRichItem ? 'richItem' : 'unknown');
+    
+    // Check navigationEndpoint
+    if (item.videoRenderer?.navigationEndpoint) {
+      const nav = item.videoRenderer.navigationEndpoint;
+      console.log('🔬 Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
+    }
+    
+    if (item.gridVideoRenderer?.navigationEndpoint) {
+      const nav = item.gridVideoRenderer.navigationEndpoint;
+      console.log('🔬 Grid - Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Grid - Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 Grid - URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
+    }
+    
+    // Check overlays
+    const overlays = item.videoRenderer?.thumbnailOverlays || 
+                     item.gridVideoRenderer?.thumbnailOverlays || 
+                     item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+    
+    console.log('🔬 Overlay count:', overlays.length);
+    overlays.forEach((overlay, idx) => {
+      if (overlay.thumbnailOverlayTimeStatusRenderer) {
+        console.log('🔬 Overlay', idx, 'style:', overlay.thumbnailOverlayTimeStatusRenderer.style);
+        console.log('🔬 Overlay', idx, 'text:', overlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText);
+      }
+    });
+    
+    // Check badges
+    if (item.videoRenderer?.badges) {
+      console.log('🔬 Badges:', item.videoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    if (item.gridVideoRenderer?.badges) {
+      console.log('🔬 Grid badges:', item.gridVideoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    
+    // Check viewCountText for "views" vs other patterns
+    const viewCount = item.videoRenderer?.viewCountText?.simpleText || 
+                     item.gridVideoRenderer?.viewCountText?.simpleText || '';
+    console.log('🔬 View count text:', viewCount);
+    
+    console.log('🔬🔬🔬 END ANALYSIS');
+  }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ========================================');
@@ -1133,7 +1256,9 @@ function isShortItem(item) {
   // Method 4: Check gridVideoRenderer
   if (item.gridVideoRenderer?.thumbnailOverlays) {
     const hasShortsBadge = item.gridVideoRenderer.thumbnailOverlays.some(overlay =>
-      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.runs?.some(run => run.text === 'SHORTS')
     );
     if (hasShortsBadge) {
       if (DEBUG_ENABLED && LOG_SHORTS) {
@@ -1143,15 +1268,39 @@ function isShortItem(item) {
       return true;
     }
   }
+
+  if (item.gridVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url) {
+    const url = item.gridVideoRenderer.navigationEndpoint.commandMetadata.webCommandMetadata.url;
+    if (url.includes('/shorts/')) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 4b (gridVideoRenderer URL)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
+      }
+      return true;
+    }
+  }
   
   // Method 5: Check compactVideoRenderer
   if (item.compactVideoRenderer?.thumbnailOverlays) {
     const hasShortsBadge = item.compactVideoRenderer.thumbnailOverlays.some(overlay =>
-      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.runs?.some(run => run.text === 'SHORTS')
     );
     if (hasShortsBadge) {
       if (DEBUG_ENABLED && LOG_SHORTS) {
         console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 5 (compactVideoRenderer)');
+        console.log('[SHORTS_DIAGNOSTIC] ========================================');
+      }
+      return true;
+    }
+  }
+
+  if (item.compactVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url) {
+    const url = item.compactVideoRenderer.navigationEndpoint.commandMetadata.webCommandMetadata.url;
+    if (url.includes('/shorts/')) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 5b (compactVideoRenderer URL)');
         console.log('[SHORTS_DIAGNOSTIC] ========================================');
       }
       return true;
@@ -1182,7 +1331,9 @@ function isShortItem(item) {
   // Method 6c: Check tileRenderer overlay
   if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays) {
     const hasShortsBadge = item.tileRenderer.header.tileHeaderRenderer.thumbnailOverlays.some(overlay =>
-      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+      overlay.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS' ||
+      overlay.thumbnailOverlayTimeStatusRenderer?.text?.runs?.some(run => run.text === 'SHORTS')
     );
     if (hasShortsBadge) {
       if (DEBUG_ENABLED && LOG_SHORTS) {
@@ -1249,6 +1400,27 @@ function isShortItem(item) {
   return false;
 }
 
+function getShelfTitle(shelf) {
+  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
+  const richShelfTitle = shelf?.richShelfRenderer?.title;
+  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
+  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
+
+  const titleText = (title) => {
+    if (!title) return '';
+    if (title.simpleText) return title.simpleText;
+    if (Array.isArray(title.runs)) return title.runs.map(run => run.text).join('');
+    return '';
+  };
+
+  return (
+    titleText(shelfRendererTitle) ||
+    titleText(richShelfTitle) ||
+    titleText(richSectionTitle) ||
+    titleText(gridHeaderTitle)
+  );
+}
+
 function processShelves(shelves, shouldAddPreviews = true) {  
   if (!Array.isArray(shelves)) {
     console.warn('[SHELF_PROCESS] processShelves called with non-array', { type: typeof shelves });
@@ -1271,9 +1443,27 @@ function processShelves(shelves, shouldAddPreviews = true) {
       console.log('[PAGE_DEBUG] Page changed to:', page);
       console.log('[PAGE_DEBUG] URL:', window.location.href);
       console.log('[PAGE_DEBUG] Hash:', window.location.hash);
+      console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
+      console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
       console.log('[PAGE_DEBUG] ========================================');
     }
     window._lastLoggedPage = page;
+  }
+
+  // ⭐ ADD DIAGNOSTIC LOGGING
+  if (DEBUG_ENABLED && (page === 'subscriptions' || page.includes('channel'))) {
+    console.log('$$$$$$$$$$$ SHELF PROCESSING START $$$$$$$$$$$');
+    console.log('$$$$$$$$$$$ Page:', page);
+    console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
+    console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
+    
+    // ⭐ NEW: Log ALL shelf titles
+    console.log('📚📚📚 ALL SHELF TITLES:');
+    shelves.forEach((shelf, idx) => {
+      const title = getShelfTitle(shelf);
+      console.log('📚 Shelf', idx, ':', title || '(no title)');
+    });
+    console.log('📚📚📚 END SHELF TITLES');
   }
   
   let totalItemsBefore = 0;
@@ -1288,9 +1478,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (!shelve) continue;
       
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
-      if (!shortsEnabled && shelve.shelfRenderer) {
-        const shelfTitle = shelve.shelfRenderer.shelfHeaderRenderer?.title?.simpleText || '';
-        if (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short')) {
+      if (!shortsEnabled) {
+        const shelfTitle = getShelfTitle(shelve);
+        console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+
+        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+          console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
+          console.log('$$$$$$$$$$$ Title:', shelfTitle);
+          console.log('$$$$$$$$$$$ Page:', page);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
@@ -1894,4 +2089,51 @@ function getCurrentPage() {
   }
   
   return detectedPage;
+}
+
+// ⭐ Detect and enhance playlist info area
+function detectPlaylistButtons() {
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') return;
+  
+  console.log('🎛️🎛️🎛️ SEARCHING FOR PLAYLIST BUTTONS');
+  
+  // Look for common playlist UI structures
+  const possibleSelectors = [
+    'ytlr-playlist-header-renderer',
+    'ytlr-playlist-panel-renderer',
+    '[class*="playlist-header"]',
+    '[class*="playlist-info"]',
+    'ytlr-browse-feed-actions-renderer'
+  ];
+  
+  possibleSelectors.forEach(selector => {
+    const element = document.querySelector(selector);
+    if (element) {
+      console.log('🎛️ FOUND:', selector);
+      console.log('🎛️ Element:', element);
+      console.log('🎛️ HTML:', element.outerHTML.substring(0, 500));
+    }
+  });
+  
+  // Also search for buttons
+  const buttons = document.querySelectorAll('button, ytlr-button-renderer, [role="button"]');
+  console.log('🎛️ Total buttons found:', buttons.length);
+  
+  buttons.forEach((btn, idx) => {
+    const text = btn.textContent || btn.innerText || '';
+    if (text.toLowerCase().includes('play') || text.toLowerCase().includes('shuffle') || text.toLowerCase().includes('repeat')) {
+      console.log('🎛️ Playlist button', idx, ':', text.trim());
+      console.log('🎛️ Parent:', btn.parentElement?.tagName);
+    }
+  });
+  
+  console.log('🎛️🎛️🎛️ END BUTTON SEARCH');
+}
+
+// Run detection when page loads
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    detectPlaylistButtons();
+  }, 3000); // Run 3 seconds after page load
 }
