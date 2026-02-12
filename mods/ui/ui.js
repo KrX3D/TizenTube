@@ -69,7 +69,6 @@ function execute_once_dom_loaded() {
   uiContainer.addEventListener(
     'keydown',
     (evt) => {
-      console.info('uiContainer key event:', evt.type, evt.keyCode, evt);
       if (evt.keyCode !== 404 && evt.keyCode !== 172) {
         if (evt.keyCode in ARROW_KEY_CODE) {
           navigate(ARROW_KEY_CODE[evt.keyCode]);
@@ -128,13 +127,6 @@ function execute_once_dom_loaded() {
   } catch (e) { }
 
   var eventHandler = (evt) => {
-    console.info(
-      'Key event:',
-      evt.type,
-      evt.keyCode,
-      evt.keyCode,
-      evt.defaultPrevented
-    );
     
     // Screen dimming logic
     if (configRead('enableScreenDimming')) {
@@ -160,6 +152,7 @@ function execute_once_dom_loaded() {
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             if (typeof window.scrollConsoleUp === 'function') {
+                console.log('[CONSOLE_KEY] RED pressed -> scrollConsoleUp');
                 window.scrollConsoleUp();
             }
         }
@@ -171,6 +164,7 @@ function execute_once_dom_loaded() {
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             if (typeof window.scrollConsoleDown === 'function') {
+                console.log('[CONSOLE_KEY] GREEN pressed -> scrollConsoleDown');
                 window.scrollConsoleDown();
             }
         }

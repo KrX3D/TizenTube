@@ -270,8 +270,36 @@ function createRemoteLogger(settingsAccessor = configRead) {
     }
 
     if (useWs() && wsEndpoint()) {
-      connectWs();
-      checks.ws = wsReady() ? 'ok' : 'pending';
+      checks.ws = await new Promise((resolve) => {
+        let resolved = false;
+        try {
+          const token = authToken();
+          const raw = wsEndpoint();
+          const joiner = raw.includes('?') ? '&' : '?';
+          const probeUrl = token ? `${raw}${joiner}token=${encodeURIComponent(token)}` : raw;
+          const probe = new WebSocket(probeUrl);
+          const done = (value) => {
+            if (resolved) return;
+            resolved = true;
+            try { probe.close(); } catch (_) {}
+            resolve(value);
+          };
+          const timeout = setTimeout(() => done('failed'), 2500);
+          probe.addEventListener('open', () => {
+            clearTimeout(timeout);
+            try {
+              probe.send(JSON.stringify({ type: 'logs', source: 'TizenTube', entries: [{ level: 'info', args: ['[RemoteLogger] WS test'], ts: Date.now(), href: location.href, userAgent: navigator.userAgent, source: 'TizenTube' }] }));
+            } catch (_) {}
+            done('ok');
+          });
+          probe.addEventListener('error', () => {
+            clearTimeout(timeout);
+            done('failed');
+          });
+        } catch (_) {
+          resolve('failed');
+        }
+      });
     }
 
     return checks;

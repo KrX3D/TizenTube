@@ -867,10 +867,11 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -901,10 +902,10 @@ JSON.parse = function () {
         }
 
         // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
-        scanAndFilterAllArrays(items, page, `onResponse-${idx}`);
+        scanAndFilterAllArrays(items, effectivePage, `onResponse-${idx}`);
 
         // Then direct-filter top-level arrays with videos.
-        const filtered = directFilterArray(items, page, `continuation-${idx}`);
+        const filtered = directFilterArray(items, effectivePage, `continuation-${idx}`);
         action.appendContinuationItemsAction.continuationItems = filtered;
       }
     });
@@ -1741,6 +1742,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
       }
       
       let shelfType = 'unknown';
@@ -2302,87 +2306,81 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
-    console.log('[PLAYLIST_BUTTON] No button container found (attempt ' + attempt + ')');
+    if (DEBUG_ENABLED) console.log('[PLAYLIST_BUTTON] No button container found (attempt ' + attempt + ')');
     if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
 
   const parentContainer = baseContainer.parentElement;
-  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
-  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
-
-  if (attempt === 1) {
-    logChunked('[PLAYLIST_BUTTON] baseContainer HTML', baseContainer.outerHTML || '');
-    if (parentContainer) {
-      logChunked('[PLAYLIST_BUTTON] parentContainer HTML', parentContainer.outerHTML || '');
-    }
-  }
+  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer')).filter(btn => btn.id !== 'tizentube-collection-btn');
+  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')).filter(btn => btn.id !== 'tizentube-collection-btn') : [];
 
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
   const existingButtons = useParent ? parentButtons : baseButtons;
 
-  console.log('[PLAYLIST_BUTTON] Container selected:', useParent ? 'parent' : 'base', '| buttons:', existingButtons.length);
-
-  if (existingButtons.length === 0) {
-    console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
+  if (!container || existingButtons.length === 0) {
+    if (DEBUG_ENABLED) console.log('[PLAYLIST_BUTTON] No native buttons in selected container (attempt ' + attempt + ')');
     if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
 
-  const existingCustom = container.querySelector('#tizentube-collection-btn');
-  if (existingCustom) existingCustom.remove();
+  if (document.getElementById('tizentube-collection-btn')) {
+    return;
+  }
 
-  const templateBtn = existingButtons[existingButtons.length - 1];
+  const templateBtn = existingButtons[0];
+  const lastBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
 
   Array.from(templateBtn.attributes).forEach((attr) => {
-    if (attr.name.startsWith('data-') || attr.name === 'tabindex' || attr.name === 'role') {
-      customBtn.setAttribute(attr.name, attr.value);
-    }
+    customBtn.setAttribute(attr.name, attr.value);
   });
 
   const label = customBtn.querySelector('yt-formatted-string');
   if (label) {
-    label.textContent = '🔄 Refresh Filters';
+    label.textContent = '🔄 Refresh Filter';
   }
 
   customBtn.style.cssText = templateBtn.style.cssText;
-  customBtn.style.position = 'relative';
-  customBtn.style.top = 'auto';
-  customBtn.style.left = 'auto';
-  customBtn.style.transform = 'none';
-  customBtn.style.display = 'block';
-  customBtn.style.visibility = 'visible';
-  customBtn.style.opacity = '1';
+  customBtn.style.display = '';
+  customBtn.style.visibility = '';
+  customBtn.style.opacity = '';
+  customBtn.style.position = '';
+  customBtn.style.transform = '';
+  customBtn.style.marginTop = '14px';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.zIndex = '5';
-  customBtn.style.marginTop = '32px';
-
-  const templateHeight = templateBtn.getBoundingClientRect().height || 72;
-  const minHeightNeeded = container.scrollHeight + templateHeight + 40;
-  container.style.minHeight = `${Math.max(minHeightNeeded, container.clientHeight + templateHeight + 24)}px`;
-  container.style.overflow = 'visible';
+  customBtn.style.zIndex = '3';
+  customBtn.setAttribute('tabindex', '0');
 
   customBtn.addEventListener('click', (evt) => {
     evt.preventDefault();
     evt.stopPropagation();
-    resolveCommand({
-      signalAction: {
-        signal: 'SOFT_RELOAD_PAGE'
-      }
-    });
+    resolveCommand({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
   });
 
-  container.appendChild(customBtn);
-
-  if (attempt < 3) {
-    setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
+  if (!document.getElementById('tizentube-playlist-btn-style')) {
+    const style = document.createElement('style');
+    style.id = 'tizentube-playlist-btn-style';
+    style.textContent = '#tizentube-collection-btn{display:block!important;min-height:64px!important;}';
+    document.head.appendChild(style);
   }
 
-  const rect = customBtn.getBoundingClientRect();
-  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| text=', (label?.textContent || '').trim());
+  lastBtn.insertAdjacentElement('afterend', customBtn);
+
+  const lastRect = lastBtn.getBoundingClientRect();
+  const customRect = customBtn.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+  const overflowBottom = Math.max(0, customRect.bottom - containerRect.bottom);
+  if (overflowBottom > 0) {
+    container.style.minHeight = `${container.clientHeight + overflowBottom + 24}px`;
+    container.style.overflow = 'visible';
+  }
+
+  if (DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| lastY=', Math.round(lastRect.top), '| newY=', Math.round(customRect.top));
+  }
 }
 
 
@@ -2392,6 +2390,8 @@ if (typeof window !== 'undefined') {
   setInterval(() => {
     if (window.location.href !== lastPlaylistButtonHref) {
       lastPlaylistButtonHref = window.location.href;
+      const existing = document.getElementById('tizentube-collection-btn');
+      if (existing) existing.remove();
       setTimeout(() => addPlaylistControlButtons(1), 1800);
     }
   }, 1200);
