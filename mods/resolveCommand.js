@@ -178,7 +178,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console 580' + APP_VERSION_LABEL + ' (' + APP_VERSION + ')');
+            console.log('[Console] Visual Console 590' + APP_VERSION_LABEL + ' (' + APP_VERSION + ')');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
