@@ -115,9 +115,9 @@ function directFilterArray(arr, page, context = '') {
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    console.log('[CLEANUP_TRIGGER] Cleanup triggered! context:', context, '| helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
     
-    // Store the helper IDs for filtering
+    // Store the helper IDs before clearing
     const helperIdsToRemove = window._lastHelperVideos.map(video => 
       video.tileRenderer?.contentId || 
       video.videoRenderer?.videoId || 
@@ -127,17 +127,25 @@ function directFilterArray(arr, page, context = '') {
       'unknown'
     );
     
-    console.log('[CLEANUP] Helper IDs to remove:', helperIdsToRemove);
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP] Inserting', window._lastHelperVideos.length, 'old helpers into batch for filtering');
+      console.log('[CLEANUP] Helper IDs:', helperIdsToRemove);
+    }
     
-    // ⭐ DON'T insert helpers into new batch - they're already rendered!
-    // Just track them for removal if they appear
+    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
+    // This way they get filtered out cleanly with the rest!
+    arr.unshift(...window._lastHelperVideos);
+    
+    // Track as removed (for fallback filtering)
     trackRemovedPlaylistHelpers(helperIdsToRemove);
     
-    // Clear helpers immediately (don't wait for last batch)
-    if (!isLastBatch) {
+    // Clear the stored helpers (UNLESS this is the last batch)
+    if (isLastBatch) {
+      console.log('--------------------------------->> NOT clearing helpers (last batch - will clean after filtering)');
+    } else {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
-      console.log('[CLEANUP] Helpers cleared');
+      console.log('[CLEANUP] Helpers cleared for next batch');
     }
   }
   
@@ -709,11 +717,6 @@ JSON.parse = function () {
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
-  
-    // ⭐ Trigger button detection
-    setTimeout(() => {
-      detectPlaylistButtons();
-    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -1106,80 +1109,61 @@ function isShortItem(item) {
                  item.compactVideoRenderer?.videoId ||
                  'unknown';
 
-  const page = getCurrentPage();
   
-  // ⭐ FULL STRUCTURE DUMP for subscriptions/channels
+  // ⭐ COMPREHENSIVE DIAGNOSTIC for subscription shorts that look like videos
+  const page = getCurrentPage();
   if ((page === 'subscriptions' || page.includes('channel'))) {
+    // Log EVERY video to find what shorts have in common
+    const hasVideoRenderer = !!item.videoRenderer;
+    const hasGridRenderer = !!item.gridVideoRenderer;
+    const hasTileRenderer = !!item.tileRenderer;
+    const hasRichItem = !!item.richItemRenderer;
     
-    // Check if this will be detected as a short by Method 8 (duration)
-    let willBeDetectedAsShort = false;
-    let durationSeconds = null;
+    console.log('🔬🔬🔬 VIDEO ANALYSIS:', videoId);
+    console.log('🔬 Renderer type:', hasVideoRenderer ? 'videoRenderer' : hasGridRenderer ? 'gridRenderer' : hasTileRenderer ? 'tileRenderer' : hasRichItem ? 'richItem' : 'unknown');
     
-    if (item.tileRenderer) {
-      let lengthText = null;
-      
-      const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-      if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-        const timeOverlay = thumbnailOverlays.find(o => o?.thumbnailOverlayTimeStatusRenderer);
-        if (timeOverlay) {
-          lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-        }
-      }
-      
-      if (!lengthText) {
-        lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-          i => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
-        )?.lineItemRenderer?.text?.simpleText;
-      }
-      
-      if (lengthText) {
-        const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-        if (durationMatch) {
-          const minutes = parseInt(durationMatch[1], 10);
-          const seconds = parseInt(durationMatch[2], 10);
-          durationSeconds = minutes * 60 + seconds;
-          willBeDetectedAsShort = (durationSeconds <= 90);
-        }
-      }
+    // Check navigationEndpoint
+    if (item.videoRenderer?.navigationEndpoint) {
+      const nav = item.videoRenderer.navigationEndpoint;
+      console.log('🔬 Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
     }
     
-    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
-    if (willBeDetectedAsShort) {
-      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
-      console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'seconds');
-      console.log('🔬 Page:', page);
-      
-      // Dump FULL JSON structure
-      console.log('🔬 FULL ITEM JSON:');
-      console.log(JSON.stringify(item, null, 2));
-      
-      // Extract key fields
-      if (item.videoRenderer) {
-        console.log('🔬 📹 videoRenderer detected');
-        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
-      }
-      
-      if (item.gridVideoRenderer) {
-        console.log('🔬 📊 gridVideoRenderer detected');
-        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
-      }
-      
-      if (item.tileRenderer) {
-        console.log('🔬 🔲 tileRenderer detected');
-        console.log('🔬 Content type:', item.tileRenderer.contentType);
-        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
-      }
-      
-      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+    if (item.gridVideoRenderer?.navigationEndpoint) {
+      const nav = item.gridVideoRenderer.navigationEndpoint;
+      console.log('🔬 Grid - Has watchEndpoint:', !!nav.watchEndpoint);
+      console.log('🔬 Grid - Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
+      console.log('🔬 Grid - URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
     }
+    
+    // Check overlays
+    const overlays = item.videoRenderer?.thumbnailOverlays || 
+                     item.gridVideoRenderer?.thumbnailOverlays || 
+                     item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+    
+    console.log('🔬 Overlay count:', overlays.length);
+    overlays.forEach((overlay, idx) => {
+      if (overlay.thumbnailOverlayTimeStatusRenderer) {
+        console.log('🔬 Overlay', idx, 'style:', overlay.thumbnailOverlayTimeStatusRenderer.style);
+        console.log('🔬 Overlay', idx, 'text:', overlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText);
+      }
+    });
+    
+    // Check badges
+    if (item.videoRenderer?.badges) {
+      console.log('🔬 Badges:', item.videoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    if (item.gridVideoRenderer?.badges) {
+      console.log('🔬 Grid badges:', item.gridVideoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    }
+    
+    // Check viewCountText for "views" vs other patterns
+    const viewCount = item.videoRenderer?.viewCountText?.simpleText || 
+                     item.gridVideoRenderer?.viewCountText?.simpleText || '';
+    console.log('🔬 View count text:', viewCount);
+    
+    console.log('🔬🔬🔬 END ANALYSIS');
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
