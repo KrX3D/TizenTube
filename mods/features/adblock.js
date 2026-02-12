@@ -1156,6 +1156,14 @@ function isShortItem(item) {
         console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
         console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
       }
+      
+      if (item.tileRenderer) {
+        console.log('🔬 🔲 tileRenderer detected');
+        console.log('🔬 Content type:', item.tileRenderer.contentType);
+        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
+        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+      }
+      
       console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
     }
   }
