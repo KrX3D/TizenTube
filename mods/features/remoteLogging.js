@@ -71,14 +71,18 @@ function createRemoteLogger(settingsAccessor = configRead) {
     return Math.max(500, Number(settingsAccessor('remoteLoggingHttpTimeoutMs') || 3500));
   }
 
-  function useHttp() {
+  function activeTransport() {
     const mode = transportMode();
-    return mode === 'http' || mode === 'both';
+    if (mode === 'ws') return 'ws';
+    return 'http';
+  }
+
+  function useHttp() {
+    return activeTransport() === 'http';
   }
 
   function useWs() {
-    const mode = transportMode();
-    return mode === 'ws' || mode === 'both';
+    return activeTransport() === 'ws';
   }
 
   function pushLog(level, args) {

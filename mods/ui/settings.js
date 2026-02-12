@@ -820,7 +820,7 @@ export default function modernUI(update, parameters) {
                         menuId: 'tt-remote-log-transport',
                         menuHeader: {
                             title: 'Remote Logging Transport',
-                            subtitle: 'Choose HTTP, WebSocket, or both'
+                            subtitle: 'Choose one active transport (HTTP or WebSocket)'
                         },
                         options: [
                             {
@@ -832,13 +832,7 @@ export default function modernUI(update, parameters) {
                                 name: 'WebSocket only',
                                 key: 'remoteLoggingTransport',
                                 value: 'ws'
-                            },
-                            {
-                                name: 'HTTP + WebSocket',
-                                key: 'remoteLoggingTransport',
-                                value: 'both'
-                            }
-                        ]
+                            },                        ]
                     },
                     {
                         name: 'Remote HTTP Endpoint',

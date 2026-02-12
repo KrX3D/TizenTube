@@ -157,7 +157,7 @@ import { configWrite } from "./config.js";
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'log');
         }
-        if (window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
     };
 
     console.info = function(...args) {
@@ -166,7 +166,7 @@ import { configWrite } from "./config.js";
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'log');
         }
-        if (window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
     };
 
     console.error = function(...args) {
@@ -175,7 +175,7 @@ import { configWrite } from "./config.js";
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'error');
         }
-        if (window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
     };
 
     console.warn = function(...args) {
@@ -184,7 +184,7 @@ import { configWrite } from "./config.js";
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'warn');
         }
-        if (window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
     };
 
     console.debug = function(...args) {
@@ -193,7 +193,7 @@ import { configWrite } from "./config.js";
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'log');
         }
-        if (window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
     };
 
     let lastToggleTime = 0;

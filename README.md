@@ -34,9 +34,9 @@ TizenTube can stream console logs to a receiver on your LAN.
 ### Settings
 In **Developer Options → Remote Logging** configure:
 - Enable/Disable
-- Transport: `http`, `ws`, or `both`
-- HTTP endpoint (example: `http://192.168.1.50:9000/log`)
-- WebSocket endpoint (example: `ws://192.168.1.50:9001`)
+- Transport: `http` or `ws` (one active transport at a time)
+- HTTP endpoint (example: `http://192.168.70.124:9000/log`)
+- WebSocket endpoint (example: `ws://192.168.70.124:9001`)
 - Optional auth token
 - Test actions in **Test Console**
 
@@ -89,14 +89,82 @@ Make sure TV and PC are on the same LAN and inbound ports are open in your firew
 ### Windows PowerShell firewall commands
 > Run PowerShell as Administrator.
 
-Open inbound rules:
+Open inbound rules (Domain + Private):
 ```powershell
-New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
-New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000" -Direction Inbound -Protocol TCP -LocalPort 9000 -Action Allow
-New-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"   -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 8765 In" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 8765 `
+  -Profile Domain,Private
+
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 9000 In" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9000 `
+  -Profile Domain,Private
+
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 9001 In" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9001 `
+  -Profile Domain,Private
 ```
 
-Test local listeners (replace ports as needed):
+Safer LocalSubnet-only variants:
+```powershell
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 8765 In (LocalSubnet)" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 8765 `
+  -Profile Domain,Private `
+  -RemoteAddress LocalSubnet
+
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 9000 In (LocalSubnet)" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9000 `
+  -Profile Domain,Private `
+  -RemoteAddress LocalSubnet
+
+New-NetFirewallRule `
+  -DisplayName "Allow TCP 9001 In (LocalSubnet)" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 9001 `
+  -Profile Domain,Private `
+  -RemoteAddress LocalSubnet
+```
+
+Verify rule port mapping:
+```powershell
+Get-NetFirewallRule -DisplayName "Allow TCP 8765 In" | Get-NetFirewallPortFilter
+Get-NetFirewallRule -DisplayName "Allow TCP 9000 In" | Get-NetFirewallPortFilter
+Get-NetFirewallRule -DisplayName "Allow TCP 9001 In" | Get-NetFirewallPortFilter
+
+Get-NetFirewallRule -DisplayName "Allow TCP 8765 In (LocalSubnet)" | Get-NetFirewallPortFilter
+Get-NetFirewallRule -DisplayName "Allow TCP 9000 In (LocalSubnet)" | Get-NetFirewallPortFilter
+Get-NetFirewallRule -DisplayName "Allow TCP 9001 In (LocalSubnet)" | Get-NetFirewallPortFilter
+```
+
+Test listeners are actually bound:
+```powershell
+Get-NetTCPConnection -LocalPort 8765 -State Listen
+Get-NetTCPConnection -LocalPort 9000 -State Listen
+Get-NetTCPConnection -LocalPort 9001 -State Listen
+```
+
+Test local TCP reachability:
 ```powershell
 Test-NetConnection -ComputerName 127.0.0.1 -Port 8765
 Test-NetConnection -ComputerName 127.0.0.1 -Port 9000
@@ -112,7 +180,10 @@ Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 9001
 
 Close/remove rules later:
 ```powershell
-Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765"
-Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000"
-Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"
+Remove-NetFirewallRule -DisplayName "Allow TCP 8765 In"
+Remove-NetFirewallRule -DisplayName "Allow TCP 9000 In"
+Remove-NetFirewallRule -DisplayName "Allow TCP 9001 In"
+Remove-NetFirewallRule -DisplayName "Allow TCP 8765 In (LocalSubnet)"
+Remove-NetFirewallRule -DisplayName "Allow TCP 9000 In (LocalSubnet)"
+Remove-NetFirewallRule -DisplayName "Allow TCP 9001 In (LocalSubnet)"
 ```
