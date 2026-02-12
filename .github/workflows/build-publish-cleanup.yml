@@ -94,6 +94,8 @@ on:
       - main
     paths-ignore:
       - '.github/**'
+      - 'package.json'
+      - 'README.md'
   release:
     types: [published]
   workflow_dispatch:
