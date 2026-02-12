@@ -86,40 +86,62 @@ import { configWrite } from "./config.js";
     const originalLog = console.log;
     const originalError = console.error;
     const originalWarn = console.warn;
+    const originalInfo = console.info;
+    const originalDebug = console.debug;
 
     let logs = [];
     window.consoleAutoScroll = true;
 
+    function safeStringify(value) {
+        if (typeof value === 'string') return value;
+        if (value === null || value === undefined) return String(value);
+        if (typeof value !== 'object') return String(value);
+
+        const seen = new WeakSet();
+        try {
+            const serialized = JSON.stringify(value, (key, val) => {
+                if (typeof val === 'object' && val !== null) {
+                    if (seen.has(val)) return '[Circular]';
+                    seen.add(val);
+                }
+                return val;
+            });
+            if (typeof serialized === 'string') {
+                return serialized.length > 600 ? serialized.slice(0, 600) + '…[truncated]' : serialized;
+            }
+        } catch (_) { }
+
+        try { return String(value); } catch (_) { return '[Unserializable]'; }
+    }
+
+    function formatConsoleArgs(args) {
+        return args.map((arg) => safeStringify(arg)).join(' ');
+    }
+
     // Scroll functions
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
-        
-        const before = consoleDiv.scrollTop;
-        const newScroll = Math.max(0, consoleDiv.scrollTop - 100);
-        
+
+        const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
+        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
+        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + step);
+        originalLog('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll, 'step=', step);
+
         consoleDiv.scrollTop = newScroll;
-        consoleDiv.scroll(0, newScroll);
-        consoleDiv.scrollTo(0, newScroll);
-        
-        void consoleDiv.offsetHeight;
-        
+
         window.consoleAutoScroll = false;
         updateBorder();
     };
 
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
-        
-        const before = consoleDiv.scrollTop;
-        const maxScroll = consoleDiv.scrollHeight - consoleDiv.clientHeight;
-        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 100);
-        
+
+        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
+        const newScroll = Math.max(0, consoleDiv.scrollTop - step);
+        originalLog('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+
         consoleDiv.scrollTop = newScroll;
-        consoleDiv.scroll(0, newScroll);
-        consoleDiv.scrollTo(0, newScroll);
-        
-        void consoleDiv.offsetHeight;
-        
+
         window.consoleAutoScroll = false;
         updateBorder();
     };
@@ -134,34 +156,62 @@ import { configWrite } from "./config.js";
         consoleDiv.scrollTo(0, 0);
     };
 
+    window.deleteConsoleLastLog = function() {
+        if (!consoleDiv || !enabled || !consoleVisible) return;
+        if (logs.length === 0) return;
+        logs.splice(0, Math.min(3, logs.length));
+        consoleDiv.innerHTML = logs.join('');
+    };
+
     function updateBorder() {
         if (consoleDiv) {
             consoleDiv.style.borderColor = window.consoleAutoScroll ? '#0f0' : '#f80';
         }
     }
 
-        console.log = function(...args) {
-                originalLog.apply(console, args);
-                        // Only add to logs if console is enabled
-                                if (enabled) {
-                                            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'log');
-                                                    }
-                                                        };
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (enabled) {
+            const msg = formatConsoleArgs(args);
+            addLog(msg, 'log');
+        }
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
+    };
+
+    console.info = function(...args) {
+        originalInfo.apply(console, args);
+        if (enabled) {
+            const msg = formatConsoleArgs(args);
+            addLog(msg, 'log');
+        }
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
+    };
 
     console.error = function(...args) {
         originalError.apply(console, args);
-        // Only add to logs if console is enabled
         if (enabled) {
-            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error');
+            const msg = formatConsoleArgs(args);
+            addLog(msg, 'error');
         }
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
     };
 
     console.warn = function(...args) {
         originalWarn.apply(console, args);
-        // Only add to logs if console is enabled
         if (enabled) {
-            addLog(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn');
+            const msg = formatConsoleArgs(args);
+            addLog(msg, 'warn');
         }
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
+    };
+
+    console.debug = function(...args) {
+        originalDebug.apply(console, args);
+        if (enabled) {
+            const msg = formatConsoleArgs(args);
+            addLog(msg, 'log');
+        }
+        if (enabled && window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
     };
 
     let lastToggleTime = 0;
@@ -274,20 +324,42 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v10 - NEWEST FIRST');
+    console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
     console.log('[Console]   RED button - Scroll UP (older logs)');
     console.log('[Console]   GREEN button - Scroll DOWN (newer logs)');
-    console.log('[Console]   YELLOW button - Jump to TOP (newest)');
+    console.log('[Console]   YELLOW button - Delete last log line');
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
     console.log('[Console] ========================================');
+
+    // Show startup version toast (best effort for ~5s by repeating once)
+    const versionToastCmd = {
+        openPopupAction: {
+            popupType: 'TOAST',
+            popupDurationSeconds: 5,
+            popup: {
+                overlayToastRenderer: {
+                    title: { simpleText: 'TizenTube started' },
+                    subtitle: { simpleText: 'Version ' + APP_VERSION }
+                }
+            }
+        }
+    };
+
+    setTimeout(() => {
+        try { resolveCommand(versionToastCmd); } catch (_) {}
+        setTimeout(() => {
+            try { resolveCommand(versionToastCmd); } catch (_) {}
+        }, 2500);
+    }, 1200);
     
     updateBorder();
 })();
 
+import "./features/remoteLogging.js";
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';
@@ -312,3 +384,8 @@ import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
+
+import resolveCommand from "./resolveCommand.js";
+import appPkg from "../package.json";
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
