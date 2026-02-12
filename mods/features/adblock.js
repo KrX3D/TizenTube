@@ -1108,50 +1108,11 @@ function isShortItem(item) {
   
   // ⭐ FULL STRUCTURE DUMP for subscriptions/channels
   if ((page === 'subscriptions' || page.includes('channel'))) {
-    // Log EVERY video to find what shorts have in common
-    const hasVideoRenderer = !!item.videoRenderer;
-    const hasGridRenderer = !!item.gridVideoRenderer;
-    const hasTileRenderer = !!item.tileRenderer;
-    const hasRichItem = !!item.richItemRenderer;
     
     // Check if this will be detected as a short by Method 8 (duration)
     let willBeDetectedAsShort = false;
     let durationSeconds = null;
-    
-    if (item.gridVideoRenderer?.navigationEndpoint) {
-      const nav = item.gridVideoRenderer.navigationEndpoint;
-      console.log('🔬 Grid - Has watchEndpoint:', !!nav.watchEndpoint);
-      console.log('🔬 Grid - Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
-      console.log('🔬 Grid - URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
-    }
-    
-    // Check overlays
-    const overlays = item.videoRenderer?.thumbnailOverlays || 
-                     item.gridVideoRenderer?.thumbnailOverlays || 
-                     item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
-    
-    console.log('🔬 Overlay count:', overlays.length);
-    overlays.forEach((overlay, idx) => {
-      if (overlay.thumbnailOverlayTimeStatusRenderer) {
-        console.log('🔬 Overlay', idx, 'style:', overlay.thumbnailOverlayTimeStatusRenderer.style);
-        console.log('🔬 Overlay', idx, 'text:', overlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText);
-      }
-    });
-    
-    // Check badges
-    if (item.videoRenderer?.badges) {
-      console.log('🔬 Badges:', item.videoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
-    }
-    if (item.gridVideoRenderer?.badges) {
-      console.log('🔬 Grid badges:', item.gridVideoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
-    }
-    
-    // Check viewCountText for "views" vs other patterns
-    const viewCount = item.videoRenderer?.viewCountText?.simpleText || 
-                     item.gridVideoRenderer?.viewCountText?.simpleText || '';
-    console.log('🔬 View count text:', viewCount);
-    
-    console.log('🔬🔬🔬 END ANALYSIS');
+
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
