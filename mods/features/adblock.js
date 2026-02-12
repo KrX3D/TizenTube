@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = true;   // Set false to disable shorts logging  
+const LOG_SHORTS = false;   // Set false to disable shorts logging  
 const LOG_WATCHED = true;  // Set false to disable watched video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
@@ -1397,7 +1397,8 @@ function isShortItem(item) {
         const totalSeconds = minutes * 60 + seconds;
         
         if (totalSeconds <= 90) {
-          if (DEBUG_ENABLED && LOG_SHORTS) {
+          //if (DEBUG_ENABLED && LOG_SHORTS) {
+          if (DEBUG_ENABLED) {
             console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s)');
             console.log('[SHORTS_DIAGNOSTIC] Duration:', totalSeconds, 'seconds');
             console.log('[SHORTS_DIAGNOSTIC] ========================================');
@@ -1409,7 +1410,8 @@ function isShortItem(item) {
   }
   
   // NOT A SHORT
-  if (DEBUG_ENABLED && LOG_SHORTS) {
+  //if (DEBUG_ENABLED && LOG_SHORTS) {
+  if (DEBUG_ENABLED) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
     console.log('[SHORTS_DIAGNOSTIC] ========================================');
   }
