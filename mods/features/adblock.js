@@ -6,7 +6,7 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
 const LOG_SHORTS = false;   // Set false to disable shorts logging  
-const LOG_WATCHED = false;  // Set true to enable verbose watched-video logging
+const LOG_WATCHED = true;  // Set true to enable verbose watched-video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
 // Updated automatically via config change events
