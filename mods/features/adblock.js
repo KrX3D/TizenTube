@@ -1147,6 +1147,19 @@ function isShortItem(item) {
       console.log('🔬 Video ID:', videoId);
       console.log('🔬 Duration:', durationSeconds, 'seconds');
       console.log('🔬 Page:', page);
+      
+      // Dump FULL JSON structure
+      console.log('🔬 FULL ITEM JSON:');
+      console.log(JSON.stringify(item, null, 2));
+      
+      // Extract key fields
+      if (item.videoRenderer) {
+        console.log('🔬 📹 videoRenderer detected');
+        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
+      }
 
       console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
     }
