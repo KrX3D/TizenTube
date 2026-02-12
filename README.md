@@ -26,3 +26,93 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 - [DeArrow](https://dearrow.ajay.app/) Support
 - Customizable Themes (Custom Coloring)
 - More to come, if you [request](https://github.com/reisxd/TizenTube/issues/new) it!
+
+## Remote Logging (HTTP + WebSocket)
+
+TizenTube can stream console logs to a receiver on your LAN.
+
+### Settings
+In **Developer Options → Remote Logging** configure:
+- Enable/Disable
+- Transport: `http`, `ws`, or `both`
+- HTTP endpoint (example: `http://192.168.1.50:9000/log`)
+- WebSocket endpoint (example: `ws://192.168.1.50:9001`)
+- Optional auth token
+- Test actions in **Test Console**
+
+### Run a local HTTP receiver (Python)
+```python
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+class H(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+        self.end_headers()
+
+    def do_POST(self):
+        n = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(n).decode('utf-8', errors='replace')
+        print(body)
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+
+HTTPServer(('0.0.0.0', 9000), H).serve_forever()
+```
+
+### Run a local WebSocket receiver (Node.js)
+```js
+// npm i ws
+const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 9001 });
+
+wss.on('connection', (ws) => {
+  ws.on('message', (msg) => {
+    console.log(String(msg));
+  });
+});
+
+console.log('WS receiver listening on :9001');
+```
+
+Make sure TV and PC are on the same LAN and inbound ports are open in your firewall.
+
+
+### Ports used by this setup
+- **8765/TCP**: example HTTP receiver (legacy sample in app defaults)
+- **9000/TCP**: HTTP receiver sample in this README
+- **9001/TCP**: WebSocket receiver sample in this README
+
+### Windows PowerShell firewall commands
+> Run PowerShell as Administrator.
+
+Open inbound rules:
+```powershell
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765" -Direction Inbound -Protocol TCP -LocalPort 8765 -Action Allow
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000" -Direction Inbound -Protocol TCP -LocalPort 9000 -Action Allow
+New-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"   -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
+```
+
+Test local listeners (replace ports as needed):
+```powershell
+Test-NetConnection -ComputerName 127.0.0.1 -Port 8765
+Test-NetConnection -ComputerName 127.0.0.1 -Port 9000
+Test-NetConnection -ComputerName 127.0.0.1 -Port 9001
+```
+
+Test from another LAN device/PC to your host:
+```powershell
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 8765
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 9000
+Test-NetConnection -ComputerName <YOUR_PC_LAN_IP> -Port 9001
+```
+
+Close/remove rules later:
+```powershell
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 8765"
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog HTTP 9000"
+Remove-NetFirewallRule -DisplayName "TizenTube RemoteLog WS 9001"
+```

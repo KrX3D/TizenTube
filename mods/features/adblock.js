@@ -98,6 +98,7 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
+  let isPlaylistPage;
   
   // ⭐ Check if this is a playlist page
   isPlaylistPage = (page === 'playlist');
@@ -1723,6 +1724,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         // ⭐ Also log when we DON'T remove (for debugging)
         if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
         if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);

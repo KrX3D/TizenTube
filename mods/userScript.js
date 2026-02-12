@@ -86,6 +86,8 @@ import { configWrite } from "./config.js";
     const originalLog = console.log;
     const originalError = console.error;
     const originalWarn = console.warn;
+    const originalInfo = console.info;
+    const originalDebug = console.debug;
 
     let logs = [];
     window.consoleAutoScroll = true;
@@ -149,34 +151,49 @@ import { configWrite } from "./config.js";
         }
     }
 
-        console.log = function(...args) {
-                originalLog.apply(console, args);
-                        // Only add to logs if console is enabled
-                                if (enabled) {
-                                            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+    console.log = function(...args) {
+        originalLog.apply(console, args);
+        if (enabled) {
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'log');
-            if (window.remoteLogger?.log) window.remoteLogger.log('log', msg);
-                                                    }
-                                                        };
+        }
+        if (window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
+    };
+
+    console.info = function(...args) {
+        originalInfo.apply(console, args);
+        if (enabled) {
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            addLog(msg, 'log');
+        }
+        if (window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
+    };
 
     console.error = function(...args) {
         originalError.apply(console, args);
-        // Only add to logs if console is enabled
         if (enabled) {
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'error');
-            if (window.remoteLogger?.log) window.remoteLogger.log('error', msg);
         }
+        if (window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
     };
 
     console.warn = function(...args) {
         originalWarn.apply(console, args);
-        // Only add to logs if console is enabled
         if (enabled) {
             const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
             addLog(msg, 'warn');
-            if (window.remoteLogger?.log) window.remoteLogger.log('warn', msg);
         }
+        if (window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
+    };
+
+    console.debug = function(...args) {
+        originalDebug.apply(console, args);
+        if (enabled) {
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            addLog(msg, 'log');
+        }
+        if (window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
     };
 
     let lastToggleTime = 0;
@@ -289,7 +306,7 @@ import { configWrite } from "./config.js";
     }
     
     console.log('[Console] ========================================');
-    console.log('[Console] Visual Console v380 - NEWEST FIRST');
+    console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' - NEWEST FIRST');
     console.log('[Console] ========================================');
     console.log('[Console] ⚡ NEWEST LOGS AT TOP (scroll down for older)');
     console.log('[Console] Remote Controls:');
@@ -299,6 +316,27 @@ import { configWrite } from "./config.js";
     console.log('[Console]   BLUE button - Toggle console ON/OFF');
     console.log('[Console]   ');
     console.log('[Console] ========================================');
+
+    // Show startup version toast (best effort for ~5s by repeating once)
+    const versionToastCmd = {
+        openPopupAction: {
+            popupType: 'TOAST',
+            popupDurationSeconds: 5,
+            popup: {
+                overlayToastRenderer: {
+                    title: { simpleText: 'TizenTube started' },
+                    subtitle: { simpleText: 'Version ' + APP_VERSION }
+                }
+            }
+        }
+    };
+
+    setTimeout(() => {
+        try { resolveCommand(versionToastCmd); } catch (_) {}
+        setTimeout(() => {
+            try { resolveCommand(versionToastCmd); } catch (_) {}
+        }, 2500);
+    }, 1200);
     
     updateBorder();
 })();
@@ -328,3 +366,6 @@ import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
+
+import resolveCommand from "./resolveCommand.js";
+import { APP_VERSION, APP_VERSION_LABEL } from "./version.js";

@@ -814,24 +814,141 @@ export default function modernUI(update, parameters) {
                         value: 'enableRemoteLogging'
                     },
                     {
-                        name: 'Remote Log URL Preset',
+                        name: 'Remote Logging Transport',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-transport',
+                        menuHeader: {
+                            title: 'Remote Logging Transport',
+                            subtitle: 'Choose HTTP, WebSocket, or both'
+                        },
+                        options: [
+                            {
+                                name: 'HTTP only',
+                                key: 'remoteLoggingTransport',
+                                value: 'http'
+                            },
+                            {
+                                name: 'WebSocket only',
+                                key: 'remoteLoggingTransport',
+                                value: 'ws'
+                            },
+                            {
+                                name: 'HTTP + WebSocket',
+                                key: 'remoteLoggingTransport',
+                                value: 'both'
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote HTTP Endpoint',
                         icon: 'SETTINGS',
                         value: null,
                         menuId: 'tt-remote-log-url',
                         menuHeader: {
-                            title: 'Remote Log URL',
-                            subtitle: 'Pick target endpoint for remote log export'
+                            title: 'Remote HTTP Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. http://192.168.70.124:9000/log'
                         },
                         options: [
                             {
-                                name: 'Disabled (empty URL)',
+                                name: 'Preset: Disabled (empty URL)',
                                 key: 'remoteLoggingUrl',
                                 value: ''
                             },
                             {
-                                name: 'Local PC sample: http://192.168.1.100:8765/log',
+                                name: 'Preset: http://192.168.70.124:9000/log',
                                 key: 'remoteLoggingUrl',
-                                value: 'http://192.168.1.100:8765/log'
+                                value: 'http://192.168.70.124:9000/log'
+                            },
+                            {
+                                name: 'Set HTTP endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_HTTP_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote WebSocket Endpoint',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-ws-url',
+                        menuHeader: {
+                            title: 'Remote WebSocket Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. ws://192.168.70.124:9001'
+                        },
+                        options: [
+                            {
+                                name: 'Preset: Disabled (empty URL)',
+                                key: 'remoteLoggingWsUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Preset: ws://192.168.70.124:9001',
+                                key: 'remoteLoggingWsUrl',
+                                value: 'ws://192.168.70.124:9001'
+                            },
+                            {
+                                name: 'Set WebSocket endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_WS_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote Logging Auth Token',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-token',
+                        menuHeader: {
+                            title: 'Remote Logging Auth Token',
+                            subtitle: 'Optional token sent in HTTP Authorization and WS auth payload'
+                        },
+                        options: [
+                            {
+                                name: 'Clear token',
+                                key: 'remoteLoggingAuthToken',
+                                value: ''
+                            },
+                            {
+                                name: 'Set token (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_AUTH_TOKEN'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
                             }
                         ]
                     },
@@ -866,6 +983,22 @@ export default function modernUI(update, parameters) {
                                         {
                                             customAction: {
                                                 action: 'TEST_REMOTE_LOGGING'
+                                            }
+                                        },
+                                        {
+                                            signalAction: {
+                                                signal: 'POPUP_BACK'
+                                            }
+                                        }
+                                    ]
+                                ),
+                                buttonItem(
+                                    { title: 'Test Remote Connection' },
+                                    { icon: 'LANGUAGE' },
+                                    [
+                                        {
+                                            customAction: {
+                                                action: 'TEST_REMOTE_CONNECTION'
                                             }
                                         },
                                         {
