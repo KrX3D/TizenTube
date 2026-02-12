@@ -2307,65 +2307,160 @@ if (typeof window !== 'undefined') {
   }, 3000); // Run 3 seconds after page load
 }
 
-// ⭐ ADD UI BUTTON to start collection mode
-function addCollectionModeButton() {
+// ⭐ INJECT PLAYLIST CONTROL BUTTONS (YouTube TV native style)
+function addPlaylistControlButtons() {
   const page = getCurrentPage();
   if (page !== 'playlist' && page !== 'playlists') return;
   
-  // Check if button already exists
-  if (document.getElementById('tizentube-collection-btn')) return;
+  // Check if buttons already added
+  if (document.getElementById('tizentube-collection-injected')) return;
+  
+  console.log('🎛️🎛️🎛️ INJECTING PLAYLIST CONTROL BUTTONS');
+  
+  // Find the button container
+  // Looking for the parent of YTLR-BUTTON-RENDERER elements
+  const existingButtons = document.querySelectorAll('ytlr-button-renderer');
+  if (existingButtons.length === 0) {
+    console.log('🎛️ No existing buttons found, retrying later...');
+    return;
+  }
+  
+  // Find the container (usually a DIV or ytlr-browse-feed-actions-renderer)
+  let buttonContainer = null;
+  for (const btn of existingButtons) {
+    const text = (btn.textContent || '').toLowerCase();
+    if (text.includes('play') || text.includes('abspielen') || text.includes('shuffle') || text.includes('repeat') || text.includes('wiederhol')) {
+      buttonContainer = btn.parentElement;
+      console.log('🎛️ Found button container:', buttonContainer.tagName, buttonContainer.className);
+      break;
+    }
+  }
+  
+  if (!buttonContainer) {
+    console.log('🎛️ Could not find button container, retrying...');
+    return;
+  }
+  
+  // Mark as injected
+  const marker = document.createElement('div');
+  marker.id = 'tizentube-collection-injected';
+  marker.style.display = 'none';
+  buttonContainer.appendChild(marker);
   
   // Check current mode
   const inCollection = isInCollectionMode();
   const filterIds = getFilteredVideoIds();
   
-  console.log('🔘 Adding collection mode button');
-  console.log('🔘 Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
+  console.log('🎛️ Current mode:', inCollection ? 'COLLECTING' : filterIds ? 'FILTERING' : 'NORMAL');
   
-  // Create button
-  const btn = document.createElement('button');
-  btn.id = 'tizentube-collection-btn';
-  btn.style.cssText = `
-    position: fixed;
-    top: 100px;
-    right: 20px;
-    z-index: 9999;
-    padding: 15px 25px;
-    font-size: 18px;
-    font-weight: bold;
-    border: 3px solid white;
-    border-radius: 8px;
-    cursor: pointer;
-    font-family: Arial, sans-serif;
-  `;
+  // ⭐ BUTTON 1: Collection Mode Toggle
+  const collectionBtn = document.createElement('ytlr-button-renderer');
+  collectionBtn.className = existingButtons[0].className; // Copy classes from existing buttons
   
-  // Set button text and color based on mode
   if (inCollection) {
-    btn.textContent = '🔄 COLLECTING...';
-    btn.style.backgroundColor = '#ff9800';
-    btn.style.color = 'white';
+    collectionBtn.innerHTML = `
+      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #ff9800;">
+        <div class="vlElK zyJon-ve">🔄 Collecting...</div>
+      </button>
+    `;
   } else if (filterIds) {
-    btn.textContent = '✅ FILTER MODE (Click to Exit)';
-    btn.style.backgroundColor = '#4caf50';
-    btn.style.color = 'white';
-    btn.onclick = () => {
-      if (confirm('Exit filter mode and show all videos?')) {
-        exitFilterMode();
-      }
+    collectionBtn.innerHTML = `
+      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #4caf50;">
+        <div class="vlElK zyJon-ve">✅ Exit Filter Mode</div>
+      </button>
+    `;
+    collectionBtn.onclick = () => {
+      exitFilterMode();
     };
   } else {
-    btn.textContent = '🔄 Collect Unwatched';
-    btn.style.backgroundColor = '#2196f3';
-    btn.style.color = 'white';
-    btn.onclick = () => {
-      if (confirm('Start collection mode?\n\nThis will:\n1. Auto-scroll through entire playlist\n2. Collect all unwatched videos\n3. Reload showing ONLY unwatched\n\nContinue?')) {
-        startCollectionMode();
-      }
+    collectionBtn.innerHTML = `
+      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #2196f3;">
+        <div class="vlElK zyJon-ve">🔄 Collect Unwatched</div>
+      </button>
+    `;
+    collectionBtn.onclick = () => {
+      console.log('🎛️ Collection button clicked!');
+      startCollectionMode();
     };
   }
   
-  document.body.appendChild(btn);
-  console.log('🔘 Button added to page');
+  // ⭐ BUTTON 2: Play Next Unwatched (only in filter mode)
+  if (filterIds && filterIds.size > 0) {
+    const playNextBtn = document.createElement('ytlr-button-renderer');
+    playNextBtn.className = existingButtons[0].className;
+    playNextBtn.innerHTML = `
+      <button class="iM3bAd pkmK al2iYc EZJGFd" style="background-color: #9c27b0;">
+        <div class="vlElK zyJon-ve">▶️ Play Next Unwatched</div>
+      </button>
+    `;
+    playNextBtn.onclick = () => {
+      console.log('🎛️ Play next unwatched clicked!');
+      playNextUnwatchedVideo();
+    };
+    
+    buttonContainer.appendChild(playNextBtn);
+    console.log('🎛️ Added "Play Next Unwatched" button');
+  }
+  
+  // Insert collection button
+  buttonContainer.appendChild(collectionBtn);
+  console.log('🎛️ Added collection mode button');
+  
+  console.log('🎛️🎛️🎛️ BUTTONS INJECTED SUCCESSFULLY');
+}
+
+// ⭐ FUNCTION: Play the first unwatched video
+function playNextUnwatchedVideo() {
+  // Find all video tiles on the page
+  const tiles = document.querySelectorAll('ytlr-tile-renderer');
+  
+  if (tiles.length === 0) {
+    console.log('▶️ No videos found on page');
+    return;
+  }
+  
+  console.log('▶️ Found', tiles.length, 'video tiles, playing first one...');
+  
+  // Click the first tile (they're already filtered to unwatched)
+  const firstTile = tiles[0];
+  
+  // Try multiple click methods for TV compatibility
+  if (firstTile.click) {
+    firstTile.click();
+  } else if (firstTile.querySelector('a')) {
+    firstTile.querySelector('a').click();
+  } else {
+    // Simulate enter key press
+    const event = new KeyboardEvent('keydown', { keyCode: 13, which: 13 });
+    firstTile.dispatchEvent(event);
+  }
+  
+  console.log('▶️ Clicked first video tile');
+}
+
+// Run button injection when page loads or changes
+if (typeof window !== 'undefined') {
+  // Try multiple times as DOM loads
+  const tryInject = () => {
+    setTimeout(() => addPlaylistControlButtons(), 2000);
+    setTimeout(() => addPlaylistControlButtons(), 4000);
+    setTimeout(() => addPlaylistControlButtons(), 6000);
+  };
+  
+  // Initial load
+  tryInject();
+  
+  // Watch for URL changes (playlist navigation)
+  let lastHref = window.location.href;
+  setInterval(() => {
+    if (window.location.href !== lastHref) {
+      lastHref = window.location.href;
+      // Remove injection marker so buttons can be re-added
+      const marker = document.getElementById('tizentube-collection-injected');
+      if (marker) marker.remove();
+      tryInject();
+    }
+  }, 1000);
 }
 
 // Run button detection when page loads or changes
