@@ -451,6 +451,10 @@ jobs:
           URLS+="${GH_BASE}/dist/userScript.js,"
           URLS+="${GH_BASE}/dist/service.js,"
           
+          URLS+="${GH_BASE}/blob/main/package.json,"
+          URLS+="${GH_BASE}/blob/main/dist/userScript.js,"
+          URLS+="${GH_BASE}/blob/main/dist/service.js,"
+
           # Purge entire repo (all branches/tags) DOENST WORK
           URLS+="${GH_BASE}@*"
           
