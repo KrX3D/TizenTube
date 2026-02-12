@@ -1140,6 +1140,16 @@ function isShortItem(item) {
         }
       }
     }
+    
+    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
+    if (willBeDetectedAsShort) {
+      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 Video ID:', videoId);
+      console.log('🔬 Duration:', durationSeconds, 'seconds');
+      console.log('🔬 Page:', page);
+
+      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+    }
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
