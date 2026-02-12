@@ -92,38 +92,56 @@ import { configWrite } from "./config.js";
     let logs = [];
     window.consoleAutoScroll = true;
 
+    function safeStringify(value) {
+        if (typeof value === 'string') return value;
+        if (value === null || value === undefined) return String(value);
+        if (typeof value !== 'object') return String(value);
+
+        const seen = new WeakSet();
+        try {
+            const serialized = JSON.stringify(value, (key, val) => {
+                if (typeof val === 'object' && val !== null) {
+                    if (seen.has(val)) return '[Circular]';
+                    seen.add(val);
+                }
+                return val;
+            });
+            if (typeof serialized === 'string') {
+                return serialized.length > 600 ? serialized.slice(0, 600) + '…[truncated]' : serialized;
+            }
+        } catch (_) { }
+
+        try { return String(value); } catch (_) { return '[Unserializable]'; }
+    }
+
+    function formatConsoleArgs(args) {
+        return args.map((arg) => safeStringify(arg)).join(' ');
+    }
+
     // Scroll functions
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
-        
+
         const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
-        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + 140);
-        originalLog('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
-        
+        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
+        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + step);
+        originalLog('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll, 'step=', step);
+
         consoleDiv.scrollTop = newScroll;
-        consoleDiv.scroll(0, newScroll);
-        consoleDiv.scrollTo(0, newScroll);
-        consoleDiv.scrollBy(0, 0);
-        
-        void consoleDiv.offsetHeight;
-        
+
         window.consoleAutoScroll = false;
         updateBorder();
     };
 
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
-        
-        const newScroll = Math.max(0, consoleDiv.scrollTop - 140);
-        originalLog('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
-        
+
+        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
+        const newScroll = Math.max(0, consoleDiv.scrollTop - step);
+        originalLog('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+
         consoleDiv.scrollTop = newScroll;
-        consoleDiv.scroll(0, newScroll);
-        consoleDiv.scrollTo(0, newScroll);
-        consoleDiv.scrollBy(0, 0);
-        
-        void consoleDiv.offsetHeight;
-        
+
         window.consoleAutoScroll = false;
         updateBorder();
     };
@@ -154,7 +172,7 @@ import { configWrite } from "./config.js";
     console.log = function(...args) {
         originalLog.apply(console, args);
         if (enabled) {
-            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            const msg = formatConsoleArgs(args);
             addLog(msg, 'log');
         }
         if (enabled && window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
@@ -163,7 +181,7 @@ import { configWrite } from "./config.js";
     console.info = function(...args) {
         originalInfo.apply(console, args);
         if (enabled) {
-            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            const msg = formatConsoleArgs(args);
             addLog(msg, 'log');
         }
         if (enabled && window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
@@ -172,7 +190,7 @@ import { configWrite } from "./config.js";
     console.error = function(...args) {
         originalError.apply(console, args);
         if (enabled) {
-            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            const msg = formatConsoleArgs(args);
             addLog(msg, 'error');
         }
         if (enabled && window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
@@ -181,7 +199,7 @@ import { configWrite } from "./config.js";
     console.warn = function(...args) {
         originalWarn.apply(console, args);
         if (enabled) {
-            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            const msg = formatConsoleArgs(args);
             addLog(msg, 'warn');
         }
         if (enabled && window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
@@ -190,7 +208,7 @@ import { configWrite } from "./config.js";
     console.debug = function(...args) {
         originalDebug.apply(console, args);
         if (enabled) {
-            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+            const msg = formatConsoleArgs(args);
             addLog(msg, 'log');
         }
         if (enabled && window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
@@ -368,4 +386,6 @@ import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
 
 import resolveCommand from "./resolveCommand.js";
-import { APP_VERSION, APP_VERSION_LABEL } from "./version.js";
+import appPkg from "../package.json";
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;

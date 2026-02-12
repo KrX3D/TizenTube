@@ -4,7 +4,9 @@ import modernUI, { optionShow } from './ui/settings.js';
 import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
-import { APP_VERSION, APP_VERSION_LABEL } from './version.js';
+import appPkg from '../package.json';
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
 
 export default function resolveCommand(cmd, _) {
     for (const key in window._yttv) {

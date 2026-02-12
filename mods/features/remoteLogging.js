@@ -170,14 +170,22 @@ function createRemoteLogger(settingsAccessor = configRead) {
     const url = httpEndpoint();
     if (!url || batch.length === 0) return false;
 
+    const body = JSON.stringify({ source: 'TizenTube', sentAt: Date.now(), entries: batch });
+    const token = authToken();
+
+    // 1) Fast path for best effort telemetry
+    try {
+      if (!token && navigator.sendBeacon) {
+        const blob = new Blob([body], { type: 'application/json' });
+        if (navigator.sendBeacon(url, blob)) return true;
+      }
+    } catch (_) {}
+
+    // 2) Standard CORS fetch path
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timeoutHandle = controller ? setTimeout(() => controller.abort(), httpTimeoutMs()) : null;
-
     const headers = { 'Content-Type': 'application/json' };
-    const token = authToken();
     if (token) headers.Authorization = `Bearer ${token}`;
-
-    const body = JSON.stringify({ source: 'TizenTube', sentAt: Date.now(), entries: batch });
 
     try {
       const response = await fetch(url, {
@@ -188,11 +196,26 @@ function createRemoteLogger(settingsAccessor = configRead) {
         mode: 'cors',
         signal: controller ? controller.signal : undefined
       });
-      return !!response && response.ok;
+      if (response && response.ok) return true;
     } catch (_) {
-      return false;
+      // fall through to no-cors fallback
     } finally {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
+
+    // 3) Fallback similar to your simple snippet
+    // (No custom headers here, avoids preflight/auth constraints)
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        mode: 'no-cors',
+        keepalive: true
+      });
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
