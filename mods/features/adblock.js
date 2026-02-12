@@ -53,8 +53,10 @@ function isPageConfigured(configPages, page) {
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
+  let isPlaylistPage;
+
   // ⭐ Check if this is a playlist page
-  const isPlaylistPage = (page === 'playlist');
+  isPlaylistPage = (page === 'playlist');
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
@@ -98,7 +100,6 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
-  let isPlaylistPage;
   
   // ⭐ Check if this is a playlist page
   isPlaylistPage = (page === 'playlist');
