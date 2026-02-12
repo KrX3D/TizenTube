@@ -253,7 +253,7 @@ jobs:
       # Commit version bump + built JS to repo (push to main only)
       # NOTE: dist is often gitignored, so we force-add the built files.
       # ----------------------------
-      - name: Commit version + built files in dist/ (if changed)
+      - name: Commit version bump + built files in dist/ (if changed)
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         run: |
           set -euo pipefail
@@ -262,16 +262,11 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # stage version bump
+          # stage what you actually want to commit
           git add package.json
 
           # stage dist files (use -f because dist/ is in .gitignore)
           git add -f dist/userScript.js dist/service.js
-
-          # optionally stage README if you change it elsewhere (safe no-op if unchanged)
-          if [ -f README.md ]; then
-            git add README.md || true
-          fi
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
@@ -279,12 +274,16 @@ jobs:
           fi
 
           NEWVER=$(node -p "require('./package.json').version")
-
           git commit -m "chore: bump version to ${NEWVER} + rebuild dist [skip ci]"
 
-          # Rebase on latest main to avoid non-fast-forward
+          # IMPORTANT: ensure clean tree before rebase/pull
+          # (drops any lockfile drift etc. that you didn't commit)
+          git reset --hard HEAD
+          git clean -fd
+
           git fetch origin main
-          git pull --rebase origin main
+          #git pull --rebase origin main
+          git rebase origin/main
           # git reset --hard
 
           echo "Pushing changes back to main..."
