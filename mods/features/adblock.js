@@ -1114,51 +1114,75 @@ function isShortItem(item) {
     const hasTileRenderer = !!item.tileRenderer;
     const hasRichItem = !!item.richItemRenderer;
     
-    console.log('🔬🔬🔬 VIDEO ANALYSIS:', videoId);
-    console.log('🔬 Renderer type:', hasVideoRenderer ? 'videoRenderer' : hasGridRenderer ? 'gridRenderer' : hasTileRenderer ? 'tileRenderer' : hasRichItem ? 'richItem' : 'unknown');
+    // Check if this will be detected as a short by Method 8 (duration)
+    let willBeDetectedAsShort = false;
+    let durationSeconds = null;
     
-    // Check navigationEndpoint
-    if (item.videoRenderer?.navigationEndpoint) {
-      const nav = item.videoRenderer.navigationEndpoint;
-      console.log('🔬 Has watchEndpoint:', !!nav.watchEndpoint);
-      console.log('🔬 Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
-      console.log('🔬 URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
-    }
-    
-    if (item.gridVideoRenderer?.navigationEndpoint) {
-      const nav = item.gridVideoRenderer.navigationEndpoint;
-      console.log('🔬 Grid - Has watchEndpoint:', !!nav.watchEndpoint);
-      console.log('🔬 Grid - Has reelWatchEndpoint:', !!nav.reelWatchEndpoint);
-      console.log('🔬 Grid - URL:', nav.commandMetadata?.webCommandMetadata?.url || 'none');
-    }
-    
-    // Check overlays
-    const overlays = item.videoRenderer?.thumbnailOverlays || 
-                     item.gridVideoRenderer?.thumbnailOverlays || 
-                     item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
-    
-    console.log('🔬 Overlay count:', overlays.length);
-    overlays.forEach((overlay, idx) => {
-      if (overlay.thumbnailOverlayTimeStatusRenderer) {
-        console.log('🔬 Overlay', idx, 'style:', overlay.thumbnailOverlayTimeStatusRenderer.style);
-        console.log('🔬 Overlay', idx, 'text:', overlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText);
+    if (item.tileRenderer) {
+      let lengthText = null;
+      
+      const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
+      if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+        const timeOverlay = thumbnailOverlays.find(o => o?.thumbnailOverlayTimeStatusRenderer);
+        if (timeOverlay) {
+          lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+        }
       }
-    });
-    
-    // Check badges
-    if (item.videoRenderer?.badges) {
-      console.log('🔬 Badges:', item.videoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+      
+      if (!lengthText) {
+        lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+          i => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
+        )?.lineItemRenderer?.text?.simpleText;
+      }
+      
+      if (lengthText) {
+        const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
+        if (durationMatch) {
+          const minutes = parseInt(durationMatch[1], 10);
+          const seconds = parseInt(durationMatch[2], 10);
+          durationSeconds = minutes * 60 + seconds;
+          willBeDetectedAsShort = (durationSeconds <= 90);
+        }
+      }
     }
-    if (item.gridVideoRenderer?.badges) {
-      console.log('🔬 Grid badges:', item.gridVideoRenderer.badges.map(b => b.metadataBadgeRenderer?.label || b.metadataBadgeRenderer?.style));
+    
+    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
+    if (willBeDetectedAsShort) {
+      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 Video ID:', videoId);
+      console.log('🔬 Duration:', durationSeconds, 'seconds');
+      console.log('🔬 Page:', page);
+      
+      // Dump FULL JSON structure
+      console.log('🔬 FULL ITEM JSON:');
+      console.log(JSON.stringify(item, null, 2));
+      
+      // Extract key fields
+      if (item.videoRenderer) {
+        console.log('🔬 📹 videoRenderer detected');
+        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
+      }
+      
+      if (item.gridVideoRenderer) {
+        console.log('🔬 📊 gridVideoRenderer detected');
+        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
+      }
+      
+      if (item.tileRenderer) {
+        console.log('🔬 🔲 tileRenderer detected');
+        console.log('🔬 Content type:', item.tileRenderer.contentType);
+        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
+        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+      }
+      
+      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
     }
-    
-    // Check viewCountText for "views" vs other patterns
-    const viewCount = item.videoRenderer?.viewCountText?.simpleText || 
-                     item.gridVideoRenderer?.viewCountText?.simpleText || '';
-    console.log('🔬 View count text:', viewCount);
-    
-    console.log('🔬🔬🔬 END ANALYSIS');
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
