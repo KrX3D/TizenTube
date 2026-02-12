@@ -109,8 +109,12 @@ on:
       - main
     paths-ignore:
       - '.github/**'
-      - 'package.json'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.npmignore'
+      - 'LICENSE'
       - 'README.md'
+      - 'package.json'
   release:
     types: [published]
   workflow_dispatch:
@@ -501,7 +505,8 @@ jobs:
           URLS+="${NPM_BASE}/dist/userScript.js,"
           URLS+="${NPM_BASE}/dist/service.js,"
 
-          URLS+="${NPM_BASE}@*,"
+          # URLS+="${NPM_BASE}@*," # If Git is added than this is needed
+          URLS+="${NPM_BASE}@*"
 
           # GitHub repo URLs - main branch
           # URLS+="${GH_BASE}@main,"

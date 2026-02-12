@@ -1147,9 +1147,11 @@ function isShortItem(item) {
       console.log('🔬 Video ID:', videoId);
       console.log('🔬 Duration:', durationSeconds, 'seconds');
       console.log('🔬 Page:', page);
-
-
-
+      
+      // Dump FULL JSON structure
+      console.log('🔬 FULL ITEM JSON:');
+      console.log(JSON.stringify(item, null, 2));
+      
       // Extract key fields
       if (item.videoRenderer) {
         console.log('🔬 📹 videoRenderer detected');
