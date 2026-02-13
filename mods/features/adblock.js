@@ -82,7 +82,6 @@ function directFilterArray(arr, page, context = '') {
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
-  
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -1319,6 +1318,16 @@ function isShortItem(item) {
     }
     return true;
   }
+  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
+  // Check if the video data contains a shorts URL anywhere
+  const itemStr = JSON.stringify(item);
+  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
   
   // Method 2: Check videoRenderer
   if (item.videoRenderer) {
@@ -1505,7 +1514,27 @@ function isShortItem(item) {
       }
     }
   }
-  
+
+  // Method 9: Check if URL path contains reelItemRenderer or shorts patterns
+  if (item.richItemRenderer?.content?.reelItemRenderer) {
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 9 (reelItemRenderer)');
+    }
+    return true;
+  }
+
+  // Method 10: Check thumbnail aspect ratio (shorts are vertical ~9:16)
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
+    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+    if (thumb && thumb.height > thumb.width) {
+      if (DEBUG_ENABLED) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 10 (vertical thumbnail)');
+        console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
+      }
+      return true;
+    }
+  }
+
   // NOT A SHORT
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
@@ -1644,7 +1673,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
