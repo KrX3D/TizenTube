@@ -802,18 +802,6 @@ JSON.parse = function () {
       console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
       // Set flag for directFilterArray to read
       window._isLastPlaylistBatch = true;
-
-      // ⭐ CHECK: Are we in collection mode?
-      if (isInCollectionMode()) {
-        console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
-        console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
-        
-        // Switch to filter mode after a delay (let current batch render)
-        setTimeout(() => {
-          finishCollectionAndFilter(window._collectedUnwatched);
-        }, 2000);
-      }
-  
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
