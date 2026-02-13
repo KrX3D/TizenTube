@@ -1232,23 +1232,40 @@ function isShortItem(item) {
       }
     }
     
-    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
-    if (durationSeconds && durationSeconds > 90) {
-      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
-      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
-      
-      // Check for shorts keywords in the entire item JSON
-      const itemJson = JSON.stringify(item);
-      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
-      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
-      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
-      
-      // Log title so you can identify it
-      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
-        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
+    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
+    if (willBeDetectedAsShort) {
+      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 Video ID:', videoId);
+      console.log('🔬 Duration:', durationSeconds, 'seconds');
+      console.log('🔬 Page:', page);
+
+
+
+      // Extract key fields
+      if (item.videoRenderer) {
+        console.log('🔬 📹 videoRenderer detected');
+        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
       }
       
-      console.log('🔬 ---');
+      if (item.gridVideoRenderer) {
+        console.log('🔬 📊 gridVideoRenderer detected');
+        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
+      }
+      
+      if (item.tileRenderer) {
+        console.log('🔬 🔲 tileRenderer detected');
+        console.log('🔬 Content type:', item.tileRenderer.contentType);
+        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
+        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+      }
+      
+      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
     }
   }
   
@@ -1546,58 +1563,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     console.log('📚📚📚 ALL SHELF TITLES:');
     shelves.forEach((shelf, idx) => {
-      console.log(`📚 === Shelf ${idx} ===`);
-      console.log('📚 Top-level keys:', Object.keys(shelf));
-      
-      // ⭐ LOG FULL STRUCTURE for shelf 1 (the shorts shelf)
-      if (idx === 1) {
-        console.log('📚 🔍 FULL SHELF 1 STRUCTURE (shorts shelf):');
-        const fullJson = JSON.stringify(shelf, null, 2);
-        console.log('📚 Total JSON length:', fullJson.length, 'chars');
-        
-        // Split into 2200-char chunks
-        const chunkSize = 2200;
-        const chunks = Math.ceil(fullJson.length / chunkSize);
-        
-        for (let i = 0; i < chunks; i++) {
-          const start = i * chunkSize;
-          const end = Math.min(start + chunkSize, fullJson.length);
-          console.log(`📚 JSON Part ${i + 1}/${chunks}:`);
-          console.log(fullJson.substring(start, end));
-        }
-      }
-      
-      // Check each renderer type
-      if (shelf.shelfRenderer) {
-        console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
-        if (shelf.shelfRenderer.headerRenderer) {
-          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
-        }
-        if (shelf.shelfRenderer.content) {
-          console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
-        }
-      }
-      
-      if (shelf.richShelfRenderer) {
-        console.log('📚 richShelfRenderer keys:', Object.keys(shelf.richShelfRenderer));
-        console.log('📚   title:', shelf.richShelfRenderer.title);
-      }
-      
-      if (shelf.gridRenderer) {
-        console.log('📚 gridRenderer keys:', Object.keys(shelf.gridRenderer));
-        if (shelf.gridRenderer.header) {
-          console.log('📚   header keys:', Object.keys(shelf.gridRenderer.header));
-        }
-      }
-      
-      if (shelf.richSectionRenderer) {
-        console.log('📚 richSectionRenderer keys:', Object.keys(shelf.richSectionRenderer));
-      }
-      
-      // Use getShelfTitle function
-      const extractedTitle = getShelfTitle(shelf);
-      console.log('📚 Final extracted title:', extractedTitle || '(none)');
-      console.log('📚 ---');
+      const title = getShelfTitle(shelf);
+      console.log('📚 Shelf', idx, ':', title || '(no title)');
     });
     console.log('📚📚📚 END SHELF TITLES');
   }
@@ -1616,7 +1583,12 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
+        console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
+
+        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+          console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
+          console.log('$$$$$$$$$$$ Title:', shelfTitle);
+          console.log('$$$$$$$$$$$ Page:', page);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
