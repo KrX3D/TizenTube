@@ -35,6 +35,28 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
+function trackRemovedPlaylistHelpers(helperIds) {
+  if (!window._playlistRemovedHelpers) {
+    window._playlistRemovedHelpers = new Set();
+  }
+  if (!window._playlistRemovedHelperQueue) {
+    window._playlistRemovedHelperQueue = [];
+  }
+
+  helperIds.forEach((helperId) => {
+    if (!helperId || helperId === 'unknown') return;
+    if (!window._playlistRemovedHelpers.has(helperId)) {
+      window._playlistRemovedHelpers.add(helperId);
+      window._playlistRemovedHelperQueue.push(helperId);
+    }
+  });
+
+  const MAX_REMOVED_HELPERS = 25;
+  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
+    const oldest = window._playlistRemovedHelperQueue.shift();
+    window._playlistRemovedHelpers.delete(oldest);
+  }
+}
 
 function isPageConfigured(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
@@ -258,11 +280,6 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
-    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
-    if (filterIds) {
-      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
-      return [];  // Return empty - we're showing only specific videos
-    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
@@ -1212,6 +1229,8 @@ function isShortItem(item) {
   // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
+    // Check if this will be detected as a short by Method 8 (duration)
+    let willBeDetectedAsShort = false;
     let durationSeconds = null;
 
     if (item.tileRenderer) {
@@ -1237,24 +1256,23 @@ function isShortItem(item) {
           const minutes = parseInt(durationMatch[1], 10);
           const seconds = parseInt(durationMatch[2], 10);
           durationSeconds = minutes * 60 + seconds;
+          willBeDetectedAsShort = (durationSeconds <= 90);
         }
       }
     }
     
-    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
-    if (durationSeconds && durationSeconds > 90) {
+    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
+    if (willBeDetectedAsShort) {
       console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
       console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
-      
-      // Check for shorts keywords in the entire item JSON
-      const itemJson = JSON.stringify(item);
-      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
-      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
-      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
-      
-      // Log title so you can identify it
-      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
-        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
+
+      // Extract key fields
+      if (item.videoRenderer) {
+        console.log('🔬 📹 videoRenderer detected');
+        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
+        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
+        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
+        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
       }
       
       console.log('🔬 ---');
