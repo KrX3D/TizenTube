@@ -797,11 +797,32 @@ JSON.parse = function () {
       console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
       // Set flag for directFilterArray to read
       window._isLastPlaylistBatch = true;
+
+      // ⭐ CHECK: Are we in collection mode?
+      if (isInCollectionMode()) {
+        console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
+        console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
+        
+      }
+  
+      setTimeout(() => {
+        detectPlaylistButtons();
+      }, 2000);
+      
+      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
+      setTimeout(() => {
+        addPlaylistControlButtons();
+      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
+  
+    // ⭐ Trigger button detection
+    setTimeout(() => {
+      detectPlaylistButtons();
+    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -809,10 +830,11 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -832,7 +854,7 @@ JSON.parse = function () {
     r.onResponseReceivedActions.forEach((action, idx) => {
       // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        const items = action.appendContinuationItemsAction.continuationItems;
+        let items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -1234,12 +1256,8 @@ function isShortItem(item) {
     
     // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
     if (willBeDetectedAsShort) {
-      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
-      console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'seconds');
-      console.log('🔬 Page:', page);
-
-
+      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
+      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
 
       // Extract key fields
       if (item.videoRenderer) {
@@ -1250,22 +1268,7 @@ function isShortItem(item) {
         console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
       }
       
-      if (item.gridVideoRenderer) {
-        console.log('🔬 📊 gridVideoRenderer detected');
-        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
-      }
-      
-      if (item.tileRenderer) {
-        console.log('🔬 🔲 tileRenderer detected');
-        console.log('🔬 Content type:', item.tileRenderer.contentType);
-        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
-      }
-      
-      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 ---');
     }
   }
   
@@ -1563,8 +1566,58 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     console.log('📚📚📚 ALL SHELF TITLES:');
     shelves.forEach((shelf, idx) => {
-      const title = getShelfTitle(shelf);
-      console.log('📚 Shelf', idx, ':', title || '(no title)');
+      console.log(`📚 === Shelf ${idx} ===`);
+      console.log('📚 Top-level keys:', Object.keys(shelf));
+      
+      // ⭐ LOG FULL STRUCTURE for shelf 1 (the shorts shelf)
+      if (idx === 1) {
+        console.log('📚 🔍 FULL SHELF 1 STRUCTURE (shorts shelf):');
+        const fullJson = JSON.stringify(shelf, null, 2);
+        console.log('📚 Total JSON length:', fullJson.length, 'chars');
+        
+        // Split into 2200-char chunks
+        const chunkSize = 2200;
+        const chunks = Math.ceil(fullJson.length / chunkSize);
+        
+        for (let i = 0; i < chunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, fullJson.length);
+          console.log(`📚 JSON Part ${i + 1}/${chunks}:`);
+          console.log(fullJson.substring(start, end));
+        }
+      }
+      
+      // Check each renderer type
+      if (shelf.shelfRenderer) {
+        console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
+        if (shelf.shelfRenderer.headerRenderer) {
+          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
+        }
+        if (shelf.shelfRenderer.content) {
+          console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
+        }
+      }
+      
+      if (shelf.richShelfRenderer) {
+        console.log('📚 richShelfRenderer keys:', Object.keys(shelf.richShelfRenderer));
+        console.log('📚   title:', shelf.richShelfRenderer.title);
+      }
+      
+      if (shelf.gridRenderer) {
+        console.log('📚 gridRenderer keys:', Object.keys(shelf.gridRenderer));
+        if (shelf.gridRenderer.header) {
+          console.log('📚   header keys:', Object.keys(shelf.gridRenderer.header));
+        }
+      }
+      
+      if (shelf.richSectionRenderer) {
+        console.log('📚 richSectionRenderer keys:', Object.keys(shelf.richSectionRenderer));
+      }
+      
+      // Use getShelfTitle function
+      const extractedTitle = getShelfTitle(shelf);
+      console.log('📚 Final extracted title:', extractedTitle || '(none)');
+      console.log('📚 ---');
     });
     console.log('📚📚📚 END SHELF TITLES');
   }
@@ -1583,18 +1636,36 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        console.log('🔍 Checking shelf title:', shelfTitle || '(no title)');
-
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-          console.log('$$$$$$$$$$$ REMOVING SHORTS SHELF');
-          console.log('$$$$$$$$$$$ Title:', shelfTitle);
-          console.log('$$$$$$$$$$$ Page:', page);
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
-          continue;
+          continue; // Skip to next shelf
+        }
+
+        // ⭐ Also log when we DON'T remove (for debugging)
+        if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
       }
       
