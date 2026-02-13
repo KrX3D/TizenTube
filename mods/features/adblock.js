@@ -101,7 +101,6 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
-  let isPlaylistPage;
   
   // ⭐ Check if this is a playlist page
   isPlaylistPage = (page === 'playlist');
