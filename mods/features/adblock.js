@@ -810,25 +810,11 @@ JSON.parse = function () {
         console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
         
       }
-  
-      setTimeout(() => {
-        detectPlaylistButtons();
-      }, 2000);
-      
-      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
-      setTimeout(() => {
-        addPlaylistControlButtons();
-      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
-  
-    // ⭐ Trigger button detection
-    setTimeout(() => {
-      detectPlaylistButtons();
-    }, 2000);
     
     // Continue with normal processing via universal filter
   }
