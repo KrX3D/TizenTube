@@ -58,17 +58,37 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
+function isPageConfigured(configPages, page) {
+  if (!Array.isArray(configPages) || configPages.length === 0) return true;
+  const normalized = configPages.map(p => String(p).toLowerCase());
+  const aliases = {
+    playlist: ['playlist'],
+    playlists: ['playlists'],
+    channel: ['channel', 'channels'],
+    channels: ['channel', 'channels'],
+    subscriptions: ['subscriptions', 'subscription']
+  };
+  const candidates = aliases[page] || [page];
+  return candidates.some(candidate => normalized.includes(candidate));
+}
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
   let isPlaylistPage;
+
+  // ⭐ Check if this is a playlist page
+  isPlaylistPage = (page === 'playlist');
+  
+  // ⭐ FILTER MODE: Only show videos from our collected list
+  const filterIds = getFilteredVideoIds();
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && configPages.includes(page);
+  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
@@ -135,7 +155,7 @@ function directFilterArray(arr, page, context = '') {
     // This way they get filtered out cleanly with the rest!
     arr.unshift(...window._lastHelperVideos);
     
-    // Track as removed (for fallback filtering)
+    // Just track them for removal if they appear
     trackRemovedPlaylistHelpers(helperIdsToRemove);
     
     // Clear helpers immediately (don't wait for last batch)
@@ -1228,8 +1248,6 @@ function isShortItem(item) {
   // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
-    // Check if this will be detected as a short by Method 8 (duration)
-    let willBeDetectedAsShort = false;
     let durationSeconds = null;
 
     if (item.tileRenderer) {
@@ -1255,42 +1273,24 @@ function isShortItem(item) {
           const minutes = parseInt(durationMatch[1], 10);
           const seconds = parseInt(durationMatch[2], 10);
           durationSeconds = minutes * 60 + seconds;
-          willBeDetectedAsShort = (durationSeconds <= 90);
         }
       }
     }
     
-    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
-    if (willBeDetectedAsShort) {
-      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
-      console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'seconds');
-      console.log('🔬 Page:', page);
-
-
-
-      // Extract key fields
-      if (item.videoRenderer) {
-        console.log('🔬 📹 videoRenderer detected');
-        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
-      }
+    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
+    if (durationSeconds && durationSeconds > 90) {
+      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
+      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
       
-      if (item.gridVideoRenderer) {
-        console.log('🔬 📊 gridVideoRenderer detected');
-        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
-      }
+      // Check for shorts keywords in the entire item JSON
+      const itemJson = JSON.stringify(item);
+      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
+      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
+      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
       
-      if (item.tileRenderer) {
-        console.log('🔬 🔲 tileRenderer detected');
-        console.log('🔬 Content type:', item.tileRenderer.contentType);
-        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
+      // Log title so you can identify it
+      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
+        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
       }
       
       console.log('🔬 ---');
@@ -1563,7 +1563,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
-  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
+  const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
   
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide watched:', shouldHideWatched, '| Shorts:', shortsEnabled);
@@ -1591,8 +1591,58 @@ function processShelves(shelves, shouldAddPreviews = true) {
     
     console.log('📚📚📚 ALL SHELF TITLES:');
     shelves.forEach((shelf, idx) => {
-      const title = getShelfTitle(shelf);
-      console.log('📚 Shelf', idx, ':', title || '(no title)');
+      console.log(`📚 === Shelf ${idx} ===`);
+      console.log('📚 Top-level keys:', Object.keys(shelf));
+      
+      // ⭐ LOG FULL STRUCTURE for shelf 1 (the shorts shelf)
+      if (idx === 1) {
+        console.log('📚 🔍 FULL SHELF 1 STRUCTURE (shorts shelf):');
+        const fullJson = JSON.stringify(shelf, null, 2);
+        console.log('📚 Total JSON length:', fullJson.length, 'chars');
+        
+        // Split into 2200-char chunks
+        const chunkSize = 2200;
+        const chunks = Math.ceil(fullJson.length / chunkSize);
+        
+        for (let i = 0; i < chunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, fullJson.length);
+          console.log(`📚 JSON Part ${i + 1}/${chunks}:`);
+          console.log(fullJson.substring(start, end));
+        }
+      }
+      
+      // Check each renderer type
+      if (shelf.shelfRenderer) {
+        console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
+        if (shelf.shelfRenderer.headerRenderer) {
+          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
+        }
+        if (shelf.shelfRenderer.content) {
+          console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
+        }
+      }
+      
+      if (shelf.richShelfRenderer) {
+        console.log('📚 richShelfRenderer keys:', Object.keys(shelf.richShelfRenderer));
+        console.log('📚   title:', shelf.richShelfRenderer.title);
+      }
+      
+      if (shelf.gridRenderer) {
+        console.log('📚 gridRenderer keys:', Object.keys(shelf.gridRenderer));
+        if (shelf.gridRenderer.header) {
+          console.log('📚   header keys:', Object.keys(shelf.gridRenderer.header));
+        }
+      }
+      
+      if (shelf.richSectionRenderer) {
+        console.log('📚 richSectionRenderer keys:', Object.keys(shelf.richSectionRenderer));
+      }
+      
+      // Use getShelfTitle function
+      const extractedTitle = getShelfTitle(shelf);
+      console.log('📚 Final extracted title:', extractedTitle || '(none)');
+      console.log('📚 ---');
     });
     console.log('📚📚📚 END SHELF TITLES');
   }
