@@ -58,27 +58,8 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
-function isPageConfigured(configPages, page) {
-  if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  const normalized = configPages.map(p => String(p).toLowerCase());
-  const aliases = {
-    playlist: ['playlist'],
-    playlists: ['playlists'],
-    channel: ['channel', 'channels'],
-    channels: ['channel', 'channels'],
-    subscriptions: ['subscriptions', 'subscription']
-  };
-  const candidates = aliases[page] || [page];
-  return candidates.some(candidate => normalized.includes(candidate));
-}
-
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
-  
-  let isPlaylistPage;
-
-  // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist');
   
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
@@ -100,7 +81,7 @@ function directFilterArray(arr, page, context = '') {
   const callId = Math.random().toString(36).substr(2, 6);
   
   // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -816,24 +797,11 @@ JSON.parse = function () {
       console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
       // Set flag for directFilterArray to read
       window._isLastPlaylistBatch = true;
-
-      // ⭐ CHECK: Are we in collection mode?
-      if (isInCollectionMode()) {
-        console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
-        console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
-        
-      }
-  
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
-  
-    // ⭐ Trigger button detection
-    setTimeout(() => {
-      detectPlaylistButtons();
-    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -841,11 +809,10 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
-    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
+      console.log('[ON_RESPONSE] Page:', page);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -865,7 +832,7 @@ JSON.parse = function () {
     r.onResponseReceivedActions.forEach((action, idx) => {
       // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        let items = action.appendContinuationItemsAction.continuationItems;
+        const items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -1233,6 +1200,8 @@ function isShortItem(item) {
   // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
+    // Check if this will be detected as a short by Method 8 (duration)
+    let willBeDetectedAsShort = false;
     let durationSeconds = null;
 
     if (item.tileRenderer) {
@@ -1258,6 +1227,7 @@ function isShortItem(item) {
           const minutes = parseInt(durationMatch[1], 10);
           const seconds = parseInt(durationMatch[2], 10);
           durationSeconds = minutes * 60 + seconds;
+          willBeDetectedAsShort = (durationSeconds <= 90);
         }
       }
     }
@@ -1652,30 +1622,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
-          continue; // Skip to next shelf
-        }
-
-        // ⭐ Also log when we DON'T remove (for debugging)
-        if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+          continue;
         }
       }
       
