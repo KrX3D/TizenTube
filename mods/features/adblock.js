@@ -6,7 +6,7 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
 const LOG_SHORTS = false;   // Set false to disable shorts logging  
-const LOG_WATCHED = true;  // Set false to disable watched video logging
+const LOG_WATCHED = true;  // Set true to enable verbose watched-video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
 // Updated automatically via config change events
@@ -101,6 +101,7 @@ function directFilterArray(arr, page, context = '') {
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
+  let isPlaylistPage;
   
   // ⭐ Check if this is a playlist page
   isPlaylistPage = (page === 'playlist');
@@ -258,6 +259,18 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
+  // ⭐ SAFEGUARD: avoid blank pages from over-aggressive watched filtering
+  const shouldProtectPageFromEmptyResults = ['home', 'channel', 'library'].includes(page);
+  if (shouldHideWatched && shouldProtectPageFromEmptyResults && filtered.length === 0 && originalLength > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_SAFEGUARD #' + callId + '] Watched filtering would remove all items on page', page, '- keeping original items');
+    }
+    if (shouldFilterShorts) {
+      return arr.filter(item => !isShortItem(item));
+    }
+    return arr;
+  }
+
   // ⭐ Enhanced summary logging
   if (DEBUG_ENABLED) {
     console.log('[FILTER_END #' + callId + '] ========================================');
@@ -794,22 +807,23 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     if (DEBUG_ENABLED) {
-      console.log('[CONTINUATION]', page, '- Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
+      console.log('[CONTINUATION]', page, '(effective:', effectivePage + ') - Processing', r.continuationContents.sectionListContinuation.contents.length, 'shelves');
     }
 
-    if (window._lastLoggedPage !== page) {
+    if (window._lastLoggedPage !== effectivePage) {
       if (DEBUG_ENABLED) {
         console.log('[PAGE_DEBUG] ========================================');
-        console.log('[PAGE_DEBUG] Page changed to:', page);
+        console.log('[PAGE_DEBUG] Page changed to:', effectivePage);
         console.log('[PAGE_DEBUG] URL:', window.location.href);
         console.log('[PAGE_DEBUG] Hash:', window.location.hash);
         console.log('[PAGE_DEBUG] ========================================');
       }
-      window._lastLoggedPage = page;
+      window._lastLoggedPage = effectivePage;
     }
-    
-    // This is where individual channel content loads!
+
+    scanAndFilterAllArrays(r.continuationContents.sectionListContinuation.contents, effectivePage, 'sectionListContinuation');
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
 
@@ -868,10 +882,11 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -1718,6 +1733,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
+        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        }
       }
       
       let shelfType = 'unknown';
@@ -1730,6 +1748,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
           shelfType = 'hList';
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
                   
           deArrowify(items);
@@ -1758,8 +1777,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           // ⭐ WATCHED FILTERING (always runs, independent of shorts)
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.horizontalListRenderer.items = items;
@@ -1778,6 +1803,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.gridRenderer?.items) {
           shelfType = 'grid';
           let items = shelve.shelfRenderer.content.gridRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           deArrowify(items);
@@ -1792,8 +1818,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.gridRenderer.items = items;
@@ -1812,6 +1844,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.verticalListRenderer?.items) {
           shelfType = 'vList';
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           deArrowify(items);
@@ -1826,8 +1859,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.verticalListRenderer.items = items;
@@ -1847,6 +1886,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
         shelfType = 'richGrid';
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
+        const originalContents = Array.isArray(contents) ? contents.slice() : [];
         itemsBefore = contents.length;
 
         deArrowify(contents);
@@ -1861,8 +1901,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = contents.length;
-        contents = hideVideo(contents);
-        totalHidden += (beforeHide - contents.length);
+        if (shouldHideWatched) {
+          contents = hideVideo(contents);
+          totalHidden += (beforeHide - contents.length);
+        }
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && contents.length === 0 && originalContents.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          contents = originalContents;
+        }
         itemsAfter = contents.length;
         
         shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
@@ -1900,6 +1946,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.gridRenderer?.items) {
         shelfType = 'topGrid';
         let items = shelve.gridRenderer.items;
+        const originalItems = Array.isArray(items) ? items.slice() : [];
         itemsBefore = items.length;
 
         deArrowify(items);
@@ -1914,8 +1961,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = items.length;
-        items = hideVideo(items);
-        totalHidden += (beforeHide - items.length);
+        if (shouldHideWatched) {
+          items = hideVideo(items);
+          totalHidden += (beforeHide - items.length);
+        }
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          items = originalItems;
+        }
         itemsAfter = items.length;
         
         shelve.gridRenderer.items = items;
