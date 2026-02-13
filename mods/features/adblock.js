@@ -231,6 +231,17 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
   
+  // ⭐ SAFEGUARD: avoid blank pages from over-aggressive watched filtering
+  if (shouldHideWatched && !isPlaylistPage && filtered.length === 0 && originalLength > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[FILTER_SAFEGUARD #' + callId + '] Watched filtering would remove all items on page', page, '- keeping original items');
+    }
+    if (shouldFilterShorts) {
+      return arr.filter(item => !isShortItem(item));
+    }
+    return arr;
+  }
+
   // ⭐ Enhanced summary logging
   if (DEBUG_ENABLED) {
     console.log('[FILTER_END #' + callId + '] ========================================');
@@ -1520,6 +1531,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
           shelfType = 'hList';
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
           
           if (DEBUG_ENABLED) {
@@ -1560,6 +1572,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.horizontalListRenderer.items = items;
@@ -1578,6 +1594,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.gridRenderer?.items) {
           shelfType = 'grid';
           let items = shelve.shelfRenderer.content.gridRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           if (DEBUG_ENABLED) {
@@ -1606,6 +1623,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           if (shouldHideWatched) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
           }
           itemsAfter = items.length;
           
@@ -1625,6 +1646,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.verticalListRenderer?.items) {
           shelfType = 'vList';
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           if (DEBUG_ENABLED) {
@@ -1653,6 +1675,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           if (shouldHideWatched) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
           }
           itemsAfter = items.length;
           
@@ -1673,6 +1699,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
         shelfType = 'richGrid';
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
+        const originalContents = Array.isArray(contents) ? contents.slice() : [];
         itemsBefore = contents.length;
 
         if (DEBUG_ENABLED) {
@@ -1701,6 +1728,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (shouldHideWatched) {
           contents = hideVideo(contents);
           totalHidden += (beforeHide - contents.length);
+        }
+        if (shouldHideWatched && contents.length === 0 && originalContents.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          contents = originalContents;
         }
         itemsAfter = contents.length;
         
@@ -1739,6 +1770,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.gridRenderer?.items) {
         shelfType = 'topGrid';
         let items = shelve.gridRenderer.items;
+        const originalItems = Array.isArray(items) ? items.slice() : [];
         itemsBefore = items.length;
 
         if (DEBUG_ENABLED) {
@@ -1767,6 +1799,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (shouldHideWatched) {
           items = hideVideo(items);
           totalHidden += (beforeHide - items.length);
+        }
+        if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          items = originalItems;
         }
         itemsAfter = items.length;
         
