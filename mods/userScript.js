@@ -392,7 +392,3 @@ import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
 
-import resolveCommand from "./resolveCommand.js";
-import appPkg from "../package.json";
-const APP_VERSION = appPkg.version;
-const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
