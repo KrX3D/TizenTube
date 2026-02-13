@@ -232,7 +232,8 @@ function directFilterArray(arr, page, context = '') {
   });
   
   // ⭐ SAFEGUARD: avoid blank pages from over-aggressive watched filtering
-  if (shouldHideWatched && !isPlaylistPage && filtered.length === 0 && originalLength > 0) {
+  const shouldProtectPageFromEmptyResults = ['home', 'channel', 'library'].includes(page);
+  if (shouldHideWatched && shouldProtectPageFromEmptyResults && filtered.length === 0 && originalLength > 0) {
     if (DEBUG_ENABLED) {
       console.log('[FILTER_SAFEGUARD #' + callId + '] Watched filtering would remove all items on page', page, '- keeping original items');
     }
@@ -1460,6 +1461,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
   const shouldHideWatched = hideWatchedEnabled && isPageConfigured(configPages, page);
+  const shouldProtectShelfFromEmpty = ['home', 'channel', 'library'].includes(page);
   
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide:', shouldHideWatched, '| Shorts:', shortsEnabled);
@@ -1572,7 +1574,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1624,7 +1626,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1676,7 +1678,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1729,7 +1731,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           contents = hideVideo(contents);
           totalHidden += (beforeHide - contents.length);
         }
-        if (shouldHideWatched && contents.length === 0 && originalContents.length > 0) {
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && contents.length === 0 && originalContents.length > 0) {
           if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
           contents = originalContents;
         }
@@ -1800,7 +1802,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           items = hideVideo(items);
           totalHidden += (beforeHide - items.length);
         }
-        if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
           if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
           items = originalItems;
         }
