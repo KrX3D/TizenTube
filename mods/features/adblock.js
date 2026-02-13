@@ -802,6 +802,18 @@ JSON.parse = function () {
       console.log('═══ ⭐⭐⭐ THIS IS THE LAST BATCH! ⭐⭐⭐');
       // Set flag for directFilterArray to read
       window._isLastPlaylistBatch = true;
+
+      // ⭐ CHECK: Are we in collection mode?
+      if (isInCollectionMode()) {
+        console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
+        console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
+        
+        // Switch to filter mode after a delay (let current batch render)
+        setTimeout(() => {
+          finishCollectionAndFilter(window._collectedUnwatched);
+        }, 2000);
+      }
+  
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
@@ -814,10 +826,11 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -835,9 +848,9 @@ JSON.parse = function () {
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
-      // Handle appendContinuationItemsAction (playlist scroll continuation)
+      // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        const items = action.appendContinuationItemsAction.continuationItems;
+        let items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -869,6 +882,7 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
     }
   }
+
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     if (DEBUG_ENABLED) {
@@ -1200,8 +1214,8 @@ function isShortItem(item) {
                  'unknown';
 
   const page = getCurrentPage();
-  
-  // ⭐ FULL STRUCTURE DUMP for subscriptions/channels
+
+  // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
     // Check if this will be detected as a short by Method 8 (duration)
@@ -1269,7 +1283,7 @@ function isShortItem(item) {
         console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
       }
       
-      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 ---');
     }
   }
   
@@ -1308,6 +1322,16 @@ function isShortItem(item) {
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
     if (DEBUG_ENABLED && LOG_SHORTS) {
       console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 1 (contentType)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
+  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
+  // Check if the video data contains a shorts URL anywhere
+  const itemStr = JSON.stringify(item);
+  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
       console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
