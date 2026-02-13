@@ -719,10 +719,11 @@ JSON.parse = function () {
   // Handle onResponseReceivedActions (lazy-loaded channel tabs AND PLAYLIST SCROLLING)
   if (r?.onResponseReceivedActions) {
     const page = getCurrentPage();
+    const effectivePage = page === 'other' ? (window._lastDetectedPage || page) : page;
     
     if (DEBUG_ENABLED) {
       console.log('[ON_RESPONSE] ========================================');
-      console.log('[ON_RESPONSE] Page:', page);
+      console.log('[ON_RESPONSE] Page:', page, '| effective:', effectivePage);
       console.log('[ON_RESPONSE] Actions:', r.onResponseReceivedActions.length);
     }
   
@@ -740,9 +741,9 @@ JSON.parse = function () {
     }
     
     r.onResponseReceivedActions.forEach((action, idx) => {
-      // Handle appendContinuationItemsAction (playlist scroll continuation)
+      // Handle appendContinuationItemsAction (playlist/channel/subscription continuations)
       if (action.appendContinuationItemsAction?.continuationItems) {
-        const items = action.appendContinuationItemsAction.continuationItems;
+        let items = action.appendContinuationItemsAction.continuationItems;
         
         if (DEBUG_ENABLED) {
           console.log(`[ON_RESPONSE] Action ${idx}: appendContinuationItemsAction`);
@@ -774,6 +775,7 @@ JSON.parse = function () {
       console.log('[ON_RESPONSE] ========================================');
     }
   }
+
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     if (DEBUG_ENABLED) {
@@ -1025,7 +1027,7 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
 
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
@@ -1105,12 +1107,10 @@ function isShortItem(item) {
                  'unknown';
 
   const page = getCurrentPage();
-  
-  // ⭐ FULL STRUCTURE DUMP for subscriptions/channels
+
+  // ⭐ ONLY log videos OVER 90 seconds on subscriptions/channels (to find long shorts)
   if ((page === 'subscriptions' || page.includes('channel'))) {
     
-    // Check if this will be detected as a short by Method 8 (duration)
-    let willBeDetectedAsShort = false;
     let durationSeconds = null;
 
     if (item.tileRenderer) {
@@ -1136,45 +1136,27 @@ function isShortItem(item) {
           const minutes = parseInt(durationMatch[1], 10);
           const seconds = parseInt(durationMatch[2], 10);
           durationSeconds = minutes * 60 + seconds;
-          willBeDetectedAsShort = (durationSeconds <= 90);
         }
       }
     }
     
-    // ⭐ ONLY log items that Method 8 will catch (shorts ≤90s)
-    if (willBeDetectedAsShort) {
-      console.log('🔬🔬🔬🔬🔬 SHORTS STRUCTURE DUMP 🔬🔬🔬🔬🔬');
-      console.log('🔬 Video ID:', videoId);
-      console.log('🔬 Duration:', durationSeconds, 'seconds');
-      console.log('🔬 Page:', page);
-
-
-
-      // Extract key fields
-      if (item.videoRenderer) {
-        console.log('🔬 📹 videoRenderer detected');
-        console.log('🔬 Title:', item.videoRenderer.title?.simpleText || item.videoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.videoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.videoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.videoRenderer.thumbnailOverlays, null, 2));
+    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
+    if (durationSeconds && durationSeconds > 90) {
+      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
+      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
+      
+      // Check for shorts keywords in the entire item JSON
+      const itemJson = JSON.stringify(item);
+      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
+      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
+      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
+      
+      // Log title so you can identify it
+      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
+        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
       }
       
-      if (item.gridVideoRenderer) {
-        console.log('🔬 📊 gridVideoRenderer detected');
-        console.log('🔬 Title:', item.gridVideoRenderer.title?.simpleText || item.gridVideoRenderer.title?.runs?.[0]?.text);
-        console.log('🔬 Navigation endpoint:', JSON.stringify(item.gridVideoRenderer.navigationEndpoint, null, 2));
-        console.log('🔬 Badges:', JSON.stringify(item.gridVideoRenderer.badges, null, 2));
-        console.log('🔬 Overlays:', JSON.stringify(item.gridVideoRenderer.thumbnailOverlays, null, 2));
-      }
-      
-      if (item.tileRenderer) {
-        console.log('🔬 🔲 tileRenderer detected');
-        console.log('🔬 Content type:', item.tileRenderer.contentType);
-        console.log('🔬 Title:', item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText);
-        console.log('🔬 onSelectCommand:', JSON.stringify(item.tileRenderer.onSelectCommand, null, 2));
-      }
-      
-      console.log('🔬🔬🔬🔬🔬 END SHORTS DUMP 🔬🔬🔬🔬🔬');
+      console.log('🔬 ---');
     }
   }
   
@@ -1213,6 +1195,16 @@ function isShortItem(item) {
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
     if (DEBUG_ENABLED && LOG_SHORTS) {
       console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 1 (contentType)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
+  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
+  // Check if the video data contains a shorts URL anywhere
+  const itemStr = JSON.stringify(item);
+  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
       console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
