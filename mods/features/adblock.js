@@ -880,13 +880,22 @@ JSON.parse = function () {
             console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
           }
         }
-
-        // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
-        scanAndFilterAllArrays(items, effectivePage, `onResponse-${idx}`);
-
-        // Then direct-filter top-level arrays with videos.
-        const filtered = directFilterArray(items, effectivePage, `continuation-${idx}`);
-        action.appendContinuationItemsAction.continuationItems = filtered;
+        
+        // Check if this is playlist video continuation
+        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
+        
+        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
+          if (DEBUG_ENABLED) {
+            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
+          }
+          
+          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        } else {
+          // For non-playlist continuation, use direct filter
+          const filtered = directFilterArray(items, page, `continuation-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        }
       }
     });
     
@@ -1319,16 +1328,6 @@ function isShortItem(item) {
     }
     return true;
   }
-  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
-  // Check if the video data contains a shorts URL anywhere
-  const itemStr = JSON.stringify(item);
-  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
-      console.log('[SHORTS_DIAGNOSTIC] ========================================');
-    }
-    return true;
-  }
   
   // Method 2: Check videoRenderer
   if (item.videoRenderer) {
@@ -1515,27 +1514,7 @@ function isShortItem(item) {
       }
     }
   }
-
-  // Method 9: Check if URL path contains reelItemRenderer or shorts patterns
-  if (item.richItemRenderer?.content?.reelItemRenderer) {
-    if (DEBUG_ENABLED) {
-      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 9 (reelItemRenderer)');
-    }
-    return true;
-  }
-
-  // Method 10: Check thumbnail aspect ratio (shorts are vertical ~9:16)
-  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
-    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
-    if (thumb && thumb.height > thumb.width) {
-      if (DEBUG_ENABLED) {
-        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 10 (vertical thumbnail)');
-        console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
-      }
-      return true;
-    }
-  }
-
+  
   // NOT A SHORT
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
