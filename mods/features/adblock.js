@@ -5,7 +5,6 @@ import { registerJsonParseHook } from './jsonParseHooks.js';
 import { applyAdCleanup } from './adblock/adCleanup.js';
 import { applyPreferredVideoCodec } from './adblock/videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from './adblock/processShelves.js';
-import { addPreviews } from './adblock/previews.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './adblock/sponsorblock.js';
 
 function buildShelfProcessingOptions() {
@@ -74,11 +73,9 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
-    const options = buildShelfProcessingOptions();
-    addPreviews(parsedResponse.continuationContents.horizontalListContinuation.items, options.previewsEnabled);
     parsedResponse.continuationContents.horizontalListContinuation.items = processHorizontalItems(
       parsedResponse.continuationContents.horizontalListContinuation.items,
-      options
+      buildShelfProcessingOptions()
     );
   }
 
