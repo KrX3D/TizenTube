@@ -60,28 +60,6 @@ function directFilterArray(arr, page, context = '') {
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
-  
-  if (isPlaylistPage && filterIds) {
-    console.log('[FILTER_MODE] 🔄 Active - filtering to', filterIds.size, 'unwatched videos');
-    
-    const filtered = arr.filter(item => {
-      const videoId = item.tileRenderer?.contentId || 
-                     item.videoRenderer?.videoId || 
-                     item.playlistVideoRenderer?.videoId ||
-                     item.gridVideoRenderer?.videoId ||
-                     item.compactVideoRenderer?.videoId;
-      
-      const keep = filterIds.has(videoId);
-      if (!keep && videoId) {
-        console.log('[FILTER_MODE] 🔄 Hiding (not in unwatched list):', videoId);
-      }
-      return keep;
-    });
-    
-    console.log('[FILTER_MODE] 🔄 Kept', filtered.length, 'of', arr.length, 'videos');
-    return filtered;
-  }
-  
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
