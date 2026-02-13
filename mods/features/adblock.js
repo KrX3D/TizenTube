@@ -810,11 +810,25 @@ JSON.parse = function () {
         console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
         
       }
+  
+      setTimeout(() => {
+        detectPlaylistButtons();
+      }, 2000);
+      
+      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
+      setTimeout(() => {
+        addPlaylistControlButtons();
+      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
+  
+    // ⭐ Trigger button detection
+    setTimeout(() => {
+      detectPlaylistButtons();
+    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -1518,6 +1532,11 @@ function isShortItem(item) {
 }
 
 function getShelfTitle(shelf) {
+  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
+  const richShelfTitle = shelf?.richShelfRenderer?.title;
+  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
+  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
+
   const titleText = (title) => {
     if (!title) return '';
     if (title.simpleText) return title.simpleText;
@@ -1525,38 +1544,12 @@ function getShelfTitle(shelf) {
     return '';
   };
 
-  const titlePaths = [
-    ['shelfRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.shelfHeaderRenderer?.title],
-    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title],
-    ['headerRenderer.shelfHeaderRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.title],
-    ['richShelfRenderer.title', shelf?.richShelfRenderer?.title],
-    ['richSectionRenderer.content.richShelfRenderer.title', shelf?.richSectionRenderer?.content?.richShelfRenderer?.title],
-    ['gridRenderer.header.gridHeaderRenderer.title', shelf?.gridRenderer?.header?.gridHeaderRenderer?.title],
-    ['shelfRenderer.headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
-    ['headerRenderer.shelfHeaderRenderer.avatarLockup.avatarLockupRenderer.title', shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title],
-  ];
-
-  for (const [path, rawTitle] of titlePaths) {
-    const text = titleText(rawTitle);
-    if (text) {
-      if (DEBUG_ENABLED && text.toLowerCase().includes('short')) {
-        console.log('[SHELF_TITLE] path=', path, '| title=', text);
-      }
-      return text;
-    }
-  }
-
-  const shelfJson = JSON.stringify(shelf);
-  const match = shelfJson.match(/"avatarLockupRenderer":\{[\s\S]*?"title":\{[\s\S]*?"runs":\[\{"text":"([^"]+)"\}/);
-  if (match?.[1]) {
-    if (DEBUG_ENABLED) {
-      console.log('[SHELF_TITLE] avatarLockup fallback title:', match[1]);
-      console.log('[SHELF_TITLE] avatarLockup fallback path: avatarLockupRenderer.title.runs[0].text');
-    }
-    return match[1];
-  }
-
-  return '';
+  return (
+    titleText(shelfRendererTitle) ||
+    titleText(richShelfTitle) ||
+    titleText(richSectionTitle) ||
+    titleText(gridHeaderTitle)
+  );
 }
 
 
