@@ -42,7 +42,6 @@ const defaultConfig = {
       'subscriptions', 
       'channel',
       'library',
-      'playlists',
       'playlist',
       'history',
       'more',

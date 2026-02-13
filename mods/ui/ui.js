@@ -152,6 +152,7 @@ function execute_once_dom_loaded() {
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             if (typeof window.scrollConsoleUp === 'function') {
+                console.log('[CONSOLE_KEY] RED pressed -> scrollConsoleUp');
                 window.scrollConsoleUp();
             }
         }
@@ -163,6 +164,7 @@ function execute_once_dom_loaded() {
         evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
             if (typeof window.scrollConsoleDown === 'function') {
+                console.log('[CONSOLE_KEY] GREEN pressed -> scrollConsoleDown');
                 window.scrollConsoleDown();
             }
         }
