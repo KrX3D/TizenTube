@@ -80,8 +80,6 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ Check if this is a playlist page
   isPlaylistPage = (page === 'playlist');
   
-  // ⭐ FILTER MODE: Only show videos from our collected list
-  const filterIds = getFilteredVideoIds();
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -280,11 +278,6 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
-    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
-    if (filterIds) {
-      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
-      return [];  // Return empty - we're showing only specific videos
-    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
@@ -831,14 +824,6 @@ JSON.parse = function () {
         
       }
   
-      setTimeout(() => {
-        detectPlaylistButtons();
-      }, 2000);
-      
-      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
-      setTimeout(() => {
-        addPlaylistControlButtons();
-      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
