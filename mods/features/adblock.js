@@ -1556,8 +1556,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.horizontalListRenderer.items = items;
@@ -1601,8 +1603,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.gridRenderer.items = items;
@@ -1646,8 +1650,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.verticalListRenderer.items = items;
@@ -1692,8 +1698,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = contents.length;
-        contents = hideVideo(contents);
-        totalHidden += (beforeHide - contents.length);
+        if (shouldHideWatched) {
+          contents = hideVideo(contents);
+          totalHidden += (beforeHide - contents.length);
+        }
         itemsAfter = contents.length;
         
         shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
@@ -1756,8 +1764,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = items.length;
-        items = hideVideo(items);
-        totalHidden += (beforeHide - items.length);
+        if (shouldHideWatched) {
+          items = hideVideo(items);
+          totalHidden += (beforeHide - items.length);
+        }
         itemsAfter = items.length;
         
         shelve.gridRenderer.items = items;

@@ -1,3 +1,8 @@
+import resolveCommand from "./resolveCommand.js";
+import appPkg from "../package.json";
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
+
 import { configWrite } from "./config.js";
 
 // Visual Console for TV - FIXED VERSION v10
@@ -122,12 +127,13 @@ import { configWrite } from "./config.js";
     window.scrollConsoleUp = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
 
-        const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
-        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
-        const newScroll = Math.min(maxScroll, consoleDiv.scrollTop + step);
-        originalLog('[ConsoleScroll] RED old=', consoleDiv.scrollTop, 'new=', newScroll, 'max=', maxScroll, 'step=', step);
-
-        consoleDiv.scrollTop = newScroll;
+        const step = Math.max(180, Math.floor(consoleDiv.clientHeight * 0.85));
+        if (typeof consoleDiv.scrollBy === 'function') {
+            consoleDiv.scrollBy(0, step);
+        } else {
+            const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
+            consoleDiv.scrollTop = Math.min(maxScroll, consoleDiv.scrollTop + step);
+        }
 
         window.consoleAutoScroll = false;
         updateBorder();
@@ -136,11 +142,12 @@ import { configWrite } from "./config.js";
     window.scrollConsoleDown = function() {
         if (!consoleDiv || !enabled || !consoleVisible) return;
 
-        const step = Math.max(140, Math.floor(consoleDiv.clientHeight * 0.75));
-        const newScroll = Math.max(0, consoleDiv.scrollTop - step);
-        originalLog('[ConsoleScroll] GREEN old=', consoleDiv.scrollTop, 'new=', newScroll, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
-
-        consoleDiv.scrollTop = newScroll;
+        const step = Math.max(180, Math.floor(consoleDiv.clientHeight * 0.85));
+        if (typeof consoleDiv.scrollBy === 'function') {
+            consoleDiv.scrollBy(0, -step);
+        } else {
+            consoleDiv.scrollTop = Math.max(0, consoleDiv.scrollTop - step);
+        }
 
         window.consoleAutoScroll = false;
         updateBorder();
