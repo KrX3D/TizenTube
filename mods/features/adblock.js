@@ -58,9 +58,30 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
+function isPageConfigured(configPages, page) {
+  if (!Array.isArray(configPages) || configPages.length === 0) return true;
+  const normalized = configPages.map(p => String(p).toLowerCase());
+  const aliases = {
+    playlist: ['playlist'],
+    playlists: ['playlists'],
+    channel: ['channel', 'channels'],
+    channels: ['channel', 'channels'],
+    subscriptions: ['subscriptions', 'subscription']
+  };
+  const candidates = aliases[page] || [page];
+  return candidates.some(candidate => normalized.includes(candidate));
+}
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
+  let isPlaylistPage;
+
+  // ⭐ Check if this is a playlist page
+  isPlaylistPage = (page === 'playlist');
+  
+  // ⭐ FILTER MODE: Only show videos from our collected list
+  const filterIds = getFilteredVideoIds();
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -81,7 +102,7 @@ function directFilterArray(arr, page, context = '') {
   const callId = Math.random().toString(36).substr(2, 6);
   
   // ⭐ Check if this is a playlist page
-  const isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  isPlaylistPage = (page === 'playlist');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -259,6 +280,11 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
+    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
+    if (filterIds) {
+      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
+      return [];  // Return empty - we're showing only specific videos
+    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
@@ -1138,7 +1164,7 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
 
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
@@ -1307,6 +1333,16 @@ function isShortItem(item) {
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
     if (DEBUG_ENABLED && LOG_SHORTS) {
       console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 1 (contentType)');
+      console.log('[SHORTS_DIAGNOSTIC] ========================================');
+    }
+    return true;
+  }
+  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
+  // Check if the video data contains a shorts URL anywhere
+  const itemStr = JSON.stringify(item);
+  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
       console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
