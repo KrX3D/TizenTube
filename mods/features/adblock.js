@@ -280,11 +280,6 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
-    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
-    if (filterIds) {
-      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
-      return [];  // Return empty - we're showing only specific videos
-    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
@@ -830,25 +825,11 @@ JSON.parse = function () {
         console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
         
       }
-  
-      setTimeout(() => {
-        detectPlaylistButtons();
-      }, 2000);
-      
-      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
-      setTimeout(() => {
-        addPlaylistControlButtons();
-      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
-  
-    // ⭐ Trigger button detection
-    setTimeout(() => {
-      detectPlaylistButtons();
-    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -1164,7 +1145,7 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
 
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
@@ -1333,16 +1314,6 @@ function isShortItem(item) {
   if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') {
     if (DEBUG_ENABLED && LOG_SHORTS) {
       console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 1 (contentType)');
-      console.log('[SHORTS_DIAGNOSTIC] ========================================');
-    }
-    return true;
-  }
-  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
-  // Check if the video data contains a shorts URL anywhere
-  const itemStr = JSON.stringify(item);
-  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
       console.log('[SHORTS_DIAGNOSTIC] ========================================');
     }
     return true;
