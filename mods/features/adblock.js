@@ -414,6 +414,7 @@ function directFilterArray(arr, page, context = '') {
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
+  window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
   
   // If this is an array with video items, filter it
   if (Array.isArray(obj) && obj.length > 0) {
@@ -452,6 +453,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
             if (LOG_SHORTS && DEBUG_ENABLED) {
               console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
+            collectVideoIdsFromShelf(shelf).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
             obj.splice(i, 1);
           }
         }

@@ -136,7 +136,7 @@ import { configWrite } from "./config.js";
             consoleDiv.scrollTop = Math.min(maxScroll, consoleDiv.scrollTop + step);
         }
         const after = consoleDiv.scrollTop;
-        originalLog('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+        console.log('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();
@@ -153,7 +153,7 @@ import { configWrite } from "./config.js";
             consoleDiv.scrollTop = Math.max(0, consoleDiv.scrollTop - step);
         }
         const after = consoleDiv.scrollTop;
-        originalLog('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+        console.log('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();
