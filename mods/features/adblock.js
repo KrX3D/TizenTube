@@ -478,6 +478,24 @@ function directFilterArray(arr, page, context = '') {
     console.log('[COLLECTION] 🔄 Batch complete. Total unwatched collected:', window._collectedUnwatched.length);
   }
   
+  // ⭐ COLLECTION MODE: Track unwatched videos
+  if (isPlaylistPage && isInCollectionMode()) {
+    // Collect all unwatched video IDs from this batch
+    filtered.forEach(item => {
+      const videoId = item.tileRenderer?.contentId || 
+                     item.videoRenderer?.videoId || 
+                     item.playlistVideoRenderer?.videoId ||
+                     item.gridVideoRenderer?.videoId ||
+                     item.compactVideoRenderer?.videoId;
+      
+      if (videoId && !window._collectedUnwatched.includes(videoId)) {
+        window._collectedUnwatched.push(videoId);
+      }
+    });
+    
+    console.log('[COLLECTION] 🔄 Batch complete. Total unwatched collected:', window._collectedUnwatched.length);
+  }
+  
   // ⭐ If we found unwatched videos, clear stored helpers (we don't need them anymore)
   if (isPlaylistPage && filtered.length > 0 && noProgressBarCount > 0) {
     if (window._lastHelperVideos && window._lastHelperVideos.length > 0) {
