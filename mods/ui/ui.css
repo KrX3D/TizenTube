@@ -176,4 +176,7 @@ div[idomkey="shadow"] {
   display: block !important;
   width: 100% !important;
   overflow: visible !important;
+  flex-basis: 100% !important;
+  order: 999 !important;
+  clear: both !important;
 }

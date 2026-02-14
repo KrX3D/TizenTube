@@ -400,12 +400,6 @@ function directFilterArray(arr, page, context = '') {
     console.log('--------------------------------->> Clearing all helpers and trackers');
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
-    if (window._playlistRemovedHelpers) {
-      window._playlistRemovedHelpers.clear();
-    }
-    if (window._playlistRemovedHelperQueue) {
-      window._playlistRemovedHelperQueue = [];
-    }
     console.log('--------------------------------->> All helpers cleared!');
   }
   
@@ -1713,6 +1707,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
               if (DEBUG_ENABLED) {
                 console.log('[SHELF_PROCESS] Removing entire SHORTS shelf (by type)');
               }
+              collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
               shelves.splice(i, 1);
               shelvesRemoved++;
               totalShortsRemoved += itemsBefore;
@@ -1743,6 +1738,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             if (DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
             }
+            collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
             shelves.splice(i, 1);
             shelvesRemoved++;
             continue;
@@ -2284,10 +2280,14 @@ function cleanupPlaylistHelperTiles() {
   if (tiles.length === 0) return;
 
   let removed = 0;
+  const activeHelperIds = window._playlistScrollHelpers ? Array.from(window._playlistScrollHelpers) : [];
+  const allIds = Array.from(new Set([...helperIds, ...activeHelperIds])).filter(Boolean);
+
   tiles.forEach((tile) => {
     const text = tile.textContent || '';
-    const hasHelperLabel = text.includes('SCROLL HELPER');
-    const hasRemovedId = helperIds.some((id) => id && text.includes(id));
+    const html = tile.outerHTML || '';
+    const hasHelperLabel = text.includes('SCROLL HELPER') || html.includes('SCROLL HELPER');
+    const hasRemovedId = allIds.some((id) => id && (text.includes(id) || html.includes(id)));
     if (hasHelperLabel || hasRemovedId) {
       tile.remove();
       removed++;
@@ -2382,6 +2382,9 @@ function addPlaylistControlButtons(attempt = 1) {
   buttonHost.style.display = 'block';
   buttonHost.style.marginTop = '36px';
   buttonHost.style.width = '100%';
+  buttonHost.style.flexBasis = '100%';
+  buttonHost.style.order = '999';
+  buttonHost.style.clear = 'both';
   buttonHost.appendChild(customBtn);
 
   if (targetHost.parentElement) {
