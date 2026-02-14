@@ -868,13 +868,22 @@ JSON.parse = function () {
             console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
           }
         }
-
-        // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
-        scanAndFilterAllArrays(items, effectivePage, `onResponse-${idx}`);
-
-        // Then direct-filter top-level arrays with videos.
-        const filtered = directFilterArray(items, effectivePage, `continuation-${idx}`);
-        action.appendContinuationItemsAction.continuationItems = filtered;
+        
+        // Check if this is playlist video continuation
+        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
+        
+        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
+          if (DEBUG_ENABLED) {
+            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
+          }
+          
+          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        } else {
+          // For non-playlist continuation, use direct filter
+          const filtered = directFilterArray(items, page, `continuation-${idx}`);
+          action.appendContinuationItemsAction.continuationItems = filtered;
+        }
       }
     });
     
