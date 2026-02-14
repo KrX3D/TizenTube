@@ -1706,6 +1706,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
           shelfType = 'hList';
           let items = shelve.shelfRenderer.content.horizontalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
                   
           deArrowify(items);
@@ -1734,8 +1735,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           // ⭐ WATCHED FILTERING (always runs, independent of shorts)
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.horizontalListRenderer.items = items;
@@ -1754,6 +1761,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.gridRenderer?.items) {
           shelfType = 'grid';
           let items = shelve.shelfRenderer.content.gridRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           deArrowify(items);
@@ -1768,8 +1776,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.gridRenderer.items = items;
@@ -1788,6 +1802,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         else if (shelve.shelfRenderer.content?.verticalListRenderer?.items) {
           shelfType = 'vList';
           let items = shelve.shelfRenderer.content.verticalListRenderer.items;
+          const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
           deArrowify(items);
@@ -1802,8 +1817,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           
           const beforeHide = items.length;
-          items = hideVideo(items);
-          totalHidden += (beforeHide - items.length);
+          if (shouldHideWatched) {
+            items = hideVideo(items);
+            totalHidden += (beforeHide - items.length);
+          }
+          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+            if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+            items = originalItems;
+          }
           itemsAfter = items.length;
           
           shelve.shelfRenderer.content.verticalListRenderer.items = items;
@@ -1823,6 +1844,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.richShelfRenderer?.content?.richGridRenderer?.contents) {
         shelfType = 'richGrid';
         let contents = shelve.richShelfRenderer.content.richGridRenderer.contents;
+        const originalContents = Array.isArray(contents) ? contents.slice() : [];
         itemsBefore = contents.length;
 
         deArrowify(contents);
@@ -1837,8 +1859,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = contents.length;
-        contents = hideVideo(contents);
-        totalHidden += (beforeHide - contents.length);
+        if (shouldHideWatched) {
+          contents = hideVideo(contents);
+          totalHidden += (beforeHide - contents.length);
+        }
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && contents.length === 0 && originalContents.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          contents = originalContents;
+        }
         itemsAfter = contents.length;
         
         shelve.richShelfRenderer.content.richGridRenderer.contents = contents;
@@ -1876,6 +1904,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       else if (shelve.gridRenderer?.items) {
         shelfType = 'topGrid';
         let items = shelve.gridRenderer.items;
+        const originalItems = Array.isArray(items) ? items.slice() : [];
         itemsBefore = items.length;
 
         deArrowify(items);
@@ -1890,8 +1919,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
         }
         
         const beforeHide = items.length;
-        items = hideVideo(items);
-        totalHidden += (beforeHide - items.length);
+        if (shouldHideWatched) {
+          items = hideVideo(items);
+          totalHidden += (beforeHide - items.length);
+        }
+        if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+          if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
+          items = originalItems;
+        }
         itemsAfter = items.length;
         
         shelve.gridRenderer.items = items;
