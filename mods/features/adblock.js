@@ -74,11 +74,15 @@ function getVideoId(item) {
 
 function collectVideoIdsFromShelf(shelf) {
   const ids = [];
+  const seen = new Set();
   const pushFrom = (arr) => {
     if (!Array.isArray(arr)) return;
     arr.forEach((item) => {
       const id = getVideoId(item);
-      if (id) ids.push(id);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
     });
   };
 
@@ -87,7 +91,49 @@ function collectVideoIdsFromShelf(shelf) {
   pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
   pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
   pushFrom(shelf?.gridRenderer?.items);
+
+  // Fallback: recurse through shelf object to catch Tizen 5.5 variants where
+  // Shorts shelf videos are rendered in non-standard branches.
+  const stack = [shelf];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (Array.isArray(node)) {
+      for (const entry of node) stack.push(entry);
+      continue;
+    }
+
+    const id = getVideoId(node);
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
+
+    for (const key in node) {
+      if (Object.prototype.hasOwnProperty.call(node, key)) {
+        stack.push(node[key]);
+      }
+    }
+  }
+
   return ids;
+}
+
+function isLikelyPlaylistHelperItem(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item.continuationItemRenderer) return true;
+
+  const videoId = getVideoId(item);
+  if (videoId) return false;
+
+  const textParts = [
+    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText,
+    item?.videoRenderer?.title?.runs?.[0]?.text,
+    item?.compactVideoRenderer?.title?.simpleText,
+    item?.playlistVideoRenderer?.title?.runs?.[0]?.text,
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return /scroll|weiter|weiteres|mehr|more|helper|continuation/.test(textParts);
 }
 
 
@@ -280,7 +326,12 @@ function directFilterArray(arr, page, context = '') {
                         item.playlistVideoRenderer ||
                         item.richItemRenderer?.content?.videoRenderer;
     
-    if (!isVideoItem) return true;
+    if (!isVideoItem) {
+      if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
+        return false;
+      }
+      return true;
+    }
     
     const videoId = item.tileRenderer?.contentId || 
                    item.videoRenderer?.videoId || 
@@ -297,6 +348,9 @@ function directFilterArray(arr, page, context = '') {
     }
 
     const videoKey = getVideoKey(item);
+    if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
+      return false;
+    }
     if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys?.has(videoKey))) {
       if (DEBUG_ENABLED) {
         console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId, '| key=', videoKey);
@@ -2313,14 +2367,6 @@ function logChunked(prefix, text, chunkSize = 1000) {
 
 function cleanupPlaylistHelperTiles() {
   if (getCurrentPage() !== 'playlist') return;
-
-  // Do not remove DOM nodes directly (causes blank placeholders with virtualized rows).
-  // Rely on data-level filtering by _playlistRemovedHelpers/_playlistRemovedHelperKeys.
-  if (DEBUG_ENABLED) {
-    const helperIds = window._playlistRemovedHelpers ? window._playlistRemovedHelpers.size : 0;
-    const helperKeys = window._playlistRemovedHelperKeys ? window._playlistRemovedHelperKeys.size : 0;
-    console.log('[HELPER_CLEANUP_DOM] skipping direct DOM removal; ids=', helperIds, 'keys=', helperKeys);
-  }
 }
 
 
@@ -2381,7 +2427,7 @@ function addPlaylistControlButtons(attempt = 1) {
   customBtn.style.visibility = 'visible';
   customBtn.style.opacity = '1';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.marginTop = '28px';
+  customBtn.style.marginTop = '0';
   customBtn.style.marginLeft = '0';
   customBtn.style.zIndex = '6';
   customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
@@ -2399,21 +2445,17 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const targetHost = (parentContainer || container);
   targetHost.style.overflow = 'visible';
-  targetHost.style.minHeight = `${Math.max(targetHost.scrollHeight + 120, targetHost.clientHeight + 120)}px`;
-
-  const insertionRoot = targetHost.closest('ytlr-playlist-header-renderer') || targetHost.parentElement || targetHost;
 
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
   buttonHost.style.display = 'block';
-  buttonHost.style.marginTop = '36px';
+  buttonHost.style.marginTop = '20px';
   buttonHost.style.width = '100%';
-  buttonHost.style.flexBasis = '100%';
-  buttonHost.style.order = '999';
-  buttonHost.style.clear = 'both';
   buttonHost.appendChild(customBtn);
 
-  insertionRoot.appendChild(buttonHost);
+  // Insert as sibling below the native button row (not inside it),
+  // so TV focus order does not wedge the custom button between native actions.
+  targetHost.insertAdjacentElement('afterend', buttonHost);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
@@ -2435,5 +2477,5 @@ if (typeof window !== 'undefined') {
       lastPlaylistButtonHref = window.location.href;
       setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
     }
-  }, 1200);
+  }, 3000);
 }

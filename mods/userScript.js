@@ -132,8 +132,11 @@ import { configWrite } from "./config.js";
         const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
         const target = Math.min(maxScroll, before + step);
         consoleDiv.scrollTop = target;
+        if (typeof consoleDiv.scrollTo === 'function') {
+            consoleDiv.scrollTo(0, target);
+        }
         const after = consoleDiv.scrollTop;
-        console.log('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+        originalLog('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();
@@ -146,8 +149,11 @@ import { configWrite } from "./config.js";
         const before = consoleDiv.scrollTop;
         const target = Math.max(0, before - step);
         consoleDiv.scrollTop = target;
+        if (typeof consoleDiv.scrollTo === 'function') {
+            consoleDiv.scrollTo(0, target);
+        }
         const after = consoleDiv.scrollTop;
-        console.log('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
+        originalLog('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();
@@ -324,8 +330,7 @@ import { configWrite } from "./config.js";
             if (window.consoleAutoScroll) {
                 consoleDiv.scrollTop = 0;
             } else {
-                const heightDelta = consoleDiv.scrollHeight - previousScrollHeight;
-                consoleDiv.scrollTop = previousScrollTop + heightDelta;
+                consoleDiv.scrollTop = previousScrollTop;
             }
         }
     }
