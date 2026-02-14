@@ -280,11 +280,6 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
-    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
-    if (filterIds) {
-      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
-      return [];  // Return empty - we're showing only specific videos
-    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
