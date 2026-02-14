@@ -128,12 +128,15 @@ import { configWrite } from "./config.js";
         if (!consoleDiv || !enabled || !consoleVisible) return;
 
         const step = Math.max(180, Math.floor(consoleDiv.clientHeight * 0.85));
+        const before = consoleDiv.scrollTop;
         if (typeof consoleDiv.scrollBy === 'function') {
             consoleDiv.scrollBy(0, step);
         } else {
             const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
             consoleDiv.scrollTop = Math.min(maxScroll, consoleDiv.scrollTop + step);
         }
+        const after = consoleDiv.scrollTop;
+        originalLog('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();
@@ -143,11 +146,14 @@ import { configWrite } from "./config.js";
         if (!consoleDiv || !enabled || !consoleVisible) return;
 
         const step = Math.max(180, Math.floor(consoleDiv.clientHeight * 0.85));
+        const before = consoleDiv.scrollTop;
         if (typeof consoleDiv.scrollBy === 'function') {
             consoleDiv.scrollBy(0, -step);
         } else {
             consoleDiv.scrollTop = Math.max(0, consoleDiv.scrollTop - step);
         }
+        const after = consoleDiv.scrollTop;
+        originalLog('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
         window.consoleAutoScroll = false;
         updateBorder();

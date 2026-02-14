@@ -58,6 +58,35 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
+
+function getVideoId(item) {
+  return item?.tileRenderer?.contentId ||
+    item?.videoRenderer?.videoId ||
+    item?.playlistVideoRenderer?.videoId ||
+    item?.gridVideoRenderer?.videoId ||
+    item?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    null;
+}
+
+function collectVideoIdsFromShelf(shelf) {
+  const ids = [];
+  const pushFrom = (arr) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach((item) => {
+      const id = getVideoId(item);
+      if (id) ids.push(id);
+    });
+  };
+
+  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
+  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
+  pushFrom(shelf?.gridRenderer?.items);
+  return ids;
+}
+
 function isPageConfigured(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
   const normalized = configPages.map(p => String(p).toLowerCase());
@@ -223,6 +252,13 @@ function directFilterArray(arr, page, context = '') {
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
 
+    if (videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
+      if (LOG_SHORTS && DEBUG_ENABLED) {
+        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf ID:', videoId);
+      }
+      return false;
+    }
+
     if (isPlaylistPage && window._playlistRemovedHelpers.has(videoId)) {
       if (DEBUG_ENABLED) {
         console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId);
@@ -351,6 +387,8 @@ function directFilterArray(arr, page, context = '') {
       if (DEBUG_ENABLED) {
         console.log('[CLEANUP] Found', noProgressBarCount, 'unwatched - clearing', window._lastHelperVideos.length, 'stored helper(s)');
       }
+      const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
+      trackRemovedPlaylistHelpers(helperIdsToTrack);
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
@@ -1588,6 +1626,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
     console.warn('[SHELF_PROCESS] processShelves called with non-array', { type: typeof shelves });
     return;
   }
+
+  window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
   
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
@@ -1677,6 +1717,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
+          collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
           shelves.splice(i, 1);
           shelvesRemoved++;
           continue; // Skip to next shelf
@@ -2294,18 +2335,15 @@ function addPlaylistControlButtons(attempt = 1) {
   const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
   const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
 
-  if (attempt === 1) {
-    logChunked('[PLAYLIST_BUTTON] baseContainer HTML', baseContainer.outerHTML || '');
-    if (parentContainer) {
-      logChunked('[PLAYLIST_BUTTON] parentContainer HTML', parentContainer.outerHTML || '');
-    }
+  if (attempt === 1 && DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] base buttons:', baseButtons.length, '| parent buttons:', parentButtons.length);
   }
 
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
   const existingButtons = useParent ? parentButtons : baseButtons;
 
-  console.log('[PLAYLIST_BUTTON] Container selected:', useParent ? 'parent' : 'base', '| buttons:', existingButtons.length);
+  console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
 
   if (existingButtons.length === 0) {
     console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
@@ -2333,13 +2371,15 @@ function addPlaylistControlButtons(attempt = 1) {
 
   customBtn.style.cssText = templateBtn.style.cssText;
   customBtn.style.position = 'relative';
-  customBtn.style.display = 'inline-flex';
+  customBtn.style.display = 'flex';
   customBtn.style.visibility = 'visible';
   customBtn.style.opacity = '1';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.marginTop = '0';
-  customBtn.style.marginLeft = '12px';
+  customBtn.style.marginTop = '28px';
+  customBtn.style.marginLeft = '0';
+  customBtn.style.zIndex = '6';
   customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
+  customBtn.removeAttribute('aria-hidden');
 
   customBtn.addEventListener('click', (evt) => {
     evt.preventDefault();
@@ -2351,7 +2391,10 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   });
 
-  (templateBtn.parentElement || container).appendChild(customBtn);
+  const targetHost = (parentContainer || container);
+  targetHost.style.overflow = 'visible';
+  targetHost.style.minHeight = `${Math.max(targetHost.scrollHeight + 96, targetHost.clientHeight + 96)}px`;
+  targetHost.appendChild(customBtn);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
