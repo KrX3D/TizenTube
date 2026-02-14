@@ -1318,16 +1318,6 @@ function isShortItem(item) {
     }
     return true;
   }
-  // Method 12: Check canonical URL (Tizen 5.5 - long shorts appear as regular videos)
-  // Check if the video data contains a shorts URL anywhere
-  const itemStr = JSON.stringify(item);
-  if (itemStr.includes('/shorts/') || itemStr.includes('"isShortsEligible":true')) {
-    if (DEBUG_ENABLED && LOG_SHORTS) {
-      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 12 (canonical URL contains /shorts/)');
-      console.log('[SHORTS_DIAGNOSTIC] ========================================');
-    }
-    return true;
-  }
   
   // Method 2: Check videoRenderer
   if (item.videoRenderer) {
