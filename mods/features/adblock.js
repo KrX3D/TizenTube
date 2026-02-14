@@ -821,8 +821,8 @@ JSON.parse = function () {
       }
       window._lastLoggedPage = effectivePage;
     }
-    
-    // This is where individual channel content loads!
+
+    scanAndFilterAllArrays(r.continuationContents.sectionListContinuation.contents, effectivePage, 'sectionListContinuation');
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
 
