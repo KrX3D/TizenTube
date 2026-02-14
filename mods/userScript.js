@@ -167,6 +167,14 @@ import { configWrite } from "./config.js";
         consoleDiv.scrollTop = 0;
         consoleDiv.scroll(0, 0);
         consoleDiv.scrollTo(0, 0);
+        consoleDiv.innerHTML = logs.join('');
+    };
+
+    window.deleteConsoleLastLog = function() {
+        if (!consoleDiv || !enabled || !consoleVisible) return;
+        if (logs.length === 0) return;
+        logs.splice(0, Math.min(3, logs.length));
+        consoleDiv.innerHTML = logs.join('');
     };
 
     window.deleteConsoleLastLog = function() {
@@ -324,6 +332,9 @@ import { configWrite } from "./config.js";
         
         // Only update DOM if console is visible
         if (consoleDiv && consoleVisible) {
+            if (!window.consoleAutoScroll) {
+                return;
+            }
             const previousScrollTop = consoleDiv.scrollTop;
             const previousScrollHeight = consoleDiv.scrollHeight;
             consoleDiv.innerHTML = logs.join('');

@@ -162,8 +162,8 @@ div[idomkey="shadow"] {
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
-  min-height: 64px !important;
-  margin-top: 28px !important;
+  min-height: 56px !important;
+  margin-top: 0 !important;
 }
 
 /* Ensure playlist action container can grow for the injected button */
@@ -177,4 +177,6 @@ div[idomkey="shadow"] {
   width: 100% !important;
   overflow: visible !important;
   margin-top: 20px !important;
+  position: relative !important;
+  z-index: 9999 !important;
 }

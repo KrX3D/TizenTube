@@ -72,6 +72,18 @@ function getVideoId(item) {
     null;
 }
 
+function getVideoTitle(item) {
+  return (
+    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+    item?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.compactVideoRenderer?.title?.simpleText ||
+    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
+    ''
+  );
+}
+
 function collectVideoIdsFromShelf(shelf) {
   const ids = [];
   const seen = new Set();
@@ -122,18 +134,16 @@ function collectVideoIdsFromShelf(shelf) {
 function isLikelyPlaylistHelperItem(item) {
   if (!item || typeof item !== 'object') return false;
   if (item.continuationItemRenderer) return true;
+  if (item?.tileRenderer?.onSelectCommand?.continuationCommand) return true;
+  if (item?.tileRenderer?.onSelectCommand?.continuationEndpoint) return true;
+  if (item?.continuationEndpoint || item?.continuationCommand) return true;
 
   const videoId = getVideoId(item);
   if (videoId) return false;
 
-  const textParts = [
-    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText,
-    item?.videoRenderer?.title?.runs?.[0]?.text,
-    item?.compactVideoRenderer?.title?.simpleText,
-    item?.playlistVideoRenderer?.title?.runs?.[0]?.text,
-  ].filter(Boolean).join(' ').toLowerCase();
+  const textParts = getVideoTitle(item).toLowerCase();
 
-  return /scroll|weiter|weiteres|mehr|more|helper|continuation/.test(textParts);
+  return /scroll|weiter|weiteres|mehr|more|helper|continuation|fortsetzen|laden/.test(textParts);
 }
 
 
@@ -187,7 +197,7 @@ function directFilterArray(arr, page, context = '') {
   let isPlaylistPage;
 
   // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist');
+  isPlaylistPage = (page === 'playlist' || page === 'playlists');
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
@@ -233,7 +243,7 @@ function directFilterArray(arr, page, context = '') {
   const callId = Math.random().toString(36).substr(2, 6);
   
   // ⭐ Check if this is a playlist page
-  isPlaylistPage = (page === 'playlist');
+  isPlaylistPage = (page === 'playlist' || page === 'playlists');
   
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -343,6 +353,14 @@ function directFilterArray(arr, page, context = '') {
     if (videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
       if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf ID:', videoId);
+      }
+      return false;
+    }
+
+    const videoTitle = getVideoTitle(item).trim().toLowerCase();
+    if (videoTitle && window._shortsTitlesFromShelves?.has(videoTitle)) {
+      if (LOG_SHORTS && DEBUG_ENABLED) {
+        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf TITLE:', videoTitle);
       }
       return false;
     }
@@ -502,6 +520,7 @@ function directFilterArray(arr, page, context = '') {
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
   window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
+  window._shortsTitlesFromShelves = window._shortsTitlesFromShelves || new Set();
   
   // If this is an array with video items, filter it
   if (Array.isArray(obj) && obj.length > 0) {
@@ -541,6 +560,22 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
               console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
             collectVideoIdsFromShelf(shelf).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+            const stack = [shelf];
+            while (stack.length) {
+              const node = stack.pop();
+              if (!node || typeof node !== 'object') continue;
+              if (Array.isArray(node)) {
+                node.forEach((entry) => stack.push(entry));
+                continue;
+              }
+              const title = getVideoTitle(node).trim().toLowerCase();
+              if (title) window._shortsTitlesFromShelves.add(title);
+              for (const key in node) {
+                if (Object.prototype.hasOwnProperty.call(node, key)) {
+                  stack.push(node[key]);
+                }
+              }
+            }
             obj.splice(i, 1);
           }
         }
@@ -2372,7 +2407,7 @@ function cleanupPlaylistHelperTiles() {
 
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
-  if (page !== 'playlist') return;
+  if (page !== 'playlist' && page !== 'playlists') return;
 
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
@@ -2407,31 +2442,25 @@ function addPlaylistControlButtons(attempt = 1) {
   if (existingHost) existingHost.remove();
 
   const templateBtn = existingButtons[existingButtons.length - 1];
-  const customBtn = templateBtn.cloneNode(true);
+  const customBtn = document.createElement('button');
   customBtn.id = 'tizentube-collection-btn';
-
-  Array.from(templateBtn.attributes).forEach((attr) => {
-    if (attr.name.startsWith('data-') || attr.name === 'tabindex' || attr.name === 'role') {
-      customBtn.setAttribute(attr.name, attr.value);
-    }
-  });
-
-  const label = customBtn.querySelector('yt-formatted-string');
-  if (label) {
-    label.textContent = '🔄 Refresh Filters';
-  }
-
-  customBtn.style.cssText = templateBtn.style.cssText;
+  customBtn.type = 'button';
+  customBtn.textContent = '🔄 Refresh Filters';
+  customBtn.setAttribute('tabindex', '0');
   customBtn.style.position = 'relative';
-  customBtn.style.display = 'flex';
-  customBtn.style.visibility = 'visible';
-  customBtn.style.opacity = '1';
+  customBtn.style.display = 'inline-flex';
+  customBtn.style.alignItems = 'center';
+  customBtn.style.justifyContent = 'center';
+  customBtn.style.padding = '10px 18px';
+  customBtn.style.minHeight = '56px';
+  customBtn.style.background = '#1f1f1f';
+  customBtn.style.color = '#fff';
+  customBtn.style.border = '2px solid #5f6368';
+  customBtn.style.borderRadius = '28px';
+  customBtn.style.fontSize = '20px';
+  customBtn.style.cursor = 'pointer';
+  customBtn.style.zIndex = '9999';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.marginTop = '0';
-  customBtn.style.marginLeft = '0';
-  customBtn.style.zIndex = '6';
-  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
-  customBtn.removeAttribute('aria-hidden');
 
   customBtn.addEventListener('click', (evt) => {
     evt.preventDefault();
@@ -2462,7 +2491,7 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   const rect = customBtn.getBoundingClientRect();
-  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| text=', (label?.textContent || '').trim());
+  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height));
 }
 
 
