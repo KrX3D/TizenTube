@@ -35,28 +35,6 @@ if (typeof window !== 'undefined') {
 
 // ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
 // Trying to hide them causes empty space and layout issues
-function trackRemovedPlaylistHelpers(helperIds) {
-  if (!window._playlistRemovedHelpers) {
-    window._playlistRemovedHelpers = new Set();
-  }
-  if (!window._playlistRemovedHelperQueue) {
-    window._playlistRemovedHelperQueue = [];
-  }
-
-  helperIds.forEach((helperId) => {
-    if (!helperId || helperId === 'unknown') return;
-    if (!window._playlistRemovedHelpers.has(helperId)) {
-      window._playlistRemovedHelpers.add(helperId);
-      window._playlistRemovedHelperQueue.push(helperId);
-    }
-  });
-
-  const MAX_REMOVED_HELPERS = 25;
-  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
-    const oldest = window._playlistRemovedHelperQueue.shift();
-    window._playlistRemovedHelpers.delete(oldest);
-  }
-}
 
 function isPageConfigured(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
@@ -152,10 +130,7 @@ function directFilterArray(arr, page, context = '') {
     
     console.log('[CLEANUP] Helper IDs to remove:', helperIdsToRemove);
     
-    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
-    // This way they get filtered out cleanly with the rest!
-    arr.unshift(...window._lastHelperVideos);
-    
+    // ⭐ DON'T insert helpers into new batch - they're already rendered!
     // Just track them for removal if they appear
     trackRemovedPlaylistHelpers(helperIdsToRemove);
     
@@ -890,22 +865,13 @@ JSON.parse = function () {
             console.log(`[ON_RESPONSE] First item keys:`, Object.keys(items[0]));
           }
         }
-        
-        // Check if this is playlist video continuation
-        const hasPlaylistVideos = items.some(item => item.playlistVideoRenderer);
-        
-        if (hasPlaylistVideos && (page === 'playlist' || page === 'playlists')) {
-          if (DEBUG_ENABLED) {
-            console.log(`[ON_RESPONSE] Playlist videos detected - filtering`);
-          }
-          
-          const filtered = directFilterArray(items, page, `playlist-scroll-${idx}`);
-          action.appendContinuationItemsAction.continuationItems = filtered;
-        } else {
-          // For non-playlist continuation, use direct filter
-          const filtered = directFilterArray(items, page, `continuation-${idx}`);
-          action.appendContinuationItemsAction.continuationItems = filtered;
-        }
+
+        // First scan recursively so shelf-like continuation payloads on Tizen 5.5/6.5 also get filtered.
+        scanAndFilterAllArrays(items, effectivePage, `onResponse-${idx}`);
+
+        // Then direct-filter top-level arrays with videos.
+        const filtered = directFilterArray(items, effectivePage, `continuation-${idx}`);
+        action.appendContinuationItemsAction.continuationItems = filtered;
       }
     });
     
