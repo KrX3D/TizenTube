@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = true;   // Set false to disable shorts logging  
+const LOG_SHORTS = false;   // Set false to disable shorts logging  
 const LOG_WATCHED = true;  // Set true to enable verbose watched-video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
@@ -190,6 +190,18 @@ function isPageConfigured(configPages, page) {
   return candidates.some(candidate => normalized.includes(candidate));
 }
 
+function shouldHideWatchedForPage(configPages, page) {
+  if (!Array.isArray(configPages) || configPages.length === 0) return true;
+  if (configPages.includes(page)) return true;
+
+  // Library playlist overview / watch-next should follow library watched-filter setting.
+  if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
+    return true;
+  }
+
+  return false;
+}
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
@@ -229,10 +241,10 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
+  const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldFilterShorts = !shortsEnabled;
+  const shouldFilterShorts = !shortsEnabled && page !== 'playlist' && page !== 'playlists';
   
   // Skip if nothing to do
   if (!shouldFilterShorts && !shouldHideWatched) {
@@ -458,24 +470,6 @@ function directFilterArray(arr, page, context = '') {
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
     return [];
-  }
-  
-  // ⭐ COLLECTION MODE: Track unwatched videos
-  if (isPlaylistPage && isInCollectionMode()) {
-    // Collect all unwatched video IDs from this batch
-    filtered.forEach(item => {
-      const videoId = item.tileRenderer?.contentId || 
-                     item.videoRenderer?.videoId || 
-                     item.playlistVideoRenderer?.videoId ||
-                     item.gridVideoRenderer?.videoId ||
-                     item.compactVideoRenderer?.videoId;
-      
-      if (videoId && !window._collectedUnwatched.includes(videoId)) {
-        window._collectedUnwatched.push(videoId);
-      }
-    });
-    
-    console.log('[COLLECTION] 🔄 Batch complete. Total unwatched collected:', window._collectedUnwatched.length);
   }
   
   // ⭐ COLLECTION MODE: Track unwatched videos
@@ -1458,14 +1452,7 @@ function isShortItem(item) {
       }
     }
     
-    // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
-    if (DEBUG_ENABLED && LOG_SHORTS && durationSeconds && durationSeconds > 90) {
-      console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
-      if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
-        console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
-      }
-      console.log('🔬 ---');
-    }
+    // keep diagnostics lightweight: only emit detailed logs when <= 90s method triggers
   }
   
   if (DEBUG_ENABLED && LOG_SHORTS) {
@@ -1683,10 +1670,17 @@ function isShortItem(item) {
         const totalSeconds = minutes * 60 + seconds;
         
         if (totalSeconds <= 90) {
-          if (DEBUG_ENABLED && LOG_SHORTS) {
-            console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s)');
-            console.log('[SHORTS_DIAGNOSTIC] Duration:', totalSeconds, 'seconds');
-            console.log('[SHORTS_DIAGNOSTIC] ========================================');
+          if (true) {
+            console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s) | id=', videoId, '| duration=', totalSeconds);
+            let itemJson = '';
+            try {
+              itemJson = JSON.stringify(item);
+            } catch (e) {
+              itemJson = '[Unserializable item: ' + (e?.message || e) + ']';
+            }
+            logChunked('[SHORTS_DIAGNOSTIC_JSON]', itemJson, 600);
+            const keyPaths = collectKeyPaths(item, 'item', 5);
+            logChunked('[SHORTS_DIAGNOSTIC_KEYPATHS]', keyPaths.join('\n'), 600);
           }
           return true;
         }
@@ -1696,7 +1690,7 @@ function isShortItem(item) {
 
   // Method 9: Check if URL path contains reelItemRenderer or shorts patterns
   if (item.richItemRenderer?.content?.reelItemRenderer) {
-    if (DEBUG_ENABLED) {
+    if (DEBUG_ENABLED && LOG_SHORTS) {
       console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 9 (reelItemRenderer)');
     }
     return true;
@@ -1706,7 +1700,7 @@ function isShortItem(item) {
   if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
     const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
     if (thumb && thumb.height > thumb.width) {
-      if (DEBUG_ENABLED) {
+      if (DEBUG_ENABLED && LOG_SHORTS) {
         console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 10 (vertical thumbnail)');
         console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
       }
@@ -1762,7 +1756,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
-  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
+  const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
   
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Page:', page, '| Shelves:', shelves.length, '| Hide watched:', shouldHideWatched, '| Shorts:', shortsEnabled);
@@ -2412,16 +2406,36 @@ function logChunked(prefix, text, chunkSize = 1000) {
   }
 }
 
+function collectKeyPaths(value, base = 'root', maxDepth = 6, output = []) {
+  if (maxDepth < 0 || value === null || value === undefined) return output;
+  if (typeof value !== 'object') {
+    output.push(base);
+    return output;
+  }
+  if (Array.isArray(value)) {
+    output.push(base + '[]');
+    value.forEach((item, idx) => collectKeyPaths(item, `${base}[${idx}]`, maxDepth - 1, output));
+    return output;
+  }
+  const keys = Object.keys(value);
+  if (keys.length === 0) {
+    output.push(base);
+    return output;
+  }
+  keys.forEach((key) => collectKeyPaths(value[key], `${base}.${key}`, maxDepth - 1, output));
+  return output;
+}
+
 
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
-  if (page !== 'playlist' && page !== 'playlists') return;
+  if (page !== 'playlist') return;
 }
 
 
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
-  if (page !== 'playlist' && page !== 'playlists') return;
+  if (page !== 'playlist') return;
 
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
@@ -2544,7 +2558,9 @@ if (typeof window !== 'undefined') {
     }
     if (window.location.href !== lastPlaylistButtonHref) {
       lastPlaylistButtonHref = window.location.href;
-      setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
+      if (page === 'playlist') {
+        setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
+      }
     }
   }, 3000);
 }

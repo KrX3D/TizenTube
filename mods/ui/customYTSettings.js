@@ -1,6 +1,7 @@
 import { SettingActionRenderer, SettingsCategory } from './ytUI.js';
 
 function PatchSettings(settingsObject) {
+    const version = window?.h5vcc?.tizentube?.GetVersion ? window.h5vcc.tizentube.GetVersion() : 'unknown';
     const tizentubeOpenAction = SettingActionRenderer(
         'TizenTube Settings',
         'tizentube_open_action',
@@ -10,7 +11,7 @@ function PatchSettings(settingsObject) {
                 parameters: []
             }
         },
-        'Open TizenTube Settings',
+        `Open TizenTube Settings\nVersion: ${version}`,
         'https://www.gstatic.com/ytlr/img/parent_code.png'
     )
 
