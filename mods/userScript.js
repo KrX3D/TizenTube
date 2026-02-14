@@ -177,6 +177,13 @@ import { configWrite } from "./config.js";
         consoleDiv.innerHTML = logs.join('');
     };
 
+    window.deleteConsoleLastLog = function() {
+        if (!consoleDiv || !enabled || !consoleVisible) return;
+        if (logs.length === 0) return;
+        logs.splice(0, Math.min(3, logs.length));
+        consoleDiv.innerHTML = logs.join('');
+    };
+
     function updateBorder() {
         if (consoleDiv) {
             consoleDiv.style.borderColor = window.consoleAutoScroll ? '#0f0' : '#f80';
@@ -400,3 +407,4 @@ import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
+
