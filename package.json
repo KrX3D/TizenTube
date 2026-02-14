@@ -19,7 +19,8 @@
     "MediaTrackPrevious"
   ],
   "repository": {
-    "url": "https://github.com/reisxd/TizenTube"
+    "type": "git",
+    "url": "git+https://github.com/KrX3D/TizenTube.git"
   },
   "license": "GPL-3.0-only"
 }

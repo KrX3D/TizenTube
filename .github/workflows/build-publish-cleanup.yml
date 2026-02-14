@@ -1,0 +1,331 @@
+# -----------------------------------------------------------------------------
+# Build, publish, and cleanup TizenTube on npm
+#
+# WHAT THIS WORKFLOW DOES
+# -----------------------
+# - Runs on every push to the `main` branch (build + verification + version bump)
+# - Runs again when a GitHub Release is published (build + npm publish + cleanup)
+# - Builds:
+#     - dist/userScript.js  (browser userscript, bundled & minified)
+#     - dist/service.js     (DIAL service, bundled with Rollup)
+# - Publishes the package to https://www.npmjs.com on release only
+# - Automatically removes old versions from npm (within 72-hour window)
+# - Deprecates older versions (beyond 72-hour window) if any remain
+# - Purges jsDelivr CDN cache after publishing
+#
+# WHEN IT RUNS
+# ------------
+# push to main:
+#   - Bumps version in root package.json (+10 patch, rollover to minor)
+#   - Builds the project (dist files contain the NEW version)
+#   - Commits updated package.json + dist outputs back to repo
+#   - Does NOT publish to npm
+#
+# release (published):
+#   - Builds the project
+#   - Publishes to npm
+#   - Removes old versions (≤72 hours old, keeps current version only)
+#   - Deprecates very old versions (>72 hours, if unpublish fails)
+#   - Purges jsDelivr cache
+#
+# AUTOMATIC VERSION CLEANUP
+# -------------------------
+# After publishing a new version, this workflow automatically:
+# - Identifies all versions except the newly published one
+# - Unpublishes versions that are ≤72 hours old (npm policy allows this)
+# - Deprecates versions >72 hours old (unpublish no longer allowed)
+# - Result: Only the latest version remains active on npm
+#
+# Note: npm allows unpublishing versions within ~72 hours of publication.
+# After that window, versions can only be deprecated, not removed.
+#
+# VERSION BUMP RULE (push to main only)
+# -------------------------------------
+# - Increments patch by +10:
+#     1.17.680 -> 1.17.690 -> ... -> 1.17.990
+# - When patch would hit 1000:
+#     1.17.990 -> 1.18.0
+#
+# LOOP PREVENTION
+# --------------
+# - Bot commits include "[skip ci]"
+# - Job is skipped when:
+#   - actor is github-actions[bot], OR
+#   - commit message contains "[skip ci]"
+#
+# PREREQUISITES (REQUIRED)
+# -----------------------
+# 1) Create an npm account:
+#    https://www.npmjs.com/signup
+#
+# 2) Create an npm access token:
+#    - npm → Profile → Access Tokens
+#    - Click "Generate New Token"
+#    - Token name: anything you want
+#    - CHECK: "Bypass two-factor authentication (2FA)"
+#    - Packages and scopes:
+#        - Permissions: Read and Write
+#        - Scope: All packages
+#    - Expiration date: e.g. 90 days
+#    - Click "Generate token" and COPY it
+#
+# 3) Add the token to GitHub Secrets:
+#    - GitHub repository → Settings
+#    - Security → Secrets and variables → Actions
+#    - Repository secrets → New repository secret
+#        Name:   NPM_TOKEN
+#        Secret: <paste npm token here>
+#
+# PACKAGE REQUIREMENTS
+# --------------------
+# - package.json must contain a unique name, e.g.:
+#     "@krx3d/tizentube"
+# - The version MUST be increased before each release
+#   (npm will reject duplicate versions)
+#
+# HOW TO PUBLISH A NEW VERSION
+# ----------------------------
+# 1) Push to main (workflow auto-bumps version and rebuilds dist)
+# 2) Create a GitHub Release
+# 3) When the release is published:
+#      → GitHub Actions builds
+#      → npm publish runs automatically
+#      → Old versions are automatically removed
+#      → jsDelivr cache is purged
+#
+# CONFIGURATION
+# -------------
+# - PACKAGE_NAME: Set to your npm package name (e.g., '@krx3d/tizentube')
+# - NODE_VERSION: Node.js version to use (default: '20')
+# - UNPUBLISH_WINDOW_HOURS: How long versions can be unpublished (default: '72')
+#
+# -----------------------------------------------------------------------------
+
+name: Build, publish and cleanup old npm versions
+
+on:
+  push:
+    branches:
+      - extract_features
+    paths-ignore:
+      - '.github/**'
+      - '.gitattributes'
+      - '.gitignore'
+      - '.npmignore'
+      - 'LICENSE'
+      - 'README.md'
+      - 'package.json'
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# Allow this workflow to push back changes to the repo
+permissions:
+  contents: write
+
+env:
+  PACKAGE_NAME_GH: 'KrX3D/TizenTube'
+  NODE_VERSION: '20'
+  UNPUBLISH_WINDOW_HOURS: '72'
+
+jobs:
+  build-publish-clean:
+    runs-on: ubuntu-latest
+
+    # Prevent loop on bot commits and on our own "[skip ci]" commits
+    if: >
+      github.event_name != 'push' ||
+      (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # ensure the checkout action leaves credentials so we can push
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # ----------------------------
+      # Version bump (push to main only) - MUST happen BEFORE building dist
+      # ----------------------------
+      - name: Bump root package.json version (+10 patch, rollover -> minor)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const path = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+
+          const ver = pkg.version || '0.0.0';
+          const m = ver.match(/^(\d+)\.(\d+)\.(\d+)$/);
+          if (!m) throw new Error(`Invalid version in package.json: ${ver}`);
+
+          let major = parseInt(m[1], 10);
+          let minor = parseInt(m[2], 10);
+          let patch = parseInt(m[3], 10);
+
+          patch += 10;
+          if (patch >= 1000) {
+            minor += 1;
+            patch = 0;
+          }
+
+          const newVer = `${major}.${minor}.${patch}`;
+          pkg.version = newVer;
+
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
+          console.log(`Bumped version: ${ver} -> ${newVer}`);
+          NODE
+
+      - name: Show current version (old -> new)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+
+          OLD_VER="$(git show HEAD^:package.json 2>/dev/null | node -e "let s='';process.stdin.on('data',d=>s+=d);process.stdin.on('end',()=>{try{console.log(JSON.parse(s).version||'');}catch{console.log('');}})")"
+          NEW_VER="$(node -p "require('./package.json').version")"
+
+          if [ -z "${OLD_VER:-}" ]; then
+            echo "Version: (unknown) -> ${NEW_VER}"
+          else
+            echo "Version: ${OLD_VER} -> ${NEW_VER}"
+          fi
+
+      # ----------------------------
+      # Build mods (userScript.js)
+      # ----------------------------
+      - name: Clean dist
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
+
+      - name: Install mods dependencies
+        run: |
+          set -euo pipefail
+          cd mods
+          npm ci
+
+      - name: Update Browserslist DB (mods)
+        run: |
+          set -euo pipefail
+          cd mods
+          npx update-browserslist-db@latest
+
+      - name: Build mods (rollup)
+        run: |
+          set -euo pipefail
+          cd mods
+          npm install
+          npx rollup -c
+
+      # ----------------------------
+      # Build service (service.js)
+      # ----------------------------
+      - name: Install service dependencies
+        run: |
+          set -euo pipefail
+          cd service
+          npm ci
+
+      - name: Build service (rollup)
+        run: |
+          set -euo pipefail
+          cd service
+          npm install
+          npx rollup -c
+
+      # ----------------------------
+      # Verify output
+      # ----------------------------
+      - name: Verify dist output
+        run: |
+          set -euo pipefail
+          echo "Listing dist/ (should contain built outputs):"
+          ls -lah dist || true
+          test -f dist/userScript.js
+          test -f dist/service.js
+
+      # ----------------------------
+      # Commit version bump + built JS to repo (push to main only)
+      # NOTE: dist is often gitignored, so we force-add the built files.
+      # ----------------------------
+      - name: Commit version bump + built files in dist/ (if changed)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          echo "Committing version bump + built files (if any changes)..."
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # stage what you actually want to commit
+          git add package.json
+
+          # stage dist files (use -f because dist/ is in .gitignore)
+          git add -f dist/userScript.js dist/service.js
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          NEWVER=$(node -p "require('./package.json').version")
+          git commit -m "chore: bump version to ${NEWVER} + rebuild dist [skip ci]"
+
+          # IMPORTANT: ensure clean tree before rebase/pull
+          # (drops any lockfile drift etc. that you didn't commit)
+          git reset --hard HEAD
+          git clean -fd
+
+          git fetch origin main
+          #git pull --rebase origin main
+          git rebase origin/main
+          # git reset --hard
+
+          echo "Pushing changes back to main..."
+          git push origin HEAD:main
+
+      # --------------------
+      # Purge jsDelivr cache
+      # --------------------
+      - name: Generate jsDelivr URLs to purge
+        id: cdn_urls
+        run: |
+          set -euo pipefail
+
+          GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
+
+          URLS=""
+
+          # GitHub repo URLs - extract_features branch
+          # URLS+="${GH_BASE}@extract_features,"
+          # URLS+="${GH_BASE}@extract_features/package.json,"
+          # URLS+="${GH_BASE}@extract_features/dist/userScript.js,"
+          # URLS+="${GH_BASE}@extract_features/dist/service.js,"
+
+          # URLS+="${GH_BASE}/blob/extract_features/package.json,"
+          # URLS+="${GH_BASE}/blob/extract_features/dist/userScript.js,"
+          # URLS+="${GH_BASE}/blob/extract_features/dist/service.js,"
+
+          # Purge entire repo (all branches/tags) usually doesn't work, but kept for parity
+          # URLS+="${GH_BASE}@*"
+
+          echo "urls=${URLS}" >> $GITHUB_OUTPUT
+          echo "Generated CDN URLs:"
+          echo "${URLS}" | tr ',' '\n'
+
+      - name: Purge jsDelivr cache
+        uses: egad13/purge-jsdelivr-cache@v1
+        with:
+          url: ${{ steps.cdn_urls.outputs.urls }}
+          attempts: 3
+
+      - name: Cache purge complete
+        run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"
