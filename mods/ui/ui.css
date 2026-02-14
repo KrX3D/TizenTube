@@ -173,10 +173,12 @@ div[idomkey="shadow"] {
 }
 
 #tizentube-collection-host {
-  display: block !important;
+  display: flex !important;
+  align-items: center !important;
   width: 100% !important;
   overflow: visible !important;
-  margin-top: 20px !important;
+  margin-top: 28px !important;
   position: relative !important;
   z-index: 9999 !important;
+  clear: both !important;
 }

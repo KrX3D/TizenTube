@@ -455,7 +455,7 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
-  // ⭐ PLAYLIST SAFEGUARD: do not keep helper tiles (they break layout/focus on TV)
+  // ⭐ PLAYLIST SAFEGUARD: keep one helper tile so TV can request next batch.
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
     // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
@@ -464,12 +464,15 @@ function directFilterArray(arr, page, context = '') {
       return [];  // Return empty - we're showing only specific videos
     }
     
+    const lastVideo = arr[arr.length - 1];
+    const lastVideoId = getVideoId(lastVideo) || 'unknown';
     if (DEBUG_ENABLED) {
-      console.log('[HELPER] ALL FILTERED - helper suppressed, returning empty batch');
+      console.log('[HELPER] ALL FILTERED - keeping 1 helper for continuation trigger:', lastVideoId);
     }
-    window._lastHelperVideos = [];
+    window._lastHelperVideos = [lastVideo];
     window._playlistScrollHelpers.clear();
-    return [];
+    window._playlistScrollHelpers.add(lastVideoId);
+    return [lastVideo];
   }
   
   // ⭐ COLLECTION MODE: Track unwatched videos
@@ -560,8 +563,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
             }
             const ids = collectVideoIdsFromShelf(shelf);
             ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-            if (LOG_SHORTS) {
-              console.log('[SCAN] Shorts shelf removed:', shelfTitle, '| ids=', ids.length, '| path=', path);
+            if (page === 'subscriptions' || LOG_SHORTS) {
+              console.log('[SUBS_SHORTS_SHELF] removed title=', shelfTitle, '| ids=', ids.length, '| path=', path);
             }
             const stack = [shelf];
             while (stack.length) {
@@ -767,7 +770,11 @@ function getFilteredVideoIds() {
   
   try {
     const data = JSON.parse(stored);
-    if (data.mode === 'filtering' && data.videoIds) {
+    if (data.mode === 'filtering' && Array.isArray(data.videoIds)) {
+      if (data.videoIds.length === 0) {
+        localStorage.removeItem(PLAYLIST_STORAGE_KEY);
+        return null;
+      }
       return new Set(data.videoIds);
     }
   } catch {}
@@ -1670,18 +1677,7 @@ function isShortItem(item) {
         const totalSeconds = minutes * 60 + seconds;
         
         if (totalSeconds <= 90) {
-          if (true) {
-            console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s) | id=', videoId, '| duration=', totalSeconds);
-            let itemJson = '';
-            try {
-              itemJson = JSON.stringify(item);
-            } catch (e) {
-              itemJson = '[Unserializable item: ' + (e?.message || e) + ']';
-            }
-            logChunked('[SHORTS_DIAGNOSTIC_JSON]', itemJson, 600);
-            const keyPaths = collectKeyPaths(item, 'item', 5);
-            logChunked('[SHORTS_DIAGNOSTIC_KEYPATHS]', keyPaths.join('\n'), 600);
-          }
+          console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 8 (duration ≤90s) | id=', videoId, '| duration=', totalSeconds);
           return true;
         }
       }
@@ -1800,8 +1796,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           const ids = collectVideoIdsFromShelf(shelve);
           ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-          if (LOG_SHORTS) {
-            console.log('[SHELF_PROCESS] Shorts shelf removed:', shelfTitle, '| ids=', ids.length, '| page=', page);
+          if (page === 'subscriptions' || LOG_SHORTS) {
+            console.log('[SUBS_SHORTS_SHELF] processShelves removed title=', shelfTitle, '| ids=', ids.length, '| page=', page);
           }
           shelves.splice(i, 1);
           shelvesRemoved++;
@@ -2406,30 +2402,17 @@ function logChunked(prefix, text, chunkSize = 1000) {
   }
 }
 
-function collectKeyPaths(value, base = 'root', maxDepth = 6, output = []) {
-  if (maxDepth < 0 || value === null || value === undefined) return output;
-  if (typeof value !== 'object') {
-    output.push(base);
-    return output;
-  }
-  if (Array.isArray(value)) {
-    output.push(base + '[]');
-    value.forEach((item, idx) => collectKeyPaths(item, `${base}[${idx}]`, maxDepth - 1, output));
-    return output;
-  }
-  const keys = Object.keys(value);
-  if (keys.length === 0) {
-    output.push(base);
-    return output;
-  }
-  keys.forEach((key) => collectKeyPaths(value[key], `${base}.${key}`, maxDepth - 1, output));
-  return output;
-}
+
 
 
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
+}
+
+function detectPlaylistButtons() {
+  if (getCurrentPage() !== 'playlist') return;
+  addPlaylistControlButtons(1);
 }
 
 
@@ -2473,25 +2456,21 @@ function addPlaylistControlButtons(attempt = 1) {
   }
   if (existingHost) existingHost.remove();
 
-  const customBtn = document.createElement('button');
+  const templateBtn = existingButtons[existingButtons.length - 1];
+  const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
-  customBtn.type = 'button';
-  customBtn.textContent = '🔄 Refresh Filters';
-  customBtn.setAttribute('tabindex', '0');
-  customBtn.style.position = 'relative';
+  customBtn.removeAttribute('aria-hidden');
+  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
+  customBtn.style.position = 'static';
   customBtn.style.display = 'inline-flex';
-  customBtn.style.alignItems = 'center';
-  customBtn.style.justifyContent = 'center';
-  customBtn.style.padding = '10px 18px';
-  customBtn.style.minHeight = '56px';
-  customBtn.style.background = '#1f1f1f';
-  customBtn.style.color = '#fff';
-  customBtn.style.border = '2px solid #5f6368';
-  customBtn.style.borderRadius = '28px';
-  customBtn.style.fontSize = '20px';
-  customBtn.style.cursor = 'pointer';
-  customBtn.style.zIndex = '9999';
+  customBtn.style.margin = '0';
   customBtn.style.pointerEvents = 'auto';
+  customBtn.style.zIndex = '9999';
+
+  const labelNode = customBtn.querySelector('yt-formatted-string');
+  if (labelNode) {
+    labelNode.textContent = '🔄 Refresh Filters';
+  }
 
   customBtn.addEventListener('click', (evt) => {
     evt.preventDefault();
@@ -2515,12 +2494,19 @@ function addPlaylistControlButtons(attempt = 1) {
           page,
           baseButtons: baseButtons.length,
           parentButtons: parentButtons.length,
+          baseTag: baseContainer.tagName,
+          baseClass: baseContainer.className,
+          baseOuterHTML: baseContainer.outerHTML,
+          parentTag: parentContainer?.tagName,
+          parentClass: parentContainer?.className,
+          parentOuterHTML: parentContainer?.outerHTML,
           targetTag: targetHost.tagName,
           targetClass: targetHost.className,
           targetOuterHTML: targetHost.outerHTML,
-          parentTag: targetHost.parentElement?.tagName,
-          parentClass: targetHost.parentElement?.className,
-          parentOuterHTML: targetHost.parentElement?.outerHTML,
+          targetParentTag: targetHost.parentElement?.tagName,
+          targetParentClass: targetHost.parentElement?.className,
+          targetParentOuterHTML: targetHost.parentElement?.outerHTML,
+          buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
         };
         logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
       } catch (e) {
@@ -2531,13 +2517,15 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
-  buttonHost.style.display = 'block';
-  buttonHost.style.marginTop = '20px';
+  buttonHost.style.display = 'flex';
+  buttonHost.style.alignItems = 'center';
+  buttonHost.style.marginTop = '26px';
   buttonHost.style.width = '100%';
+  buttonHost.style.position = 'relative';
+  buttonHost.style.zIndex = '9999';
   buttonHost.appendChild(customBtn);
 
-  const insertionRoot = targetHost.parentElement || targetHost;
-  insertionRoot.appendChild(buttonHost);
+  targetHost.insertAdjacentElement('afterend', buttonHost);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);

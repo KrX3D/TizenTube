@@ -131,10 +131,10 @@ import { configWrite } from "./config.js";
         const before = consoleDiv.scrollTop;
         const maxScroll = Math.max(0, consoleDiv.scrollHeight - consoleDiv.clientHeight);
         const target = Math.min(maxScroll, before + step);
-        consoleDiv.scrollTop = target;
-        if (typeof consoleDiv.scrollTo === 'function') {
-            consoleDiv.scrollTo(0, target);
+        if (typeof consoleDiv.scrollBy === 'function') {
+            consoleDiv.scrollBy(0, step);
         }
+        consoleDiv.scrollTop = target;
         const after = consoleDiv.scrollTop;
         originalLog('[ConsoleScroll] RED old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
@@ -148,10 +148,10 @@ import { configWrite } from "./config.js";
         const step = Math.max(180, Math.floor(consoleDiv.clientHeight * 0.85));
         const before = consoleDiv.scrollTop;
         const target = Math.max(0, before - step);
-        consoleDiv.scrollTop = target;
-        if (typeof consoleDiv.scrollTo === 'function') {
-            consoleDiv.scrollTo(0, target);
+        if (typeof consoleDiv.scrollBy === 'function') {
+            consoleDiv.scrollBy(0, -step);
         }
+        consoleDiv.scrollTop = target;
         const after = consoleDiv.scrollTop;
         originalLog('[ConsoleScroll] GREEN old=', before, 'new=', after, 'step=', step, 'h=', consoleDiv.clientHeight, 'sh=', consoleDiv.scrollHeight);
 
