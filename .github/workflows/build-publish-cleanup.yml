@@ -291,28 +291,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          BRANCH="${GITHUB_REF_NAME}"
           GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
 
-          URLS=""
+          URLS=$(printf "%s\n" \
+            "${GH_BASE}@${BRANCH}" \
+            "${GH_BASE}@${BRANCH}/package.json" \
+            "${GH_BASE}@${BRANCH}/dist/userScript.js" \
+            "${GH_BASE}@${BRANCH}/dist/service.js" \
+            "${GH_BASE}/blob/${BRANCH}/package.json" \
+            "${GH_BASE}/blob/${BRANCH}/dist/userScript.js" \
+            "${GH_BASE}/blob/${BRANCH}/dist/service.js" \
+            | paste -sd, -)
 
-          # GitHub repo URLs - extract_features branch
-          URLS+="${GH_BASE}@extract_features,"
-          URLS+="${GH_BASE}@extract_features/package.json,"
-          URLS+="${GH_BASE}@extract_features/dist/userScript.js,"
-          URLS+="${GH_BASE}@extract_features/dist/service.js,"
-
-          URLS+="${GH_BASE}/blob/extract_features/package.json,"
-          URLS+="${GH_BASE}/blob/extract_features/dist/userScript.js,"
-          URLS+="${GH_BASE}/blob/extract_features/dist/service.js,"
-
-          # Purge entire repo (all branches/tags) usually doesn't work, but kept for parity
-          # URLS+="${GH_BASE}@*"
-
-          echo "urls=${URLS}" >> $GITHUB_OUTPUT
+          echo "urls=${URLS}" >> "$GITHUB_OUTPUT"
           echo "Generated CDN URLs:"
-          echo "${URLS}" | tr ',' '\n'
+          printf "%s\n" "${URLS}" | tr ',' '\n'
 
       - name: Purge jsDelivr cache
+        if: steps.cdn_urls.outputs.urls != ''
         uses: egad13/purge-jsdelivr-cache@v1
         with:
           url: ${{ steps.cdn_urls.outputs.urls }}

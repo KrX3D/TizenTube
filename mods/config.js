@@ -50,7 +50,7 @@ const defaultConfig = {
   enableHideEndScreenCards: false,
   enableYouThereRenderer: true,
   lastAnnouncementCheck: 0,
-  enableScreenDimming: false,
+  enableScreenDimming: true,
   dimmingTimeout: 60,
   dimmingOpacity: 0.5,
   enablePaidPromotionOverlay: true,
