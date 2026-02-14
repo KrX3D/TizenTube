@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
-const LOG_SHORTS = false;   // Set false to disable shorts logging  
+const LOG_SHORTS = true;   // Set false to disable shorts logging  
 const LOG_WATCHED = true;  // Set true to enable verbose watched-video logging
 
 // ⭐ PERFORMANCE: Read debug setting ONCE and cache it globally
@@ -443,7 +443,7 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
-  // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
+  // ⭐ PLAYLIST SAFEGUARD: do not keep helper tiles (they break layout/focus on TV)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
     // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
@@ -452,25 +452,30 @@ function directFilterArray(arr, page, context = '') {
       return [];  // Return empty - we're showing only specific videos
     }
     
-    // ⭐ NORMAL MODE: Keep helper for scrolling
-    const lastVideo = arr[arr.length - 1];
-    const lastVideoId = lastVideo.tileRenderer?.contentId || 
-                      lastVideo.videoRenderer?.videoId || 
-                      lastVideo.playlistVideoRenderer?.videoId ||
-                      lastVideo.gridVideoRenderer?.videoId ||
-                      lastVideo.compactVideoRenderer?.videoId ||
-                      'unknown';
-    
-    console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
-    
-    // Store it
-    window._lastHelperVideos = [lastVideo];
+    if (DEBUG_ENABLED) {
+      console.log('[HELPER] ALL FILTERED - helper suppressed, returning empty batch');
+    }
+    window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
-    window._playlistScrollHelpers.add(lastVideoId);
+    return [];
+  }
+  
+  // ⭐ COLLECTION MODE: Track unwatched videos
+  if (isPlaylistPage && isInCollectionMode()) {
+    // Collect all unwatched video IDs from this batch
+    filtered.forEach(item => {
+      const videoId = item.tileRenderer?.contentId || 
+                     item.videoRenderer?.videoId || 
+                     item.playlistVideoRenderer?.videoId ||
+                     item.gridVideoRenderer?.videoId ||
+                     item.compactVideoRenderer?.videoId;
+      
+      if (videoId && !window._collectedUnwatched.includes(videoId)) {
+        window._collectedUnwatched.push(videoId);
+      }
+    });
     
-    console.log('[HELPER] Stored NEW helper (replaced old). Helper ID:', lastVideoId);
-    
-    return [lastVideo];
+    console.log('[COLLECTION] 🔄 Batch complete. Total unwatched collected:', window._collectedUnwatched.length);
   }
   
   // ⭐ COLLECTION MODE: Track unwatched videos
@@ -559,7 +564,11 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
             if (LOG_SHORTS && DEBUG_ENABLED) {
               console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
             }
-            collectVideoIdsFromShelf(shelf).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+            const ids = collectVideoIdsFromShelf(shelf);
+            ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+            if (LOG_SHORTS) {
+              console.log('[SCAN] Shorts shelf removed:', shelfTitle, '| ids=', ids.length, '| path=', path);
+            }
             const stack = [shelf];
             while (stack.length) {
               const node = stack.pop();
@@ -1792,10 +1801,14 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-          if (DEBUG_ENABLED) {
+          if (DEBUG_ENABLED || LOG_SHORTS) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
-          collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+          const ids = collectVideoIdsFromShelf(shelve);
+          ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+          if (LOG_SHORTS) {
+            console.log('[SHELF_PROCESS] Shorts shelf removed:', shelfTitle, '| ids=', ids.length, '| page=', page);
+          }
           shelves.splice(i, 1);
           shelvesRemoved++;
           continue; // Skip to next shelf
@@ -2401,7 +2414,8 @@ function logChunked(prefix, text, chunkSize = 1000) {
 
 
 function cleanupPlaylistHelperTiles() {
-  if (getCurrentPage() !== 'playlist') return;
+  const page = getCurrentPage();
+  if (page !== 'playlist' && page !== 'playlists') return;
 }
 
 
@@ -2436,12 +2450,15 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  const existingCustom = document.querySelector('#tizentube-collection-btn');
-  if (existingCustom) existingCustom.remove();
   const existingHost = document.querySelector('#tizentube-collection-host');
+  if (existingHost && existingHost.querySelector('#tizentube-collection-btn')) {
+    if (DEBUG_ENABLED) {
+      console.log('[PLAYLIST_BUTTON] Existing custom button host found; skip reinject (attempt ' + attempt + ')');
+    }
+    return;
+  }
   if (existingHost) existingHost.remove();
 
-  const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = document.createElement('button');
   customBtn.id = 'tizentube-collection-btn';
   customBtn.type = 'button';
@@ -2475,6 +2492,29 @@ function addPlaylistControlButtons(attempt = 1) {
   const targetHost = (parentContainer || container);
   targetHost.style.overflow = 'visible';
 
+  if (attempt === 1) {
+    const lastDumpUrl = window._playlistButtonDumpUrl;
+    if (lastDumpUrl !== window.location.href) {
+      window._playlistButtonDumpUrl = window.location.href;
+      try {
+        const dump = {
+          page,
+          baseButtons: baseButtons.length,
+          parentButtons: parentButtons.length,
+          targetTag: targetHost.tagName,
+          targetClass: targetHost.className,
+          targetOuterHTML: targetHost.outerHTML,
+          parentTag: targetHost.parentElement?.tagName,
+          parentClass: targetHost.parentElement?.className,
+          parentOuterHTML: targetHost.parentElement?.outerHTML,
+        };
+        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
+      } catch (e) {
+        console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
+      }
+    }
+  }
+
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
   buttonHost.style.display = 'block';
@@ -2482,9 +2522,8 @@ function addPlaylistControlButtons(attempt = 1) {
   buttonHost.style.width = '100%';
   buttonHost.appendChild(customBtn);
 
-  // Insert as sibling below the native button row (not inside it),
-  // so TV focus order does not wedge the custom button between native actions.
-  targetHost.insertAdjacentElement('afterend', buttonHost);
+  const insertionRoot = targetHost.parentElement || targetHost;
+  insertionRoot.appendChild(buttonHost);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
@@ -2499,7 +2538,8 @@ if (typeof window !== 'undefined') {
   setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);
   let lastPlaylistButtonHref = window.location.href;
   setInterval(() => {
-    if (getCurrentPage() === 'playlist') {
+    const page = getCurrentPage();
+    if (page === 'playlist' || page === 'playlists') {
       cleanupPlaylistHelperTiles();
     }
     if (window.location.href !== lastPlaylistButtonHref) {
