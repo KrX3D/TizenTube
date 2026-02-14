@@ -82,6 +82,7 @@ function directFilterArray(arr, page, context = '') {
   
   // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
+  
   const shortsEnabled = configRead('enableShorts');
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -280,6 +281,11 @@ function directFilterArray(arr, page, context = '') {
   // ⭐ PLAYLIST SAFEGUARD: Keep 1 video if ALL were filtered (to enable scrolling)
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
+    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
+    if (filterIds) {
+      console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
+      return [];  // Return empty - we're showing only specific videos
+    }
     
     // ⭐ NORMAL MODE: Keep helper for scrolling
     const lastVideo = arr[arr.length - 1];
@@ -825,11 +831,25 @@ JSON.parse = function () {
         console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
         
       }
+  
+      setTimeout(() => {
+        detectPlaylistButtons();
+      }, 2000);
+      
+      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
+      setTimeout(() => {
+        addPlaylistControlButtons();
+      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
     }
     console.log('═══════════════════════════════════════════════════════');
+  
+    // ⭐ Trigger button detection
+    setTimeout(() => {
+      detectPlaylistButtons();
+    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -1145,7 +1165,7 @@ JSON.parse = function () {
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlists', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   //const criticalPages = ['subscriptions', 'library', 'history', 'channel'];
 
   if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
@@ -1497,7 +1517,27 @@ function isShortItem(item) {
       }
     }
   }
-  
+
+  // Method 9: Check if URL path contains reelItemRenderer or shorts patterns
+  if (item.richItemRenderer?.content?.reelItemRenderer) {
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 9 (reelItemRenderer)');
+    }
+    return true;
+  }
+
+  // Method 10: Check thumbnail aspect ratio (shorts are vertical ~9:16)
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
+    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+    if (thumb && thumb.height > thumb.width) {
+      if (DEBUG_ENABLED) {
+        console.log('[SHORTS_DIAGNOSTIC] ✂️ IS SHORT - Method 10 (vertical thumbnail)');
+        console.log('[SHORTS_DIAGNOSTIC] Dimensions:', thumb.width, 'x', thumb.height);
+      }
+      return true;
+    }
+  }
+
   // NOT A SHORT
   if (DEBUG_ENABLED && LOG_SHORTS) {
     console.log('[SHORTS_DIAGNOSTIC] ❌ NOT A SHORT:', videoId);
@@ -1636,7 +1676,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
+        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
