@@ -130,7 +130,10 @@ function directFilterArray(arr, page, context = '') {
     
     console.log('[CLEANUP] Helper IDs to remove:', helperIdsToRemove);
     
-    // ⭐ DON'T insert helpers into new batch - they're already rendered!
+    // ⭐ CRITICAL: INSERT old helpers into the NEW batch
+    // This way they get filtered out cleanly with the rest!
+    arr.unshift(...window._lastHelperVideos);
+    
     // Just track them for removal if they appear
     trackRemovedPlaylistHelpers(helperIdsToRemove);
     
