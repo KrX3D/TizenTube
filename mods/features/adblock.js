@@ -111,7 +111,7 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   // Check if we should filter watched videos on this page (EXACT match)
-  const shouldHideWatched = hideWatchedEnabled && configPages.includes(page);
+  const shouldHideWatched = hideWatchedEnabled && (configPages.length === 0 || configPages.includes(page));
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldFilterShorts = !shortsEnabled;
@@ -316,12 +316,6 @@ function directFilterArray(arr, page, context = '') {
                       'unknown';
     
     console.log('[HELPER] ALL FILTERED - Keeping 1 helper:', lastVideoId);
-    
-    // ⭐ MARK the helper with a special title so we can identify it visually
-    if (lastVideo.tileRenderer?.metadata?.tileMetadataRenderer?.title) {
-      const originalTitle = lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText;
-      lastVideo.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = '⏩ SCROLL HELPER - ' + originalTitle;
-    }
     
     // Store it
     window._lastHelperVideos = [lastVideo];
@@ -849,7 +843,11 @@ JSON.parse = function () {
       if (isInCollectionMode()) {
         console.log('═══ 🔄 COLLECTION MODE: Last batch reached!');
         console.log('═══ 🔄 Total unwatched videos collected:', window._collectedUnwatched.length);
-        
+
+        // Switch to filter mode after a delay (let current batch render)
+        setTimeout(() => {
+          finishCollectionAndFilter(window._collectedUnwatched);
+        }, 2000);
       }
   
       setTimeout(() => {
@@ -1558,11 +1556,6 @@ function isShortItem(item) {
 }
 
 function getShelfTitle(shelf) {
-  const shelfRendererTitle = shelf?.shelfRenderer?.shelfHeaderRenderer?.title;
-  const richShelfTitle = shelf?.richShelfRenderer?.title;
-  const richSectionTitle = shelf?.richSectionRenderer?.content?.richShelfRenderer?.title;
-  const gridHeaderTitle = shelf?.gridRenderer?.header?.gridHeaderRenderer?.title;
-
   const titleText = (title) => {
     if (!title) return '';
     if (title.simpleText) return title.simpleText;
@@ -1570,12 +1563,23 @@ function getShelfTitle(shelf) {
     return '';
   };
 
-  return (
-    titleText(shelfRendererTitle) ||
-    titleText(richShelfTitle) ||
-    titleText(richSectionTitle) ||
-    titleText(gridHeaderTitle)
-  );
+  const titlePaths = [
+    shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
+    shelf?.headerRenderer?.shelfHeaderRenderer?.title,
+    shelf?.richShelfRenderer?.title,
+    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
+    shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
+    shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
+  ];
+
+  for (const rawTitle of titlePaths) {
+    const text = titleText(rawTitle);
+    if (text) return text;
+  }
+
+  return '';
 }
 
 
@@ -1669,7 +1673,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
-        if (shelfTitle && shelfTitle.trim().toLowerCase() === 'shorts') {
+        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
           if (DEBUG_ENABLED) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
           }
@@ -1681,15 +1685,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
         // ⭐ Also log when we DON'T remove (for debugging)
         if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
         }
         if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
           console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
@@ -1739,7 +1734,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1780,7 +1775,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1821,7 +1816,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             items = hideVideo(items);
             totalHidden += (beforeHide - items.length);
           }
-          if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+          if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
             if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
             items = originalItems;
           }
@@ -1863,7 +1858,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           contents = hideVideo(contents);
           totalHidden += (beforeHide - contents.length);
         }
-        if (shouldHideWatched && shouldProtectShelfFromEmpty && contents.length === 0 && originalContents.length > 0) {
+        if (shouldHideWatched && contents.length === 0 && originalContents.length > 0) {
           if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
           contents = originalContents;
         }
@@ -1923,7 +1918,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           items = hideVideo(items);
           totalHidden += (beforeHide - items.length);
         }
-        if (shouldHideWatched && shouldProtectShelfFromEmpty && items.length === 0 && originalItems.length > 0) {
+        if (shouldHideWatched && items.length === 0 && originalItems.length > 0) {
           if (DEBUG_ENABLED) console.log('[SHELF_PROCESS] Watched filter would empty shelf; keeping original items to avoid black screen');
           items = originalItems;
         }
@@ -2338,20 +2333,13 @@ function addPlaylistControlButtons(attempt = 1) {
 
   customBtn.style.cssText = templateBtn.style.cssText;
   customBtn.style.position = 'relative';
-  customBtn.style.top = 'auto';
-  customBtn.style.left = 'auto';
-  customBtn.style.transform = 'none';
-  customBtn.style.display = 'block';
+  customBtn.style.display = 'inline-flex';
   customBtn.style.visibility = 'visible';
   customBtn.style.opacity = '1';
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.zIndex = '5';
-  customBtn.style.marginTop = '32px';
-
-  const templateHeight = templateBtn.getBoundingClientRect().height || 72;
-  const minHeightNeeded = container.scrollHeight + templateHeight + 40;
-  container.style.minHeight = `${Math.max(minHeightNeeded, container.clientHeight + templateHeight + 24)}px`;
-  container.style.overflow = 'visible';
+  customBtn.style.marginTop = '0';
+  customBtn.style.marginLeft = '12px';
+  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
 
   customBtn.addEventListener('click', (evt) => {
     evt.preventDefault();
@@ -2363,7 +2351,7 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   });
 
-  container.appendChild(customBtn);
+  (templateBtn.parentElement || container).appendChild(customBtn);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);

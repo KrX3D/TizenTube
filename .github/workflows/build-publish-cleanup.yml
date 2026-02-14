@@ -487,7 +487,7 @@ jobs:
           set -euo pipefail
 
           NPM_BASE="https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}"
-          GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
+          # GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
 
           URLS=""
 
@@ -505,37 +505,37 @@ jobs:
           URLS+="${NPM_BASE}/dist/userScript.js,"
           URLS+="${NPM_BASE}/dist/service.js,"
 
-          URLS+="${NPM_BASE}@*," # If Git is added than this is needed
-          #URLS+="${NPM_BASE}@*"
+          # URLS+="${NPM_BASE}@*," # If Git is added than this is needed
+          URLS+="${NPM_BASE}@*"
 
           # GitHub repo URLs - main branch
-          URLS+="${GH_BASE}@main,"
-          URLS+="${GH_BASE}@main/package.json,"
-          URLS+="${GH_BASE}@main/dist/userScript.js,"
-          URLS+="${GH_BASE}@main/dist/service.js,"
+          # URLS+="${GH_BASE}@main,"
+          # URLS+="${GH_BASE}@main/package.json,"
+          # URLS+="${GH_BASE}@main/dist/userScript.js,"
+          # URLS+="${GH_BASE}@main/dist/service.js,"
 
           # GitHub repo URLs - master branch
-          URLS+="${GH_BASE}@master,"
-          URLS+="${GH_BASE}@master/package.json,"
-          URLS+="${GH_BASE}@master/dist/userScript.js,"
-          URLS+="${GH_BASE}@master/dist/service.js,"
+          # URLS+="${GH_BASE}@master,"
+          # URLS+="${GH_BASE}@master/package.json,"
+          # URLS+="${GH_BASE}@master/dist/userScript.js,"
+          # URLS+="${GH_BASE}@master/dist/service.js,"
 
           # GitHub repo URLs - latest branch/tag
-          URLS+="${GH_BASE}@latest,"
-          URLS+="${GH_BASE}@latest/package.json,"
-          URLS+="${GH_BASE}@latest/dist/userScript.js,"
-          URLS+="${GH_BASE}@latest/dist/service.js,"
+          # URLS+="${GH_BASE}@latest,"
+          # URLS+="${GH_BASE}@latest/package.json,"
+          # URLS+="${GH_BASE}@latest/dist/userScript.js,"
+          # URLS+="${GH_BASE}@latest/dist/service.js,"
 
-          URLS+="${GH_BASE}/package.json,"
-          URLS+="${GH_BASE}/dist/userScript.js,"
-          URLS+="${GH_BASE}/dist/service.js,"
+          # URLS+="${GH_BASE}/package.json,"
+          # URLS+="${GH_BASE}/dist/userScript.js,"
+          # URLS+="${GH_BASE}/dist/service.js,"
 
-          URLS+="${GH_BASE}/blob/main/package.json,"
-          URLS+="${GH_BASE}/blob/main/dist/userScript.js,"
-          URLS+="${GH_BASE}/blob/main/dist/service.js,"
+          # URLS+="${GH_BASE}/blob/main/package.json,"
+          # URLS+="${GH_BASE}/blob/main/dist/userScript.js,"
+          # URLS+="${GH_BASE}/blob/main/dist/service.js,"
 
           # Purge entire repo (all branches/tags) usually doesn't work, but kept for parity
-          URLS+="${GH_BASE}@*"
+          # URLS+="${GH_BASE}@*"
 
           echo "urls=${URLS}" >> $GITHUB_OUTPUT
           echo "Generated CDN URLs:"
