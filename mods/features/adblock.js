@@ -39,6 +39,9 @@ function trackRemovedPlaylistHelpers(helperIds) {
   if (!window._playlistRemovedHelpers) {
     window._playlistRemovedHelpers = new Set();
   }
+  if (!window._playlistRemovedHelperKeys) {
+    window._playlistRemovedHelperKeys = new Set();
+  }
   if (!window._playlistRemovedHelperQueue) {
     window._playlistRemovedHelperQueue = [];
   }
@@ -85,6 +88,36 @@ function collectVideoIdsFromShelf(shelf) {
   pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
   pushFrom(shelf?.gridRenderer?.items);
   return ids;
+}
+
+
+function getVideoKey(item) {
+  const id = getVideoId(item);
+  const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+    item?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.compactVideoRenderer?.title?.simpleText || '';
+  return `${id || 'unknown'}|${title}`;
+}
+
+function trackRemovedPlaylistHelperKeys(helperVideos) {
+  window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
+  window._playlistRemovedHelperKeyQueue = window._playlistRemovedHelperKeyQueue || [];
+
+  helperVideos.forEach((video) => {
+    const key = getVideoKey(video);
+    if (!key || key === 'unknown|') return;
+    if (!window._playlistRemovedHelperKeys.has(key)) {
+      window._playlistRemovedHelperKeys.add(key);
+      window._playlistRemovedHelperKeyQueue.push(key);
+    }
+  });
+
+  const MAX_KEYS = 40;
+  while (window._playlistRemovedHelperKeyQueue.length > MAX_KEYS) {
+    const oldest = window._playlistRemovedHelperKeyQueue.shift();
+    window._playlistRemovedHelperKeys.delete(oldest);
+  }
 }
 
 function isPageConfigured(configPages, page) {
@@ -166,6 +199,9 @@ function directFilterArray(arr, page, context = '') {
   if (!window._playlistRemovedHelpers) {
     window._playlistRemovedHelpers = new Set();
   }
+  if (!window._playlistRemovedHelperKeys) {
+    window._playlistRemovedHelperKeys = new Set();
+  }
   
   // ⭐ DIAGNOSTIC: Log what we're checking
   if (isPlaylistPage && DEBUG_ENABLED) {
@@ -206,6 +242,7 @@ function directFilterArray(arr, page, context = '') {
     // ⭐ DON'T insert helpers into new batch - they're already rendered!
     // Just track them for removal if they appear
     trackRemovedPlaylistHelpers(helperIdsToRemove);
+    trackRemovedPlaylistHelperKeys(window._lastHelperVideos);
     
     // Clear helpers immediately (don't wait for last batch)
     if (!isLastBatch) {
@@ -259,9 +296,10 @@ function directFilterArray(arr, page, context = '') {
       return false;
     }
 
-    if (isPlaylistPage && window._playlistRemovedHelpers.has(videoId)) {
+    const videoKey = getVideoKey(item);
+    if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys?.has(videoKey))) {
       if (DEBUG_ENABLED) {
-        console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId);
+        console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId, '| key=', videoKey);
       }
       return false;
     }
@@ -389,6 +427,7 @@ function directFilterArray(arr, page, context = '') {
       }
       const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
       trackRemovedPlaylistHelpers(helperIdsToTrack);
+      trackRemovedPlaylistHelperKeys(window._lastHelperVideos);
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
@@ -2275,27 +2314,12 @@ function logChunked(prefix, text, chunkSize = 1000) {
 function cleanupPlaylistHelperTiles() {
   if (getCurrentPage() !== 'playlist') return;
 
-  const helperIds = window._playlistRemovedHelpers ? Array.from(window._playlistRemovedHelpers) : [];
-  const tiles = Array.from(document.querySelectorAll('ytlr-tile-renderer'));
-  if (tiles.length === 0) return;
-
-  let removed = 0;
-  const activeHelperIds = window._playlistScrollHelpers ? Array.from(window._playlistScrollHelpers) : [];
-  const allIds = Array.from(new Set([...helperIds, ...activeHelperIds])).filter(Boolean);
-
-  tiles.forEach((tile) => {
-    const text = tile.textContent || '';
-    const html = tile.outerHTML || '';
-    const hasHelperLabel = text.includes('SCROLL HELPER') || html.includes('SCROLL HELPER');
-    const hasRemovedId = allIds.some((id) => id && (text.includes(id) || html.includes(id)));
-    if (hasHelperLabel || hasRemovedId) {
-      tile.remove();
-      removed++;
-    }
-  });
-
-  if (removed > 0 && DEBUG_ENABLED) {
-    console.log('[HELPER_CLEANUP_DOM] removed helper tiles:', removed);
+  // Do not remove DOM nodes directly (causes blank placeholders with virtualized rows).
+  // Rely on data-level filtering by _playlistRemovedHelpers/_playlistRemovedHelperKeys.
+  if (DEBUG_ENABLED) {
+    const helperIds = window._playlistRemovedHelpers ? window._playlistRemovedHelpers.size : 0;
+    const helperKeys = window._playlistRemovedHelperKeys ? window._playlistRemovedHelperKeys.size : 0;
+    console.log('[HELPER_CLEANUP_DOM] skipping direct DOM removal; ids=', helperIds, 'keys=', helperKeys);
   }
 }
 
@@ -2377,6 +2401,8 @@ function addPlaylistControlButtons(attempt = 1) {
   targetHost.style.overflow = 'visible';
   targetHost.style.minHeight = `${Math.max(targetHost.scrollHeight + 120, targetHost.clientHeight + 120)}px`;
 
+  const insertionRoot = targetHost.closest('ytlr-playlist-header-renderer') || targetHost.parentElement || targetHost;
+
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
   buttonHost.style.display = 'block';
@@ -2387,11 +2413,7 @@ function addPlaylistControlButtons(attempt = 1) {
   buttonHost.style.clear = 'both';
   buttonHost.appendChild(customBtn);
 
-  if (targetHost.parentElement) {
-    targetHost.parentElement.insertBefore(buttonHost, targetHost.nextSibling);
-  } else {
-    targetHost.appendChild(buttonHost);
-  }
+  insertionRoot.appendChild(buttonHost);
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
