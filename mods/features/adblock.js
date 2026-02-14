@@ -1263,12 +1263,6 @@ function isShortItem(item) {
       console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
       console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
       
-      // Check for shorts keywords in the entire item JSON
-      const itemJson = JSON.stringify(item);
-      console.log('🔬 Contains "/shorts/":', itemJson.includes('/shorts/'));
-      console.log('🔬 Contains "reel":', itemJson.toLowerCase().includes('reel'));
-      console.log('🔬 Contains "short" (lowercase):', itemJson.toLowerCase().includes('"short'));
-      
       // Log title so you can identify it
       if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
         console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
