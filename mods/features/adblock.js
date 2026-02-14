@@ -1328,15 +1328,11 @@ function isShortItem(item) {
     }
     
     // ⭐ ONLY log videos OVER 90 seconds (to find long shorts that aren't being filtered)
-    if (durationSeconds && durationSeconds > 90) {
+    if (DEBUG_ENABLED && LOG_SHORTS && durationSeconds && durationSeconds > 90) {
       console.log('🔬 VIDEO >90s:', videoId, '| Duration:', durationSeconds, 'sec');
-      console.log('🔬 ⚠️ Is this a SHORT or REGULAR? (you tell me)');
-      
-      // Log title so you can identify it
       if (item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText) {
         console.log('🔬 Title:', item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText);
       }
-      
       console.log('🔬 ---');
     }
   }
@@ -1654,53 +1650,11 @@ function processShelves(shelves, shouldAddPreviews = true) {
     window._lastLoggedPage = page;
   }
 
-  // ⭐ ENHANCED DIAGNOSTIC LOGGING for shelf titles
+  // Lightweight diagnostics only (full per-shelf dumps are too slow on TV)
   if (DEBUG_ENABLED && (page === 'subscriptions' || page.includes('channel'))) {
-    console.log('$$$$$$$$$$$ SHELF PROCESSING START $$$$$$$$$$$');
-    console.log('$$$$$$$$$$$ Page:', page);
-    console.log('$$$$$$$$$$$ Shorts enabled:', shortsEnabled);
-    console.log('$$$$$$$$$$$ Total shelves:', shelves.length);
-    
-    console.log('📚📚📚 ALL SHELF TITLES:');
-    shelves.forEach((shelf, idx) => {
-      console.log(`📚 === Shelf ${idx} ===`);
-      console.log('📚 Top-level keys:', Object.keys(shelf));
-      
-      // Check each renderer type
-      if (shelf.shelfRenderer) {
-        console.log('📚 shelfRenderer keys:', Object.keys(shelf.shelfRenderer));
-        if (shelf.shelfRenderer.headerRenderer) {
-          console.log('📚   headerRenderer keys:', Object.keys(shelf.shelfRenderer.headerRenderer));
-        }
-        if (shelf.shelfRenderer.content) {
-          console.log('📚   content keys:', Object.keys(shelf.shelfRenderer.content));
-        }
-      }
-      
-      if (shelf.richShelfRenderer) {
-        console.log('📚 richShelfRenderer keys:', Object.keys(shelf.richShelfRenderer));
-        console.log('📚   title:', shelf.richShelfRenderer.title);
-      }
-      
-      if (shelf.gridRenderer) {
-        console.log('📚 gridRenderer keys:', Object.keys(shelf.gridRenderer));
-        if (shelf.gridRenderer.header) {
-          console.log('📚   header keys:', Object.keys(shelf.gridRenderer.header));
-        }
-      }
-      
-      if (shelf.richSectionRenderer) {
-        console.log('📚 richSectionRenderer keys:', Object.keys(shelf.richSectionRenderer));
-      }
-      
-      // Use getShelfTitle function
-      const extractedTitle = getShelfTitle(shelf);
-      console.log('📚 Final extracted title:', extractedTitle || '(none)');
-      console.log('📚 ---');
-    });
-    console.log('📚📚📚 END SHELF TITLES');
+    console.log('[SHELF_PROCESS] page=', page, '| shelves=', shelves.length, '| shortsEnabled=', shortsEnabled);
   }
-  
+
   let totalItemsBefore = 0;
   let totalItemsAfter = 0;
   let shelvesRemoved = 0;
@@ -2322,6 +2276,30 @@ function logChunked(prefix, text, chunkSize = 1000) {
 }
 
 
+function cleanupPlaylistHelperTiles() {
+  if (getCurrentPage() !== 'playlist') return;
+
+  const helperIds = window._playlistRemovedHelpers ? Array.from(window._playlistRemovedHelpers) : [];
+  const tiles = Array.from(document.querySelectorAll('ytlr-tile-renderer'));
+  if (tiles.length === 0) return;
+
+  let removed = 0;
+  tiles.forEach((tile) => {
+    const text = tile.textContent || '';
+    const hasHelperLabel = text.includes('SCROLL HELPER');
+    const hasRemovedId = helperIds.some((id) => id && text.includes(id));
+    if (hasHelperLabel || hasRemovedId) {
+      tile.remove();
+      removed++;
+    }
+  });
+
+  if (removed > 0 && DEBUG_ENABLED) {
+    console.log('[HELPER_CLEANUP_DOM] removed helper tiles:', removed);
+  }
+}
+
+
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
@@ -2353,8 +2331,10 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  const existingCustom = container.querySelector('#tizentube-collection-btn');
+  const existingCustom = document.querySelector('#tizentube-collection-btn');
   if (existingCustom) existingCustom.remove();
+  const existingHost = document.querySelector('#tizentube-collection-host');
+  if (existingHost) existingHost.remove();
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
@@ -2395,8 +2375,20 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const targetHost = (parentContainer || container);
   targetHost.style.overflow = 'visible';
-  targetHost.style.minHeight = `${Math.max(targetHost.scrollHeight + 96, targetHost.clientHeight + 96)}px`;
-  targetHost.appendChild(customBtn);
+  targetHost.style.minHeight = `${Math.max(targetHost.scrollHeight + 120, targetHost.clientHeight + 120)}px`;
+
+  const buttonHost = document.createElement('div');
+  buttonHost.id = 'tizentube-collection-host';
+  buttonHost.style.display = 'block';
+  buttonHost.style.marginTop = '36px';
+  buttonHost.style.width = '100%';
+  buttonHost.appendChild(customBtn);
+
+  if (targetHost.parentElement) {
+    targetHost.parentElement.insertBefore(buttonHost, targetHost.nextSibling);
+  } else {
+    targetHost.appendChild(buttonHost);
+  }
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
@@ -2408,12 +2400,15 @@ function addPlaylistControlButtons(attempt = 1) {
 
 
 if (typeof window !== 'undefined') {
-  setTimeout(() => addPlaylistControlButtons(1), 2500);
+  setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);
   let lastPlaylistButtonHref = window.location.href;
   setInterval(() => {
+    if (getCurrentPage() === 'playlist') {
+      cleanupPlaylistHelperTiles();
+    }
     if (window.location.href !== lastPlaylistButtonHref) {
       lastPlaylistButtonHref = window.location.href;
-      setTimeout(() => addPlaylistControlButtons(1), 1800);
+      setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
     }
   }, 1200);
 }

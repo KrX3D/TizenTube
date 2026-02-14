@@ -171,3 +171,9 @@ div[idomkey="shadow"] {
 [class*="TXB27d"] {
   overflow: visible !important;
 }
+
+#tizentube-collection-host {
+  display: block !important;
+  width: 100% !important;
+  overflow: visible !important;
+}
