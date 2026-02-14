@@ -69,7 +69,6 @@ function execute_once_dom_loaded() {
   uiContainer.addEventListener(
     'keydown',
     (evt) => {
-      console.info('uiContainer key event:', evt.type, evt.keyCode, evt);
       if (evt.keyCode !== 404 && evt.keyCode !== 172) {
         if (evt.keyCode in ARROW_KEY_CODE) {
           navigate(ARROW_KEY_CODE[evt.keyCode]);
@@ -128,13 +127,6 @@ function execute_once_dom_loaded() {
   } catch (e) { }
 
   var eventHandler = (evt) => {
-    console.info(
-      'Key event:',
-      evt.type,
-      evt.keyCode,
-      evt.keyCode,
-      evt.defaultPrevented
-    );
     
     // Screen dimming logic
     if (configRead('enableScreenDimming')) {
@@ -155,47 +147,45 @@ function execute_once_dom_loaded() {
     // ========================================================================
     
     if (evt.keyCode === 403 || evt.keyCode === 115) { // RED = Scroll UP
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            console.log('[Console] RED pressed - Scrolling UP');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.scrollConsoleUp === 'function') {
+                console.log('[CONSOLE_SCROLL] RED invoke scrollConsoleUp type=' + evt.type);
                 window.scrollConsoleUp();
             }
         }
         return false;
     }
     else if (evt.keyCode === 404 || evt.keyCode === 172) { // GREEN = Scroll DOWN
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            console.log('[Console] GREEN pressed - Scrolling DOWN');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.scrollConsoleDown === 'function') {
+                console.log('[CONSOLE_SCROLL] GREEN invoke scrollConsoleDown type=' + evt.type);
                 window.scrollConsoleDown();
             }
         }
         return false;
     }
-    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Jump to TOP
+    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete last log line
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            console.log('[Console] YELLOW pressed - Jump to TOP');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
-            if (typeof window.enableConsoleAutoScroll === 'function') {
-                window.enableConsoleAutoScroll();
+            if (typeof window.deleteConsoleLastLog === 'function') {
+                window.deleteConsoleLastLog();
             }
         }
         return false;
     }
     else if (evt.keyCode === 406 || evt.keyCode === 191) { // BLUE = Toggle Console
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
         if (evt.type === 'keydown') {
-            console.log('[Console] BLUE pressed - Toggling console');
-            evt.preventDefault();
-            evt.stopPropagation();
-            evt.stopImmediatePropagation();
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
             }
