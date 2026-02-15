@@ -13,8 +13,7 @@ function PatchSettings(settingsObject) {
                 parameters: []
             }
         },
-        `Open TizenTube Settings`,
-        `Version: ${APP_VERSION}`,
+        `Open TizenTube Settings Version: ${APP_VERSION}`,
         'https://www.gstatic.com/ytlr/img/parent_code.png'
     )
 

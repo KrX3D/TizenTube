@@ -355,6 +355,7 @@ function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnai
     }
 }
 
+
 function scrollPaneRenderer(items) {
     return {
         scrollPaneRenderer: {

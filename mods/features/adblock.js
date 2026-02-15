@@ -2214,7 +2214,7 @@ function getCurrentPage() {
 }
 
 
-function logChunked(prefix, text, chunkSize = 800) {
+function logChunked(prefix, text, chunkSize = 3000) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
   // Visual console shows newest logs first; emit chunks in reverse so users
@@ -2296,7 +2296,7 @@ function addPlaylistControlButtons(attempt = 1) {
         buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 800);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 3000);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2321,6 +2321,7 @@ function addPlaylistControlButtons(attempt = 1) {
   // Keep native classes/structure for TV focus behavior, but remove inline positioning
   // that can pin the clone over native buttons.
   customBtn.removeAttribute('style');
+  customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', '0');
   customBtn.style.pointerEvents = 'auto';
@@ -2361,6 +2362,8 @@ function addPlaylistControlButtons(attempt = 1) {
   const innerButton = customBtn.querySelector('button');
   if (innerButton) {
     innerButton.style.pointerEvents = 'auto';
+    innerButton.style.position = 'static';
+    innerButton.style.transform = 'none';
     innerButton.removeAttribute('disabled');
     innerButton.setAttribute('tabindex', '0');
     innerButton.addEventListener('click', runRefresh);
