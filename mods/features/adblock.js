@@ -2238,6 +2238,7 @@ function cleanupPlaylistHelperTiles() {
 
   const removedIds = window._playlistRemovedHelpers || new Set();
   const removedKeys = window._playlistRemovedHelperKeys || new Set();
+  const currentHelperIds = new Set((window._lastHelperVideos || []).map((video) => getVideoId(video)).filter(Boolean));
   const candidates = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-grid-renderer ytlr-grid-video-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer, [data-video-id]');
   let removedCount = 0;
 
@@ -2248,7 +2249,7 @@ function cleanupPlaylistHelperTiles() {
     const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden/.test(text) || /continuation/.test(html);
     const key = `${videoId}:${text.slice(0, 80)}`;
 
-    if ((videoId && removedIds.has(videoId)) || removedKeys.has(key) || looksLikeHelper) {
+    if ((videoId && (removedIds.has(videoId) || currentHelperIds.has(videoId))) || removedKeys.has(key) || looksLikeHelper) {
       node.remove();
       removedCount += 1;
     }
@@ -2304,8 +2305,8 @@ function addPlaylistControlButtons(attempt = 1) {
       const existingCustomBtn = document.querySelector('#tizentube-collection-btn');
       const dump = {
         page,
-        baseButtons: baseButtons.length,
-        parentButtons: parentButtons.length,
+        baseButtonsBefore: baseButtons.length,
+        parentButtonsBefore: parentButtons.length,
         baseTag: baseContainer.tagName,
         baseClass: baseContainer.className,
         baseOuterHTML: baseContainer.outerHTML,
@@ -2348,6 +2349,14 @@ function addPlaylistControlButtons(attempt = 1) {
   // that can pin the clone over native buttons.
   customBtn.removeAttribute('style');
   customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+  customBtn.querySelectorAll('*').forEach((el) => {
+    if (el.style && (el.style.position === 'absolute' || (el.style.transform && el.style.transform !== 'none'))) {
+      el.style.position = 'static';
+      el.style.transform = 'none';
+      el.style.top = 'auto';
+      el.style.left = 'auto';
+    }
+  });
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', '0');
   customBtn.style.pointerEvents = 'auto';
@@ -2419,13 +2428,21 @@ function addPlaylistControlButtons(attempt = 1) {
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 
   try {
+    const postButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
+    const postButtonRects = postButtons.map((btn, idx) => {
+      const r = btn.getBoundingClientRect();
+      return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: btn.id || null };
+    });
+
     const afterDump = {
       page,
       attempt,
-      injectedButtonOuterHTML: customBtn.outerHTML,
-      injectedButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
+      clonedCustomButtonOuterHTML: customBtn.outerHTML,
+      clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
-      nativeButtonRects,
+      nativeButtonRectsBefore: nativeButtonRects,
+      parentButtonsAfter: postButtons.length,
+      nativeButtonRectsAfter: postButtonRects,
     };
     logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 20000);
   } catch (e) {
