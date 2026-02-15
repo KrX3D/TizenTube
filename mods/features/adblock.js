@@ -2244,7 +2244,8 @@ function cleanupPlaylistHelperTiles() {
   candidates.forEach((node) => {
     const videoId = node.getAttribute('data-video-id') || node.getAttribute('video-id') || node.dataset?.videoId || '';
     const text = (node.textContent || '').toLowerCase();
-    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden/.test(text);
+    const html = (node.innerHTML || '').toLowerCase();
+    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden/.test(text) || /continuation/.test(html);
     const key = `${videoId}:${text.slice(0, 80)}`;
 
     if ((videoId && removedIds.has(videoId)) || removedKeys.has(key) || looksLikeHelper) {
@@ -2300,6 +2301,7 @@ function addPlaylistControlButtons(attempt = 1) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
+      const existingCustomBtn = document.querySelector('#tizentube-collection-btn');
       const dump = {
         page,
         baseButtons: baseButtons.length,
@@ -2317,6 +2319,7 @@ function addPlaylistControlButtons(attempt = 1) {
         targetParentClass: targetHostForDump.parentElement?.className,
         targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
         buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
+        existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
       logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 20000);
@@ -2356,7 +2359,6 @@ function addPlaylistControlButtons(attempt = 1) {
   customBtn.removeAttribute('disablehybridnavinsubtree');
   customBtn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
   customBtn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
-  customBtn.querySelectorAll('[tabindex]').forEach((el) => el.setAttribute('tabindex', '0'));
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2392,6 +2394,12 @@ function addPlaylistControlButtons(attempt = 1) {
     innerButton.addEventListener('click', runRefresh);
   }
 
+  const nativeButtonRects = existingButtons.map((btn, idx) => {
+    const r = btn.getBoundingClientRect();
+    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width) };
+  });
+  console.log('[PLAYLIST_BUTTON] Native button rects:', JSON.stringify(nativeButtonRects));
+
   // Keep button row visible but avoid inflating height on every reinjection attempt.
   container.style.overflow = 'visible';
   const rowMinHeight = Math.max(container.scrollHeight, container.clientHeight, 90);
@@ -2409,6 +2417,20 @@ function addPlaylistControlButtons(attempt = 1) {
   const rect = customBtn.getBoundingClientRect();
   const crect = container.getBoundingClientRect();
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
+
+  try {
+    const afterDump = {
+      page,
+      attempt,
+      injectedButtonOuterHTML: customBtn.outerHTML,
+      injectedButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
+      containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
+      nativeButtonRects,
+    };
+    logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 20000);
+  } catch (e) {
+    console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
+  }
 }
 
 
