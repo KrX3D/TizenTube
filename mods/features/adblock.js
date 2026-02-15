@@ -2418,6 +2418,13 @@ function addPlaylistControlButtons(attempt = 1) {
   const existingButtons = useParent ? parentButtons : baseButtons;
   const currentUrl = window.location.href;
 
+  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
+    if (attempt === 1) {
+      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
+    }
+    return;
+  }
+
   console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
 
   if (existingButtons.length === 0) {
@@ -2456,13 +2463,6 @@ function addPlaylistControlButtons(attempt = 1) {
         console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
       }
     }
-  }
-
-  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
-    if (attempt === 1) {
-      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
-    }
-    return;
   }
 
   const existingCustom = document.querySelector('#tizentube-collection-btn');
