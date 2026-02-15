@@ -2287,7 +2287,8 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
-  const existingButtons = useParent ? parentButtons : baseButtons;
+  const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => btn.getAttribute('data-tizentube-collection-btn') !== '1');
+  let existingButtons = getNativeButtons();
   const currentUrl = window.location.href;
 
   console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
@@ -2359,10 +2360,17 @@ function addPlaylistControlButtons(attempt = 1) {
   if (existingCustom) {
     console.log('[PLAYLIST_BUTTON] Existing custom button found; replacing (attempt ' + attempt + ')');
     existingCustom.remove();
+    existingButtons = getNativeButtons();
   }
+
+  if (existingButtons.length === 0) return;
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const templateRect = templateBtn.getBoundingClientRect();
+  const templateTop = templateBtn.offsetTop || Math.round(templateRect.top);
+  const templateLeft = templateBtn.offsetLeft || Math.round(templateRect.left);
+  const templateHeight = templateBtn.offsetHeight || Math.round(templateRect.height);
+  const templateWidth = templateBtn.offsetWidth || Math.round(templateRect.width);
   const customBtn = templateBtn.cloneNode(true);
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   // Keep cloned structure/styles intact for TV focus behavior.
@@ -2435,14 +2443,14 @@ function addPlaylistControlButtons(attempt = 1) {
   const crect = container.getBoundingClientRect();
   container.style.position = 'relative';
   customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(templateRect.left - crect.left))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(templateRect.top - crect.top + templateRect.height))}px`;
-  customBtn.style.width = `${Math.round(templateRect.width)}px`;
-  customBtn.style.height = `${Math.round(templateRect.height)}px`;
+  customBtn.style.left = `${Math.max(0, Math.round(templateLeft))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(templateTop + templateHeight))}px`;
+  customBtn.style.width = `${Math.max(1, Math.round(templateWidth))}px`;
+  customBtn.style.height = `${Math.max(1, Math.round(templateHeight))}px`;
   customBtn.style.transform = 'none';
   customBtn.style.zIndex = '2';
 
-  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
+  const requiredHeight = Math.max(container.clientHeight, Math.round(templateTop + templateHeight * 2 + 8));
   container.style.minHeight = `${requiredHeight}px`;
 
   window._playlistButtonInjectedUrl = currentUrl;
@@ -2463,6 +2471,7 @@ function addPlaylistControlButtons(attempt = 1) {
       clonedCustomButtonOuterHTML: customBtn.outerHTML,
       clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
+      templateMetrics: { top: Math.round(templateTop), left: Math.round(templateLeft), height: Math.round(templateHeight), width: Math.round(templateWidth) },
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
