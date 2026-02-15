@@ -464,7 +464,7 @@ function directFilterArray(arr, page, context = '') {
       return [];  // Return empty - we're showing only specific videos
     }
     
-    const lastVideo = arr[arr.length - 1];
+    const lastVideo = [...arr].reverse().find((item) => !!getVideoId(item)) || arr[arr.length - 1];
     const lastVideoId = getVideoId(lastVideo) || 'unknown';
     if (DEBUG_ENABLED) {
       console.log('[HELPER] ALL FILTERED - keeping 1 helper for continuation trigger:', lastVideoId);
@@ -551,6 +551,16 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     
     if (hasShelves) {
       const shortsEnabled = configRead('enableShorts');
+
+      if (page === 'subscriptions') {
+        for (let i = 0; i < obj.length; i++) {
+          const shelf = obj[i];
+          const shelfTitle = getShelfTitle(shelf);
+          if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+            console.log('[SUBS_SHORTS_SHELF] seen title=', shelfTitle, '| path=', path + '[' + i + ']', '| shortsEnabled=', shortsEnabled);
+          }
+        }
+      }
       
       // ⭐ FIRST: Remove Shorts shelves by title (before recursive filtering)
       if (!shortsEnabled) {
@@ -1788,6 +1798,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
       // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
       if (!shortsEnabled) {
         const shelfTitle = getShelfTitle(shelve);
+        if (page === 'subscriptions' && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
+          console.log('[SUBS_SHORTS_SHELF] processShelves seen title=', shelfTitle, '| index=', i, '| shortsEnabled=', shortsEnabled);
+        }
         if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
           if (DEBUG_ENABLED || LOG_SHORTS) {
             console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
@@ -2469,7 +2482,7 @@ function addPlaylistControlButtons(attempt = 1) {
           buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
         };
         console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
+        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 600);
       } catch (e) {
         console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
       }
@@ -2493,14 +2506,14 @@ function addPlaylistControlButtons(attempt = 1) {
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', '0');
   customBtn.style.cssText = '';
-  customBtn.style.position = 'relative';
+  customBtn.style.setProperty('position', 'relative', 'important');
   customBtn.style.display = 'inline-flex';
   customBtn.style.margin = '0';
   customBtn.style.pointerEvents = 'auto';
   customBtn.style.zIndex = '9999';
-  customBtn.style.transform = 'none';
-  customBtn.style.top = '0';
-  customBtn.style.left = '0';
+  customBtn.style.setProperty('transform', 'none', 'important');
+  customBtn.style.setProperty('top', '0', 'important');
+  customBtn.style.setProperty('left', '0', 'important');
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2522,9 +2535,9 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
-  buttonHost.style.display = 'flex';
+  buttonHost.style.display = 'block';
   buttonHost.style.alignItems = 'center';
-  buttonHost.style.marginTop = '26px';
+  buttonHost.style.marginTop = '34px';
   buttonHost.style.width = '100%';
   buttonHost.style.position = 'relative';
   buttonHost.style.zIndex = '9999';
