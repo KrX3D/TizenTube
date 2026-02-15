@@ -2216,7 +2216,7 @@ function getCurrentPage() {
 }
 
 
-function logChunked(prefix, text, chunkSize = 20000) {
+function logChunked(prefix, text, chunkSize = 3000) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
   // Visual console shows newest logs first; emit chunks in reverse so users
@@ -2323,7 +2323,7 @@ function addPlaylistControlButtons(attempt = 1) {
         existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 20000);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 3000);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2348,7 +2348,7 @@ function addPlaylistControlButtons(attempt = 1) {
         baseOuterHTMLAfter: baseContainer.outerHTML,
         parentOuterHTMLAfter: parentContainer?.outerHTML || null,
       };
-      logChunked('[PLAYLIST_BUTTON_JSON_AFTER_SKIP]', JSON.stringify(skipDump), 20000);
+      logChunked('[PLAYLIST_BUTTON_JSON_AFTER_SKIP]', JSON.stringify(skipDump), 3000);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON_AFTER_SKIP] Failed to stringify skip state', e?.message || e);
     }
@@ -2433,23 +2433,19 @@ function addPlaylistControlButtons(attempt = 1) {
   // Insert after the last native button to keep row order and avoid overlaying first button.
   templateBtn.insertAdjacentElement('afterend', customBtn);
 
-  const existingRects = existingButtons.map((btn) => btn.getBoundingClientRect());
-  const lastRect = existingRects.reduce((maxRect, rect) => (rect.top > maxRect.top ? rect : maxRect), existingRects[0]);
-  const crect = container.getBoundingClientRect();
-  container.style.position = 'relative';
-  customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(lastRect.left - crect.left))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(lastRect.top - crect.top + lastRect.height))}px`;
-  customBtn.style.width = `${Math.round(lastRect.width)}px`;
-  customBtn.style.height = `${Math.round(lastRect.height)}px`;
+  // Use native layout flow. Absolute placement caused focus-navigation issues and could
+  // place the injected control into the wrong visual slot on some Tizen versions.
+  customBtn.style.position = 'static';
+  customBtn.style.left = 'auto';
+  customBtn.style.top = 'auto';
+  customBtn.style.width = 'auto';
+  customBtn.style.height = 'auto';
   customBtn.style.transform = 'none';
-  customBtn.style.zIndex = '2';
-
-  const requiredHeight = Math.max(container.clientHeight, Math.round((lastRect.top - crect.top) + lastRect.height * 2 + 8));
-  container.style.minHeight = `${requiredHeight}px`;
+  customBtn.style.zIndex = '1';
 
   window._playlistButtonInjectedUrl = currentUrl;
 
+  const crect = container.getBoundingClientRect();
   const rect = customBtn.getBoundingClientRect();
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 
@@ -2472,7 +2468,7 @@ function addPlaylistControlButtons(attempt = 1) {
       baseOuterHTMLAfter: baseContainer.outerHTML,
       parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
-    logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 20000);
+    logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 3000);
   } catch (e) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
   }
@@ -2486,6 +2482,9 @@ if (typeof window !== 'undefined') {
     const page = getCurrentPage();
     if (page === 'playlist' || page === 'playlists') {
       cleanupPlaylistHelperTiles();
+      if (!document.querySelector('[data-tizentube-collection-btn="1"]') && page === 'playlist') {
+        addPlaylistControlButtons(1);
+      }
     }
     if (window.location.href !== lastPlaylistButtonHref) {
       lastPlaylistButtonHref = window.location.href;
