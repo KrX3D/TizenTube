@@ -3,6 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { addLongPress } from './longPress.js';
+import { addPreviews } from './previews.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
@@ -1835,7 +1836,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           deArrowify(items);
           hqify(items);
           addLongPress(items, configRead('enableLongPress'));
-          if (shouldAddPreviews) addPreviews(items);
+          addPreviews(items, shouldAddPreviews);
           
           // ⭐ SHORTS FILTERING
           if (!shortsEnabled) {
@@ -1892,7 +1893,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           deArrowify(items);
           hqify(items);
           addLongPress(items, configRead('enableLongPress'));
-          if (shouldAddPreviews) addPreviews(items);
+          addPreviews(items, shouldAddPreviews);
           
           if (!shortsEnabled) {
             const beforeShortFilter = items.length;
@@ -1933,7 +1934,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           deArrowify(items);
           hqify(items);
           addLongPress(items, configRead('enableLongPress'));
-          if (shouldAddPreviews) addPreviews(items);
+          addPreviews(items, shouldAddPreviews);
           
           if (!shortsEnabled) {
             const beforeShortFilter = items.length;
@@ -1975,7 +1976,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         deArrowify(contents);
         hqify(contents);
         addLongPress(contents, configRead('enableLongPress'));
-        if (shouldAddPreviews) addPreviews(contents);
+        addPreviews(contents, shouldAddPreviews);
         
         if (!shortsEnabled) {
           const beforeShortFilter = contents.length;
@@ -2035,7 +2036,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         deArrowify(items);
         hqify(items);
         addLongPress(items, configRead('enableLongPress'));
-        if (shouldAddPreviews) addPreviews(items);
+        addPreviews(items, shouldAddPreviews);
         
         if (!shortsEnabled) {
           const beforeShortFilter = items.length;
@@ -2109,28 +2110,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
   // Summary
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Done:', totalItemsBefore, '→', totalItemsAfter, '| Hidden:', totalHidden, '| Shorts:', totalShortsRemoved, '| Removed:', shelvesRemoved, 'shelves');
-  }
-}
-
-function addPreviews(items) {
-  if (!configRead('enablePreviews')) return;
-  for (const item of items) {
-    if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
-      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
-      item.tileRenderer.onFocusCommand = {
-        startInlinePlaybackCommand: {
-          blockAdoption: true,
-          caption: false,
-          delayMs: 3000,
-          durationMs: 40000,
-          muted: false,
-          restartPlaybackBeforeSeconds: 10,
-          resumeVideo: true,
-          playbackEndpoint: watchEndpoint
-        }
-      };
-    }
   }
 }
 
@@ -2418,13 +2397,6 @@ function addPlaylistControlButtons(attempt = 1) {
   const existingButtons = useParent ? parentButtons : baseButtons;
   const currentUrl = window.location.href;
 
-  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
-    if (attempt === 1) {
-      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
-    }
-    return;
-  }
-
   console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
 
   if (existingButtons.length === 0) {
@@ -2434,35 +2406,39 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   if (attempt <= 2) {
-    const lastDumpUrl = window._playlistButtonDumpUrl;
-    if (lastDumpUrl !== currentUrl || attempt === 2) {
-      window._playlistButtonDumpUrl = currentUrl;
-      try {
-        const targetHostForDump = (parentContainer || container);
-        const dump = {
-          page,
-          baseButtons: baseButtons.length,
-          parentButtons: parentButtons.length,
-          baseTag: baseContainer.tagName,
-          baseClass: baseContainer.className,
-          baseOuterHTML: baseContainer.outerHTML,
-          parentTag: parentContainer?.tagName,
-          parentClass: parentContainer?.className,
-          parentOuterHTML: parentContainer?.outerHTML,
-          targetTag: targetHostForDump.tagName,
-          targetClass: targetHostForDump.className,
-          targetOuterHTML: targetHostForDump.outerHTML,
-          targetParentTag: targetHostForDump.parentElement?.tagName,
-          targetParentClass: targetHostForDump.parentElement?.className,
-          targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
-          buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
-        };
-        console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 600);
-      } catch (e) {
-        console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
-      }
+    window._playlistButtonDumpUrl = currentUrl;
+    try {
+      const targetHostForDump = (parentContainer || container);
+      const dump = {
+        page,
+        baseButtons: baseButtons.length,
+        parentButtons: parentButtons.length,
+        baseTag: baseContainer.tagName,
+        baseClass: baseContainer.className,
+        baseOuterHTML: baseContainer.outerHTML,
+        parentTag: parentContainer?.tagName,
+        parentClass: parentContainer?.className,
+        parentOuterHTML: parentContainer?.outerHTML,
+        targetTag: targetHostForDump.tagName,
+        targetClass: targetHostForDump.className,
+        targetOuterHTML: targetHostForDump.outerHTML,
+        targetParentTag: targetHostForDump.parentElement?.tagName,
+        targetParentClass: targetHostForDump.parentElement?.className,
+        targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
+        buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
+      };
+      console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 600);
+    } catch (e) {
+      console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
+  }
+
+  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
+    if (attempt === 1) {
+      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
+    }
+    return;
   }
 
   const existingCustom = document.querySelector('#tizentube-collection-btn');
@@ -2495,15 +2471,32 @@ function addPlaylistControlButtons(attempt = 1) {
     labelNode.textContent = 'Refresh Filters';
   }
 
-  customBtn.addEventListener('click', (evt) => {
-    evt.preventDefault();
-    evt.stopPropagation();
+  const runRefresh = (evt) => {
+    evt?.preventDefault?.();
+    evt?.stopPropagation?.();
     resolveCommand({
       signalAction: {
         signal: 'SOFT_RELOAD_PAGE'
       }
     });
+  };
+
+  customBtn.style.zIndex = '1';
+  customBtn.style.pointerEvents = 'auto';
+  customBtn.addEventListener('click', runRefresh);
+  customBtn.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Enter' || evt.key === ' ') {
+      runRefresh(evt);
+    }
   });
+
+  const innerButton = customBtn.querySelector('button');
+  if (innerButton) {
+    innerButton.style.pointerEvents = 'auto';
+    innerButton.removeAttribute('disabled');
+    innerButton.setAttribute('tabindex', '0');
+    innerButton.addEventListener('click', runRefresh);
+  }
 
   // Keep button row visible but avoid inflating height on every reinjection attempt.
   container.style.overflow = 'visible';
