@@ -2403,11 +2403,15 @@ function getCurrentPage() {
 }
 
 
-function logChunked(prefix, text, chunkSize = 1000) {
+function logChunked(prefix, text, chunkSize = 600) {
   if (!text) return;
+  const total = Math.ceil(text.length / chunkSize);
   for (let i = 0; i < text.length; i += chunkSize) {
+    const partIndex = Math.floor(i / chunkSize) + 1;
     const part = text.slice(i, i + chunkSize);
-    console.log(`${prefix} [${Math.floor(i / chunkSize) + 1}]`, part);
+    // Keep metadata and chunk in separate logs so TV console always shows full 600-char parts.
+    console.log(`${prefix} [${partIndex}/${total}]`);
+    console.log(part);
   }
 }
 
