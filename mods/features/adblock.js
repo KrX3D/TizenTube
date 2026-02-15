@@ -2406,8 +2406,10 @@ function getCurrentPage() {
 function logChunked(prefix, text, chunkSize = 600) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
-  for (let i = 0; i < text.length; i += chunkSize) {
-    const partIndex = Math.floor(i / chunkSize) + 1;
+  // Visual console shows newest logs first; emit chunks in reverse so users
+  // can read [1/total] ... [total/total] top-to-bottom.
+  for (let partIndex = total; partIndex >= 1; partIndex--) {
+    const i = (partIndex - 1) * chunkSize;
     const part = text.slice(i, i + chunkSize);
     // Keep metadata and chunk in separate logs so TV console always shows full 600-char parts.
     console.log(`${prefix} [${partIndex}/${total}]`);
@@ -2493,20 +2495,17 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   }
 
-  const existingHost = document.querySelector('#tizentube-collection-host');
-  if (existingHost && existingHost.querySelector('#tizentube-collection-btn')) {
-    if (window._playlistButtonInjectedUrl === currentUrl) {
-      console.log('[PLAYLIST_BUTTON] Existing custom button host found; skip reinject (attempt ' + attempt + ')');
-      return;
-    }
-    existingHost.remove();
-  } else if (existingHost) {
-    existingHost.remove();
+  const existingCustom = document.querySelector('#tizentube-collection-btn');
+  if (existingCustom) {
+    console.log('[PLAYLIST_BUTTON] Existing custom button found; replacing (attempt ' + attempt + ')');
+    existingCustom.remove();
   }
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
+  customBtn.removeAttribute('style');
+  customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', '0');
   customBtn.style.cssText = '';
@@ -2521,7 +2520,7 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
-    labelNode.textContent = '🔄 Refresh Filters';
+    labelNode.textContent = 'Refresh Filters';
   }
 
   customBtn.addEventListener('click', (evt) => {
@@ -2537,18 +2536,9 @@ function addPlaylistControlButtons(attempt = 1) {
   const targetHost = (parentContainer || container);
   targetHost.style.overflow = 'visible';
 
-  const buttonHost = document.createElement('div');
-  buttonHost.id = 'tizentube-collection-host';
-  buttonHost.style.display = 'block';
-  buttonHost.style.alignItems = 'center';
-  buttonHost.style.marginTop = '34px';
-  buttonHost.style.width = '100%';
-  buttonHost.style.position = 'relative';
-  buttonHost.style.zIndex = '9999';
-  buttonHost.style.minHeight = '68px';
-  buttonHost.appendChild(customBtn);
-
-  targetHost.insertAdjacentElement('afterend', buttonHost);
+  const lastNativeButton = existingButtons[existingButtons.length - 1];
+  lastNativeButton.insertAdjacentElement('afterend', customBtn);
+  customBtn.style.marginLeft = '0.75rem';
   window._playlistButtonInjectedUrl = currentUrl;
 
   if (attempt < 3) {
