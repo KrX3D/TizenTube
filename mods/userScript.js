@@ -7,7 +7,7 @@ import '@formatjs/intl-displaynames/polyfill.iife'
 import '@formatjs/intl-displaynames/locale-data/en';
 
 import "./domrect-polyfill";
-import "./main/features/adblock.js";
+import "./main/features/responsePatches.js";
 import "./main/features/sponsorblock.js";
 import "./ui/ui.js";
 import "./ui/speedUI.js";
