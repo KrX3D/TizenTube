@@ -2438,6 +2438,7 @@ function addPlaylistControlButtons(attempt = 1) {
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
   const existingButtons = useParent ? parentButtons : baseButtons;
+  const currentUrl = window.location.href;
 
   console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
 
@@ -2447,14 +2448,47 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
+  if (attempt === 1) {
+    const lastDumpUrl = window._playlistButtonDumpUrl;
+    if (lastDumpUrl !== currentUrl) {
+      window._playlistButtonDumpUrl = currentUrl;
+      try {
+        const targetHostForDump = (parentContainer || container);
+        const dump = {
+          page,
+          baseButtons: baseButtons.length,
+          parentButtons: parentButtons.length,
+          baseTag: baseContainer.tagName,
+          baseClass: baseContainer.className,
+          baseOuterHTML: baseContainer.outerHTML,
+          parentTag: parentContainer?.tagName,
+          parentClass: parentContainer?.className,
+          parentOuterHTML: parentContainer?.outerHTML,
+          targetTag: targetHostForDump.tagName,
+          targetClass: targetHostForDump.className,
+          targetOuterHTML: targetHostForDump.outerHTML,
+          targetParentTag: targetHostForDump.parentElement?.tagName,
+          targetParentClass: targetHostForDump.parentElement?.className,
+          targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
+          buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
+        };
+        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
+      } catch (e) {
+        console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
+      }
+    }
+  }
+
   const existingHost = document.querySelector('#tizentube-collection-host');
   if (existingHost && existingHost.querySelector('#tizentube-collection-btn')) {
-    if (DEBUG_ENABLED) {
+    if (window._playlistButtonInjectedUrl === currentUrl) {
       console.log('[PLAYLIST_BUTTON] Existing custom button host found; skip reinject (attempt ' + attempt + ')');
+      return;
     }
-    return;
+    existingHost.remove();
+  } else if (existingHost) {
+    existingHost.remove();
   }
-  if (existingHost) existingHost.remove();
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
@@ -2485,36 +2519,6 @@ function addPlaylistControlButtons(attempt = 1) {
   const targetHost = (parentContainer || container);
   targetHost.style.overflow = 'visible';
 
-  if (attempt === 1) {
-    const lastDumpUrl = window._playlistButtonDumpUrl;
-    if (lastDumpUrl !== window.location.href) {
-      window._playlistButtonDumpUrl = window.location.href;
-      try {
-        const dump = {
-          page,
-          baseButtons: baseButtons.length,
-          parentButtons: parentButtons.length,
-          baseTag: baseContainer.tagName,
-          baseClass: baseContainer.className,
-          baseOuterHTML: baseContainer.outerHTML,
-          parentTag: parentContainer?.tagName,
-          parentClass: parentContainer?.className,
-          parentOuterHTML: parentContainer?.outerHTML,
-          targetTag: targetHost.tagName,
-          targetClass: targetHost.className,
-          targetOuterHTML: targetHost.outerHTML,
-          targetParentTag: targetHost.parentElement?.tagName,
-          targetParentClass: targetHost.parentElement?.className,
-          targetParentOuterHTML: targetHost.parentElement?.outerHTML,
-          buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
-        };
-        logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
-      } catch (e) {
-        console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
-      }
-    }
-  }
-
   const buttonHost = document.createElement('div');
   buttonHost.id = 'tizentube-collection-host';
   buttonHost.style.display = 'flex';
@@ -2526,6 +2530,7 @@ function addPlaylistControlButtons(attempt = 1) {
   buttonHost.appendChild(customBtn);
 
   targetHost.insertAdjacentElement('afterend', buttonHost);
+  window._playlistButtonInjectedUrl = currentUrl;
 
   if (attempt < 3) {
     setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
