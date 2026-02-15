@@ -4,6 +4,7 @@ const APP_VERSION = rootPkg.version;
 const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
 
 function PatchSettings(settingsObject) {
+    const version = window?.h5vcc?.tizentube?.GetVersion ? window.h5vcc.tizentube.GetVersion() : 'unknown';
     const tizentubeOpenAction = SettingActionRenderer(
         'TizenTube Settings',
         'tizentube_open_action',
