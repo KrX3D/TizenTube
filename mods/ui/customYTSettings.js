@@ -3,6 +3,7 @@ import rootPkg from '../../package.json';
 const APP_VERSION = rootPkg.version;
 
 function PatchSettings(settingsObject) {
+    const version = window?.h5vcc?.tizentube?.GetVersion ? window.h5vcc.tizentube.GetVersion() : 'unknown';
     const tizentubeOpenAction = SettingActionRenderer(
         'TizenTube Settings',
         'tizentube_open_action',
