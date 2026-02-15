@@ -4,11 +4,11 @@ import resolveCommand from '../resolveCommand.js';
 import { ShelfRenderer, TileRenderer } from '../ui/ytUI.js';
 import { addLongPress } from './longPress.js';
 import { addPreviews } from './previews.js';
-import { applyPreferredVideoCodec } from './adblock/videoCodecPreference.js';
-import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './adblock/sponsorblock.js';
+import { applyPreferredVideoCodec } from './videoCodecPreference.js';
+import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sponsorblock.js';
 import { deArrowify } from './deArrowify.js';
 import { hqify } from './hqify.js';
-import { applyAdCleanup } from './adblock/adCleanup.js';
+import { applyAdCleanup } from './adCleanup.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
