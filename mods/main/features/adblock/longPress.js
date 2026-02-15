@@ -1,4 +1,4 @@
-import { longPressData, MenuServiceItemRenderer } from '../../ui/ytUI.js';
+import { longPressData, MenuServiceItemRenderer } from '../../../ui/ytUI.js';
 
 export function addLongPress(items, longPressEnabled) {
   for (const item of items) {

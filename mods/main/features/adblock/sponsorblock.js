@@ -1,4 +1,4 @@
-import { timelyAction, ButtonRenderer } from '../../ui/ytUI.js';
+import { timelyAction, ButtonRenderer } from '../../../ui/ytUI.js';
 
 export function applySponsorBlockTimelyActions(parsedResponse, manualSkippedSegments) {
   if (!parsedResponse?.playerOverlays?.playerOverlayRenderer) return;

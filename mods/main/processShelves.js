@@ -1,9 +1,9 @@
-import { deArrowify } from './deArrowify.js';
-import { hqify } from './hqify.js';
-import { addLongPress } from './longPress.js';
-import { addPreviews } from './previews.js';
-import { hideWatchedVideos } from './hideWatchedVideos.js';
-import { hideShorts } from './hideShorts.js';
+import { deArrowify } from './features/adblock/deArrowify.js';
+import { hqify } from './features/adblock/hqify.js';
+import { addLongPress } from './features/adblock/longPress.js';
+import { addPreviews } from './features/adblock/previews.js';
+import { hideWatchedVideos } from './features/adblock/hideWatchedVideos.js';
+import { hideShorts } from './features/adblock/hideShorts.js';
 
 export function processShelves(shelves, options) {
   const {
