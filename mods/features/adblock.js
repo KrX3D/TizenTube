@@ -2330,32 +2330,6 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   }
 
-  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('[data-tizentube-collection-btn="1"]')) {
-    if (attempt === 1) {
-      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
-    }
-    try {
-      const postButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
-      const postButtonRects = postButtons.map((btn, idx) => {
-        const r = btn.getBoundingClientRect();
-        return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
-      });
-      const skipDump = {
-        page,
-        attempt,
-        reason: 'already_injected',
-        parentButtonsAfter: postButtons.length,
-        nativeButtonRectsAfter: postButtonRects,
-        baseOuterHTMLAfter: baseContainer.outerHTML,
-        parentOuterHTMLAfter: parentContainer?.outerHTML || null,
-      };
-      logChunked('[PLAYLIST_BUTTON_JSON_AFTER_SKIP]', JSON.stringify(skipDump), 3000);
-    } catch (e) {
-      console.log('[PLAYLIST_BUTTON_JSON_AFTER_SKIP] Failed to stringify skip state', e?.message || e);
-    }
-    return;
-  }
-
   const existingCustom = document.querySelector('[data-tizentube-collection-btn="1"]');
   if (existingCustom) {
     console.log('[PLAYLIST_BUTTON] Existing custom button found; replacing (attempt ' + attempt + ')');
@@ -2367,10 +2341,6 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const templateRect = templateBtn.getBoundingClientRect();
-  const templateTop = templateBtn.offsetTop || Math.round(templateRect.top);
-  const templateLeft = templateBtn.offsetLeft || Math.round(templateRect.left);
-  const templateHeight = templateBtn.offsetHeight || Math.round(templateRect.height);
-  const templateWidth = templateBtn.offsetWidth || Math.round(templateRect.width);
   const customBtn = templateBtn.cloneNode(true);
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   // Keep cloned structure/styles intact for TV focus behavior.
@@ -2438,19 +2408,22 @@ function addPlaylistControlButtons(attempt = 1) {
   // Insert after the last native button to keep row order and avoid overlaying first button.
   templateBtn.insertAdjacentElement('afterend', customBtn);
 
-  // Tizen TV layouts may place cloned buttons in the same row unless we anchor it
-  // directly below the template button using the native button geometry.
+  // Keep normal flow and force the clone to occupy a full-width row in grid/flex containers.
   const crect = container.getBoundingClientRect();
-  container.style.position = 'relative';
-  customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(templateLeft))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(templateTop + templateHeight))}px`;
-  customBtn.style.width = `${Math.max(1, Math.round(templateWidth))}px`;
-  customBtn.style.height = `${Math.max(1, Math.round(templateHeight))}px`;
+  customBtn.style.position = 'static';
+  customBtn.style.left = 'auto';
+  customBtn.style.top = 'auto';
   customBtn.style.transform = 'none';
-  customBtn.style.zIndex = '2';
+  customBtn.style.zIndex = '1';
+  customBtn.style.display = 'block';
+  customBtn.style.width = '100%';
+  customBtn.style.maxWidth = '100%';
+  customBtn.style.minWidth = '100%';
+  customBtn.style.gridColumn = '1 / -1';
+  customBtn.style.justifySelf = 'stretch';
+  customBtn.style.alignSelf = 'stretch';
 
-  const requiredHeight = Math.max(container.clientHeight, Math.round(templateTop + templateHeight * 2 + 8));
+  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
   container.style.minHeight = `${requiredHeight}px`;
 
   window._playlistButtonInjectedUrl = currentUrl;
@@ -2471,7 +2444,7 @@ function addPlaylistControlButtons(attempt = 1) {
       clonedCustomButtonOuterHTML: customBtn.outerHTML,
       clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
-      templateMetrics: { top: Math.round(templateTop), left: Math.round(templateLeft), height: Math.round(templateHeight), width: Math.round(templateWidth) },
+      templateMetrics: { top: Math.round(templateRect.top), left: Math.round(templateRect.left), height: Math.round(templateRect.height), width: Math.round(templateRect.width) },
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
