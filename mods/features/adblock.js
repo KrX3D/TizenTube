@@ -2302,7 +2302,7 @@ function addPlaylistControlButtons(attempt = 1) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
-      const existingCustomBtn = document.querySelector('#tizentube-collection-btn');
+      const existingCustomBtn = document.querySelector('[data-tizentube-collection-btn="1"]');
       const dump = {
         page,
         baseButtonsBefore: baseButtons.length,
@@ -2329,14 +2329,33 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   }
 
-  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
+  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('[data-tizentube-collection-btn="1"]')) {
     if (attempt === 1) {
       console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
+    }
+    try {
+      const postButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
+      const postButtonRects = postButtons.map((btn, idx) => {
+        const r = btn.getBoundingClientRect();
+        return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
+      });
+      const skipDump = {
+        page,
+        attempt,
+        reason: 'already_injected',
+        parentButtonsAfter: postButtons.length,
+        nativeButtonRectsAfter: postButtonRects,
+        baseOuterHTMLAfter: baseContainer.outerHTML,
+        parentOuterHTMLAfter: parentContainer?.outerHTML || null,
+      };
+      logChunked('[PLAYLIST_BUTTON_JSON_AFTER_SKIP]', JSON.stringify(skipDump), 20000);
+    } catch (e) {
+      console.log('[PLAYLIST_BUTTON_JSON_AFTER_SKIP] Failed to stringify skip state', e?.message || e);
     }
     return;
   }
 
-  const existingCustom = document.querySelector('#tizentube-collection-btn');
+  const existingCustom = document.querySelector('[data-tizentube-collection-btn="1"]');
   if (existingCustom) {
     console.log('[PLAYLIST_BUTTON] Existing custom button found; replacing (attempt ' + attempt + ')');
     existingCustom.remove();
@@ -2344,7 +2363,7 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
-  customBtn.id = 'tizentube-collection-btn';
+  customBtn.setAttribute('data-tizentube-collection-btn', '1');
   // Keep native classes/structure for TV focus behavior, but remove inline positioning
   // that can pin the clone over native buttons.
   customBtn.removeAttribute('style');
@@ -2397,7 +2416,7 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const nativeButtonRects = existingButtons.map((btn, idx) => {
     const r = btn.getBoundingClientRect();
-    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: btn.id || null };
+    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
   });
   console.log('[PLAYLIST_BUTTON] Native button rects:', JSON.stringify(nativeButtonRects));
 
@@ -2414,18 +2433,19 @@ function addPlaylistControlButtons(attempt = 1) {
   // Insert after the last native button to keep row order and avoid overlaying first button.
   templateBtn.insertAdjacentElement('afterend', customBtn);
 
-  const templateRect = templateBtn.getBoundingClientRect();
+  const existingRects = existingButtons.map((btn) => btn.getBoundingClientRect());
+  const lastRect = existingRects.reduce((maxRect, rect) => (rect.top > maxRect.top ? rect : maxRect), existingRects[0]);
   const crect = container.getBoundingClientRect();
   container.style.position = 'relative';
   customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(templateRect.left - crect.left))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(templateRect.top - crect.top + templateRect.height))}px`;
-  customBtn.style.width = `${Math.round(templateRect.width)}px`;
-  customBtn.style.height = `${Math.round(templateRect.height)}px`;
+  customBtn.style.left = `${Math.max(0, Math.round(lastRect.left - crect.left))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(lastRect.top - crect.top + lastRect.height))}px`;
+  customBtn.style.width = `${Math.round(lastRect.width)}px`;
+  customBtn.style.height = `${Math.round(lastRect.height)}px`;
   customBtn.style.transform = 'none';
   customBtn.style.zIndex = '2';
 
-  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
+  const requiredHeight = Math.max(container.clientHeight, Math.round((lastRect.top - crect.top) + lastRect.height * 2 + 8));
   container.style.minHeight = `${requiredHeight}px`;
 
   window._playlistButtonInjectedUrl = currentUrl;
@@ -2437,7 +2457,7 @@ function addPlaylistControlButtons(attempt = 1) {
     const postButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
     const postButtonRects = postButtons.map((btn, idx) => {
       const r = btn.getBoundingClientRect();
-      return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: btn.id || null };
+      return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
     });
 
     const afterDump = {
