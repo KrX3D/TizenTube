@@ -1688,7 +1688,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
   const horizontalShelves = shelves.filter((shelve) => shelve?.shelfRenderer?.content?.horizontalListRenderer?.items);
-  hideShorts(horizontalShelves, shortsEnabled);
+  hideShorts(horizontalShelves, shortsEnabled, (removedShelf) => {
+    collectVideoIdsFromShelf(removedShelf).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+  });
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
@@ -2214,7 +2216,7 @@ function getCurrentPage() {
 }
 
 
-function logChunked(prefix, text, chunkSize = 3000) {
+function logChunked(prefix, text, chunkSize = 20000) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
   // Visual console shows newest logs first; emit chunks in reverse so users
@@ -2233,6 +2235,27 @@ function logChunked(prefix, text, chunkSize = 3000) {
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
+
+  const removedIds = window._playlistRemovedHelpers || new Set();
+  const removedKeys = window._playlistRemovedHelperKeys || new Set();
+  const candidates = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-grid-renderer ytlr-grid-video-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer, [data-video-id]');
+  let removedCount = 0;
+
+  candidates.forEach((node) => {
+    const videoId = node.getAttribute('data-video-id') || node.getAttribute('video-id') || node.dataset?.videoId || '';
+    const text = (node.textContent || '').toLowerCase();
+    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden/.test(text);
+    const key = `${videoId}:${text.slice(0, 80)}`;
+
+    if ((videoId && removedIds.has(videoId)) || removedKeys.has(key) || looksLikeHelper) {
+      node.remove();
+      removedCount += 1;
+    }
+  });
+
+  if (removedCount > 0 && DEBUG_ENABLED) {
+    console.log('[HELPER_CLEANUP_DOM] Removed helper tiles from DOM:', removedCount);
+  }
 }
 
 function detectPlaylistButtons() {
@@ -2296,7 +2319,7 @@ function addPlaylistControlButtons(attempt = 1) {
         buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 3000);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 20000);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2379,8 +2402,8 @@ function addPlaylistControlButtons(attempt = 1) {
     container.parentElement.style.minHeight = `${parentMinHeight}px`;
   }
 
-  // Append inside the detected container to keep it in visible/focusable bounds.
-  container.appendChild(customBtn);
+  // Insert after the last native button to keep row order and avoid overlaying first button.
+  templateBtn.insertAdjacentElement('afterend', customBtn);
   window._playlistButtonInjectedUrl = currentUrl;
 
   const rect = customBtn.getBoundingClientRect();
