@@ -1,10 +1,10 @@
-import { configRead } from '../../config.js';
-import { PatchSettings } from '../../ui/customYTSettings.js';
-import { TileRenderer, ShelfRenderer } from '../../ui/ytUI.js';
-import { registerJsonParseHook } from '../jsonParseHooks.js';
+import { configRead } from '../config.js';
+import { PatchSettings } from '../ui/customYTSettings.js';
+import { TileRenderer, ShelfRenderer } from '../ui/ytUI.js';
+import { registerJsonParseHook } from './jsonParseHooks.js';
 import { applyAdCleanup } from './adblock/adCleanup.js';
 import { applyPreferredVideoCodec } from './adblock/videoCodecPreference.js';
-import { processShelves, processHorizontalItems } from '../processShelves.js';
+import { processShelves, processHorizontalItems } from './adblock/processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './adblock/sponsorblock.js';
 
 function buildShelfProcessingOptions() {
