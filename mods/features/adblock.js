@@ -1,7 +1,8 @@
 import { configRead } from '../config.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
-import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
+import { timelyAction, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
+import { addLongPress } from './longPress.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
@@ -1044,10 +1045,6 @@ JSON.parse = function () {
     }
     console.log('═══════════════════════════════════════════════════════');
   
-    // ⭐ Trigger button detection
-    setTimeout(() => {
-      detectPlaylistButtons();
-    }, 2000);
     
     // Continue with normal processing via universal filter
   }
@@ -1112,7 +1109,7 @@ JSON.parse = function () {
     }
     deArrowify(r.continuationContents.horizontalListContinuation.items);
     hqify(r.continuationContents.horizontalListContinuation.items);
-    addLongPress(r.continuationContents.horizontalListContinuation.items);
+    addLongPress(r.continuationContents.horizontalListContinuation.items, configRead('enableLongPress'));
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
 
@@ -1837,7 +1834,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
                   
           deArrowify(items);
           hqify(items);
-          addLongPress(items);
+          addLongPress(items, configRead('enableLongPress'));
           if (shouldAddPreviews) addPreviews(items);
           
           // ⭐ SHORTS FILTERING
@@ -1894,7 +1891,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
 
           deArrowify(items);
           hqify(items);
-          addLongPress(items);
+          addLongPress(items, configRead('enableLongPress'));
           if (shouldAddPreviews) addPreviews(items);
           
           if (!shortsEnabled) {
@@ -1935,7 +1932,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
 
           deArrowify(items);
           hqify(items);
-          addLongPress(items);
+          addLongPress(items, configRead('enableLongPress'));
           if (shouldAddPreviews) addPreviews(items);
           
           if (!shortsEnabled) {
@@ -1977,7 +1974,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
 
         deArrowify(contents);
         hqify(contents);
-        addLongPress(contents);
+        addLongPress(contents, configRead('enableLongPress'));
         if (shouldAddPreviews) addPreviews(contents);
         
         if (!shortsEnabled) {
@@ -2037,7 +2034,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
 
         deArrowify(items);
         hqify(items);
-        addLongPress(items);
+        addLongPress(items, configRead('enableLongPress'));
         if (shouldAddPreviews) addPreviews(items);
         
         if (!shortsEnabled) {
@@ -2185,40 +2182,6 @@ function hqify(items) {
         }
       ];
     }
-  }
-}
-
-function addLongPress(items) {
-  for (const item of items) {
-    if (!item.tileRenderer) continue;
-    // Skip non-video tiles (channels, playlists, etc)
-    if (item.tileRenderer.contentType && 
-        item.tileRenderer.contentType !== 'TILE_CONTENT_TYPE_VIDEO') {
-      continue;
-    }
-    if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
-        clickTrackingParams: null,
-        playlistEditEndpoint: {
-          customAction: {
-            action: 'ADD_TO_QUEUE',
-            parameters: item
-          }
-        }
-      }));
-      continue;
-    }
-    if (!configRead('enableLongPress')) continue;
-    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
-    const data = longPressData({
-      videoId: item.tileRenderer.contentId,
-      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
-      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
-      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
-      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
-      item
-    });
-    item.tileRenderer.onLongPressCommand = data;
   }
 }
 
@@ -2455,6 +2418,13 @@ function addPlaylistControlButtons(attempt = 1) {
   const existingButtons = useParent ? parentButtons : baseButtons;
   const currentUrl = window.location.href;
 
+  if (window._playlistButtonInjectedUrl === currentUrl && document.querySelector('#tizentube-collection-btn')) {
+    if (attempt === 1) {
+      console.log('[PLAYLIST_BUTTON] Custom button already injected for URL; skip');
+    }
+    return;
+  }
+
   console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
 
   if (existingButtons.length === 0) {
@@ -2508,13 +2478,14 @@ function addPlaylistControlButtons(attempt = 1) {
   // that can pin the clone over native buttons.
   customBtn.removeAttribute('style');
   customBtn.removeAttribute('aria-hidden');
-  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
+  customBtn.setAttribute('tabindex', '0');
   customBtn.style.pointerEvents = 'auto';
   customBtn.style.setProperty('position', 'static', 'important');
   customBtn.style.setProperty('top', 'auto', 'important');
   customBtn.style.setProperty('left', 'auto', 'important');
   customBtn.style.setProperty('transform', 'none', 'important');
   customBtn.style.setProperty('display', 'inline-flex', 'important');
+  customBtn.removeAttribute('disablehybridnavinsubtree');
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2531,20 +2502,19 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   });
 
-  // Append inside the same button container so the custom button is in the
-  // native focus row order and not outside clipped/virtualized wrappers.
+  // Keep button row visible but avoid inflating height on every reinjection attempt.
   container.style.overflow = 'visible';
-  container.style.minHeight = `${Math.max(container.clientHeight + 90, 140)}px`;
+  const rowMinHeight = Math.max(container.scrollHeight, container.clientHeight, 90);
+  container.style.minHeight = `${rowMinHeight}px`;
   if (container.parentElement) {
     container.parentElement.style.overflow = 'visible';
-    container.parentElement.style.minHeight = `${Math.max(container.parentElement.clientHeight + 90, 180)}px`;
+    const parentMinHeight = Math.max(container.parentElement.scrollHeight, container.parentElement.clientHeight, rowMinHeight + 8);
+    container.parentElement.style.minHeight = `${parentMinHeight}px`;
   }
+
+  // Insert right after the last native button in row-order.
   templateBtn.insertAdjacentElement('afterend', customBtn);
   window._playlistButtonInjectedUrl = currentUrl;
-
-  if (attempt < 3) {
-    setTimeout(() => addPlaylistControlButtons(attempt + 1), 500);
-  }
 
   const rect = customBtn.getBoundingClientRect();
   const crect = container.getBoundingClientRect();

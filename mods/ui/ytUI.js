@@ -304,20 +304,16 @@ function SettingsCategory(categoryId, items, title) {
 }
 
 function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnail) {
-    let resolvedSummary = summary;
     let resolvedSummaryRuns = [{ text: summary }];
+    let resolvedSubtitleRuns = null;
     let resolvedThumbnail = thumbnail;
 
     // Backward-compatible overload:
     // SettingActionRenderer(title, id, endpoint, summaryLine1, summaryLine2, thumbnail)
     if (arguments.length >= 6) {
         const secondLine = arguments[4];
-        resolvedSummary = `${summary}\n${secondLine}`;
-        resolvedSummaryRuns = [
-            { text: summary },
-            { text: '\n' },
-            { text: secondLine }
-        ];
+        resolvedSummaryRuns = [{ text: summary }];
+        resolvedSubtitleRuns = [{ text: secondLine }];
         resolvedThumbnail = arguments[5];
     }
 
@@ -334,6 +330,11 @@ function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnai
             summary: {
                 runs: resolvedSummaryRuns
             },
+            ...(resolvedSubtitleRuns ? {
+                subtitle: {
+                    runs: resolvedSubtitleRuns
+                }
+            } : {}),
             trackingParams: "null",
             actionLabel: {
                 runs: [
