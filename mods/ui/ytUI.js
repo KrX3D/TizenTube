@@ -312,7 +312,11 @@ function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnai
     // SettingActionRenderer(title, id, endpoint, summaryLine1, summaryLine2, thumbnail)
     if (arguments.length >= 6) {
         const secondLine = arguments[4];
-        resolvedSummaryRuns = [{ text: summary }];
+        resolvedSummaryRuns = [
+            { text: summary },
+            { text: '\n' },
+            { text: secondLine }
+        ];
         resolvedSubtitleRuns = [{ text: secondLine }];
         resolvedThumbnail = arguments[5];
     }

@@ -2486,6 +2486,9 @@ function addPlaylistControlButtons(attempt = 1) {
   customBtn.style.setProperty('transform', 'none', 'important');
   customBtn.style.setProperty('display', 'inline-flex', 'important');
   customBtn.removeAttribute('disablehybridnavinsubtree');
+  customBtn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
+  customBtn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
+  customBtn.querySelectorAll('[tabindex]').forEach((el) => el.setAttribute('tabindex', '0'));
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
