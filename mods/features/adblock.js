@@ -4,6 +4,7 @@ import resolveCommand from '../resolveCommand.js';
 import { ShelfRenderer, TileRenderer } from '../ui/ytUI.js';
 import { addLongPress } from './longPress.js';
 import { addPreviews } from './previews.js';
+import { hideShorts } from './hideShorts.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sponsorblock.js';
 import { deArrowify } from './deArrowify.js';
@@ -1686,6 +1687,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
   
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
+  const horizontalShelves = shelves.filter((shelve) => shelve?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  hideShorts(horizontalShelves, shortsEnabled);
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
@@ -1770,19 +1773,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           // ⭐ SHORTS FILTERING
           if (!shortsEnabled) {
-            // Check if this is a shorts shelf by type
-            if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-              if (DEBUG_ENABLED) {
-                console.log('[SHELF_PROCESS] Removing entire SHORTS shelf (by type)');
-              }
-              collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-              shelves.splice(i, 1);
-              shelvesRemoved++;
-              totalShortsRemoved += itemsBefore;
-              totalItemsBefore += itemsBefore;
-              continue;
-            }
-            
             const beforeShortFilter = items.length;
             items = items.filter(item => !isShortItem(item));
             totalShortsRemoved += (beforeShortFilter - items.length);
@@ -2224,7 +2214,7 @@ function getCurrentPage() {
 }
 
 
-function logChunked(prefix, text, chunkSize = 600) {
+function logChunked(prefix, text, chunkSize = 800) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
   // Visual console shows newest logs first; emit chunks in reverse so users
@@ -2232,9 +2222,8 @@ function logChunked(prefix, text, chunkSize = 600) {
   for (let partIndex = total; partIndex >= 1; partIndex--) {
     const i = (partIndex - 1) * chunkSize;
     const part = text.slice(i, i + chunkSize);
-    // Keep metadata and chunk in separate logs so TV console always shows full 600-char parts.
-    console.log(`${prefix} [${partIndex}/${total}] len=${part.length}`);
-    console.log(part);
+    // Keep metadata + chunk in one log line so each entry shows context and payload together.
+    console.log(`${prefix} [${partIndex}/${total}] len=${part.length} ${part}`);
   }
 }
 
@@ -2307,7 +2296,7 @@ function addPlaylistControlButtons(attempt = 1) {
         buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 600);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 800);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2387,8 +2376,8 @@ function addPlaylistControlButtons(attempt = 1) {
     container.parentElement.style.minHeight = `${parentMinHeight}px`;
   }
 
-  // Insert right after the last native button in row-order.
-  templateBtn.insertAdjacentElement('afterend', customBtn);
+  // Append inside the detected container to keep it in visible/focusable bounds.
+  container.appendChild(customBtn);
   window._playlistButtonInjectedUrl = currentUrl;
 
   const rect = customBtn.getBoundingClientRect();
