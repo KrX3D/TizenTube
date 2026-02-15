@@ -304,6 +304,16 @@ function SettingsCategory(categoryId, items, title) {
 }
 
 function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnail) {
+    let resolvedSummary = summary;
+    let resolvedThumbnail = thumbnail;
+
+    // Backward-compatible overload:
+    // SettingActionRenderer(title, id, endpoint, summaryLine1, summaryLine2, thumbnail)
+    if (arguments.length >= 6) {
+        resolvedSummary = `${summary}\n${thumbnail}`;
+        resolvedThumbnail = arguments[5];
+    }
+
     return {
         settingActionRenderer: {
             title: {
@@ -317,7 +327,7 @@ function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnai
             summary: {
                 runs: [
                     {
-                        text: summary
+                        text: resolvedSummary
                     }
                 ]
             },
@@ -333,7 +343,7 @@ function SettingActionRenderer(title, itemId, serviceEndpoint, summary, thumbnai
             thumbnail: {
                 thumbnails: [
                     {
-                        url: thumbnail
+                        url: resolvedThumbnail
                     }
                 ]
             }
