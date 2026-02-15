@@ -2504,19 +2504,10 @@ function addPlaylistControlButtons(attempt = 1) {
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
-  customBtn.removeAttribute('style');
-  customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+  // Keep native styles/classes so TV focus/select behavior stays consistent.
   customBtn.removeAttribute('aria-hidden');
-  customBtn.setAttribute('tabindex', '0');
-  customBtn.style.cssText = '';
-  customBtn.style.setProperty('position', 'relative', 'important');
-  customBtn.style.display = 'inline-flex';
-  customBtn.style.margin = '0';
+  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.zIndex = '9999';
-  customBtn.style.setProperty('transform', 'none', 'important');
-  customBtn.style.setProperty('top', '0', 'important');
-  customBtn.style.setProperty('left', '0', 'important');
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2533,12 +2524,9 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   });
 
-  const targetHost = (parentContainer || container);
-  targetHost.style.overflow = 'visible';
-
-  const lastNativeButton = existingButtons[existingButtons.length - 1];
-  lastNativeButton.insertAdjacentElement('afterend', customBtn);
-  customBtn.style.marginLeft = '0.75rem';
+  // Append inside the same button container so the custom button is in the
+  // native focus row order and not outside clipped/virtualized wrappers.
+  container.appendChild(customBtn);
   window._playlistButtonInjectedUrl = currentUrl;
 
   if (attempt < 3) {
@@ -2546,7 +2534,8 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   const rect = customBtn.getBoundingClientRect();
-  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height));
+  const crect = container.getBoundingClientRect();
+  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 }
 
 
