@@ -2239,7 +2239,7 @@ function cleanupPlaylistHelperTiles() {
   const removedIds = window._playlistRemovedHelpers || new Set();
   const removedKeys = window._playlistRemovedHelperKeys || new Set();
   const currentHelperIds = new Set((window._lastHelperVideos || []).map((video) => getVideoId(video)).filter(Boolean));
-  const candidates = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-grid-renderer ytlr-grid-video-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer, [data-video-id]');
+  const candidates = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-grid-renderer ytlr-grid-video-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer, ytlr-continuation-item-renderer, [class*="continuation"], [data-video-id]');
   let removedCount = 0;
 
   candidates.forEach((node) => {
@@ -2349,14 +2349,6 @@ function addPlaylistControlButtons(attempt = 1) {
   // that can pin the clone over native buttons.
   customBtn.removeAttribute('style');
   customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
-  customBtn.querySelectorAll('*').forEach((el) => {
-    if (el.style && (el.style.position === 'absolute' || (el.style.transform && el.style.transform !== 'none'))) {
-      el.style.position = 'static';
-      el.style.transform = 'none';
-      el.style.top = 'auto';
-      el.style.left = 'auto';
-    }
-  });
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', '0');
   customBtn.style.pointerEvents = 'auto';
@@ -2405,7 +2397,7 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const nativeButtonRects = existingButtons.map((btn, idx) => {
     const r = btn.getBoundingClientRect();
-    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width) };
+    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: btn.id || null };
   });
   console.log('[PLAYLIST_BUTTON] Native button rects:', JSON.stringify(nativeButtonRects));
 
@@ -2421,10 +2413,24 @@ function addPlaylistControlButtons(attempt = 1) {
 
   // Insert after the last native button to keep row order and avoid overlaying first button.
   templateBtn.insertAdjacentElement('afterend', customBtn);
+
+  const templateRect = templateBtn.getBoundingClientRect();
+  const crect = container.getBoundingClientRect();
+  container.style.position = 'relative';
+  customBtn.style.position = 'absolute';
+  customBtn.style.left = `${Math.max(0, Math.round(templateRect.left - crect.left))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(templateRect.top - crect.top + templateRect.height))}px`;
+  customBtn.style.width = `${Math.round(templateRect.width)}px`;
+  customBtn.style.height = `${Math.round(templateRect.height)}px`;
+  customBtn.style.transform = 'none';
+  customBtn.style.zIndex = '2';
+
+  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
+  container.style.minHeight = `${requiredHeight}px`;
+
   window._playlistButtonInjectedUrl = currentUrl;
 
   const rect = customBtn.getBoundingClientRect();
-  const crect = container.getBoundingClientRect();
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 
   try {
@@ -2443,6 +2449,8 @@ function addPlaylistControlButtons(attempt = 1) {
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
+      baseOuterHTMLAfter: baseContainer.outerHTML,
+      parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
     logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 20000);
   } catch (e) {
