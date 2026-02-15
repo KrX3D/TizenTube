@@ -112,7 +112,7 @@ import { configWrite } from "./config.js";
                 return val;
             });
             if (typeof serialized === 'string') {
-                return serialized.length > 600 ? serialized.slice(0, 600) + '…[truncated]' : serialized;
+                return serialized;
             }
         } catch (_) { }
 

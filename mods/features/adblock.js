@@ -2412,7 +2412,7 @@ function logChunked(prefix, text, chunkSize = 600) {
     const i = (partIndex - 1) * chunkSize;
     const part = text.slice(i, i + chunkSize);
     // Keep metadata and chunk in separate logs so TV console always shows full 600-char parts.
-    console.log(`${prefix} [${partIndex}/${total}]`);
+    console.log(`${prefix} [${partIndex}/${total}] len=${part.length}`);
     console.log(part);
   }
 }
@@ -2504,10 +2504,17 @@ function addPlaylistControlButtons(attempt = 1) {
   const templateBtn = existingButtons[existingButtons.length - 1];
   const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
-  // Keep native styles/classes so TV focus/select behavior stays consistent.
+  // Keep native classes/structure for TV focus behavior, but remove inline positioning
+  // that can pin the clone over native buttons.
+  customBtn.removeAttribute('style');
   customBtn.removeAttribute('aria-hidden');
   customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
   customBtn.style.pointerEvents = 'auto';
+  customBtn.style.setProperty('position', 'static', 'important');
+  customBtn.style.setProperty('top', 'auto', 'important');
+  customBtn.style.setProperty('left', 'auto', 'important');
+  customBtn.style.setProperty('transform', 'none', 'important');
+  customBtn.style.setProperty('display', 'inline-flex', 'important');
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2526,7 +2533,13 @@ function addPlaylistControlButtons(attempt = 1) {
 
   // Append inside the same button container so the custom button is in the
   // native focus row order and not outside clipped/virtualized wrappers.
-  container.appendChild(customBtn);
+  container.style.overflow = 'visible';
+  container.style.minHeight = `${Math.max(container.clientHeight + 90, 140)}px`;
+  if (container.parentElement) {
+    container.parentElement.style.overflow = 'visible';
+    container.parentElement.style.minHeight = `${Math.max(container.parentElement.clientHeight + 90, 180)}px`;
+  }
+  templateBtn.insertAdjacentElement('afterend', customBtn);
   window._playlistButtonInjectedUrl = currentUrl;
 
   if (attempt < 3) {
