@@ -563,9 +563,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
             }
             const ids = collectVideoIdsFromShelf(shelf);
             ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-            if (page === 'subscriptions' || LOG_SHORTS) {
-              console.log('[SUBS_SHORTS_SHELF] removed title=', shelfTitle, '| ids=', ids.length, '| path=', path);
-            }
+            console.log('[SUBS_SHORTS_SHELF] removed title=', shelfTitle, '| ids=', ids.length, '| path=', path, '| page=', page);
             const stack = [shelf];
             while (stack.length) {
               const node = stack.pop();
@@ -1796,9 +1794,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           }
           const ids = collectVideoIdsFromShelf(shelve);
           ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-          if (page === 'subscriptions' || LOG_SHORTS) {
-            console.log('[SUBS_SHORTS_SHELF] processShelves removed title=', shelfTitle, '| ids=', ids.length, '| page=', page);
-          }
+          console.log('[SUBS_SHORTS_SHELF] processShelves removed title=', shelfTitle, '| ids=', ids.length, '| page=', page);
           shelves.splice(i, 1);
           shelvesRemoved++;
           continue; // Skip to next shelf
@@ -2448,9 +2444,9 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  if (attempt === 1) {
+  if (attempt <= 2) {
     const lastDumpUrl = window._playlistButtonDumpUrl;
-    if (lastDumpUrl !== currentUrl) {
+    if (lastDumpUrl !== currentUrl || attempt === 2) {
       window._playlistButtonDumpUrl = currentUrl;
       try {
         const targetHostForDump = (parentContainer || container);
@@ -2472,6 +2468,7 @@ function addPlaylistControlButtons(attempt = 1) {
           targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
           buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
         };
+        console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
         logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 2000);
       } catch (e) {
         console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
@@ -2494,12 +2491,16 @@ function addPlaylistControlButtons(attempt = 1) {
   const customBtn = templateBtn.cloneNode(true);
   customBtn.id = 'tizentube-collection-btn';
   customBtn.removeAttribute('aria-hidden');
-  customBtn.setAttribute('tabindex', templateBtn.getAttribute('tabindex') || '0');
-  customBtn.style.position = 'static';
+  customBtn.setAttribute('tabindex', '0');
+  customBtn.style.cssText = '';
+  customBtn.style.position = 'relative';
   customBtn.style.display = 'inline-flex';
   customBtn.style.margin = '0';
   customBtn.style.pointerEvents = 'auto';
   customBtn.style.zIndex = '9999';
+  customBtn.style.transform = 'none';
+  customBtn.style.top = '0';
+  customBtn.style.left = '0';
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2527,6 +2528,7 @@ function addPlaylistControlButtons(attempt = 1) {
   buttonHost.style.width = '100%';
   buttonHost.style.position = 'relative';
   buttonHost.style.zIndex = '9999';
+  buttonHost.style.minHeight = '68px';
   buttonHost.appendChild(customBtn);
 
   targetHost.insertAdjacentElement('afterend', buttonHost);

@@ -181,4 +181,5 @@ div[idomkey="shadow"] {
   position: relative !important;
   z-index: 9999 !important;
   clear: both !important;
+  min-height: 68px !important;
 }
