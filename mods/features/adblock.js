@@ -1,9 +1,14 @@
 import { configRead } from '../config.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
-import { timelyAction, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
+import { ShelfRenderer, TileRenderer } from '../ui/ytUI.js';
 import { addLongPress } from './longPress.js';
 import { addPreviews } from './previews.js';
+import { applyPreferredVideoCodec } from './videoCodecPreference.js';
+import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sponsorblock.js';
+import { deArrowify } from './deArrowify.js';
+import { hqify } from './hqify.js';
+import { applyAdCleanup } from './adCleanup.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
@@ -831,42 +836,14 @@ JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
 
-  if (r.adPlacements && adBlockEnabled) {
-    //console.log('ADBLOCK', 'Removing adPlacements', { count: r.adPlacements.length });
-    
-    r.adPlacements = [];
-  }
-
-  if (r.playerAds && adBlockEnabled) {
-    //console.log('ADBLOCK', 'Disabling playerAds');
-    r.playerAds = false;
-  }
-
-  if (r.adSlots && adBlockEnabled) {
-    //console.log('ADBLOCK', 'Clearing adSlots', { count: r.adSlots.length });
-    r.adSlots = [];
-  }
+  applyAdCleanup(r, adBlockEnabled);
 
   if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
     //console.log('ADBLOCK', 'Removing paid content overlay');
     r.paidContentOverlay = null;
   }
 
-  if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
-    const preferredCodec = configRead('videoPreferredCodec');
-    const hasPreferredCodec = r.streamingData.adaptiveFormats.find(format => format.mimeType.includes(preferredCodec));
-    if (hasPreferredCodec) {
-      const before = r.streamingData.adaptiveFormats.length;
-      r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(format => {
-        if (format.mimeType.startsWith('audio/')) return true;
-        return format.mimeType.includes(preferredCodec);
-      });
-      logger.info('VIDEO_CODEC', `Filtered formats for ${preferredCodec}`, {
-        before,
-        after: r.streamingData.adaptiveFormats.length
-      });
-    }
-  }
+  applyPreferredVideoCodec(r, configRead('videoPreferredCodec'));
 
   // Drop "masthead" ad from home screen
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
@@ -1108,8 +1085,8 @@ JSON.parse = function () {
         count: r.continuationContents.horizontalListContinuation.items.length
       });
     }
-    deArrowify(r.continuationContents.horizontalListContinuation.items);
-    hqify(r.continuationContents.horizontalListContinuation.items);
+    deArrowify(r.continuationContents.horizontalListContinuation.items, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+    hqify(r.continuationContents.horizontalListContinuation.items, configRead('enableHqThumbnails'));
     addLongPress(r.continuationContents.horizontalListContinuation.items, configRead('enableLongPress'));
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
@@ -1300,55 +1277,8 @@ JSON.parse = function () {
     }
   }
 
-  // Manual SponsorBlock Skips
-  if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
-    const manualSkippedSegments = configRead('sponsorBlockManualSkips');
-    let timelyActions = [];
-    if (window?.sponsorblock?.segments) {
-      for (const segment of window.sponsorblock.segments) {
-        if (manualSkippedSegments.includes(segment.category)) {
-          const timelyActionData = timelyAction(
-            `Skip ${segment.category}`,
-            'SKIP_NEXT',
-            {
-              clickTrackingParams: null,
-              showEngagementPanelEndpoint: {
-                customAction: {
-                  action: 'SKIP',
-                  parameters: { time: segment.segment[1] }
-                }
-              }
-            },
-            segment.segment[0] * 1000,
-            segment.segment[1] * 1000 - segment.segment[0] * 1000
-          );
-          timelyActions.push(timelyActionData);
-        }
-      }
-      r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
-      //console.log('SPONSORBLOCK', `Added ${timelyActions.length} manual skip actions`);
-    }
-  } else if (r?.playerOverlays?.playerOverlayRenderer) {
-    r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
-  }
-
-  if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
-    if (window?.sponsorblock?.segments) {
-      const category = window.sponsorblock.segments.find(seg => seg.category === 'poi_highlight');
-      if (category) {
-        r.transportControls.transportControlsRenderer.promotedActions.push({
-          type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
-          button: {
-            buttonRenderer: ButtonRenderer(false, 'Skip to highlight', 'SKIP_NEXT', {
-              clickTrackingParams: null,
-              customAction: { action: 'SKIP', parameters: { time: category.segment[0] }}
-            })
-          }
-        });
-        //console.log('SPONSORBLOCK', 'Added highlight button');
-      }
-    }
-  }
+  applySponsorBlockTimelyActions(r, configRead('sponsorBlockManualSkips'));
+  applySponsorBlockHighlight(r, configRead('enableSponsorBlockHighlight'));
   
   // UNIVERSAL FALLBACK - Filter EVERYTHING if we're on a critical page
   const currentPage = getCurrentPage();
@@ -1833,8 +1763,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
                   
-          deArrowify(items);
-          hqify(items);
+          deArrowify(items, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+          hqify(items, configRead('enableHqThumbnails'));
           addLongPress(items, configRead('enableLongPress'));
           addPreviews(items, shouldAddPreviews);
           
@@ -1890,8 +1820,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
-          deArrowify(items);
-          hqify(items);
+          deArrowify(items, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+          hqify(items, configRead('enableHqThumbnails'));
           addLongPress(items, configRead('enableLongPress'));
           addPreviews(items, shouldAddPreviews);
           
@@ -1931,8 +1861,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const originalItems = Array.isArray(items) ? items.slice() : [];
           itemsBefore = items.length;
 
-          deArrowify(items);
-          hqify(items);
+          deArrowify(items, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+          hqify(items, configRead('enableHqThumbnails'));
           addLongPress(items, configRead('enableLongPress'));
           addPreviews(items, shouldAddPreviews);
           
@@ -1973,8 +1903,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
         const originalContents = Array.isArray(contents) ? contents.slice() : [];
         itemsBefore = contents.length;
 
-        deArrowify(contents);
-        hqify(contents);
+        deArrowify(contents, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+        hqify(contents, configRead('enableHqThumbnails'));
         addLongPress(contents, configRead('enableLongPress'));
         addPreviews(contents, shouldAddPreviews);
         
@@ -2033,8 +1963,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
         const originalItems = Array.isArray(items) ? items.slice() : [];
         itemsBefore = items.length;
 
-        deArrowify(items);
-        hqify(items);
+        deArrowify(items, configRead('enableDeArrow'), configRead('enableDeArrowThumbnails'));
+        hqify(items, configRead('enableHqThumbnails'));
         addLongPress(items, configRead('enableLongPress'));
         addPreviews(items, shouldAddPreviews);
         
@@ -2110,57 +2040,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
   // Summary
   if (DEBUG_ENABLED) {
     console.log('[SHELF] Done:', totalItemsBefore, '→', totalItemsAfter, '| Hidden:', totalHidden, '| Shorts:', totalShortsRemoved, '| Removed:', shelvesRemoved, 'shelves');
-  }
-}
-
-function deArrowify(items) {
-  for (const item of items) {
-    if (item.adSlotRenderer) {
-      const index = items.indexOf(item);
-      items.splice(index, 1);
-      continue;
-    }
-    if (!item.tileRenderer) continue;
-    if (configRead('enableDeArrow')) {
-      const videoID = item.tileRenderer.contentId;
-      fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`).then(res => res.json()).then(data => {
-        if (data.titles.length > 0) {
-          const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
-          item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
-        }
-
-        if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
-          const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
-          if (mostVotedThumbnail.timestamp) {
-            item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-              {
-                url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`,
-                width: 1280,
-                height: 640
-              }
-            ]
-          }
-        }
-      }).catch(() => { });
-    }
-  }
-}
-
-function hqify(items) {
-  for (const item of items) {
-    if (!item.tileRenderer) continue;
-    if (configRead('enableHqThumbnails')) {
-      if (!item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId) continue;
-      const videoID = item.tileRenderer.onSelectCommand.watchEndpoint.videoId;
-      const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
-      item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-        {
-          url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
-          width: 640,
-          height: 480
-        }
-      ];
-    }
   }
 }
 
@@ -2405,7 +2284,7 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  if (attempt <= 2) {
+  if (attempt <= 6) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
