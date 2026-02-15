@@ -2362,23 +2362,20 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   const templateBtn = existingButtons[existingButtons.length - 1];
+  const templateRect = templateBtn.getBoundingClientRect();
   const customBtn = templateBtn.cloneNode(true);
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
-  // Keep native classes/structure for TV focus behavior, but remove inline positioning
-  // that can pin the clone over native buttons.
-  customBtn.removeAttribute('style');
-  customBtn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
-  customBtn.removeAttribute('aria-hidden');
+  // Keep cloned structure/styles intact for TV focus behavior.
+  customBtn.removeAttribute('id');
   customBtn.setAttribute('tabindex', '0');
+  customBtn.removeAttribute('aria-hidden');
   customBtn.style.pointerEvents = 'auto';
-  customBtn.style.setProperty('position', 'static', 'important');
-  customBtn.style.setProperty('top', 'auto', 'important');
-  customBtn.style.setProperty('left', 'auto', 'important');
-  customBtn.style.setProperty('transform', 'none', 'important');
-  customBtn.style.setProperty('display', 'inline-flex', 'important');
-  customBtn.removeAttribute('disablehybridnavinsubtree');
-  customBtn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
-  customBtn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
+  customBtn.style.opacity = '1';
+  customBtn.style.visibility = 'visible';
+  customBtn.style.display = 'block';
+  customBtn.style.removeProperty('right');
+  customBtn.style.removeProperty('inset');
+  customBtn.style.removeProperty('margin-left');
 
   const labelNode = customBtn.querySelector('yt-formatted-string');
   if (labelNode) {
@@ -2433,19 +2430,23 @@ function addPlaylistControlButtons(attempt = 1) {
   // Insert after the last native button to keep row order and avoid overlaying first button.
   templateBtn.insertAdjacentElement('afterend', customBtn);
 
-  // Use native layout flow. Absolute placement caused focus-navigation issues and could
-  // place the injected control into the wrong visual slot on some Tizen versions.
-  customBtn.style.position = 'static';
-  customBtn.style.left = 'auto';
-  customBtn.style.top = 'auto';
-  customBtn.style.width = 'auto';
-  customBtn.style.height = 'auto';
+  // Tizen TV layouts may place cloned buttons in the same row unless we anchor it
+  // directly below the template button using the native button geometry.
+  const crect = container.getBoundingClientRect();
+  container.style.position = 'relative';
+  customBtn.style.position = 'absolute';
+  customBtn.style.left = `${Math.max(0, Math.round(templateRect.left - crect.left))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(templateRect.top - crect.top + templateRect.height))}px`;
+  customBtn.style.width = `${Math.round(templateRect.width)}px`;
+  customBtn.style.height = `${Math.round(templateRect.height)}px`;
   customBtn.style.transform = 'none';
-  customBtn.style.zIndex = '1';
+  customBtn.style.zIndex = '2';
+
+  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
+  container.style.minHeight = `${requiredHeight}px`;
 
   window._playlistButtonInjectedUrl = currentUrl;
 
-  const crect = container.getBoundingClientRect();
   const rect = customBtn.getBoundingClientRect();
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 
