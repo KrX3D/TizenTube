@@ -83,6 +83,31 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
 
   const page = currentPage || 'other';
 
+  // ⭐ NEW: Tizen 5.5 specific - check for shorts in any renderer type FIRST
+  const allRenderers = [
+    item.tileRenderer,
+    item.videoRenderer, 
+    item.gridVideoRenderer,
+    item.compactVideoRenderer,
+    item.richItemRenderer?.content?.videoRenderer
+  ].filter(Boolean);
+
+  for (const renderer of allRenderers) {
+    // Check navigation endpoint for /shorts/ URL
+    const navUrl = renderer.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || '';
+    if (navUrl.includes('/shorts/')) {
+      if (logShorts) console.log('[SHORTS] Detected by URL:', videoId);
+      return true;
+    }
+
+    // Check for reelWatchEndpoint anywhere in the renderer
+    const rendererStr = JSON.stringify(renderer);
+    if (rendererStr.includes('reelWatchEndpoint') || rendererStr.includes('reelWatch')) {
+      if (logShorts) console.log('[SHORTS] Detected by reelWatch:', videoId);
+      return true;
+    }
+  }
+
   if ((page === 'subscriptions' || String(page).includes('channel')) && debugEnabled && logShorts) {
     console.log('[SHORTS_DIAGNOSTIC] checking', videoId);
   }

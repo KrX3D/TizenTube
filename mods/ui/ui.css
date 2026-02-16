@@ -182,3 +182,13 @@ div[idomkey="shadow"] {
   clear: both !important;
   min-height: 68px !important;
 }
+
+/* Playlist button - ensure it's visible and clickable */
+ytlr-button-renderer[data-tizentube-collection-btn="1"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  margin-top: 16px !important;
+}
