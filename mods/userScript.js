@@ -14,6 +14,7 @@ initVisualConsole({
   configWrite
 });
 
+import "./features/remoteLogging.js";
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';
@@ -38,3 +39,4 @@ import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
+
