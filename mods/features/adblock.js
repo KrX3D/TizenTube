@@ -2307,7 +2307,9 @@ function addPlaylistControlButtons(attempt = 1) {
   let existingButtons = getNativeButtons();
   const currentUrl = window.location.href;
 
-  console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
+  if (attempt <= 6 || DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
+  }
 
   if (existingButtons.length === 0) {
     console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
@@ -2418,40 +2420,46 @@ function addPlaylistControlButtons(attempt = 1) {
   });
   console.log('[PLAYLIST_BUTTON] Native button rects:', JSON.stringify(nativeButtonRects));
 
-  // Keep button row visible but avoid inflating height on every reinjection attempt.
-  container.style.overflow = 'visible';
-  const rowMinHeight = Math.max(container.scrollHeight, container.clientHeight, 90);
-  container.style.minHeight = `${rowMinHeight}px`;
-  if (container.parentElement) {
-    container.parentElement.style.overflow = 'visible';
-    const parentMinHeight = Math.max(container.parentElement.scrollHeight, container.parentElement.clientHeight, rowMinHeight + 8);
-    container.parentElement.style.minHeight = `${parentMinHeight}px`;
-  }
-
   // Keep custom button directly after the current last native button.
   if (templateBtn.nextElementSibling !== customBtn) {
     templateBtn.insertAdjacentElement('afterend', customBtn);
   }
 
-  // Place custom button one slot below template (y + height) using native geometry.
   const crect = container.getBoundingClientRect();
-  const templateTop = templateBtn.offsetTop || Math.round(templateRect.top - crect.top);
-  const templateLeft = templateBtn.offsetLeft || Math.round(templateRect.left - crect.left);
-  const templateHeight = templateBtn.offsetHeight || Math.round(templateRect.height);
-  const templateWidth = templateBtn.offsetWidth || Math.round(templateRect.width);
+  const lastNativeRect = existingButtons
+    .map((btn) => btn.getBoundingClientRect())
+    .reduce((maxRect, rect) => (rect.top > maxRect.top ? rect : maxRect), templateRect);
 
   container.style.position = 'relative';
   customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(templateLeft))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(templateTop + templateHeight))}px`;
-  customBtn.style.width = `${Math.max(1, Math.round(templateWidth))}px`;
-  customBtn.style.height = `${Math.max(1, Math.round(templateHeight))}px`;
+  customBtn.style.left = `${Math.max(0, Math.round(lastNativeRect.left - crect.left))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(lastNativeRect.top - crect.top + lastNativeRect.height))}px`;
+  customBtn.style.width = `${Math.max(1, Math.round(lastNativeRect.width))}px`;
+  customBtn.style.height = `${Math.max(1, Math.round(lastNativeRect.height))}px`;
   customBtn.style.display = 'block';
   customBtn.style.transform = 'none';
   customBtn.style.zIndex = '2';
 
-  const requiredHeight = Math.max(container.clientHeight, Math.round(templateTop + templateHeight * 2 + 8));
+  // Prevent infinite growth by anchoring minimum height to an initial baseline.
+  const baseMinHeight = Number(container.dataset.tizentubeBaseMinHeight || 0) || Math.max(container.clientHeight, 90);
+  if (!container.dataset.tizentubeBaseMinHeight) {
+    container.dataset.tizentubeBaseMinHeight = String(baseMinHeight);
+  }
+
+  const nativeBottomRel = Math.round(lastNativeRect.top - crect.top + lastNativeRect.height);
+  const requiredHeight = Math.max(baseMinHeight, nativeBottomRel + Math.round(lastNativeRect.height) + 8);
+  container.style.overflow = 'visible';
   container.style.minHeight = `${requiredHeight}px`;
+
+  if (container.parentElement) {
+    const parent = container.parentElement;
+    const parentBaseMinHeight = Number(parent.dataset.tizentubeBaseMinHeight || 0) || Math.max(parent.clientHeight, requiredHeight + 8);
+    if (!parent.dataset.tizentubeBaseMinHeight) {
+      parent.dataset.tizentubeBaseMinHeight = String(parentBaseMinHeight);
+    }
+    parent.style.overflow = 'visible';
+    parent.style.minHeight = `${Math.max(parentBaseMinHeight, requiredHeight + 8)}px`;
+  }
 
   window._playlistButtonInjectedUrl = currentUrl;
 
@@ -2478,7 +2486,9 @@ function addPlaylistControlButtons(attempt = 1) {
       baseOuterHTMLAfter: baseContainer.outerHTML,
       parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
-    logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 3000);
+    if (attempt <= 6) {
+      logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 3000);
+    }
   } catch (e) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
   }
@@ -2492,7 +2502,7 @@ if (typeof window !== 'undefined') {
     const page = getCurrentPage();
     if (page === 'playlist' || page === 'playlists') {
       cleanupPlaylistHelperTiles();
-      if (page === 'playlist') {
+      if (!document.querySelector('[data-tizentube-collection-btn="1"]') && page === 'playlist') {
         addPlaylistControlButtons(7);
       }
     }
@@ -2502,5 +2512,5 @@ if (typeof window !== 'undefined') {
         setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
       }
     }
-  }, 1500);
+  }, 1200);
 }
