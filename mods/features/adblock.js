@@ -228,7 +228,7 @@ function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
   console.log('[DIAGNOSTIC] directFilterArray called | page:', page, '| context:', context, '| items:', arr.length);
-    
+  
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
 
@@ -265,7 +265,7 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
   console.log('[DIAGNOSTIC] Config | shortsEnabled:', shortsEnabled, '| hideWatchedEnabled:', hideWatchedEnabled, '| threshold:', threshold);
-    
+  
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
   
@@ -273,13 +273,13 @@ function directFilterArray(arr, page, context = '') {
   const shouldApplyShortsFilter = shouldFilterShorts(shortsEnabled, page);
   
   console.log('[DIAGNOSTIC] Filtering flags | shouldHideWatched:', shouldHideWatched, '| shouldApplyShortsFilter:', shouldApplyShortsFilter, '| page:', page);
-    
+  
   // Skip if nothing to do
   if (!shouldApplyShortsFilter && !shouldHideWatched) {
     console.log('[DIAGNOSTIC] SKIPPING - No filtering needed');
     return arr;
   }
-
+  
   console.log('[DIAGNOSTIC] PROCEEDING with filtering...');
   
   // Generate unique call ID for debugging
@@ -388,11 +388,11 @@ function directFilterArray(arr, page, context = '') {
       }
       
       const videoId = item.tileRenderer?.contentId || 
-                    item.videoRenderer?.videoId || 
-                    item.playlistVideoRenderer?.videoId ||
-                    item.gridVideoRenderer?.videoId ||
-                    item.compactVideoRenderer?.videoId ||
-                    'unknown';
+                     item.videoRenderer?.videoId || 
+                     item.playlistVideoRenderer?.videoId ||
+                     item.gridVideoRenderer?.videoId ||
+                     item.compactVideoRenderer?.videoId ||
+                     'unknown';
 
       // ⭐ ORIGINAL WORKING LOGIC RESTORED: Check shelf memory first
       if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
@@ -485,6 +485,19 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
+  // ⭐ CHANNEL DIAGNOSTIC - Add this right after the filtering summary
+  if (page === 'channel' || page.includes('channel')) {
+    console.log('[CHANNEL_DIAGNOSTIC] ========================================');
+    console.log('[CHANNEL_DIAGNOSTIC] Page:', page);
+    console.log('[CHANNEL_DIAGNOSTIC] shouldHideWatched:', shouldHideWatched);
+    console.log('[CHANNEL_DIAGNOSTIC] configPages:', configPages);
+    console.log('[CHANNEL_DIAGNOSTIC] hideWatchedEnabled:', hideWatchedEnabled);
+    console.log('[CHANNEL_DIAGNOSTIC] Original items:', originalLength, '| Filtered:', filtered.length);
+    console.log('[CHANNEL_DIAGNOSTIC] Hidden count:', hiddenCount);
+    console.log('[CHANNEL_DIAGNOSTIC] Threshold:', threshold);
+    console.log('[CHANNEL_DIAGNOSTIC] ========================================');
+  }
+  
   // ⭐ PLAYLIST SAFEGUARD: keep one helper tile so TV can request next batch.
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
@@ -544,6 +557,21 @@ function directFilterArray(arr, page, context = '') {
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
     console.log('--------------------------------->> All helpers cleared!');
+  }
+  
+  // ⭐ AGGRESSIVE: Schedule helper cleanup for playlists
+  if (isPlaylistPage && filtered.length > 0) {
+    setTimeout(() => {
+      cleanupPlaylistHelperTiles();
+    }, 100);
+    
+    setTimeout(() => {
+      cleanupPlaylistHelperTiles();
+    }, 500);
+    
+    setTimeout(() => {
+      cleanupPlaylistHelperTiles();
+    }, 1000);
   }
   
   return filtered;
@@ -1964,15 +1992,19 @@ function addPlaylistControlButtons(attempt = 1) {
   if (page !== 'playlist') return;
 
   if (document.querySelector('[data-tizentube-collection-btn="1"]')) {
+    console.log('[PLAYLIST_BUTTON] Already exists, skipping');
     return;
   }
 
   // Find ALL visible buttons
   const allButtons = Array.from(document.querySelectorAll('ytlr-button-renderer'))
     .filter(btn => {
+      if (btn.getAttribute('data-tizentube-collection-btn')) return false;
       const rect = btn.getBoundingClientRect();
       return rect.height > 10 && rect.width > 10;
     });
+  
+  console.log('[PLAYLIST_BUTTON] Found', allButtons.length, 'native buttons');
   
   if (allButtons.length === 0) {
     if (attempt < 6) {
@@ -1981,48 +2013,86 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  // Get the last button
-  const lastButton = allButtons[allButtons.length - 1];
-  
-  // ⭐ FIND THE FLEX CONTAINER - walk up the DOM tree
-  let container = lastButton.parentElement;
-  let searchDepth = 0;
-  while (container && searchDepth < 5) {
-    const style = window.getComputedStyle(container);
-    // Look for a flex or grid container
-    if (style.display === 'flex' || style.display === 'grid' || container.children.length === allButtons.length) {
-      console.log('[PLAYLIST_BUTTON] Found container:', container.tagName, container.className);
-      break;
-    }
-    container = container.parentElement;
-    searchDepth++;
-  }
-  
-  if (!container) {
-    console.error('[PLAYLIST_BUTTON] Could not find suitable container');
-    if (attempt < 6) {
-      setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
-    }
-    return;
-  }
+  // Get positions of all buttons
+  allButtons.forEach((btn, idx) => {
+    const rect = btn.getBoundingClientRect();
+    console.log('[PLAYLIST_BUTTON] Native button', idx, '| Y:', rect.top, '| Height:', rect.height);
+  });
 
-  // Clone and setup
-  const customBtn = lastButton.cloneNode(true);
+  // Use the first button as template (most reliable)
+  const templateButton = allButtons[0];
+  const customBtn = templateButton.cloneNode(true);
+  
+  // Setup custom button
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   customBtn.removeAttribute('id');
+  customBtn.setAttribute('tabindex', '0');
+  customBtn.setAttribute('hybridnavfocusable', 'true'); // ⭐ Critical for TV navigation
   
+  // Ensure visibility
+  customBtn.style.display = '';
+  customBtn.style.visibility = 'visible';
+  customBtn.style.opacity = '1';
+  customBtn.style.pointerEvents = 'auto';
+  
+  // Change text
   const labelNode = customBtn.querySelector('yt-formatted-string');
-  if (labelNode) labelNode.textContent = 'Refresh Filters';
+  if (labelNode) {
+    labelNode.textContent = 'Refresh Filters';
+  }
   
-  customBtn.addEventListener('click', (evt) => {
+  // Add click handler
+  const runRefresh = (evt) => {
     evt?.preventDefault?.();
-    resolveCommand({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
+    evt?.stopPropagation?.();
+    console.log('[PLAYLIST_BUTTON] Refresh clicked!');
+    resolveCommand({
+      signalAction: {
+        signal: 'SOFT_RELOAD_PAGE'
+      }
+    });
+  };
+  
+  customBtn.addEventListener('click', runRefresh);
+  customBtn.addEventListener('keydown', (evt) => {
+    if (evt.key === 'Enter' || evt.key === ' ') {
+      runRefresh(evt);
+    }
   });
   
-  // ⭐ Insert as last child of the container
-  container.appendChild(customBtn);
+  // Find the parent container
+  const lastButton = allButtons[allButtons.length - 1];
+  const container = lastButton.parentElement;
   
-  console.log('[PLAYLIST_BUTTON] Injected. Container now has', container.children.length, 'children');
+  if (!container) {
+    console.error('[PLAYLIST_BUTTON] No container found');
+    return;
+  }
+  
+  console.log('[PLAYLIST_BUTTON] Container:', container.tagName, '| Class:', container.className);
+  console.log('[PLAYLIST_BUTTON] Container children before:', container.children.length);
+  
+  // ⭐ Insert AFTER the last button (as next sibling)
+  lastButton.insertAdjacentElement('afterend', customBtn);
+  
+  console.log('[PLAYLIST_BUTTON] Container children after:', container.children.length);
+  
+  // Verify insertion
+  setTimeout(() => {
+    const btnRect = customBtn.getBoundingClientRect();
+    console.log('[PLAYLIST_BUTTON] Custom button rect | Y:', btnRect.top, '| Height:', btnRect.height, '| Width:', btnRect.width);
+    console.log('[PLAYLIST_BUTTON] Custom button visible:', btnRect.height > 0 && btnRect.width > 0);
+    console.log('[PLAYLIST_BUTTON] Custom button in DOM:', document.contains(customBtn));
+    
+    // Log all buttons after insertion
+    const afterButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
+    console.log('[PLAYLIST_BUTTON] Total buttons after insertion:', afterButtons.length);
+    afterButtons.forEach((btn, idx) => {
+      const isCustom = btn.getAttribute('data-tizentube-collection-btn') === '1';
+      const rect = btn.getBoundingClientRect();
+      console.log('[PLAYLIST_BUTTON] Button', idx, isCustom ? '(CUSTOM)' : '(native)', '| Y:', rect.top, '| Height:', rect.height);
+    });
+  }, 100);
 }
 
 if (typeof window !== 'undefined') {

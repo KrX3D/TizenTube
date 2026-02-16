@@ -17,7 +17,13 @@ export function isShortsShelfTitle(title = '') {
 export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle) {
   initShortsTrackingState();
   const ids = collectVideoIdsFromShelf(shelf);
-  ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+  
+  // ⭐ CRITICAL: Store in BOTH memory structures
+  ids.forEach((id) => {
+    if (id && id !== 'unknown') {
+      window._shortsVideoIdsFromShelves.add(id);
+    }
+  });
 
   const stack = [shelf];
   while (stack.length) {
@@ -36,6 +42,7 @@ export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVide
     }
   }
 
+  console.log('[SHORTS_MEMORY] Stored', ids.length, 'IDs from shelf | Total in memory:', window._shortsVideoIdsFromShelves.size);
   return ids;
 }
 
@@ -95,12 +102,16 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
 
   const page = currentPage || 'other';
 
-  // ⭐ CRITICAL FIX: Check global shorts memory FIRST
-  if (videoId && videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
-    if (debugEnabled && logShorts) {
-      console.log('[SHORTS] Found in removed shelf memory:', videoId);
+  // ⭐ CRITICAL: Check global shorts memory FIRST with logging
+  if (videoId && videoId !== 'unknown') {
+    const inMemory = window._shortsVideoIdsFromShelves?.has(videoId);
+    if (debugEnabled || page === 'subscriptions') {
+      console.log('[SHORTS_CHECK]', videoId, '| In memory:', inMemory, '| Page:', page, '| Memory size:', window._shortsVideoIdsFromShelves?.size || 0);
     }
-    return true;
+    if (inMemory) {
+      console.log('✂️✂️✂️ [MEMORY] Found in shelf memory:', videoId);
+      return true;
+    }
   }
 
   // ⭐ NEW: Tizen 5.5 specific - check for shorts in any renderer type FIRST
