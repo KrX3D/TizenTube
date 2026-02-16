@@ -13,7 +13,7 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
-import { isShortItem, getShelfTitle } from './shortsCore.js';
+import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems } from './shortsCore.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
@@ -266,10 +266,10 @@ function directFilterArray(arr, page, context = '') {
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldFilterShorts = !shortsEnabled && page !== 'playlist' && page !== 'playlists';
+  const shouldApplyShortsFilter = shouldFilterShorts(shortsEnabled, page);
   
   // Skip if nothing to do
-  if (!shouldFilterShorts && !shouldHideWatched) {
+  if (!shouldApplyShortsFilter && !shouldHideWatched) {
     return arr;
   }
   
@@ -343,7 +343,7 @@ function directFilterArray(arr, page, context = '') {
   }
   
   // ⭐ DEBUG: Log configuration
-  if (DEBUG_ENABLED && (shouldFilterShorts || shouldHideWatched)) {
+  if (DEBUG_ENABLED && (shouldApplyShortsFilter || shouldHideWatched)) {
     console.log('[FILTER_START #' + callId + '] ========================================');
     console.log('[FILTER_START #' + callId + '] Context:', context);
     console.log('[FILTER_START #' + callId + '] Page:', page);
@@ -351,7 +351,7 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_START #' + callId + '] Total items:', arr.length);
     console.log('[FILTER_CONFIG #' + callId + '] Threshold:', threshold + '%');
     console.log('[FILTER_CONFIG #' + callId + '] Hide watched:', shouldHideWatched);
-    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldFilterShorts);
+    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldApplyShortsFilter);
   }
   
   let hiddenCount = 0;
@@ -384,17 +384,9 @@ function directFilterArray(arr, page, context = '') {
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
 
-    if (videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
+    if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
       if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf ID:', videoId);
-      }
-      return false;
-    }
-
-    const videoTitle = getVideoTitle(item).trim().toLowerCase();
-    if (videoTitle && window._shortsTitlesFromShelves?.has(videoTitle)) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf TITLE:', videoTitle);
+        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
       }
       return false;
     }
@@ -411,7 +403,7 @@ function directFilterArray(arr, page, context = '') {
     }
     
     // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
-    if (shouldFilterShorts && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
+    if (shouldApplyShortsFilter && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
       shortsCount++;
       
       // ⭐ ADD VISUAL MARKER
@@ -543,8 +535,7 @@ function directFilterArray(arr, page, context = '') {
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
-  window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
-  window._shortsTitlesFromShelves = window._shortsTitlesFromShelves || new Set();
+  initShortsTrackingState();
   
   // If this is an array with video items, filter it
   if (Array.isArray(obj) && obj.length > 0) {
@@ -574,48 +565,15 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     if (hasShelves) {
       const shortsEnabled = configRead('enableShorts');
 
-      if (page === 'subscriptions') {
-        for (let i = 0; i < obj.length; i++) {
-          const shelf = obj[i];
-          const shelfTitle = getShelfTitle(shelf);
-          if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-            console.log('[SUBS_SHORTS_SHELF] seen title=', shelfTitle, '| path=', path + '[' + i + ']', '| shortsEnabled=', shortsEnabled);
-          }
-        }
-      }
-      
-      // ⭐ FIRST: Remove Shorts shelves by title (before recursive filtering)
-      if (!shortsEnabled) {
-        for (let i = obj.length - 1; i >= 0; i--) {
-          const shelf = obj[i];
-          const shelfTitle = getShelfTitle(shelf);
-          if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-            if (LOG_SHORTS && DEBUG_ENABLED) {
-              console.log('[SCAN] Removing Shorts shelf by title:', shelfTitle, 'at:', path);
-            }
-            const ids = collectVideoIdsFromShelf(shelf);
-            ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-            console.log('[SUBS_SHORTS_SHELF] removed title=', shelfTitle, '| ids=', ids.length, '| path=', path, '| page=', page);
-            const stack = [shelf];
-            while (stack.length) {
-              const node = stack.pop();
-              if (!node || typeof node !== 'object') continue;
-              if (Array.isArray(node)) {
-                node.forEach((entry) => stack.push(entry));
-                continue;
-              }
-              const title = getVideoTitle(node).trim().toLowerCase();
-              if (title) window._shortsTitlesFromShelves.add(title);
-              for (const key in node) {
-                if (Object.prototype.hasOwnProperty.call(node, key)) {
-                  stack.push(node[key]);
-                }
-              }
-            }
-            obj.splice(i, 1);
-          }
-        }
-      }
+      removeShortsShelvesByTitle(obj, {
+        page,
+        shortsEnabled,
+        collectVideoIdsFromShelf,
+        getVideoTitle,
+        debugEnabled: DEBUG_ENABLED,
+        logShorts: LOG_SHORTS,
+        path
+      });
       
       // Filter shelves recursively
       for (const key in obj) {
@@ -1325,13 +1283,13 @@ function processShelves(shelves, shouldAddPreviews = true) {
     return;
   }
 
-  window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
+  initShortsTrackingState();
   
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
   const horizontalShelves = shelves.filter((shelve) => shelve?.shelfRenderer?.content?.horizontalListRenderer?.items);
   hideShorts(horizontalShelves, shortsEnabled, (removedShelf) => {
-    collectVideoIdsFromShelf(removedShelf).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+    rememberShortsFromShelf(removedShelf, collectVideoIdsFromShelf, getVideoTitle);
   });
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const configPages = configRead('hideWatchedVideosPages') || [];
@@ -1370,30 +1328,20 @@ function processShelves(shelves, shouldAddPreviews = true) {
       const shelve = shelves[i];
       if (!shelve) continue;
       
-      // ⭐ NEW: Check if this is a Shorts shelf by title (Tizen 5.5 detection)
+      // Shorts shelf removal by title moved to shortsCore.
       if (!shortsEnabled) {
-        const shelfTitle = getShelfTitle(shelve);
-        if (page === 'subscriptions' && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SUBS_SHORTS_SHELF] processShelves seen title=', shelfTitle, '| index=', i, '| shortsEnabled=', shortsEnabled);
-        }
-        if (shelfTitle && (shelfTitle.toLowerCase().includes('shorts') || shelfTitle.toLowerCase().includes('short'))) {
-          if (DEBUG_ENABLED || LOG_SHORTS) {
-            console.log('[SHELF_PROCESS] Removing Shorts shelf by title:', shelfTitle);
-          }
-          const ids = collectVideoIdsFromShelf(shelve);
-          ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
-          console.log('[SUBS_SHORTS_SHELF] processShelves removed title=', shelfTitle, '| ids=', ids.length, '| page=', page);
-          shelves.splice(i, 1);
-          shelvesRemoved++;
-          continue; // Skip to next shelf
-        }
-
-        // ⭐ Also log when we DON'T remove (for debugging)
-        if (shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('🔍 NOT removing shelf (contains "short" but not exact match):', shelfTitle);
-        }
-        if (DEBUG_ENABLED && shelfTitle && shelfTitle.toLowerCase().includes('short')) {
-          console.log('[SHELF_PROCESS] Keeping non-exact short shelf title:', shelfTitle);
+        const removed = removeShortsShelvesByTitle(shelves, {
+          page,
+          shortsEnabled,
+          collectVideoIdsFromShelf,
+          getVideoTitle,
+          debugEnabled: DEBUG_ENABLED,
+          logShorts: LOG_SHORTS,
+          path: `processShelves[${i}]`
+        });
+        if (removed > 0) {
+          shelvesRemoved += removed;
+          continue;
         }
       }
       
@@ -1417,9 +1365,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
           
           // ⭐ SHORTS FILTERING
           if (!shortsEnabled) {
-            const beforeShortFilter = items.length;
-            items = items.filter(item => !isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }));
-            totalShortsRemoved += (beforeShortFilter - items.length);
+            const shortResult = filterShortItems(items, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+            items = shortResult.items;
+            totalShortsRemoved += shortResult.removed;
           }
           
           // ⭐ WATCHED FILTERING (always runs, independent of shorts)
@@ -1440,7 +1388,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
             if (DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Shelf empty after filtering, removing');
             }
-            collectVideoIdsFromShelf(shelve).forEach((id) => window._shortsVideoIdsFromShelves.add(id));
+            rememberShortsFromShelf(shelve, collectVideoIdsFromShelf, getVideoTitle);
             shelves.splice(i, 1);
             shelvesRemoved++;
             continue;
@@ -1460,9 +1408,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
           addPreviews(items, shouldAddPreviews);
           
           if (!shortsEnabled) {
-            const beforeShortFilter = items.length;
-            items = items.filter(item => !isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }));
-            totalShortsRemoved += (beforeShortFilter - items.length);
+            const shortResult = filterShortItems(items, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+            items = shortResult.items;
+            totalShortsRemoved += shortResult.removed;
           }
           
           const beforeHide = items.length;
@@ -1501,9 +1449,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
           addPreviews(items, shouldAddPreviews);
           
           if (!shortsEnabled) {
-            const beforeShortFilter = items.length;
-            items = items.filter(item => !isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }));
-            totalShortsRemoved += (beforeShortFilter - items.length);
+            const shortResult = filterShortItems(items, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+            items = shortResult.items;
+            totalShortsRemoved += shortResult.removed;
           }
           
           const beforeHide = items.length;
@@ -1543,9 +1491,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         addPreviews(contents, shouldAddPreviews);
         
         if (!shortsEnabled) {
-          const beforeShortFilter = contents.length;
-          contents = contents.filter(item => !isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }));
-          totalShortsRemoved += (beforeShortFilter - contents.length);
+          const shortResult = filterShortItems(contents, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+          contents = shortResult.items;
+          totalShortsRemoved += shortResult.removed;
         }
         
         const beforeHide = contents.length;
@@ -1578,8 +1526,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
         if (!shortsEnabled) {
           const innerShelf = shelve.richSectionRenderer.content.richShelfRenderer;
           const contents = innerShelf?.content?.richGridRenderer?.contents;
-          
-          if (Array.isArray(contents) && contents.some(item => isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }))) {            
+          const shortResult = filterShortItems(contents, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+          if (shortResult.removed > 0) {
             if (LOG_SHORTS && DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
             }
@@ -1603,9 +1551,9 @@ function processShelves(shelves, shouldAddPreviews = true) {
         addPreviews(items, shouldAddPreviews);
         
         if (!shortsEnabled) {
-          const beforeShortFilter = items.length;
-          items = items.filter(item => !isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() }));
-          totalShortsRemoved += (beforeShortFilter - items.length);
+          const shortResult = filterShortItems(items, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
+          items = shortResult.items;
+          totalShortsRemoved += shortResult.removed;
         }
         
         const beforeHide = items.length;
@@ -1858,7 +1806,7 @@ function getCurrentPage() {
 }
 
 
-function logChunkedByLines(prefix, text, linesPerChunk = 45) {
+function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
   const lines = String(text).split('\n');
   const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
@@ -1974,13 +1922,13 @@ function addPlaylistControlButtons(attempt = 1) {
   let existingButtons = getNativeButtons();
   const currentUrl = window.location.href;
 
-  if (attempt <= 2 || DEBUG_ENABLED) {
+  if (attempt <= 2) {
     console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
   }
 
   if (existingButtons.length === 0) {
     const now = Date.now();
-    if (attempt <= 2 || DEBUG_ENABLED || !window._playlistNoNativeLogAt || (now - window._playlistNoNativeLogAt) > 5000) {
+    if (!window._playlistNoNativeLogAt || (now - window._playlistNoNativeLogAt) > 15000) {
       console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
       window._playlistNoNativeLogAt = now;
     }
@@ -2013,23 +1961,15 @@ function addPlaylistControlButtons(attempt = 1) {
         existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 45);
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 60);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
   }
 
-  const existingCustom = document.querySelector('[data-tizentube-collection-btn="1"]');
-  if (existingCustom) {
-    console.log('[PLAYLIST_BUTTON] Existing custom button found; replacing (attempt ' + attempt + ')');
-    existingCustom.remove();
-    existingButtons = getNativeButtons();
-  }
-
   if (existingButtons.length === 0) return;
 
   const templateBtn = existingButtons[existingButtons.length - 1];
-  const templateRect = templateBtn.getBoundingClientRect();
   const runRefresh = (evt) => {
     evt?.preventDefault?.();
     evt?.stopPropagation?.();
@@ -2082,6 +2022,15 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   };
 
+  const existingCustom = container.querySelector('[data-tizentube-collection-btn="1"]');
+  if (existingCustom) {
+    setupCustomButton(existingCustom);
+    if (templateBtn.nextElementSibling !== existingCustom) {
+      templateBtn.insertAdjacentElement('afterend', existingCustom);
+    }
+    return;
+  }
+
   let customBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
   if (!customBtn) {
     customBtn = templateBtn.cloneNode(true);
@@ -2099,42 +2048,18 @@ function addPlaylistControlButtons(attempt = 1) {
     templateBtn.insertAdjacentElement('afterend', customBtn);
   }
 
-  const crect = container.getBoundingClientRect();
-  const anchorRect = templateBtn.getBoundingClientRect();
-
-  container.style.position = 'relative';
-  customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(anchorRect.left - crect.left))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(anchorRect.top - crect.top + anchorRect.height))}px`;
-  customBtn.style.width = `${Math.max(1, Math.round(anchorRect.width))}px`;
-  customBtn.style.height = `${Math.max(1, Math.round(anchorRect.height))}px`;
-  customBtn.style.display = 'block';
-  customBtn.style.transform = 'none';
-  customBtn.style.zIndex = '2';
-
-  // Prevent infinite growth by anchoring minimum height to an initial baseline.
-  const baseMinHeight = Number(container.dataset.tizentubeBaseMinHeight || 0) || Math.max(container.clientHeight, 90);
-  if (!container.dataset.tizentubeBaseMinHeight) {
-    container.dataset.tizentubeBaseMinHeight = String(baseMinHeight);
-  }
-
-  const nativeBottomRel = Math.round(anchorRect.top - crect.top + anchorRect.height);
-  const requiredHeight = Math.max(baseMinHeight, nativeBottomRel + Math.round(anchorRect.height) + 8);
-  container.style.overflow = 'visible';
-  container.style.minHeight = `${requiredHeight}px`;
-
-  if (container.parentElement) {
-    const parent = container.parentElement;
-    const parentBaseMinHeight = Number(parent.dataset.tizentubeBaseMinHeight || 0) || Math.max(parent.clientHeight, requiredHeight + 8);
-    if (!parent.dataset.tizentubeBaseMinHeight) {
-      parent.dataset.tizentubeBaseMinHeight = String(parentBaseMinHeight);
-    }
-    parent.style.overflow = 'visible';
-    parent.style.minHeight = `${Math.max(parentBaseMinHeight, requiredHeight + 8)}px`;
-  }
+  customBtn.style.position = '';
+  customBtn.style.left = '';
+  customBtn.style.top = '';
+  customBtn.style.width = '';
+  customBtn.style.height = '';
+  customBtn.style.display = '';
+  customBtn.style.transform = '';
+  customBtn.style.zIndex = '';
 
   window._playlistButtonInjectedUrl = currentUrl;
 
+  const crect = container.getBoundingClientRect();
   const rect = customBtn.getBoundingClientRect();
   console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
 
@@ -2151,7 +2076,7 @@ function addPlaylistControlButtons(attempt = 1) {
       clonedCustomButtonOuterHTML: customBtn.outerHTML,
       clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
-      templateMetrics: { top: Math.round(templateBtn.offsetTop || templateRect.top), left: Math.round(templateBtn.offsetLeft || templateRect.left), height: Math.round(templateBtn.offsetHeight || templateRect.height), width: Math.round(templateBtn.offsetWidth || templateRect.width) },
+      templateMetrics: { top: Math.round(templateBtn.offsetTop || 0), left: Math.round(templateBtn.offsetLeft || 0), height: Math.round(templateBtn.offsetHeight || 0), width: Math.round(templateBtn.offsetWidth || 0) },
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
@@ -2159,7 +2084,7 @@ function addPlaylistControlButtons(attempt = 1) {
       parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
     if (attempt <= 6) {
-      logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 45);
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 60);
     }
   } catch (e) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
