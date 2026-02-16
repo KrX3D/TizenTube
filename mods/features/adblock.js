@@ -8,7 +8,7 @@ import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sponsorblock.js';
 import { deArrowify } from './deArrowify.js';
 import { hqify } from './hqify.js';
-import { applyAdCleanup } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
 import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
@@ -32,6 +32,30 @@ window.adblock.setDebugEnabled = function(value) {
 
 // Listen for config changes to update DEBUG_ENABLED cache
 if (typeof window !== 'undefined') {
+  if (!window._playlistButtonObserver) {
+    window._playlistButtonObserver = new MutationObserver(() => {
+      const page = getCurrentPage();
+      if (page !== 'playlist') return;
+      const hasCustom = !!document.querySelector('[data-tizentube-collection-btn="1"]');
+      if (!hasCustom) {
+        addPlaylistControlButtons(7);
+      }
+    });
+
+    const observe = () => {
+      const target = document.querySelector('yt-virtual-list') || document.body;
+      if (!target) return;
+      try {
+        window._playlistButtonObserver.observe(target, { childList: true, subtree: true });
+      } catch (_) {}
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', observe, { once: true });
+    } else {
+      observe();
+    }
+  }
   setTimeout(() => {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (e) => {
@@ -885,27 +909,7 @@ JSON.parse = function () {
           console.log('[BROWSE] ========================================');
       }
       
-      if (adBlockEnabled) {
-        const beforeAds = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.length;
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-          r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-            (elm) => !elm.adSlotRenderer
-          );
-
-        for (const shelve of r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents) {
-          if (shelve.shelfRenderer) {
-            shelve.shelfRenderer.content.horizontalListRenderer.items =
-              shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
-                (item) => !item.adSlotRenderer
-              );
-          }
-        }
-        
-        const afterAds = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.length;
-        if (beforeAds !== afterAds) {
-          logger.info('ADBLOCK', 'Removed masthead ads', { removed: beforeAds - afterAds });
-        }
-      }
+      applyBrowseAdFiltering(r, adBlockEnabled);
 
       processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
     } else {
@@ -2303,7 +2307,15 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
-  const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => btn.getAttribute('data-tizentube-collection-btn') !== '1');
+  const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
+    if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
+    const rect = btn.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return false;
+    const style = window.getComputedStyle(btn);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    if (btn.getAttribute('aria-hidden') === 'true') return false;
+    return true;
+  });
   let existingButtons = getNativeButtons();
   const currentUrl = window.location.href;
 
@@ -2342,7 +2354,7 @@ function addPlaylistControlButtons(attempt = 1) {
         existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 3000);
+      logChunked('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump), 800);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2380,6 +2392,9 @@ function addPlaylistControlButtons(attempt = 1) {
     btn.style.removeProperty('right');
     btn.style.removeProperty('inset');
     btn.style.removeProperty('margin-left');
+    btn.removeAttribute('disablehybridnavinsubtree');
+    btn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
+    btn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
 
     const labelNode = btn.querySelector('yt-formatted-string');
     if (labelNode) {
@@ -2487,7 +2502,7 @@ function addPlaylistControlButtons(attempt = 1) {
       parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
     if (attempt <= 6) {
-      logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 3000);
+      logChunked('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 800);
     }
   } catch (e) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
