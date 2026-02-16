@@ -198,5 +198,52 @@ function customAction(action, parameters) {
                 showToast('Console', 'ERROR: Console DIV not found');
             }
             break;
+        case 'SET_REMOTE_HTTP_ENDPOINT': {
+            const current = configRead('remoteLoggingUrl') || '';
+            const value = window.prompt ? window.prompt('Enter HTTP endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingUrl', String(value).trim());
+                showToast('Remote Logging', 'HTTP endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_WS_ENDPOINT': {
+            const current = configRead('remoteLoggingWsUrl') || '';
+            const value = window.prompt ? window.prompt('Enter WebSocket endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingWsUrl', String(value).trim());
+                showToast('Remote Logging', 'WebSocket endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_AUTH_TOKEN': {
+            const current = configRead('remoteLoggingAuthToken') || '';
+            const value = window.prompt ? window.prompt('Enter optional auth token for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingAuthToken', String(value).trim());
+                showToast('Remote Logging', 'Auth token updated');
+            }
+            break;
+        }
+        case 'TEST_REMOTE_CONNECTION':
+            if (window.remoteLogger && typeof window.remoteLogger.testConnection === 'function') {
+                window.remoteLogger.testConnection().then((result) => {
+                    showToast('Remote Logging', `HTTP: ${result.http} | WS: ${result.ws}`);
+                }).catch(() => {
+                    showToast('Remote Logging', 'Connection test failed');
+                });
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
+            }
+            break;
+
+        case 'TEST_REMOTE_LOGGING':
+            if (window.remoteLogger && typeof window.remoteLogger.test === 'function') {
+                window.remoteLogger.test();
+                showToast('Remote Logging', 'Test log sent (if URL is configured)');
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
+            }
+            break;
     }
 }
