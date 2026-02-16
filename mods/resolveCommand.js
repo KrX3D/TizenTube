@@ -4,6 +4,9 @@ import modernUI, { optionShow } from './ui/settings.js';
 import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
+import appPkg from '../package.json';
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
 
 export default function resolveCommand(cmd, _) {
     for (const key in window._yttv) {
@@ -177,7 +180,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v10');
+            console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' (' + APP_VERSION + ')');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
@@ -188,7 +191,7 @@ function customAction(action, parameters) {
             if (consoleDiv) {
                 consoleDiv.style.display = 'block';
                 consoleDiv.style.zIndex = '999999';
-                console.log('✓ Console DIV found and forced visible');
+                console.log('✓ Console DIV found and forced visible')
                 showToast('Console', 'Console should be visible now');
             } else {
                 console.error('✗ Console DIV not found!');
