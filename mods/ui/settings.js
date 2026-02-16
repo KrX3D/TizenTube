@@ -831,8 +831,9 @@ export default function modernUI(update, parameters) {
                                             }
                                         }
                                     ]
-                                )
-                            ])
+                                ),
+                                
+                                ])
                         }
                     }
                 ];
