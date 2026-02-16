@@ -4,7 +4,9 @@ export function initShortsTrackingState() {
 }
 
 export function shouldFilterShorts(shortsEnabled, page) {
-  return !shortsEnabled && page !== 'playlist' && page !== 'playlists';
+  const result = !shortsEnabled && page !== 'playlist' && page !== 'playlists';
+  console.log('[DIAGNOSTIC_SHORTS] shouldFilterShorts | shortsEnabled:', shortsEnabled, '| page:', page, '| result:', result);
+  return result;
 }
 
 export function isShortsShelfTitle(title = '') {

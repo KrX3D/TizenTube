@@ -227,6 +227,8 @@ function shouldHideWatchedForPage(configPages, page) {
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
   
+  console.log('[DIAGNOSTIC] directFilterArray called | page:', page, '| context:', context, '| items:', arr.length);
+    
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
 
@@ -262,16 +264,23 @@ function directFilterArray(arr, page, context = '') {
   const configPages = configRead('hideWatchedVideosPages') || [];
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   
+  console.log('[DIAGNOSTIC] Config | shortsEnabled:', shortsEnabled, '| hideWatchedEnabled:', hideWatchedEnabled, '| threshold:', threshold);
+    
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(configPages, page);
   
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldApplyShortsFilter = shouldFilterShorts(shortsEnabled, page);
   
+  console.log('[DIAGNOSTIC] Filtering flags | shouldHideWatched:', shouldHideWatched, '| shouldApplyShortsFilter:', shouldApplyShortsFilter, '| page:', page);
+    
   // Skip if nothing to do
   if (!shouldApplyShortsFilter && !shouldHideWatched) {
+    console.log('[DIAGNOSTIC] SKIPPING - No filtering needed');
     return arr;
   }
+
+  console.log('[DIAGNOSTIC] PROCEEDING with filtering...');
   
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
@@ -360,98 +369,103 @@ function directFilterArray(arr, page, context = '') {
   const originalLength = arr.length;
   
   const filtered = arr.filter(item => {
-    if (!item) return true;
-    
-    // Check if it's a video item
-    const isVideoItem = item.tileRenderer || 
-                        item.videoRenderer || 
-                        item.gridVideoRenderer ||
-                        item.compactVideoRenderer ||
-                        item.playlistVideoRenderer ||
-                        item.richItemRenderer?.content?.videoRenderer;
-    
-    if (!isVideoItem) {
+    try {
+      if (!item) return true;
+      
+      // Check if it's a video item
+      const isVideoItem = item.tileRenderer || 
+                          item.videoRenderer || 
+                          item.gridVideoRenderer ||
+                          item.compactVideoRenderer ||
+                          item.playlistVideoRenderer ||
+                          item.richItemRenderer?.content?.videoRenderer;
+      
+      if (!isVideoItem) {
+        if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
+          return false;
+        }
+        return true;
+      }
+      
+      const videoId = item.tileRenderer?.contentId || 
+                    item.videoRenderer?.videoId || 
+                    item.playlistVideoRenderer?.videoId ||
+                    item.gridVideoRenderer?.videoId ||
+                    item.compactVideoRenderer?.videoId ||
+                    'unknown';
+
+      // ⭐ ORIGINAL WORKING LOGIC RESTORED: Check shelf memory first
+      if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
+        if (LOG_SHORTS && DEBUG_ENABLED) {
+          console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
+        }
+        shortsCount++;
+        return false;
+      }
+
+      const videoKey = getVideoKey(item);
       if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
         return false;
       }
-      return true;
-    }
-    
-    const videoId = item.tileRenderer?.contentId || 
-                   item.videoRenderer?.videoId || 
-                   item.playlistVideoRenderer?.videoId ||
-                   item.gridVideoRenderer?.videoId ||
-                   item.compactVideoRenderer?.videoId ||
-                   'unknown';
-
-    // ⭐ ORIGINAL WORKING LOGIC RESTORED: Check shelf memory first
-    if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
+      if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys?.has(videoKey))) {
+        if (DEBUG_ENABLED) {
+          console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId, '| key=', videoKey);
+        }
+        return false;
       }
-      shortsCount++;
-      return false;
-    }
-
-    const videoKey = getVideoKey(item);
-    if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
-      return false;
-    }
-    if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys?.has(videoKey))) {
-      if (DEBUG_ENABLED) {
-        console.log('[HELPER_CLEANUP] Removing stale helper from data:', videoId, '| key=', videoKey);
-      }
-      return false;
-    }
-    
-    // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
-    if (shouldApplyShortsFilter && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
-      shortsCount++;
       
-      // ⭐ ADD VISUAL MARKER
-      console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
+      // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
+      if (shouldApplyShortsFilter && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
+        shortsCount++;
+        
+        // ⭐ ADD VISUAL MARKER
+        console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
 
-      if (LOG_SHORTS && DEBUG_ENABLED) {
-        console.log('[FILTER #' + callId + '] REMOVED SHORT:', videoId);
+        if (LOG_SHORTS && DEBUG_ENABLED) {
+          console.log('[FILTER #' + callId + '] REMOVED SHORT:', videoId);
+        }
+        return false;
       }
-      return false;
-    }
-    
-    // ⭐ STEP 2: Filter watched videos (only if enabled for this page)
-    if (shouldHideWatched) {
-      const progressBar = findProgressBar(item);
       
-      // ⭐ PLAYLIST SPECIAL HANDLING: Only filter if progress bar EXISTS
-      if (isPlaylistPage) {
-        if (!progressBar) {
-          // No progress bar = unwatched = KEEP IT
-          noProgressBarCount++;
-          
-          if (LOG_WATCHED && DEBUG_ENABLED) {
-            console.log('[FILTER #' + callId + '] ✓ KEEPING (playlist, no progress):', videoId);
+      // ⭐ STEP 2: Filter watched videos (only if enabled for this page)
+      if (shouldHideWatched) {
+        const progressBar = findProgressBar(item);
+        
+        // ⭐ PLAYLIST SPECIAL HANDLING: Only filter if progress bar EXISTS
+        if (isPlaylistPage) {
+          if (!progressBar) {
+            // No progress bar = unwatched = KEEP IT
+            noProgressBarCount++;
+            
+            if (LOG_WATCHED && DEBUG_ENABLED) {
+              console.log('[FILTER #' + callId + '] ✓ KEEPING (playlist, no progress):', videoId);
+            }
+            return true;
           }
-          return true;
+        }
+        
+        // Calculate progress percentage
+        const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+        
+        // ⭐ DEBUG: Log each decision
+        if (LOG_WATCHED && DEBUG_ENABLED) {
+          const hasProgressBar = !!progressBar;
+          const decision = percentWatched >= threshold ? '❌ HIDING' : '✓ KEEPING';
+          console.log('[FILTER #' + callId + '] ' + decision + ':', videoId, '| Progress:', percentWatched + '%', '| Threshold:', threshold + '%');
+        }
+        
+        // Hide if watched above threshold
+        if (percentWatched >= threshold) {
+          hiddenCount++;
+          return false;
         }
       }
       
-      // Calculate progress percentage
-      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
-      
-      // ⭐ DEBUG: Log each decision
-      if (LOG_WATCHED && DEBUG_ENABLED) {
-        const hasProgressBar = !!progressBar;
-        const decision = percentWatched >= threshold ? '❌ HIDING' : '✓ KEEPING';
-        console.log('[FILTER #' + callId + '] ' + decision + ':', videoId, '| Progress:', percentWatched + '%', '| Threshold:', threshold + '%');
-      }
-      
-      // Hide if watched above threshold
-      if (percentWatched >= threshold) {
-        hiddenCount++;
-        return false;
-      }
+      return true;
+    } catch (error) {
+      console.error('[FILTER_ERROR] Exception in filter:', error.message, '| Stack:', error.stack);
+      return true; // Keep item on error to avoid breaking
     }
-    
-    return true;
   });
   
   // ⭐ Enhanced summary logging
