@@ -181,13 +181,20 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
       )?.lineItemRenderer?.text?.simpleText;
     }
 
+    // Find this section in isShortItem() (around line 180-195)
     if (lengthText) {
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) return true;
+        // ⭐ CHANGED: YouTube shorts are now up to 3 minutes (180 seconds)
+        if (totalSeconds <= 180) {
+          if (LOG_SHORTS && DEBUG_ENABLED) {
+            console.log('[SHORTS] Detected by duration:', videoId, '| Duration:', totalSeconds + 's');
+          }
+          return true;
+        }
       }
     }
   }

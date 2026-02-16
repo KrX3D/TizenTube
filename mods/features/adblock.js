@@ -362,13 +362,6 @@ function directFilterArray(arr, page, context = '') {
                    item.gridVideoRenderer?.videoId ||
                    item.compactVideoRenderer?.videoId ||
                    'unknown';
-
-    // ⭐ CHANGE #1: CHECK SHORTS MEMORY FIRST - Before any other checks!
-    if (shouldApplyShortsFilter && videoId && videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
-      console.log('✂️✂️✂️ FILTERING VIDEO FROM REMOVED SHORTS SHELF:', videoId);
-      shortsCount++;
-      return false;
-    }
     
     // Check if it's a video item
     const isVideoItem = item.tileRenderer || 
@@ -385,11 +378,18 @@ function directFilterArray(arr, page, context = '') {
       return true;
     }
 
-    // Check shelf memory (secondary check)
+    // ⭐ FIX #2: Check shelf memory FIRST (this was working before for channels)
     if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
       if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
       }
+      shortsCount++;
+      return false;
+    }
+
+    // ⭐ FIX #2: SECOND check - global shorts video ID set (subscriptions)
+    if (shouldApplyShortsFilter && videoId && videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
+      console.log('✂️✂️✂️ FILTERING VIDEO FROM REMOVED SHORTS SHELF:', videoId);
       shortsCount++;
       return false;
     }
@@ -405,10 +405,11 @@ function directFilterArray(arr, page, context = '') {
       return false;
     }
     
-    // ⭐ STEP 1: Filter shorts (after memory check)
+    // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
     if (shouldApplyShortsFilter && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
       shortsCount++;
       
+      // ⭐ ADD VISUAL MARKER
       console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
 
       if (LOG_SHORTS && DEBUG_ENABLED) {
@@ -471,7 +472,7 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
-  // ⭐ CHANGE #2: PLAYLIST SAFEGUARD with DOM cleanup
+  // ⭐ FIX #3: PLAYLIST SAFEGUARD - Find UNWATCHED video as helper
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
     // Check if we're in filter mode
@@ -480,33 +481,49 @@ function directFilterArray(arr, page, context = '') {
       return [];
     }
     
-    // Find the last real video (not a continuation item)
-    const lastVideo = [...arr].reverse().find((item) => {
+    // ⭐ FIX #3: Find a REAL UNWATCHED video to use as helper, not a watched one
+    const lastUnwatchedVideo = [...arr].reverse().find((item) => {
       const vid = getVideoId(item);
-      return vid && vid !== 'unknown';
+      if (!vid || vid === 'unknown') return false;
+      
+      // Make sure it's not a helper item
+      if (isLikelyPlaylistHelperItem(item)) return false;
+      
+      // ⭐ NEW: Make sure it doesn't have a high progress bar (not watched)
+      const progressBar = findProgressBar(item);
+      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+      
+      // Only use as helper if it's truly unwatched (less than 10% watched)
+      return percentWatched < 10;
     });
     
-    if (lastVideo) {
-      const lastVideoId = getVideoId(lastVideo) || 'unknown';
+    if (lastUnwatchedVideo) {
+      const lastVideoId = getVideoId(lastUnwatchedVideo) || 'unknown';
       if (DEBUG_ENABLED) {
-        console.log('[HELPER] ALL FILTERED - keeping 1 helper for continuation trigger:', lastVideoId);
+        console.log('[HELPER] ALL FILTERED - keeping 1 UNWATCHED helper for continuation:', lastVideoId);
       }
       
       // Store this helper
-      window._lastHelperVideos = [lastVideo];
+      window._lastHelperVideos = [lastUnwatchedVideo];
       window._playlistScrollHelpers.clear();
       window._playlistScrollHelpers.add(lastVideoId);
       
       // ⭐ Schedule aggressive DOM cleanup and trigger next load
       setTimeout(() => {
         cleanupPlaylistHelperTiles();
-        // Try to trigger next load immediately
         setTimeout(() => {
           triggerPlaylistContinuationLoad();
         }, 300);
       }, 500);
       
-      return [lastVideo];
+      return [lastUnwatchedVideo];
+    } else {
+      // ⭐ FIX #3: If no unwatched video found, try to force load more
+      console.log('[HELPER] No unwatched video found - forcing continuation load');
+      setTimeout(() => {
+        triggerPlaylistContinuationLoad();
+      }, 500);
+      return [];
     }
   }
   
@@ -1987,7 +2004,6 @@ function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
-  // Find the button container
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                         document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
@@ -2003,9 +2019,13 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  // Get all native buttons
+  // Get all VISIBLE native buttons
   const nativeButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'))
-    .filter(btn => !btn.getAttribute('data-tizentube-collection-btn'));
+    .filter(btn => {
+      if (btn.getAttribute('data-tizentube-collection-btn')) return false;
+      const rect = btn.getBoundingClientRect();
+      return rect.height > 10 && rect.width > 10;
+    });
   
   if (nativeButtons.length === 0) {
     if (attempt < 6) {
@@ -2014,14 +2034,19 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  // Clone the last button
-  const lastButton = nativeButtons[nativeButtons.length - 1];
-  const customBtn = lastButton.cloneNode(true);
+  // Clone the FIRST button (most reliable template)
+  const templateButton = nativeButtons[0];
+  const customBtn = templateButton.cloneNode(true);
   
   // Setup custom button
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   customBtn.removeAttribute('id');
   customBtn.setAttribute('tabindex', '0');
+  customBtn.style.position = 'relative';
+  customBtn.style.display = 'block';
+  customBtn.style.visibility = 'visible';
+  customBtn.style.opacity = '1';
+  customBtn.style.pointerEvents = 'auto';
   
   // Change text
   const labelNode = customBtn.querySelector('yt-formatted-string');
@@ -2047,10 +2072,28 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   });
   
-  // ⭐ SIMPLE INSERTION - Just append after last button
-  lastButton.insertAdjacentElement('afterend', customBtn);
+  // ⭐ FIXED: Calculate position based on last button
+  const lastButton = nativeButtons[nativeButtons.length - 1];
+  const lastButtonRect = lastButton.getBoundingClientRect();
+  const containerRect = baseContainer.getBoundingClientRect();
   
-  console.log('[PLAYLIST_BUTTON] Injected successfully after', nativeButtons.length, 'native buttons');
+  // Calculate relative position
+  const topOffset = lastButtonRect.bottom - containerRect.top + 16; // 16px spacing
+  
+  // Apply absolute positioning within container
+  customBtn.style.position = 'absolute';
+  customBtn.style.top = topOffset + 'px';
+  customBtn.style.left = lastButtonRect.left - containerRect.left + 'px';
+  customBtn.style.width = lastButtonRect.width + 'px';
+  
+  // Make container relative so absolute positioning works
+  baseContainer.style.position = 'relative';
+  baseContainer.style.minHeight = (topOffset + 70) + 'px'; // Ensure space for button
+  
+  // Append button
+  baseContainer.appendChild(customBtn);
+  
+  console.log('[PLAYLIST_BUTTON] Injected at Y:', topOffset, 'after', nativeButtons.length, 'native buttons');
 }
 
 if (typeof window !== 'undefined') {
