@@ -1928,6 +1928,10 @@ function addPlaylistControlButtons(attempt = 1) {
     return true;
   });
   let existingButtons = getNativeButtons();
+  const getButtonRect = (btn) => {
+    const r = btn.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  };
   const currentUrl = window.location.href;
 
   if (attempt <= 2) {
@@ -1966,6 +1970,7 @@ function addPlaylistControlButtons(attempt = 1) {
         targetParentClass: targetHostForDump.parentElement?.className,
         targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
         buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
+        allButtonOuterHTML: Array.from(container.querySelectorAll('ytlr-button-renderer')).map((btn) => btn.outerHTML),
         existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
@@ -1977,7 +1982,14 @@ function addPlaylistControlButtons(attempt = 1) {
 
   if (existingButtons.length === 0) return;
 
-  const templateBtn = existingButtons[existingButtons.length - 1];
+  const templateBtn = existingButtons.reduce((best, btn) => {
+    if (!best) return btn;
+    const a = getButtonRect(best);
+    const b = getButtonRect(btn);
+    if (b.top > a.top + 1) return btn;
+    if (Math.abs(b.top - a.top) <= 1 && b.left > a.left) return btn;
+    return best;
+  }, null) || existingButtons[existingButtons.length - 1];
   const runRefresh = (evt) => {
     evt?.preventDefault?.();
     evt?.stopPropagation?.();
@@ -1993,6 +2005,7 @@ function addPlaylistControlButtons(attempt = 1) {
     btn.removeAttribute('id');
     btn.setAttribute('tabindex', '0');
     btn.removeAttribute('aria-hidden');
+    btn.removeAttribute('style');
     btn.style.pointerEvents = 'auto';
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
@@ -2008,6 +2021,7 @@ function addPlaylistControlButtons(attempt = 1) {
     btn.style.removeProperty('inset');
     btn.style.removeProperty('margin-left');
     btn.removeAttribute('disablehybridnavinsubtree');
+    btn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
     btn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
     btn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
 
