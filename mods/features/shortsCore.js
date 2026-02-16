@@ -4,9 +4,7 @@ export function initShortsTrackingState() {
 }
 
 export function shouldFilterShorts(shortsEnabled, page) {
-  const result = !shortsEnabled && page !== 'playlist' && page !== 'playlists';
-  console.log('[DIAGNOSTIC_SHORTS] shouldFilterShorts | shortsEnabled:', shortsEnabled, '| page:', page, '| result:', result);
-  return result;
+  return !shortsEnabled && page !== 'playlist' && page !== 'playlists';
 }
 
 export function isShortsShelfTitle(title = '') {
@@ -17,13 +15,7 @@ export function isShortsShelfTitle(title = '') {
 export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle) {
   initShortsTrackingState();
   const ids = collectVideoIdsFromShelf(shelf);
-  
-  // ⭐ CRITICAL: Store in BOTH memory structures
-  ids.forEach((id) => {
-    if (id && id !== 'unknown') {
-      window._shortsVideoIdsFromShelves.add(id);
-    }
-  });
+  ids.forEach((id) => window._shortsVideoIdsFromShelves.add(id));
 
   const stack = [shelf];
   while (stack.length) {
@@ -42,7 +34,6 @@ export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVide
     }
   }
 
-  console.log('[SHORTS_MEMORY] Stored', ids.length, 'IDs from shelf | Total in memory:', window._shortsVideoIdsFromShelves.size);
   return ids;
 }
 
@@ -65,19 +56,9 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
     if (!isShortsShelfTitle(title)) continue;
 
     const ids = rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
-    
-    // ⭐ ALSO store in global set
-    ids.forEach(id => {
-      if (id && id !== 'unknown') {
-        window._shortsVideoIdsFromShelves.add(id);
-      }
-    });
-    
     if (debugEnabled || logShorts) {
-      console.log('✂️✂️✂️ [SHORTS_SHELF] Removing shelf:', title, '| Videos tagged:', ids.length, '| Path:', path || i);
-      console.log('✂️✂️✂️ [SHORTS_SHELF] Global memory now has:', window._shortsVideoIdsFromShelves.size, 'shorts');
+      console.log('[SHORTS_SHELF] removed title=', title, '| ids=', ids.length, '| page=', page, '| path=', path || i);
     }
-    
     shelves.splice(i, 1);
     removed++;
   }
@@ -101,43 +82,6 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
     'unknown';
 
   const page = currentPage || 'other';
-
-  // ⭐ CRITICAL: Check global shorts memory FIRST with logging
-  if (videoId && videoId !== 'unknown') {
-    const inMemory = window._shortsVideoIdsFromShelves?.has(videoId);
-    if (debugEnabled || page === 'subscriptions') {
-      console.log('[SHORTS_CHECK]', videoId, '| In memory:', inMemory, '| Page:', page, '| Memory size:', window._shortsVideoIdsFromShelves?.size || 0);
-    }
-    if (inMemory) {
-      console.log('✂️✂️✂️ [MEMORY] Found in shelf memory:', videoId);
-      return true;
-    }
-  }
-
-  // ⭐ NEW: Tizen 5.5 specific - check for shorts in any renderer type FIRST
-  const allRenderers = [
-    item.tileRenderer,
-    item.videoRenderer, 
-    item.gridVideoRenderer,
-    item.compactVideoRenderer,
-    item.richItemRenderer?.content?.videoRenderer
-  ].filter(Boolean);
-
-  for (const renderer of allRenderers) {
-    // Check navigation endpoint for /shorts/ URL
-    const navUrl = renderer.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url || '';
-    if (navUrl.includes('/shorts/')) {
-      if (logShorts) console.log('[SHORTS] Detected by URL:', videoId);
-      return true;
-    }
-
-    // Check for reelWatchEndpoint anywhere in the renderer
-    const rendererStr = JSON.stringify(renderer);
-    if (rendererStr.includes('reelWatchEndpoint') || rendererStr.includes('reelWatch')) {
-      if (logShorts) console.log('[SHORTS] Detected by reelWatch:', videoId);
-      return true;
-    }
-  }
 
   if ((page === 'subscriptions' || String(page).includes('channel')) && debugEnabled && logShorts) {
     console.log('[SHORTS_DIAGNOSTIC] checking', videoId);
@@ -212,15 +156,12 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
       )?.lineItemRenderer?.text?.simpleText;
     }
 
-    // In isShortItem() - find this section around line 180-195
     if (lengthText) {
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        
-        // ⭐ CONSERVATIVE: Only flag as short if < 90 seconds
         if (totalSeconds <= 90) {
           if (debugEnabled && logShorts) {
             console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
@@ -228,8 +169,8 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
           return true;
         }
         
-        // Extended check for 90-180 seconds with shelf memory
-        if (totalSeconds <= 180 && window._shortsVideoIdsFromShelves?.has(videoId)) {
+        // Extended check for 90-180 seconds Shorts can be nowt till 3min
+        if (totalSeconds <= 180) {
           if (debugEnabled && logShorts) {
             console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
           }
