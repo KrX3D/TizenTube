@@ -85,6 +85,14 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
 
   const page = currentPage || 'other';
 
+  // ⭐ CRITICAL FIX: Check global shorts memory FIRST
+  if (videoId && videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
+    if (debugEnabled && logShorts) {
+      console.log('[SHORTS] Found in removed shelf memory:', videoId);
+    }
+    return true;
+  }
+
   // ⭐ NEW: Tizen 5.5 specific - check for shorts in any renderer type FIRST
   const allRenderers = [
     item.tileRenderer,
@@ -183,7 +191,7 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
       )?.lineItemRenderer?.text?.simpleText;
     }
 
-    // In isShortItem(), replace the duration section (around line 180-195)
+    // In isShortItem() - find this section around line 180-195
     if (lengthText) {
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
@@ -192,16 +200,18 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
         const totalSeconds = minutes * 60 + seconds;
         
         // ⭐ CONSERVATIVE: Only flag as short if < 90 seconds
-        // Don't use 180s threshold since it catches regular videos
         if (totalSeconds <= 90) {
-          console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
+          if (debugEnabled && logShorts) {
+            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
+          }
           return true;
         }
         
-        // ⭐ NO aspect ratio check here - YouTube letterboxes shorts so they look 16:9
-        // Instead, rely on shelf memory for 90-180 second videos
+        // Extended check for 90-180 seconds with shelf memory
         if (totalSeconds <= 180 && window._shortsVideoIdsFromShelves?.has(videoId)) {
-          console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
+          if (debugEnabled && logShorts) {
+            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
+          }
           return true;
         }
       }
