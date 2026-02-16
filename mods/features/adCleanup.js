@@ -37,3 +37,14 @@ export function applyBrowseAdFiltering(parsedResponse, adBlockEnabled) {
       shelve.shelfRenderer.content.horizontalListRenderer.items.filter((item) => !item.adSlotRenderer);
   }
 }
+
+
+export function applyShortsAdFiltering(parsedResponse, adBlockEnabled) {
+  if (Array.isArray(parsedResponse)) return;
+  if (!adBlockEnabled) return;
+  if (!parsedResponse?.entries) return;
+
+  parsedResponse.entries = parsedResponse.entries.filter(
+    (entry) => !entry?.command?.reelWatchEndpoint?.adClientParams?.isAd
+  );
+}

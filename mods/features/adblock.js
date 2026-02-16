@@ -8,7 +8,7 @@ import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sponsorblock.js';
 import { deArrowify } from './deArrowify.js';
 import { hqify } from './hqify.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering, applyShortsAdFiltering } from './adCleanup.js';
 import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
@@ -209,20 +209,6 @@ function trackRemovedPlaylistHelperKeys(helperVideos) {
     const oldest = window._playlistRemovedHelperKeyQueue.shift();
     window._playlistRemovedHelperKeys.delete(oldest);
   }
-}
-
-function isPageConfigured(configPages, page) {
-  if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  const normalized = configPages.map(p => String(p).toLowerCase());
-  const aliases = {
-    playlist: ['playlist'],
-    playlists: ['playlists'],
-    channel: ['channel', 'channels'],
-    channels: ['channel', 'channels'],
-    subscriptions: ['subscriptions', 'subscription']
-  };
-  const candidates = aliases[page] || [page];
-  return candidates.some(candidate => normalized.includes(candidate));
 }
 
 function shouldHideWatchedForPage(configPages, page) {
@@ -923,13 +909,7 @@ JSON.parse = function () {
   applyYouThereRenderer(r, configRead('enableYouThereRenderer'));
 
   // Remove shorts ads
-  if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
-    const before = r.entries.length;
-    r.entries = r.entries?.filter((elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd);
-    if (before !== r.entries.length) {
-      //logger.info('ADBLOCK', 'Removed shorts ads', { removed: before - r.entries.length });
-    }
-  }
+  applyShortsAdFiltering(r, adBlockEnabled);
 
   if (r?.title?.runs) {
     PatchSettings(r);
@@ -2314,6 +2294,8 @@ function addPlaylistControlButtons(attempt = 1) {
     const style = window.getComputedStyle(btn);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
     if (btn.getAttribute('aria-hidden') === 'true') return false;
+    const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!text) return false;
     return true;
   });
   let existingButtons = getNativeButtons();
@@ -2441,16 +2423,14 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   const crect = container.getBoundingClientRect();
-  const lastNativeRect = existingButtons
-    .map((btn) => btn.getBoundingClientRect())
-    .reduce((maxRect, rect) => (rect.top > maxRect.top ? rect : maxRect), templateRect);
+  const anchorRect = templateBtn.getBoundingClientRect();
 
   container.style.position = 'relative';
   customBtn.style.position = 'absolute';
-  customBtn.style.left = `${Math.max(0, Math.round(lastNativeRect.left - crect.left))}px`;
-  customBtn.style.top = `${Math.max(0, Math.round(lastNativeRect.top - crect.top + lastNativeRect.height))}px`;
-  customBtn.style.width = `${Math.max(1, Math.round(lastNativeRect.width))}px`;
-  customBtn.style.height = `${Math.max(1, Math.round(lastNativeRect.height))}px`;
+  customBtn.style.left = `${Math.max(0, Math.round(anchorRect.left - crect.left))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(anchorRect.top - crect.top + anchorRect.height))}px`;
+  customBtn.style.width = `${Math.max(1, Math.round(anchorRect.width))}px`;
+  customBtn.style.height = `${Math.max(1, Math.round(anchorRect.height))}px`;
   customBtn.style.display = 'block';
   customBtn.style.transform = 'none';
   customBtn.style.zIndex = '2';
@@ -2461,8 +2441,8 @@ function addPlaylistControlButtons(attempt = 1) {
     container.dataset.tizentubeBaseMinHeight = String(baseMinHeight);
   }
 
-  const nativeBottomRel = Math.round(lastNativeRect.top - crect.top + lastNativeRect.height);
-  const requiredHeight = Math.max(baseMinHeight, nativeBottomRel + Math.round(lastNativeRect.height) + 8);
+  const nativeBottomRel = Math.round(anchorRect.top - crect.top + anchorRect.height);
+  const requiredHeight = Math.max(baseMinHeight, nativeBottomRel + Math.round(anchorRect.height) + 8);
   container.style.overflow = 'visible';
   container.style.minHeight = `${requiredHeight}px`;
 
