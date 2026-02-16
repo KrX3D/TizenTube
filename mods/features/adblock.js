@@ -2112,23 +2112,3 @@ if (typeof window !== 'undefined') {
     }
   }, 1200);
 }
-
-if (typeof window !== 'undefined') {
-  setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);
-  let lastPlaylistButtonHref = window.location.href;
-  setInterval(() => {
-    const page = getCurrentPage();
-    if (page === 'playlist' || page === 'playlists') {
-      cleanupPlaylistHelperTiles();
-      if (!document.querySelector('[data-tizentube-collection-btn="1"]') && page === 'playlist') {
-        addPlaylistControlButtons(7);
-      }
-    }
-    if (window.location.href !== lastPlaylistButtonHref) {
-      lastPlaylistButtonHref = window.location.href;
-      if (page === 'playlist') {
-        setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
-      }
-    }
-  }, 1200);
-}
