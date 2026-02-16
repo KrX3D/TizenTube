@@ -1304,35 +1304,20 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
   
-  // ⭐ CRITICAL: Remove shorts shelves FIRST and remember ALL their videos
+  // ⭐ CRITICAL: Remove shorts shelves FIRST - SINGLE CONSOLIDATED SECTION
   if (!shortsEnabled) {
-    for (let i = shelves.length - 1; i >= 0; i--) {
-      const shelf = shelves[i];
-      if (!shelf) continue;
-      
-      const title = getShelfTitle(shelf).toLowerCase();
-      
-      // ⭐ Check both title and shelf type
-      const isShortsShelf = title.includes('short') || 
-                           shelf.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
-      
-      if (isShortsShelf) {
-        // Remember ALL video IDs from this shorts shelf
-        const videoIds = collectVideoIdsFromShelf(shelf);
-        console.log('✂️✂️✂️ SHORTS SHELF DETECTED:', title, '| Videos:', videoIds.length);
-        
-        // Store these IDs globally - BOTH sets for redundancy
-        videoIds.forEach(id => {
-          window._shortsVideoIdsFromShelves.add(id);
-        });
-        
-        // Also remember by crawling the entire shelf structure
-        rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
-        
-        // Remove the shelf
-        shelves.splice(i, 1);
-        console.log('✂️✂️✂️ SHORTS SHELF REMOVED - Tagged', videoIds.length, 'videos as shorts');
-      }
+    const removed = removeShortsShelvesByTitle(shelves, {
+      page,
+      shortsEnabled,
+      collectVideoIdsFromShelf,
+      getVideoTitle,
+      debugEnabled: DEBUG_ENABLED,
+      logShorts: LOG_SHORTS,
+      path: `processShelves-initial`
+    });
+    
+    if (removed > 0 && DEBUG_ENABLED) {
+      console.log('✂️✂️✂️ Removed', removed, 'shorts shelves at start of processShelves');
     }
   }
 
@@ -1377,22 +1362,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       const shelve = shelves[i];
       if (!shelve) continue;
       
-      // Shorts shelf removal by title moved to shortsCore.
-      if (!shortsEnabled) {
-        const removed = removeShortsShelvesByTitle(shelves, {
-          page,
-          shortsEnabled,
-          collectVideoIdsFromShelf,
-          getVideoTitle,
-          debugEnabled: DEBUG_ENABLED,
-          logShorts: LOG_SHORTS,
-          path: `processShelves[${i}]`
-        });
-        if (removed > 0) {
-          shelvesRemoved += removed;
-          continue;
-        }
-      }
+      // ⭐ REMOVED: Duplicate shorts shelf removal section that was here
       
       let shelfType = 'unknown';
       let itemsBefore = 0;
@@ -1577,7 +1547,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const contents = innerShelf?.content?.richGridRenderer?.contents;
           const shortResult = filterShortItems(contents, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
           if (shortResult.removed > 0) {
-            if (LOG_SHORTS && DEBUG_ENABLED) {
+            if (DEBUG_ENABLED && LOG_SHORTS) {
               console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
             }
             shelves.splice(i, 1);
@@ -1993,12 +1963,11 @@ function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
-  // Check if button already exists
   if (document.querySelector('[data-tizentube-collection-btn="1"]')) {
     return;
   }
 
-  // Find ALL button elements first
+  // Find ALL visible buttons
   const allButtons = Array.from(document.querySelectorAll('ytlr-button-renderer'))
     .filter(btn => {
       const rect = btn.getBoundingClientRect();
@@ -2012,68 +1981,48 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  console.log('[PLAYLIST_BUTTON] Found', allButtons.length, 'total visible buttons');
-
-  // Get the LAST button to use as template and find its parent
+  // Get the last button
   const lastButton = allButtons[allButtons.length - 1];
-  const buttonParent = lastButton.parentElement;
   
-  if (!buttonParent) {
-    console.error('[PLAYLIST_BUTTON] No parent found for last button');
+  // ⭐ FIND THE FLEX CONTAINER - walk up the DOM tree
+  let container = lastButton.parentElement;
+  let searchDepth = 0;
+  while (container && searchDepth < 5) {
+    const style = window.getComputedStyle(container);
+    // Look for a flex or grid container
+    if (style.display === 'flex' || style.display === 'grid' || container.children.length === allButtons.length) {
+      console.log('[PLAYLIST_BUTTON] Found container:', container.tagName, container.className);
+      break;
+    }
+    container = container.parentElement;
+    searchDepth++;
+  }
+  
+  if (!container) {
+    console.error('[PLAYLIST_BUTTON] Could not find suitable container');
+    if (attempt < 6) {
+      setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
+    }
     return;
   }
 
-  console.log('[PLAYLIST_BUTTON] Parent element:', buttonParent.tagName, buttonParent.className);
-
-  // Clone the last button
+  // Clone and setup
   const customBtn = lastButton.cloneNode(true);
-  
-  // Setup custom button
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   customBtn.removeAttribute('id');
-  customBtn.setAttribute('tabindex', '0');
   
-  // Ensure proper display
-  customBtn.style.display = '';
-  customBtn.style.position = '';
-  customBtn.style.marginTop = '16px';
-  
-  // Change text
   const labelNode = customBtn.querySelector('yt-formatted-string');
-  if (labelNode) {
-    labelNode.textContent = 'Refresh Filters';
-  }
+  if (labelNode) labelNode.textContent = 'Refresh Filters';
   
-  // Add click handler
-  const runRefresh = (evt) => {
+  customBtn.addEventListener('click', (evt) => {
     evt?.preventDefault?.();
-    evt?.stopPropagation?.();
-    resolveCommand({
-      signalAction: {
-        signal: 'SOFT_RELOAD_PAGE'
-      }
-    });
-  };
-  
-  customBtn.addEventListener('click', runRefresh);
-  customBtn.addEventListener('keydown', (evt) => {
-    if (evt.key === 'Enter' || evt.key === ' ') {
-      runRefresh(evt);
-    }
+    resolveCommand({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
   });
   
-  // ⭐ CRITICAL: Insert into the SAME parent as the last button
-  // This ensures it's a sibling, not nested
-  buttonParent.appendChild(customBtn);
+  // ⭐ Insert as last child of the container
+  container.appendChild(customBtn);
   
-  console.log('[PLAYLIST_BUTTON] Injected into parent with', buttonParent.children.length, 'children');
-  
-  // Verify it was inserted correctly
-  setTimeout(() => {
-    const btnRect = customBtn.getBoundingClientRect();
-    const lastBtnRect = lastButton.getBoundingClientRect();
-    console.log('[PLAYLIST_BUTTON] Position check | Custom Y:', btnRect.top, '| Last button Y:', lastBtnRect.top, '| Height:', btnRect.height);
-  }, 100);
+  console.log('[PLAYLIST_BUTTON] Injected. Container now has', container.children.length, 'children');
 }
 
 if (typeof window !== 'undefined') {

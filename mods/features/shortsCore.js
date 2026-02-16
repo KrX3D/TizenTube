@@ -58,9 +58,19 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
     if (!isShortsShelfTitle(title)) continue;
 
     const ids = rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
+    
+    // ⭐ ALSO store in global set
+    ids.forEach(id => {
+      if (id && id !== 'unknown') {
+        window._shortsVideoIdsFromShelves.add(id);
+      }
+    });
+    
     if (debugEnabled || logShorts) {
-      console.log('[SHORTS_SHELF] removed title=', title, '| ids=', ids.length, '| page=', page, '| path=', path || i);
+      console.log('✂️✂️✂️ [SHORTS_SHELF] Removing shelf:', title, '| Videos tagged:', ids.length, '| Path:', path || i);
+      console.log('✂️✂️✂️ [SHORTS_SHELF] Global memory now has:', window._shortsVideoIdsFromShelves.size, 'shorts');
     }
+    
     shelves.splice(i, 1);
     removed++;
   }

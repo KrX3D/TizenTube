@@ -487,65 +487,103 @@ jobs:
           set -euo pipefail
 
           NPM_BASE="https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}"
-          # GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
+          GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
 
-          URLS=""
+          # Create array of URLs (npm + GitHub)
+          declare -a URLS=(
+            # npm package URLs
+            "${NPM_BASE}@latest"
+            "${NPM_BASE}@latest/package.json"
+            "${NPM_BASE}@latest/dist/userScript.js"
+            "${NPM_BASE}@latest/dist/service.js"
+            "${NPM_BASE}@*/package.json"
+            "${NPM_BASE}@*/dist/userScript.js"
+            "${NPM_BASE}@*/dist/service.js"
+            "${NPM_BASE}/package.json"
+            "${NPM_BASE}/dist/userScript.js"
+            "${NPM_BASE}/dist/service.js"
+            "${NPM_BASE}@*"
+            
+            # GitHub repo URLs - main branch
+            "${GH_BASE}@main"
+            "${GH_BASE}@main/package.json"
+            "${GH_BASE}@main/dist/userScript.js"
+            "${GH_BASE}@main/dist/service.js"
+            
+            # GitHub repo URLs - master branch (if you use it)
+            "${GH_BASE}@master"
+            "${GH_BASE}@master/package.json"
+            "${GH_BASE}@master/dist/userScript.js"
+            "${GH_BASE}@master/dist/service.js"
+            
+            # GitHub repo URLs - without branch
+            "${GH_BASE}/package.json"
+            "${GH_BASE}/dist/userScript.js"
+            "${GH_BASE}/dist/service.js"
+            
+            # Purge all GitHub branches/tags
+            "${GH_BASE}@*"
+          )
 
-          # npm package URLs
-          URLS+="${NPM_BASE}@latest,"
-          URLS+="${NPM_BASE}@latest/package.json,"
-          URLS+="${NPM_BASE}@latest/dist/userScript.js,"
-          URLS+="${NPM_BASE}@latest/dist/service.js,"
-
-          URLS+="${NPM_BASE}@*/package.json,"
-          URLS+="${NPM_BASE}@*/dist/userScript.js,"
-          URLS+="${NPM_BASE}@*/dist/service.js,"
-
-          URLS+="${NPM_BASE}/package.json,"
-          URLS+="${NPM_BASE}/dist/userScript.js,"
-          URLS+="${NPM_BASE}/dist/service.js,"
-
-          # URLS+="${NPM_BASE}@*," # If Git is added than this is needed
-          URLS+="${NPM_BASE}@*"
-
-          # GitHub repo URLs - main branch
-          # URLS+="${GH_BASE}@main,"
-          # URLS+="${GH_BASE}@main/package.json,"
-          # URLS+="${GH_BASE}@main/dist/userScript.js,"
-          # URLS+="${GH_BASE}@main/dist/service.js,"
-
-          # GitHub repo URLs - master branch
-          # URLS+="${GH_BASE}@master,"
-          # URLS+="${GH_BASE}@master/package.json,"
-          # URLS+="${GH_BASE}@master/dist/userScript.js,"
-          # URLS+="${GH_BASE}@master/dist/service.js,"
-
-          # GitHub repo URLs - latest branch/tag
-          # URLS+="${GH_BASE}@latest,"
-          # URLS+="${GH_BASE}@latest/package.json,"
-          # URLS+="${GH_BASE}@latest/dist/userScript.js,"
-          # URLS+="${GH_BASE}@latest/dist/service.js,"
-
-          # URLS+="${GH_BASE}/package.json,"
-          # URLS+="${GH_BASE}/dist/userScript.js,"
-          # URLS+="${GH_BASE}/dist/service.js,"
-
-          # URLS+="${GH_BASE}/blob/main/package.json,"
-          # URLS+="${GH_BASE}/blob/main/dist/userScript.js,"
-          # URLS+="${GH_BASE}/blob/main/dist/service.js,"
-
-          # Purge entire repo (all branches/tags) usually doesn't work, but kept for parity
-          # URLS+="${GH_BASE}@*"
-
-          echo "urls=${URLS}" >> $GITHUB_OUTPUT
+          # Join with commas
+          URL_STRING=$(IFS=,; echo "${URLS[*]}")
+          
+          echo "urls=${URL_STRING}" >> $GITHUB_OUTPUT
           echo "Generated CDN URLs:"
-          echo "${URLS}" | tr ',' '\n'
+          printf '%s\n' "${URLS[@]}"
 
       - name: Purge jsDelivr cache
+        continue-on-error: true
         uses: egad13/purge-jsdelivr-cache@v1
         with:
           url: ${{ steps.cdn_urls.outputs.urls }}
           attempts: 3
+
+      - name: Purge individual URLs (fallback if batch fails)
+        if: failure()
+        continue-on-error: true
+        run: |
+          set +e
+          
+          NPM_BASE="https://cdn.jsdelivr.net/npm/${PACKAGE_NAME}"
+          GH_BASE="https://cdn.jsdelivr.net/gh/${PACKAGE_NAME_GH}"
+          
+          declare -a URLS=(
+            "${NPM_BASE}@latest"
+            "${NPM_BASE}@latest/package.json"
+            "${NPM_BASE}@latest/dist/userScript.js"
+            "${NPM_BASE}@latest/dist/service.js"
+            "${NPM_BASE}@*/package.json"
+            "${NPM_BASE}@*/dist/userScript.js"
+            "${NPM_BASE}@*/dist/service.js"
+            "${NPM_BASE}/package.json"
+            "${NPM_BASE}/dist/userScript.js"
+            "${NPM_BASE}/dist/service.js"
+            "${NPM_BASE}@*"
+            "${GH_BASE}@main"
+            "${GH_BASE}@main/package.json"
+            "${GH_BASE}@main/dist/userScript.js"
+            "${GH_BASE}@main/dist/service.js"
+            "${GH_BASE}@master"
+            "${GH_BASE}@master/package.json"
+            "${GH_BASE}@master/dist/userScript.js"
+            "${GH_BASE}@master/dist/service.js"
+            "${GH_BASE}/package.json"
+            "${GH_BASE}/dist/userScript.js"
+            "${GH_BASE}/dist/service.js"
+            "${GH_BASE}@*"
+          )
+          
+          echo "Attempting individual URL purges..."
+          for url in "${URLS[@]}"; do
+            echo "Purging: $url"
+            curl -X POST "https://purge.jsdelivr.net/" \
+              -H "cache-control: no-cache" \
+              -d "path[]=$url" || echo "Failed to purge $url (continuing...)"
+            sleep 2
+          done
+          
+          echo "Individual purge attempts complete"
 
       - name: Cache purge complete
         run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"

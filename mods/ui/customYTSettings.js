@@ -5,7 +5,7 @@ const APP_VERSION = rootPkg.version;
 function PatchSettings(settingsObject) {
     const version = window?.h5vcc?.tizentube?.GetVersion ? window.h5vcc.tizentube.GetVersion() : 'unknown';
     const tizentubeOpenAction = SettingActionRenderer(
-        '2 TizenTube Settings',
+        'TizenTube Settings',
         'tizentube_open_action',
         {
             customAction: {
