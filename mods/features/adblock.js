@@ -1857,20 +1857,8 @@ function getCurrentPage() {
   return detectedPage;
 }
 
-function logChunked(prefix, text, chunkSize = 3000) {
-  if (!text) return;
-  const total = Math.ceil(text.length / chunkSize);
-  // Visual console shows newest logs first; emit chunks in reverse so users
-  // can read [1/total] ... [total/total] top-to-bottom.
-  for (let partIndex = total; partIndex >= 1; partIndex--) {
-    const i = (partIndex - 1) * chunkSize;
-    const part = text.slice(i, i + chunkSize);
-    // Keep metadata + chunk in one log line so each entry shows context and payload together.
-    console.log(`${prefix} [${partIndex}/${total}] len=${part.length} ${part}`);
-  }
-}
 
-function logChunkedByLines(prefix, text, linesPerChunk = 30) {
+function logChunkedByLines(prefix, text, linesPerChunk = 45) {
   if (!text) return;
   const lines = String(text).split('\n');
   const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
@@ -1912,6 +1900,7 @@ function triggerPlaylistContinuationLoad() {
     // noop
   }
 }
+
 
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
@@ -1985,13 +1974,15 @@ function addPlaylistControlButtons(attempt = 1) {
   let existingButtons = getNativeButtons();
   const currentUrl = window.location.href;
 
-  if (attempt <= 6 || DEBUG_ENABLED) {
+  if (attempt <= 2 || DEBUG_ENABLED) {
     console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
   }
 
   if (existingButtons.length === 0) {
-    if (attempt <= 6 || DEBUG_ENABLED) {
+    const now = Date.now();
+    if (attempt <= 2 || DEBUG_ENABLED || !window._playlistNoNativeLogAt || (now - window._playlistNoNativeLogAt) > 5000) {
       console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
+      window._playlistNoNativeLogAt = now;
     }
     if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
@@ -2022,7 +2013,7 @@ function addPlaylistControlButtons(attempt = 1) {
         existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
-      logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 30);
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 45);
     } catch (e) {
       console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
     }
@@ -2168,12 +2159,13 @@ function addPlaylistControlButtons(attempt = 1) {
       parentOuterHTMLAfter: parentContainer?.outerHTML || null,
     };
     if (attempt <= 6) {
-      logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 30);
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 45);
     }
   } catch (e) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
   }
 }
+
 
 if (typeof window !== 'undefined') {
   setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);

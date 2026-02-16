@@ -158,7 +158,7 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
   window.deleteConsoleLastLog = function() {
     if (!consoleDiv || !enabled || !consoleVisible) return;
     if (logs.length === 0) return;
-    logs.splice(0, Math.min(3, logs.length));
+    logs.splice(0, Math.min(1, logs.length));
     consoleDiv.innerHTML = logs.join('');
   };
 
