@@ -30,18 +30,32 @@ window.adblock.setDebugEnabled = function(value) {
     DEBUG_ENABLED = value;
     console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
 };
-
 // Listen for config changes to update DEBUG_ENABLED cache
 if (typeof window !== 'undefined') {
   if (!window._playlistButtonObserver) {
-  window._playlistButtonObserver = new MutationObserver(() => {
-    const page = getCurrentPage();
-    if (page !== 'playlist') return;
-    const hasCustom = !!document.querySelector('[data-tizentube-continue-btn="1"]');
-    if (!hasCustom) {
-      addPlaylistControlButtons(7);
+    window._playlistButtonObserver = new MutationObserver(() => {
+      const page = getCurrentPage();
+      if (page !== 'playlist') return;
+      const hasCustom = !!document.querySelector('[data-tizentube-continue-btn="1"]');
+      if (!hasCustom) {
+        addPlaylistControlButtons(7);
+      }
+    });
+
+    const observe = () => {
+      const target = document.querySelector('yt-virtual-list') || document.body;
+      if (!target) return;
+      try {
+        window._playlistButtonObserver.observe(target, { childList: true, subtree: true });
+      } catch (_) {}
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', observe, { once: true });
+    } else {
+      observe();
     }
-  });
+  }
   setTimeout(() => {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (e) => {
