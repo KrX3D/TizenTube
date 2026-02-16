@@ -194,18 +194,14 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
         // ⭐ CONSERVATIVE: Only flag as short if < 90 seconds
         // Don't use 180s threshold since it catches regular videos
         if (totalSeconds <= 90) {
-          if (LOG_SHORTS && DEBUG_ENABLED) {
-            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
-          }
+          console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
           return true;
         }
         
         // ⭐ NO aspect ratio check here - YouTube letterboxes shorts so they look 16:9
         // Instead, rely on shelf memory for 90-180 second videos
         if (totalSeconds <= 180 && window._shortsVideoIdsFromShelves?.has(videoId)) {
-          if (LOG_SHORTS && DEBUG_ENABLED) {
-            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
-          }
+          console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
           return true;
         }
       }
