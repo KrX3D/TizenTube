@@ -970,39 +970,8 @@ export default function modernUI(update, parameters) {
                                         }
                                     ]
                                 ),
-                                buttonItem(
-                                    { title: 'Test Remote Logging' },
-                                    { icon: 'LANGUAGE' },
-                                    [
-                                        {
-                                            customAction: {
-                                                action: 'TEST_REMOTE_LOGGING'
-                                            }
-                                        },
-                                        {
-                                            signalAction: {
-                                                signal: 'POPUP_BACK'
-                                            }
-                                        }
-                                    ]
-                                ),
-                                buttonItem(
-                                    { title: 'Test Remote Connection' },
-                                    { icon: 'LANGUAGE' },
-                                    [
-                                        {
-                                            customAction: {
-                                                action: 'TEST_REMOTE_CONNECTION'
-                                            }
-                                        },
-                                        {
-                                            signalAction: {
-                                                signal: 'POPUP_BACK'
-                                            }
-                                        }
-                                    ]
-                                )
-                            ])
+                                
+                                ])
                         }
                     }
                 ];

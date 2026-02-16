@@ -193,31 +193,26 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
   console.log = function(...args) {
     originalLog.apply(console, args);
     if (enabled) addLog(formatConsoleArgs(args), 'log');
-    if (enabled && window.remoteLogger?.log) window.remoteLogger.log('log', ...args);
   };
 
   console.info = function(...args) {
     originalInfo.apply(console, args);
     if (enabled) addLog(formatConsoleArgs(args), 'log');
-    if (enabled && window.remoteLogger?.log) window.remoteLogger.log('info', ...args);
   };
 
   console.error = function(...args) {
     originalError.apply(console, args);
     if (enabled) addLog(formatConsoleArgs(args), 'error');
-    if (enabled && window.remoteLogger?.log) window.remoteLogger.log('error', ...args);
   };
 
   console.warn = function(...args) {
     originalWarn.apply(console, args);
     if (enabled) addLog(formatConsoleArgs(args), 'warn');
-    if (enabled && window.remoteLogger?.log) window.remoteLogger.log('warn', ...args);
   };
 
   console.debug = function(...args) {
     originalDebug.apply(console, args);
     if (enabled) addLog(formatConsoleArgs(args), 'log');
-    if (enabled && window.remoteLogger?.log) window.remoteLogger.log('debug', ...args);
   };
 
   let lastToggleTime = 0;
