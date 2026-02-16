@@ -181,17 +181,28 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
       )?.lineItemRenderer?.text?.simpleText;
     }
 
-    // Find this section in isShortItem() (around line 180-195)
+    // In isShortItem(), replace the duration section (around line 180-195)
     if (lengthText) {
       const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
       if (durationMatch) {
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        // ⭐ CHANGED: YouTube shorts are now up to 3 minutes (180 seconds)
-        if (totalSeconds <= 180) {
+        
+        // ⭐ CONSERVATIVE: Only flag as short if < 90 seconds
+        // Don't use 180s threshold since it catches regular videos
+        if (totalSeconds <= 90) {
           if (LOG_SHORTS && DEBUG_ENABLED) {
-            console.log('[SHORTS] Detected by duration:', videoId, '| Duration:', totalSeconds + 's');
+            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
+          }
+          return true;
+        }
+        
+        // ⭐ NO aspect ratio check here - YouTube letterboxes shorts so they look 16:9
+        // Instead, rely on shelf memory for 90-180 second videos
+        if (totalSeconds <= 180 && window._shortsVideoIdsFromShelves?.has(videoId)) {
+          if (LOG_SHORTS && DEBUG_ENABLED) {
+            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
           }
           return true;
         }

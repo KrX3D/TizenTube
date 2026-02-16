@@ -273,6 +273,9 @@ function directFilterArray(arr, page, context = '') {
   // Generate unique call ID for debugging
   const callId = Math.random().toString(36).substr(2, 6);
   
+  // ⭐ Check if this is a playlist page
+  isPlaylistPage = (page === 'playlist' || page === 'playlists');
+  
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
@@ -355,14 +358,6 @@ function directFilterArray(arr, page, context = '') {
   const filtered = arr.filter(item => {
     if (!item) return true;
     
-    // Get video ID early for all checks
-    const videoId = item.tileRenderer?.contentId || 
-                   item.videoRenderer?.videoId || 
-                   item.playlistVideoRenderer?.videoId ||
-                   item.gridVideoRenderer?.videoId ||
-                   item.compactVideoRenderer?.videoId ||
-                   'unknown';
-    
     // Check if it's a video item
     const isVideoItem = item.tileRenderer || 
                         item.videoRenderer || 
@@ -377,19 +372,19 @@ function directFilterArray(arr, page, context = '') {
       }
       return true;
     }
+    
+    const videoId = item.tileRenderer?.contentId || 
+                   item.videoRenderer?.videoId || 
+                   item.playlistVideoRenderer?.videoId ||
+                   item.gridVideoRenderer?.videoId ||
+                   item.compactVideoRenderer?.videoId ||
+                   'unknown';
 
-    // ⭐ FIX #2: Check shelf memory FIRST (this was working before for channels)
+    // ⭐ RESTORED ORIGINAL ORDER: Check shelf memory first (this worked before)
     if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
       if (LOG_SHORTS && DEBUG_ENABLED) {
         console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
       }
-      shortsCount++;
-      return false;
-    }
-
-    // ⭐ FIX #2: SECOND check - global shorts video ID set (subscriptions)
-    if (shouldApplyShortsFilter && videoId && videoId !== 'unknown' && window._shortsVideoIdsFromShelves?.has(videoId)) {
-      console.log('✂️✂️✂️ FILTERING VIDEO FROM REMOVED SHORTS SHELF:', videoId);
       shortsCount++;
       return false;
     }
@@ -405,11 +400,10 @@ function directFilterArray(arr, page, context = '') {
       return false;
     }
     
-    // ⭐ STEP 1: Filter shorts FIRST (before checking progress bars)
+    // ⭐ STEP 1: Filter shorts (regular detection + global set as fallback)
     if (shouldApplyShortsFilter && isShortItem(item, { debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS, currentPage: page || getCurrentPage() })) {
       shortsCount++;
       
-      // ⭐ ADD VISUAL MARKER
       console.log('✂️✂️✂️ SHORT REMOVED:', videoId, '| Page:', page);
 
       if (LOG_SHORTS && DEBUG_ENABLED) {
@@ -472,16 +466,16 @@ function directFilterArray(arr, page, context = '') {
     console.log('[FILTER_END #' + callId + '] ========================================');
   }
   
-  // ⭐ FIX #3: PLAYLIST SAFEGUARD - Find UNWATCHED video as helper
+  // ⭐ PLAYLIST SAFEGUARD: keep one helper so TV can request next batch
   if (isPlaylistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
     
-    // Check if we're in filter mode
+    // ⭐ CHECK: Are we in filter mode? If so, NO helpers needed!
     if (filterIds) {
       console.log('[FILTER_MODE] 🔄 All filtered in this batch - no helpers needed (filter mode active)');
       return [];
     }
     
-    // ⭐ FIX #3: Find a REAL UNWATCHED video to use as helper, not a watched one
+    // ⭐ FIXED: Find an unwatched video using the CONFIGURED threshold, not hardcoded 10%
     const lastUnwatchedVideo = [...arr].reverse().find((item) => {
       const vid = getVideoId(item);
       if (!vid || vid === 'unknown') return false;
@@ -489,26 +483,24 @@ function directFilterArray(arr, page, context = '') {
       // Make sure it's not a helper item
       if (isLikelyPlaylistHelperItem(item)) return false;
       
-      // ⭐ NEW: Make sure it doesn't have a high progress bar (not watched)
+      // ⭐ FIXED: Use configured threshold (default 10, configurable)
       const progressBar = findProgressBar(item);
       const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
       
-      // Only use as helper if it's truly unwatched (less than 10% watched)
-      return percentWatched < 10;
+      // Keep as helper if below threshold (so if threshold is 10, keep videos < 10% watched)
+      return percentWatched < threshold;
     });
     
     if (lastUnwatchedVideo) {
       const lastVideoId = getVideoId(lastUnwatchedVideo) || 'unknown';
       if (DEBUG_ENABLED) {
-        console.log('[HELPER] ALL FILTERED - keeping 1 UNWATCHED helper for continuation:', lastVideoId);
+        console.log('[HELPER] ALL FILTERED - keeping 1 helper for continuation trigger:', lastVideoId);
       }
-      
-      // Store this helper
       window._lastHelperVideos = [lastUnwatchedVideo];
       window._playlistScrollHelpers.clear();
       window._playlistScrollHelpers.add(lastVideoId);
       
-      // ⭐ Schedule aggressive DOM cleanup and trigger next load
+      // Schedule DOM cleanup
       setTimeout(() => {
         cleanupPlaylistHelperTiles();
         setTimeout(() => {
@@ -518,12 +510,27 @@ function directFilterArray(arr, page, context = '') {
       
       return [lastUnwatchedVideo];
     } else {
-      // ⭐ FIX #3: If no unwatched video found, try to force load more
-      console.log('[HELPER] No unwatched video found - forcing continuation load');
-      setTimeout(() => {
-        triggerPlaylistContinuationLoad();
-      }, 500);
-      return [];
+      // If can't find unwatched helper, try ANY video as fallback
+      const anyVideo = [...arr].reverse().find((item) => {
+        const vid = getVideoId(item);
+        return vid && vid !== 'unknown' && !isLikelyPlaylistHelperItem(item);
+      });
+      
+      if (anyVideo) {
+        console.log('[HELPER] No unwatched found - using any video as helper:', getVideoId(anyVideo));
+        window._lastHelperVideos = [anyVideo];
+        window._playlistScrollHelpers.clear();
+        window._playlistScrollHelpers.add(getVideoId(anyVideo));
+        
+        setTimeout(() => {
+          cleanupPlaylistHelperTiles();
+          setTimeout(() => {
+            triggerPlaylistContinuationLoad();
+          }, 300);
+        }, 500);
+        
+        return [anyVideo];
+      }
     }
   }
   
@@ -1326,19 +1333,24 @@ function processShelves(shelves, shouldAddPreviews = true) {
   const page = getCurrentPage();
   const shortsEnabled = configRead('enableShorts');
   
-  // ⭐ ENHANCED: Remove shorts shelves FIRST and remember ALL their videos
+  // ⭐ CRITICAL: Remove shorts shelves FIRST and remember ALL their videos
   if (!shortsEnabled) {
     for (let i = shelves.length - 1; i >= 0; i--) {
       const shelf = shelves[i];
       if (!shelf) continue;
       
       const title = getShelfTitle(shelf).toLowerCase();
-      if (title.includes('short')) {
+      
+      // ⭐ Check both title and shelf type
+      const isShortsShelf = title.includes('short') || 
+                           shelf.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
+      
+      if (isShortsShelf) {
         // Remember ALL video IDs from this shorts shelf
         const videoIds = collectVideoIdsFromShelf(shelf);
-        console.log('[SHORTS_SHELF] Removing shorts shelf:', title, '| Videos:', videoIds.length);
+        console.log('✂️✂️✂️ SHORTS SHELF DETECTED:', title, '| Videos:', videoIds.length);
         
-        // Store these IDs globally
+        // Store these IDs globally - BOTH sets for redundancy
         videoIds.forEach(id => {
           window._shortsVideoIdsFromShelves.add(id);
         });
@@ -1348,7 +1360,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
         
         // Remove the shelf
         shelves.splice(i, 1);
-        console.log('✂️✂️✂️ SHORTS SHELF REMOVED - Tagged', videoIds.length, 'videos');
+        console.log('✂️✂️✂️ SHORTS SHELF REMOVED - Tagged', videoIds.length, 'videos as shorts');
       }
     }
   }
@@ -2004,6 +2016,7 @@ function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
+  // ⭐ CHANGED: Look for the parent container that holds ALL buttons
   const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || 
                         document.querySelector('[class*="TXB27d"]');
   if (!baseContainer) {
@@ -2014,7 +2027,7 @@ function addPlaylistControlButtons(attempt = 1) {
   }
 
   // Check if button already exists
-  if (baseContainer.querySelector('[data-tizentube-collection-btn="1"]')) {
+  if (document.querySelector('[data-tizentube-collection-btn="1"]')) {
     console.log('[PLAYLIST_BUTTON] Already exists');
     return;
   }
@@ -2024,8 +2037,11 @@ function addPlaylistControlButtons(attempt = 1) {
     .filter(btn => {
       if (btn.getAttribute('data-tizentube-collection-btn')) return false;
       const rect = btn.getBoundingClientRect();
-      return rect.height > 10 && rect.width > 10;
+      const visible = rect.height > 10 && rect.width > 10;
+      return visible;
     });
+  
+  console.log('[PLAYLIST_BUTTON] Found', nativeButtons.length, 'native buttons');
   
   if (nativeButtons.length === 0) {
     if (attempt < 6) {
@@ -2034,19 +2050,19 @@ function addPlaylistControlButtons(attempt = 1) {
     return;
   }
 
-  // Clone the FIRST button (most reliable template)
-  const templateButton = nativeButtons[0];
+  // Clone the last button as template
+  const templateButton = nativeButtons[nativeButtons.length - 1];
   const customBtn = templateButton.cloneNode(true);
   
   // Setup custom button
   customBtn.setAttribute('data-tizentube-collection-btn', '1');
   customBtn.removeAttribute('id');
   customBtn.setAttribute('tabindex', '0');
-  customBtn.style.position = 'relative';
+  
+  // ⭐ CRITICAL: Ensure it's a separate element, not nested
   customBtn.style.display = 'block';
-  customBtn.style.visibility = 'visible';
-  customBtn.style.opacity = '1';
-  customBtn.style.pointerEvents = 'auto';
+  customBtn.style.position = 'relative';
+  customBtn.style.marginTop = '16px'; // Space from previous button
   
   // Change text
   const labelNode = customBtn.querySelector('yt-formatted-string');
@@ -2072,28 +2088,17 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   });
   
-  // ⭐ FIXED: Calculate position based on last button
-  const lastButton = nativeButtons[nativeButtons.length - 1];
-  const lastButtonRect = lastButton.getBoundingClientRect();
-  const containerRect = baseContainer.getBoundingClientRect();
-  
-  // Calculate relative position
-  const topOffset = lastButtonRect.bottom - containerRect.top + 16; // 16px spacing
-  
-  // Apply absolute positioning within container
-  customBtn.style.position = 'absolute';
-  customBtn.style.top = topOffset + 'px';
-  customBtn.style.left = lastButtonRect.left - containerRect.left + 'px';
-  customBtn.style.width = lastButtonRect.width + 'px';
-  
-  // Make container relative so absolute positioning works
-  baseContainer.style.position = 'relative';
-  baseContainer.style.minHeight = (topOffset + 70) + 'px'; // Ensure space for button
-  
-  // Append button
+  // ⭐ CRITICAL FIX: Append to the CONTAINER, not after another button
+  // This ensures it's a sibling at the same level, not nested
   baseContainer.appendChild(customBtn);
   
-  console.log('[PLAYLIST_BUTTON] Injected at Y:', topOffset, 'after', nativeButtons.length, 'native buttons');
+  console.log('[PLAYLIST_BUTTON] Injected into container with', nativeButtons.length, 'existing buttons');
+  
+  // ⭐ DEBUG: Log the structure
+  if (DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] Container children:', baseContainer.children.length);
+    console.log('[PLAYLIST_BUTTON] Custom button parent:', customBtn.parentElement === baseContainer);
+  }
 }
 
 if (typeof window !== 'undefined') {
