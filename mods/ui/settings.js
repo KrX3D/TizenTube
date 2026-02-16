@@ -1228,5 +1228,5 @@ export function optionShow(parameters, update) {
         }
     }
 
-    showModal(parameters.menuHeader ? parameters.menuHeader : 'TizenTube Settings', overlayPanelItemListRenderer(buttons, parameters.selectedIndex), parameters.menuId || 'tt-settings-options', update);
+    showModal(parameters.menuHeader ? parameters.menuHeader : '1 TizenTube Settings', overlayPanelItemListRenderer(buttons, parameters.selectedIndex), parameters.menuId || 'tt-settings-options', update);
 }

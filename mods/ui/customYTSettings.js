@@ -5,7 +5,7 @@ const APP_VERSION = rootPkg.version;
 function PatchSettings(settingsObject) {
     const version = window?.h5vcc?.tizentube?.GetVersion ? window.h5vcc.tizentube.GetVersion() : 'unknown';
     const tizentubeOpenAction = SettingActionRenderer(
-        'TizenTube Settings',
+        '2 TizenTube Settings',
         'tizentube_open_action',
         {
             customAction: {
@@ -13,7 +13,7 @@ function PatchSettings(settingsObject) {
                 parameters: []
             }
         },
-        `Open TizenTube Settings Version: ${APP_VERSION}`,
+        `Version: ${APP_VERSION}`,
         'https://www.gstatic.com/ytlr/img/parent_code.png'
     )
 
