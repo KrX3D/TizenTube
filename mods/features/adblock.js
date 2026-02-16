@@ -1,7 +1,6 @@
 import { configRead } from '../config.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
-import { ShelfRenderer, TileRenderer } from '../ui/ytUI.js';
 import { addLongPress } from './longPress.js';
 import { addPreviews } from './previews.js';
 import { hideShorts } from './hideShorts.js';
@@ -10,6 +9,10 @@ import { applySponsorBlockTimelyActions, applySponsorBlockHighlight } from './sp
 import { deArrowify } from './deArrowify.js';
 import { hqify } from './hqify.js';
 import { applyAdCleanup } from './adCleanup.js';
+import { applyPaidContentOverlay } from './paidContentOverlay.js';
+import { applyEndscreen } from './endscreen.js';
+import { applyYouThereRenderer } from './youThereRenderer.js';
+import { applyQueueShelf } from './queueShelf.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
@@ -839,10 +842,7 @@ JSON.parse = function () {
 
   applyAdCleanup(r, adBlockEnabled);
 
-  if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
-    //console.log('ADBLOCK', 'Removing paid content overlay');
-    r.paidContentOverlay = null;
-  }
+  applyPaidContentOverlay(r, configRead('enablePaidPromotionOverlay'));
 
   applyPreferredVideoCodec(r, configRead('videoPreferredCodec'));
 
@@ -915,18 +915,8 @@ JSON.parse = function () {
     }
   }
 
-  if (r.endscreen && configRead('enableHideEndScreenCards')) {
-    //console.log('UI_FILTER', 'Hiding end screen cards');
-    r.endscreen = null;
-  }
-
-  if (r.messages && Array.isArray(r.messages) && !configRead('enableYouThereRenderer')) {
-    const before = r.messages.length;
-    r.messages = r.messages.filter((msg) => !msg?.youThereRenderer);
-    if (before !== r.messages.length) {
-      //console.log('UI_FILTER', 'Removed YouThereRenderer messages', { removed: before - r.messages.length });
-    }
-  }
+  applyEndscreen(r, configRead('enableHideEndScreenCards'));
+  applyYouThereRenderer(r, configRead('enableYouThereRenderer'));
 
   // Remove shorts ads
   if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
@@ -1266,16 +1256,7 @@ JSON.parse = function () {
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false);
-    if (window.queuedVideos.videos.length > 0) {
-      const queuedVideosClone = window.queuedVideos.videos.slice();
-      queuedVideosClone.unshift(TileRenderer('Clear Queue', { customAction: { action: 'CLEAR_QUEUE' }}));
-      r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.unshift(ShelfRenderer(
-        'Queued Videos',
-        queuedVideosClone,
-        queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ?
-          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) : 0
-      ));
-    }
+    applyQueueShelf(r);
   }
 
   applySponsorBlockTimelyActions(r, configRead('sponsorBlockManualSkips'));
@@ -2232,6 +2213,38 @@ function logChunked(prefix, text, chunkSize = 3000) {
 
 
 
+function triggerPlaylistContinuationLoad() {
+  const page = getCurrentPage();
+  if (page !== 'playlist') return;
+
+  const candidates = [
+    document.querySelector('yt-virtual-list'),
+    document.querySelector('[class*="virtual-list"]'),
+    document.querySelector('ytlr-playlist-video-list-renderer'),
+    document.scrollingElement,
+  ].filter(Boolean);
+
+  for (const node of candidates) {
+    try {
+      const before = node.scrollTop || 0;
+      node.scrollTop = Math.max(node.scrollTop || 0, node.scrollHeight || 0);
+      node.dispatchEvent(new Event('scroll', { bubbles: true }));
+      if ((node.scrollTop || 0) !== before) {
+        break;
+      }
+    } catch (e) {
+      // noop
+    }
+  }
+
+  try {
+    window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+  } catch (e) {
+    // noop
+  }
+}
+
+
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
@@ -2246,7 +2259,7 @@ function cleanupPlaylistHelperTiles() {
     const videoId = node.getAttribute('data-video-id') || node.getAttribute('video-id') || node.dataset?.videoId || '';
     const text = (node.textContent || '').toLowerCase();
     const html = (node.innerHTML || '').toLowerCase();
-    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden/.test(text) || /continuation/.test(html);
+    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden|mehr anzeigen|more videos|load more/.test(text) || /continuation|loadmore|mehr/.test(html);
     const key = `${videoId}:${text.slice(0, 80)}`;
 
     if ((videoId && (removedIds.has(videoId) || currentHelperIds.has(videoId))) || removedKeys.has(key) || looksLikeHelper) {
@@ -2255,8 +2268,11 @@ function cleanupPlaylistHelperTiles() {
     }
   });
 
-  if (removedCount > 0 && DEBUG_ENABLED) {
-    console.log('[HELPER_CLEANUP_DOM] Removed helper tiles from DOM:', removedCount);
+  if (removedCount > 0) {
+    if (DEBUG_ENABLED) {
+      console.log('[HELPER_CLEANUP_DOM] Removed helper tiles from DOM:', removedCount);
+    }
+    triggerPlaylistContinuationLoad();
   }
 }
 
@@ -2341,25 +2357,6 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const templateBtn = existingButtons[existingButtons.length - 1];
   const templateRect = templateBtn.getBoundingClientRect();
-  const customBtn = templateBtn.cloneNode(true);
-  customBtn.setAttribute('data-tizentube-collection-btn', '1');
-  // Keep cloned structure/styles intact for TV focus behavior.
-  customBtn.removeAttribute('id');
-  customBtn.setAttribute('tabindex', '0');
-  customBtn.removeAttribute('aria-hidden');
-  customBtn.style.pointerEvents = 'auto';
-  customBtn.style.opacity = '1';
-  customBtn.style.visibility = 'visible';
-  customBtn.style.display = 'block';
-  customBtn.style.removeProperty('right');
-  customBtn.style.removeProperty('inset');
-  customBtn.style.removeProperty('margin-left');
-
-  const labelNode = customBtn.querySelector('yt-formatted-string');
-  if (labelNode) {
-    labelNode.textContent = 'Refresh Filters';
-  }
-
   const runRefresh = (evt) => {
     evt?.preventDefault?.();
     evt?.stopPropagation?.();
@@ -2370,24 +2367,50 @@ function addPlaylistControlButtons(attempt = 1) {
     });
   };
 
-  customBtn.style.zIndex = '1';
-  customBtn.style.pointerEvents = 'auto';
-  customBtn.addEventListener('click', runRefresh);
-  customBtn.addEventListener('keydown', (evt) => {
-    if (evt.key === 'Enter' || evt.key === ' ') {
-      runRefresh(evt);
-    }
-  });
+  const setupCustomButton = (btn) => {
+    btn.setAttribute('data-tizentube-collection-btn', '1');
+    btn.removeAttribute('id');
+    btn.setAttribute('tabindex', '0');
+    btn.removeAttribute('aria-hidden');
+    btn.style.pointerEvents = 'auto';
+    btn.style.opacity = '1';
+    btn.style.visibility = 'visible';
+    btn.style.removeProperty('right');
+    btn.style.removeProperty('inset');
+    btn.style.removeProperty('margin-left');
 
-  const innerButton = customBtn.querySelector('button');
-  if (innerButton) {
-    innerButton.style.pointerEvents = 'auto';
-    innerButton.style.position = 'static';
-    innerButton.style.transform = 'none';
-    innerButton.removeAttribute('disabled');
-    innerButton.setAttribute('tabindex', '0');
-    innerButton.addEventListener('click', runRefresh);
+    const labelNode = btn.querySelector('yt-formatted-string');
+    if (labelNode) {
+      labelNode.textContent = 'Refresh Filters';
+    }
+
+    if (btn.dataset.tizentubeRefreshBound !== '1') {
+      btn.addEventListener('click', runRefresh);
+      btn.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter' || evt.key === ' ') {
+          runRefresh(evt);
+        }
+      });
+      btn.dataset.tizentubeRefreshBound = '1';
+    }
+
+    const innerButton = btn.querySelector('button');
+    if (innerButton) {
+      innerButton.style.pointerEvents = 'auto';
+      innerButton.removeAttribute('disabled');
+      innerButton.setAttribute('tabindex', '0');
+      if (innerButton.dataset.tizentubeRefreshBound !== '1') {
+        innerButton.addEventListener('click', runRefresh);
+        innerButton.dataset.tizentubeRefreshBound = '1';
+      }
+    }
+  };
+
+  let customBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
+  if (!customBtn) {
+    customBtn = templateBtn.cloneNode(true);
   }
+  setupCustomButton(customBtn);
 
   const nativeButtonRects = existingButtons.map((btn, idx) => {
     const r = btn.getBoundingClientRect();
@@ -2405,25 +2428,29 @@ function addPlaylistControlButtons(attempt = 1) {
     container.parentElement.style.minHeight = `${parentMinHeight}px`;
   }
 
-  // Insert after the last native button to keep row order and avoid overlaying first button.
-  templateBtn.insertAdjacentElement('afterend', customBtn);
+  // Keep custom button directly after the current last native button.
+  if (templateBtn.nextElementSibling !== customBtn) {
+    templateBtn.insertAdjacentElement('afterend', customBtn);
+  }
 
-  // Keep normal flow and force the clone to occupy a full-width row in grid/flex containers.
+  // Place custom button one slot below template (y + height) using native geometry.
   const crect = container.getBoundingClientRect();
-  customBtn.style.position = 'static';
-  customBtn.style.left = 'auto';
-  customBtn.style.top = 'auto';
-  customBtn.style.transform = 'none';
-  customBtn.style.zIndex = '1';
-  customBtn.style.display = 'block';
-  customBtn.style.width = '100%';
-  customBtn.style.maxWidth = '100%';
-  customBtn.style.minWidth = '100%';
-  customBtn.style.gridColumn = '1 / -1';
-  customBtn.style.justifySelf = 'stretch';
-  customBtn.style.alignSelf = 'stretch';
+  const templateTop = templateBtn.offsetTop || Math.round(templateRect.top - crect.top);
+  const templateLeft = templateBtn.offsetLeft || Math.round(templateRect.left - crect.left);
+  const templateHeight = templateBtn.offsetHeight || Math.round(templateRect.height);
+  const templateWidth = templateBtn.offsetWidth || Math.round(templateRect.width);
 
-  const requiredHeight = Math.max(container.clientHeight, Math.round((templateRect.top - crect.top) + templateRect.height * 2 + 8));
+  container.style.position = 'relative';
+  customBtn.style.position = 'absolute';
+  customBtn.style.left = `${Math.max(0, Math.round(templateLeft))}px`;
+  customBtn.style.top = `${Math.max(0, Math.round(templateTop + templateHeight))}px`;
+  customBtn.style.width = `${Math.max(1, Math.round(templateWidth))}px`;
+  customBtn.style.height = `${Math.max(1, Math.round(templateHeight))}px`;
+  customBtn.style.display = 'block';
+  customBtn.style.transform = 'none';
+  customBtn.style.zIndex = '2';
+
+  const requiredHeight = Math.max(container.clientHeight, Math.round(templateTop + templateHeight * 2 + 8));
   container.style.minHeight = `${requiredHeight}px`;
 
   window._playlistButtonInjectedUrl = currentUrl;
@@ -2444,7 +2471,7 @@ function addPlaylistControlButtons(attempt = 1) {
       clonedCustomButtonOuterHTML: customBtn.outerHTML,
       clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
-      templateMetrics: { top: Math.round(templateRect.top), left: Math.round(templateRect.left), height: Math.round(templateRect.height), width: Math.round(templateRect.width) },
+      templateMetrics: { top: Math.round(templateBtn.offsetTop || templateRect.top), left: Math.round(templateBtn.offsetLeft || templateRect.left), height: Math.round(templateBtn.offsetHeight || templateRect.height), width: Math.round(templateBtn.offsetWidth || templateRect.width) },
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
@@ -2465,8 +2492,8 @@ if (typeof window !== 'undefined') {
     const page = getCurrentPage();
     if (page === 'playlist' || page === 'playlists') {
       cleanupPlaylistHelperTiles();
-      if (!document.querySelector('[data-tizentube-collection-btn="1"]') && page === 'playlist') {
-        addPlaylistControlButtons(1);
+      if (page === 'playlist') {
+        addPlaylistControlButtons(7);
       }
     }
     if (window.location.href !== lastPlaylistButtonHref) {
@@ -2475,5 +2502,5 @@ if (typeof window !== 'undefined') {
         setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 1800);
       }
     }
-  }, 3000);
+  }, 1500);
 }
