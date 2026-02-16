@@ -1857,7 +1857,6 @@ function getCurrentPage() {
   return detectedPage;
 }
 
-
 function logChunked(prefix, text, chunkSize = 3000) {
   if (!text) return;
   const total = Math.ceil(text.length / chunkSize);
@@ -1870,10 +1869,6 @@ function logChunked(prefix, text, chunkSize = 3000) {
     console.log(`${prefix} [${partIndex}/${total}] len=${part.length} ${part}`);
   }
 }
-
-
-
-
 
 function logChunkedByLines(prefix, text, linesPerChunk = 30) {
   if (!text) return;
@@ -1917,7 +1912,6 @@ function triggerPlaylistContinuationLoad() {
     // noop
   }
 }
-
 
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
@@ -2180,7 +2174,6 @@ function addPlaylistControlButtons(attempt = 1) {
     console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
   }
 }
-
 
 if (typeof window !== 'undefined') {
   setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);
