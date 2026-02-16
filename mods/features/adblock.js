@@ -1908,6 +1908,14 @@ function addPlaylistControlButtons(attempt = 1) {
 
   const useParent = parentButtons.length > baseButtons.length;
   const container = useParent ? parentContainer : baseContainer;
+
+  // Remove stale injected buttons from other containers/old renders.
+  const allCustomButtons = Array.from(document.querySelectorAll('[data-tizentube-collection-btn="1"]'));
+  allCustomButtons.forEach((btn) => {
+    if (!container.contains(btn)) {
+      btn.remove();
+    }
+  });
   const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
     if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
     const rect = btn.getBoundingClientRect();
@@ -1940,7 +1948,7 @@ function addPlaylistControlButtons(attempt = 1) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
-      const existingCustomBtn = document.querySelector('[data-tizentube-collection-btn="1"]');
+      const existingCustomBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
       const dump = {
         page,
         baseButtonsBefore: baseButtons.length,
@@ -1988,6 +1996,14 @@ function addPlaylistControlButtons(attempt = 1) {
     btn.style.pointerEvents = 'auto';
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
+    btn.style.position = '';
+    btn.style.left = '';
+    btn.style.top = '';
+    btn.style.width = '';
+    btn.style.height = '';
+    btn.style.display = '';
+    btn.style.transform = '';
+    btn.style.zIndex = '';
     btn.style.removeProperty('right');
     btn.style.removeProperty('inset');
     btn.style.removeProperty('margin-left');
@@ -2022,15 +2038,6 @@ function addPlaylistControlButtons(attempt = 1) {
     }
   };
 
-  const existingCustom = container.querySelector('[data-tizentube-collection-btn="1"]');
-  if (existingCustom) {
-    setupCustomButton(existingCustom);
-    if (templateBtn.nextElementSibling !== existingCustom) {
-      templateBtn.insertAdjacentElement('afterend', existingCustom);
-    }
-    return;
-  }
-
   let customBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
   if (!customBtn) {
     customBtn = templateBtn.cloneNode(true);
@@ -2047,15 +2054,6 @@ function addPlaylistControlButtons(attempt = 1) {
   if (templateBtn.nextElementSibling !== customBtn) {
     templateBtn.insertAdjacentElement('afterend', customBtn);
   }
-
-  customBtn.style.position = '';
-  customBtn.style.left = '';
-  customBtn.style.top = '';
-  customBtn.style.width = '';
-  customBtn.style.height = '';
-  customBtn.style.display = '';
-  customBtn.style.transform = '';
-  customBtn.style.zIndex = '';
 
   window._playlistButtonInjectedUrl = currentUrl;
 
