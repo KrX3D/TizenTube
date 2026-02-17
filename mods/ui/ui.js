@@ -128,14 +128,8 @@ function execute_once_dom_loaded() {
   } catch (e) { }
 
   var eventHandler = (evt) => {
-    // We handle key events ourselves.
-    console.info(
-      'Key event:',
-      evt.type,
-      evt.keyCode,
-      evt.keyCode,
-      evt.defaultPrevented
-    );
+    
+    // Screen dimming logic
     if (configRead('enableScreenDimming')) {
       if (keyTimeout) {
         clearTimeout(keyTimeout);
@@ -148,30 +142,60 @@ function execute_once_dom_loaded() {
         document.getElementById('container').style.setProperty('opacity', (1 - configRead('dimmingOpacity')).toString(), 'important');
       }, configRead('dimmingTimeout') * 1000);
     }
-    if (evt.keyCode == 403) {
-      console.info('Taking over!');
-      evt.preventDefault();
-      evt.stopPropagation();
-      if (evt.type === 'keydown') {
-        try {
-          if (uiContainer.style.display === 'none') {
-            console.info('Showing and focusing!');
-            uiContainer.style.display = 'block';
-            uiContainer.focus();
-          } else {
-            console.info('Hiding!');
-            uiContainer.style.display = 'none';
-            uiContainer.blur();
-          }
-        } catch (e) { }
-      }
-      return false;
-    } else if (evt.keyCode == 404) {
-      if (evt.type === 'keydown') {
-        modernUI();
-      }
-    } else if (evt.keyCode == 39) {
-      // Right key, for PiP
+    
+    // ========================================================================
+    // CONSOLE SCROLL CONTROLS - Match original safe pattern
+    // ========================================================================
+    
+    if (evt.keyCode === 403 || evt.keyCode === 115) { // RED = Scroll UP
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
+        if (evt.type === 'keydown') {
+            if (typeof window.scrollConsoleUp === 'function') {
+                console.log('[CONSOLE_SCROLL] RED invoke scrollConsoleUp type=' + evt.type);
+                window.scrollConsoleUp();
+            }
+        }
+        return false;
+    }
+    else if (evt.keyCode === 404 || evt.keyCode === 172) { // GREEN = Scroll DOWN
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
+        if (evt.type === 'keydown') {
+            if (typeof window.scrollConsoleDown === 'function') {
+                console.log('[CONSOLE_SCROLL] GREEN invoke scrollConsoleDown type=' + evt.type);
+                window.scrollConsoleDown();
+            }
+        }
+        return false;
+    }
+    else if (evt.keyCode === 405 || evt.keyCode === 170) { // YELLOW = Delete last log line
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
+        if (evt.type === 'keydown') {
+            if (typeof window.deleteConsoleLastLog === 'function') {
+                window.deleteConsoleLastLog();
+            }
+        }
+        return false;
+    }
+    else if (evt.keyCode === 406 || evt.keyCode === 191) { // BLUE = Toggle Console
+        evt.preventDefault();
+        evt.stopPropagation();
+        evt.stopImmediatePropagation();
+        if (evt.type === 'keydown') {
+            if (typeof window.toggleDebugConsole === 'function') {
+                window.toggleDebugConsole();
+            }
+        }
+        return false;
+    }
+    
+    // Right arrow - PiP handling (keep this)
+    if (evt.keyCode == 39) {
       if (evt.type === 'keydown') {
         if (document.querySelector('ytlr-search-text-box > .zylon-focus') && window.isPipPlaying) {
           const ytlrPlayer = document.querySelector('ytlr-player');
@@ -179,9 +203,10 @@ function execute_once_dom_loaded() {
           pipToFullscreen();
         }
       }
-    };
+    }
+    
     return true;
-  }
+  };
 
   // Red, Green, Yellow, Blue
   // 403, 404, 405, 406

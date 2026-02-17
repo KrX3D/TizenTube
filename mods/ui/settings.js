@@ -426,7 +426,7 @@ export default function modernUI(update, parameters) {
                                 title: 'Watched Videos Threshold',
                                 subtitle: 'Set the percentage threshold for hiding watched videos'
                             },
-                            options: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
+                            options: [0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
                                 return {
                                     name: `${percent}%`,
                                     key: 'hideWatchedVideosThreshold',
@@ -461,12 +461,35 @@ export default function modernUI(update, parameters) {
                                     value: 'subscriptions'
                                 },
                                 {
+                                    name: 'Channel Pages',
+                                    value: 'channel'
+                                },
+                                {
                                     name: 'Library',
                                     value: 'library'
                                 },
                                 {
+                                    name: 'Library → Playlists Overview', //Subscriptions -> Playlists - arent probably removed since no indication if all videos in the Playlist are watched
+                                    icon: 'PLAYLIST_PLAY',
+                                    value: 'playlists'
+                                },
+                                {
+                                    name: 'Library → Individual Playlists (WL, LL, etc)',
+                                    icon: 'PLAYLIST_PLAY',
+                                    value: 'playlist'
+                                },
+                                {
+                                    name: 'Library → History',
+                                    icon: 'HISTORY',
+                                    value: 'history'
+                                },
+                                {
                                     name: 'More',
                                     value: 'more'
+                                },
+                                {
+                                    name: 'Watch',
+                                    value: 'watch'
                                 }
                             ]
                         }
@@ -703,6 +726,258 @@ export default function modernUI(update, parameters) {
                 }
             ]
         },
+
+        // ======= Developer Options =======
+        {
+            name: 'Developer Options',
+            icon: 'SETTINGS',
+            value: null,
+            menuHeader: {
+                title: 'Developer Options',
+                subtitle: 'Advanced debugging and logging options'
+            },
+            // Use getter so it evaluates dynamically each time
+            get options() {
+                return [
+                    {
+                        name: 'Debug Console',
+                        icon: 'VISIBILITY',
+                        value: 'enableDebugConsole'
+                    },
+                    {
+                        name: 'Debug Console Position',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-debug-console-position',
+                        menuHeader: {
+                            title: 'Debug Console Position',
+                            subtitle: 'Choose where to display the debug console'
+                        },
+                        options: [
+                            {
+                                name: 'Top Left',
+                                key: 'debugConsolePosition',
+                                value: 'top-left'
+                            },
+                            {
+                                name: 'Top Right',
+                                key: 'debugConsolePosition',
+                                value: 'top-right'
+                            },
+                            {
+                                name: 'Bottom Left',
+                                key: 'debugConsolePosition',
+                                value: 'bottom-left'
+                            },
+                            {
+                                name: 'Bottom Right',
+                                key: 'debugConsolePosition',
+                                value: 'bottom-right'
+                            },
+                            {
+                                name: 'Center',
+                                key: 'debugConsolePosition',
+                                value: 'center'
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Debug Console Height',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-debug-console-height',
+                        menuHeader: {
+                            title: 'Debug Console Height',
+                            subtitle: 'Choose console window height'
+                        },
+                        options: [
+                            {
+                                name: 'Normal (500px)',
+                                key: 'debugConsoleHeight',
+                                value: '500'
+                            },
+                            {
+                                name: 'Tall (800px)',
+                                key: 'debugConsoleHeight',
+                                value: '800'
+                            },
+                            {
+                                name: 'Full Screen (1054px)',
+                                key: 'debugConsoleHeight',
+                                value: '1054'
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote Logging',
+                        icon: 'LANGUAGE',
+                        value: 'enableRemoteLogging'
+                    },
+                    {
+                        name: 'Remote Logging Transport',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-transport',
+                        menuHeader: {
+                            title: 'Remote Logging Transport',
+                            subtitle: 'Choose one active transport (HTTP or WebSocket)'
+                        },
+                        options: [
+                            {
+                                name: 'HTTP only',
+                                key: 'remoteLoggingTransport',
+                                value: 'http'
+                            },
+                            {
+                                name: 'WebSocket only',
+                                key: 'remoteLoggingTransport',
+                                value: 'ws'
+                            },                        ]
+                    },
+                    {
+                        name: 'Remote HTTP Endpoint',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-url',
+                        menuHeader: {
+                            title: 'Remote HTTP Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. http://192.168.70.124:9000/log'
+                        },
+                        options: [
+                            {
+                                name: 'Preset: Disabled (empty URL)',
+                                key: 'remoteLoggingUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Preset: http://192.168.70.124:9000/log',
+                                key: 'remoteLoggingUrl',
+                                value: 'http://192.168.70.124:9000/log'
+                            },
+                            {
+                                name: 'Set HTTP endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_HTTP_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote WebSocket Endpoint',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-ws-url',
+                        menuHeader: {
+                            title: 'Remote WebSocket Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. ws://192.168.70.124:9001'
+                        },
+                        options: [
+                            {
+                                name: 'Preset: Disabled (empty URL)',
+                                key: 'remoteLoggingWsUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Preset: ws://192.168.70.124:9001',
+                                key: 'remoteLoggingWsUrl',
+                                value: 'ws://192.168.70.124:9001'
+                            },
+                            {
+                                name: 'Set WebSocket endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_WS_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote Logging Auth Token',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-token',
+                        menuHeader: {
+                            title: 'Remote Logging Auth Token',
+                            subtitle: 'Optional token sent in HTTP Authorization and WS auth payload'
+                        },
+                        options: [
+                            {
+                                name: 'Clear token',
+                                key: 'remoteLoggingAuthToken',
+                                value: ''
+                            },
+                            {
+                                name: 'Set token (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_AUTH_TOKEN'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: '🧪 Test Console',
+                        icon: 'SETTINGS',
+                        value: null,
+                        options: {
+                            title: 'Test Console',
+                            subtitle: 'Force show console and test logging',
+                            content: overlayPanelItemListRenderer([
+                                buttonItem(
+                                    { title: 'Force Show Console' },
+                                    { icon: 'VISIBILITY' },
+                                    [
+                                        {
+                                            customAction: {
+                                                action: 'FORCE_SHOW_CONSOLE'
+                                            }
+                                        },
+                                        {
+                                            signalAction: {
+                                                signal: 'POPUP_BACK'
+                                            }
+                                        }
+                                    ]
+                                ),
+                                
+                                ])
+                        }
+                    }
+                ];
+            }
+        },
+
         window.h5vcc && window.h5vcc.tizentube ?
             {
                 name: 'TizenTube Cobalt Updater',

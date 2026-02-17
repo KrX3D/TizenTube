@@ -206,17 +206,13 @@ function patchSubtitleMenu() {
             typeof obj.instance.resolveCommand === "function"
     );
 
-    if (
-        !yttvInstance ||
-        yttvInstance.instance.resolveCommand.isPatchedBySubtitleLocalization
-    ) {
-        if (!yttvInstance) {
-            console.error(
-                "TizenTube Subtitle Localization: Could not find resolveCommand instance."
-            );
-        } else {
-            console.log("TizenTube Subtitle Localization: Already patched.");
-        }
+    if (!yttvInstance) {
+        console.log('[Subtitles] resolveCommand not ready, retrying...');
+        return setTimeout(patchSubtitleMenu, 250);
+    }
+
+    if (yttvInstance.instance.resolveCommand.isPatchedBySubtitleLocalization) {
+        console.log("[Subtitles] Already patched");
         return;
     }
 

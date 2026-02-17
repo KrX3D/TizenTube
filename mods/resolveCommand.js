@@ -4,6 +4,9 @@ import modernUI, { optionShow } from './ui/settings.js';
 import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './main/updater.js';
+import appPkg from '../package.json';
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
 
 export default function resolveCommand(cmd, _) {
     // resolveCommand function is pretty OP, it can do from opening modals, changing client settings and way more.
@@ -165,6 +168,89 @@ function customAction(action, parameters) {
             break;
         case 'CHECK_FOR_UPDATES':
             checkForUpdates(true);
+            break;
+        case 'TOGGLE_DEBUG_CONSOLE':
+            if (typeof window.toggleDebugConsole === 'function') {
+                window.toggleDebugConsole();
+                
+                // ⭐ UPDATE: Manually update the cached DEBUG_ENABLED in adblock.js
+                const newValue = configRead('enableDebugConsole');
+                if (window.adblock && window.adblock.setDebugEnabled) {
+                    window.adblock.setDebugEnabled(newValue);
+                }
+                
+                showToast('Debug Console', 'Console ' + (newValue ? 'shown' : 'hidden'));
+            } else {
+                showToast('Debug Console', 'Console not available');
+            }
+            break;
+        case 'FORCE_SHOW_CONSOLE':
+            console.log('========================================');
+            console.log('FORCE SHOW CONSOLE TEST');
+            console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' (' + APP_VERSION + ')');
+            console.log('========================================');
+            console.log('Time:', new Date().toISOString());
+            console.error('This is an ERROR message');
+            console.warn('This is a WARN message');
+            
+            // Try to find the console div
+            const consoleDiv = document.getElementById('tv-debug-console');
+            if (consoleDiv) {
+                consoleDiv.style.display = 'block';
+                consoleDiv.style.zIndex = '999999';
+                console.log('✓ Console DIV found and forced visible')
+                showToast('Console', 'Console should be visible now');
+            } else {
+                console.error('✗ Console DIV not found!');
+                showToast('Console', 'ERROR: Console DIV not found');
+            }
+            break;
+        case 'SET_REMOTE_HTTP_ENDPOINT': {
+            const current = configRead('remoteLoggingUrl') || '';
+            const value = window.prompt ? window.prompt('Enter HTTP endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingUrl', String(value).trim());
+                showToast('Remote Logging', 'HTTP endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_WS_ENDPOINT': {
+            const current = configRead('remoteLoggingWsUrl') || '';
+            const value = window.prompt ? window.prompt('Enter WebSocket endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingWsUrl', String(value).trim());
+                showToast('Remote Logging', 'WebSocket endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_AUTH_TOKEN': {
+            const current = configRead('remoteLoggingAuthToken') || '';
+            const value = window.prompt ? window.prompt('Enter optional auth token for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingAuthToken', String(value).trim());
+                showToast('Remote Logging', 'Auth token updated');
+            }
+            break;
+        }
+        case 'TEST_REMOTE_CONNECTION':
+            if (window.remoteLogger && typeof window.remoteLogger.testConnection === 'function') {
+                window.remoteLogger.testConnection().then((result) => {
+                    showToast('Remote Logging', `HTTP: ${result.http} | WS: ${result.ws}`);
+                }).catch(() => {
+                    showToast('Remote Logging', 'Connection test failed');
+                });
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
+            }
+            break;
+
+        case 'TEST_REMOTE_LOGGING':
+            if (window.remoteLogger && typeof window.remoteLogger.test === 'function') {
+                window.remoteLogger.test();
+                showToast('Remote Logging', 'Test log sent (if URL is configured)');
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
+            }
             break;
     }
 }

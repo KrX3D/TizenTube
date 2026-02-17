@@ -155,3 +155,40 @@ div[idomkey="shadow"] {
 .ytContribIconHost::before {
     font-family: "YouTube Icons Outlined";
 }
+
+/* Playlist refresh button injected by adblock.js */
+#tizentube-collection-btn {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  min-height: 56px !important;
+  margin-top: 0 !important;
+}
+
+/* Ensure playlist action container can grow for the injected button */
+.TXB27d.RuKowd.fitbrf.B3hoEd,
+[class*="TXB27d"] {
+  overflow: visible !important;
+}
+
+#tizentube-collection-host {
+  display: block !important;
+  width: 100% !important;
+  overflow: visible !important;
+  margin-top: 34px !important;
+  position: relative !important;
+  z-index: 9999 !important;
+  clear: both !important;
+  min-height: 68px !important;
+}
+
+/* Playlist button - ensure it's visible and clickable */
+ytlr-button-renderer[data-tizentube-collection-btn="1"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  margin-top: 16px !important;
+}

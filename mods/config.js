@@ -19,20 +19,20 @@ const defaultConfig = {
   focusContainerColor: '#0f0f0f',
   routeColor: '#0f0f0f',
   enableFixedUI: (window.h5vcc && window.h5vcc.tizentube) ? false : true,
-  enableHqThumbnails: false,
+  enableHqThumbnails: true,
   enableChapters: true,
   enableLongPress: true,
-  enableShorts: true,
+  enableShorts: false,
   dontCheckUpdateUntil: 0,
   enableWhoIsWatchingMenu: false,
   enableShowUserLanguage: true,
   enableShowOtherLanguages: false,
-  showWelcomeToast: true,
+  showWelcomeToast: false,
   enablePreviousNextButtons: true,
   enableSuperThanksButton: false,
   enableSpeedControlsButton: true,
   enablePatchingVideoPlayer: true,
-  enablePreviews: true,
+  enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 10,
   hideWatchedVideosPages: [
@@ -47,20 +47,24 @@ const defaultConfig = {
       'more',
       'watch'
   ],
+  enablePlaylistContinueButton: true,
   enableHideEndScreenCards: false,
-  enableYouThereRenderer: true,
+  enableYouThereRenderer: false,
   lastAnnouncementCheck: 0,
   enableScreenDimming: true,
   dimmingTimeout: 60,
   dimmingOpacity: 0.5,
-  enablePaidPromotionOverlay: true,
+  enablePaidPromotionOverlay: false,
   speedSettingsIncrement: 0.25,
   videoPreferredCodec: 'any',
   launchToOnStartup: null,
-  disabledSidebarContents: [],
+  disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE'],
   enableUpdater: true,
   autoFrameRate: false,
-  autoFrameRatePauseVideoFor: 0
+  autoFrameRatePauseVideoFor: 0,
+  enableDebugConsole: false,
+  debugConsolePosition: 'bottom-right', // top-left, top-right, bottom-left, bottom-right, center
+  debugConsoleHeight: '500',
 };
 
 let localConfig;
@@ -73,9 +77,27 @@ try {
 }
 
 export function configRead(key) {
-  if (localConfig[key] === undefined) {
-    console.warn('Populating key', key, 'with default value', defaultConfig[key]);
-    localConfig[key] = defaultConfig[key];
+  // Ignore null/undefined keys silently (they're used for menu structure)
+  if (key === null || key === undefined) {
+    return null;
+  }
+  
+  if (localConfig[key] === undefined || localConfig[key] === null) {
+    if (defaultConfig[key] !== undefined) {
+      console.log('[CONFIG] Setting default for key:', key, '=', defaultConfig[key]);
+      localConfig[key] = defaultConfig[key];
+      try {
+        window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+      } catch (e) {
+        console.error('[CONFIG] Failed to save default:', e);
+      }
+    } else {
+      // Only warn for real config keys, not menu structure keys
+      if (typeof key === 'string' && !key.startsWith('tt-')) {
+        console.warn('[CONFIG] No default value for key:', key);
+      }
+      return undefined;
+    }
   }
 
   return localConfig[key];
@@ -108,3 +130,7 @@ export const configChangeEmitter = {
     });
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.configChangeEmitter = configChangeEmitter;
+}
