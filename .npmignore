@@ -1,9 +1,6 @@
-.github/
-.github/**
-.github/workflows/
-.github/workflows/**
-dist
+.github/*
+!.github/FUNDING.yml
+
 node_modules
 mods
 service
-.gitattributes
