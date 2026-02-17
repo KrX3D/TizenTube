@@ -118,6 +118,15 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      skip_wgt:
+        description: 'Skip signed WGT creation (manual runs only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 # Allow this workflow to push back changes to the repo
 permissions:
@@ -293,10 +302,104 @@ jobs:
           echo "Pushing changes back to main..."
           git push origin HEAD:main
 
+
+      # ----------------------------
+      # Build signed WGT artifact (release/workflow_dispatch)
+      # ----------------------------
+      - name: Install tools for Tizen packaging
+        if: github.event_name != 'workflow_dispatch' || inputs.skip_wgt != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y unzip zip curl ca-certificates
+
+      - name: Install Tizen CLI
+        if: github.event_name != 'workflow_dispatch' || inputs.skip_wgt != 'true'
+        run: |
+          set -euo pipefail
+          curl -L -o /tmp/tizen-web-cli.bin             https://download.tizen.org/sdk/Installer/tizen-studio_5.1/web-cli_Tizen_Studio_5.1_ubuntu-64.bin
+          chmod +x /tmp/tizen-web-cli.bin
+          /tmp/tizen-web-cli.bin --accept-license "$HOME/tizen-studio"
+          echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
+
+      - name: Build signed WGT package
+        if: github.event_name != 'workflow_dispatch' || inputs.skip_wgt != 'true'
+        env:
+          TIZEN_CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
+
+          CERT_PASSWORD="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
+
+          rm -rf wgt-app wgt-out wgt
+          mkdir -p wgt-app/dist wgt-out wgt
+
+          cp dist/userScript.js wgt-app/dist/userScript.js
+          cp dist/service.js wgt-app/dist/service.js
+
+          cat > wgt-app/index.html <<'HTML'
+          <!doctype html>
+          <html>
+            <head><meta charset="utf-8"><title>TizenTube</title></head>
+            <body><script src="./dist/userScript.js"></script></body>
+          </html>
+          HTML
+
+          cat > wgt-app/config.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <widget xmlns="http://www.w3.org/ns/widgets"
+                  xmlns:tizen="http://tizen.org/ns/widgets"
+                  id="http://krx3d.github.io/tizentube"
+                  version="1.0.0"
+                  viewmodes="maximized">
+            <name>TizenTube</name>
+            <content src="index.html"/>
+            <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+            <tizen:application id="KrX3D.TizenTube" package="KrX3DTT" required_version="2.4"/>
+            <tizen:profile name="tv-samsung"/>
+            <icon src="icon.png"/>
+          </widget>
+          XML
+
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > wgt-app/icon.png
+
+          tizen version
+
+          mkdir -p "${HOME}/tizen-studio-data/keystore/author"
+          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
+          tizen security-profiles add             -n tizentube-ci             -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"             -p "$CERT_PASSWORD"
+          tizen cli-config "profiles.path=${HOME}/tizen-studio-data/profile/profiles.xml"
+
+          pushd wgt-app
+          tizen build-web -- .
+          if [ -d .buildResult ]; then
+            pushd .buildResult
+            tizen package -t wgt -s tizentube-ci
+            popd
+          else
+            tizen package -t wgt -s tizentube-ci
+          fi
+          popd
+
+          WGT_FILE=$(find wgt-app -maxdepth 2 -name '*.wgt' | head -n1)
+          test -n "$WGT_FILE"
+          cp "$WGT_FILE" wgt/TizenTube.wgt
+          echo "Created signed WGT: $WGT_FILE"
+
+      - name: Upload signed WGT artifact
+        if: github.event_name != 'workflow_dispatch' || inputs.skip_wgt != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-wgt-${{ github.run_number }}
+          path: wgt/TizenTube.wgt
+          retention-days: 30
+
       # --------------------
       # NPM AUTH
       # --------------------
       - name: Configure npm auth
+        if: success()
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
@@ -314,12 +417,15 @@ jobs:
       # PUBLISH
       # --------------------
       - name: Publish package to npm
+        if: success()
+        id: publish_npm
         run: |
           set -euo pipefail
           echo "Publishing package..."
           npm publish --access public
 
       - name: Wait for npm propagation (after publish)
+        if: steps.publish_npm.outcome == 'success'
         run: |
           echo "Waiting for npm propagation..."
           sleep 10
@@ -328,6 +434,7 @@ jobs:
       # FETCH VERSIONS
       # --------------------
       - name: Gather versions and publish times
+        if: steps.publish_npm.outcome == 'success'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -344,6 +451,7 @@ jobs:
       # DECIDE WHAT TO REMOVE
       # --------------------
       - name: Decide versions to unpublish / deprecate
+        if: steps.publish_npm.outcome == 'success'
         env:
           UNPUBLISH_WINDOW_HOURS: ${{ env.UNPUBLISH_WINDOW_HOURS }}
         run: |
@@ -387,6 +495,7 @@ jobs:
       # UNPUBLISH
       # --------------------
       - name: Unpublish old versions (verified) and fallback to deprecate
+        if: steps.publish_npm.outcome == 'success'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -443,6 +552,7 @@ jobs:
       # DEPRECATE older (>72h)
       # --------------------
       - name: Deprecate older versions
+        if: steps.publish_npm.outcome == 'success'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -463,25 +573,28 @@ jobs:
       # Final wait + verify final state
       # --------------------
       - name: Wait before final verify
+        if: steps.publish_npm.outcome == 'success'
         run: |
           echo "Short wait to let registry propagate final state..."
           sleep 8
 
       - name: Verify final state
+        if: steps.publish_npm.outcome == 'success'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
           echo "Final versions on npm:"
-          npm view "${PKG}" versions --json || true
+          npm view "${PKG}" versions --json
           echo ""
           echo "Latest version:"
-          npm view "${PKG}" version || true
+          npm view "${PKG}" version
 
       # --------------------
       # Purge jsDelivr cache
       # --------------------
       - name: Generate jsDelivr URLs to purge
+        if: steps.publish_npm.outcome == 'success'
         id: cdn_urls
         run: |
           set -euo pipefail
@@ -533,14 +646,14 @@ jobs:
           printf '%s\n' "${URLS[@]}"
 
       - name: Purge jsDelivr cache
-        continue-on-error: true
+        if: steps.publish_npm.outcome == 'success'
         uses: egad13/purge-jsdelivr-cache@v1
         with:
           url: ${{ steps.cdn_urls.outputs.urls }}
           attempts: 3
 
       - name: Purge individual URLs (fallback if batch fails)
-        if: failure()
+        if: steps.publish_npm.outcome == 'success' && failure()
         continue-on-error: true
         run: |
           set +e
@@ -586,4 +699,5 @@ jobs:
           echo "Individual purge attempts complete"
 
       - name: Cache purge complete
+        if: steps.publish_npm.outcome == 'success'
         run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"
