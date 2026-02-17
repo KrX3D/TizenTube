@@ -1,7 +1,7 @@
 import { configRead } from '../../config.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { registerJsonParseHook } from '../jsonParseHooks.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adblock.js';
+import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from '../processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './sponsorblock.js';
