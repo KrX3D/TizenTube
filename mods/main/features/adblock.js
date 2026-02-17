@@ -30,13 +30,14 @@ window.adblock.setDebugEnabled = function(value) {
     DEBUG_ENABLED = value;
     console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
 };
+
 // Listen for config changes to update DEBUG_ENABLED cache
 if (typeof window !== 'undefined') {
   if (!window._playlistButtonObserver) {
     window._playlistButtonObserver = new MutationObserver(() => {
       const page = getCurrentPage();
       if (page !== 'playlist') return;
-      const hasCustom = !!document.querySelector('[data-tizentube-continue-btn="1"]');
+      const hasCustom = !!document.querySelector('[data-tizentube-collection-btn="1"]');
       if (!hasCustom) {
         addPlaylistControlButtons(7);
       }
@@ -1527,7 +1528,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
           const contents = innerShelf?.content?.richGridRenderer?.contents;
           const shortResult = filterShortItems(contents, { page, debugEnabled: DEBUG_ENABLED, logShorts: LOG_SHORTS });
           if (shortResult.removed > 0) {
-            if (DEBUG_ENABLED && LOG_SHORTS) {
+            if (LOG_SHORTS && DEBUG_ENABLED) {
               console.log('[SHELF_PROCESS] Removing shorts richSection shelf');
             }
             shelves.splice(i, 1);
@@ -1816,55 +1817,38 @@ function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   }
 }
 
+
 function triggerPlaylistContinuationLoad() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
-  if (DEBUG_ENABLED) {
-    console.log('[CONTINUATION_TRIGGER] Attempting to load more playlist videos...');
-  }
+  const candidates = [
+    document.querySelector('yt-virtual-list'),
+    document.querySelector('[class*="virtual-list"]'),
+    document.querySelector('ytlr-playlist-video-list-renderer'),
+    document.scrollingElement,
+  ].filter(Boolean);
 
-  // ⭐ Strategy 1: Scroll the virtual list container
-  const virtualList = document.querySelector('yt-virtual-list') || 
-                      document.querySelector('[class*="virtual-list"]') ||
-                      document.querySelector('ytlr-playlist-video-list-renderer');
-  
-  if (virtualList) {
+  for (const node of candidates) {
     try {
-      const maxScroll = virtualList.scrollHeight || 0;
-      virtualList.scrollTop = maxScroll;
-      virtualList.dispatchEvent(new Event('scroll', { bubbles: true }));
-      console.log('[CONTINUATION_TRIGGER] Scrolled virtual list to:', maxScroll);
+      const before = node.scrollTop || 0;
+      node.scrollTop = Math.max(node.scrollTop || 0, node.scrollHeight || 0);
+      node.dispatchEvent(new Event('scroll', { bubbles: true }));
+      if ((node.scrollTop || 0) !== before) {
+        break;
+      }
     } catch (e) {
-      console.warn('[CONTINUATION_TRIGGER] Virtual list scroll failed:', e);
+      // noop
     }
   }
 
-  // ⭐ Strategy 2: Scroll the window
   try {
-    const maxY = Math.max(
-      document.body.scrollHeight,
-      document.documentElement.scrollHeight
-    );
-    window.scrollTo(0, maxY);
-    console.log('[CONTINUATION_TRIGGER] Scrolled window to:', maxY);
+    window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
   } catch (e) {
-    console.warn('[CONTINUATION_TRIGGER] Window scroll failed:', e);
+    // noop
   }
-  
-  // ⭐ Strategy 3: Click any visible continuation buttons
-  setTimeout(() => {
-    const contButtons = document.querySelectorAll('[class*="continuation"]');
-    contButtons.forEach(btn => {
-      if (btn.offsetParent !== null) { // Check if visible
-        try {
-          btn.click();
-          console.log('[CONTINUATION_TRIGGER] Clicked continuation button');
-        } catch (e) {}
-      }
-    });
-  }, 200);
 }
+
 
 function cleanupPlaylistHelperTiles() {
   const page = getCurrentPage();
@@ -1873,64 +1857,27 @@ function cleanupPlaylistHelperTiles() {
   const removedIds = window._playlistRemovedHelpers || new Set();
   const removedKeys = window._playlistRemovedHelperKeys || new Set();
   const currentHelperIds = new Set((window._lastHelperVideos || []).map((video) => getVideoId(video)).filter(Boolean));
-  
-  // ⭐ VERY AGGRESSIVE: Query ALL possible video elements
-  const candidates = document.querySelectorAll(`
-    ytlr-grid-video-renderer,
-    ytlr-tile-renderer,
-    ytlr-playlist-video-renderer,
-    ytlr-video-renderer,
-    ytlr-continuation-item-renderer,
-    [class*="continuation"],
-    [class*="helper"],
-    [data-video-id]
-  `);
-  
+  const candidates = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-grid-renderer ytlr-grid-video-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer, ytlr-continuation-item-renderer, [class*="continuation"], [data-video-id]');
   let removedCount = 0;
-  let hiddenCount = 0;
 
   candidates.forEach((node) => {
-    const videoId = node.getAttribute('data-video-id') || 
-                    node.getAttribute('video-id') || 
-                    node.dataset?.videoId || '';
-    
+    const videoId = node.getAttribute('data-video-id') || node.getAttribute('video-id') || node.dataset?.videoId || '';
     const text = (node.textContent || '').toLowerCase();
     const html = (node.innerHTML || '').toLowerCase();
-    
-    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden|mehr anzeigen|more videos|load more|helper/i.test(text) || 
-                           /continuation|loadmore|mehr|helper/i.test(html);
-    
-    const isStoredHelper = videoId && (removedIds.has(videoId) || currentHelperIds.has(videoId));
-    
-    // ⭐ AGGRESSIVE: Remove or hide
-    if (looksLikeHelper || isStoredHelper) {
-      try {
-        // Try to fully remove
-        node.remove();
-        removedCount++;
-      } catch (e) {
-        // If removal fails, hide it completely
-        try {
-          node.style.display = 'none';
-          node.style.visibility = 'hidden';
-          node.style.position = 'absolute';
-          node.style.left = '-9999px';
-          node.style.width = '0';
-          node.style.height = '0';
-          node.style.opacity = '0';
-          node.setAttribute('aria-hidden', 'true');
-          hiddenCount++;
-        } catch (e2) {
-          console.warn('[HELPER_CLEANUP_DOM] Failed to hide:', e2);
-        }
-      }
+    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|laden|mehr anzeigen|more videos|load more/.test(text) || /continuation|loadmore|mehr/.test(html);
+    const key = `${videoId}:${text.slice(0, 80)}`;
+
+    if ((videoId && (removedIds.has(videoId) || currentHelperIds.has(videoId))) || removedKeys.has(key) || looksLikeHelper) {
+      node.remove();
+      removedCount += 1;
     }
   });
 
-  if (removedCount > 0 || hiddenCount > 0) {
+  if (removedCount > 0) {
     if (DEBUG_ENABLED) {
-      console.log('[HELPER_CLEANUP_DOM] Removed:', removedCount, '| Hidden:', hiddenCount);
+      console.log('[HELPER_CLEANUP_DOM] Removed helper tiles from DOM:', removedCount);
     }
+    triggerPlaylistContinuationLoad();
   }
 }
 
@@ -1939,174 +1886,224 @@ function detectPlaylistButtons() {
   addPlaylistControlButtons(1);
 }
 
+
 function addPlaylistControlButtons(attempt = 1) {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
-  if (document.querySelector('[data-tizentube-continue-btn="1"]')) {
-    console.log('[PLAYLIST_BUTTON] Continue button already exists');
+  const baseContainer = document.querySelector('.TXB27d.RuKowd.fitbrf.B3hoEd') || document.querySelector('[class*="TXB27d"]');
+  if (!baseContainer) {
+    console.log('[PLAYLIST_BUTTON] No button container found (attempt ' + attempt + ')');
+    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
 
-  // Find ALL visible buttons
-  const allButtons = Array.from(document.querySelectorAll('ytlr-button-renderer'))
-    .filter(btn => {
-      if (btn.getAttribute('data-tizentube-continue-btn')) return false;
-      const rect = btn.getBoundingClientRect();
-      return rect.height > 10 && rect.width > 10;
-    });
-  
-  console.log('[PLAYLIST_BUTTON] Found', allButtons.length, 'native buttons');
-  
-  if (allButtons.length === 0) {
-    if (attempt < 6) {
-      setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
+  const parentContainer = baseContainer.parentElement;
+  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
+  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
+
+  if (attempt === 1 && DEBUG_ENABLED) {
+    console.log('[PLAYLIST_BUTTON] base buttons:', baseButtons.length, '| parent buttons:', parentButtons.length);
+  }
+
+  const useParent = parentButtons.length > baseButtons.length;
+  const container = useParent ? parentContainer : baseContainer;
+
+  // Remove stale injected buttons from other containers/old renders.
+  const allCustomButtons = Array.from(document.querySelectorAll('[data-tizentube-collection-btn="1"]'));
+  allCustomButtons.forEach((btn) => {
+    if (!container.contains(btn)) {
+      btn.remove();
     }
+  });
+  const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
+    if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
+    const rect = btn.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return false;
+    const style = window.getComputedStyle(btn);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+    if (btn.getAttribute('aria-hidden') === 'true') return false;
+    const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!text) return false;
+    return true;
+  });
+  let existingButtons = getNativeButtons();
+  const getButtonRect = (btn) => {
+    const r = btn.getBoundingClientRect();
+    return { top: r.top, left: r.left, width: r.width, height: r.height };
+  };
+  const currentUrl = window.location.href;
+
+  if (attempt <= 2) {
+    console.log('[PLAYLIST_BUTTON] Container=', useParent ? 'parent' : 'base', '| buttons=', existingButtons.length, '| attempt=', attempt);
+  }
+
+  if (existingButtons.length === 0) {
+    const now = Date.now();
+    if (!window._playlistNoNativeLogAt || (now - window._playlistNoNativeLogAt) > 15000) {
+      console.log('[PLAYLIST_BUTTON] No native buttons in container (attempt ' + attempt + ')');
+      window._playlistNoNativeLogAt = now;
+    }
+    if (attempt < 6) setTimeout(() => addPlaylistControlButtons(attempt + 1), 1200);
     return;
   }
 
-  // Get the last button as template
-  const templateButton = allButtons[allButtons.length - 1];
-  const customBtn = templateButton.cloneNode(true);
-  
-  // Setup custom button
-  customBtn.setAttribute('data-tizentube-continue-btn', '1');
-  customBtn.removeAttribute('id');
-  customBtn.setAttribute('tabindex', '0');
-  
-  // ⭐ CRITICAL: Add all possible focus attributes for TV navigation
-  customBtn.setAttribute('focusable', 'true');
-  customBtn.setAttribute('aria-disabled', 'false');
-  customBtn.style.pointerEvents = 'auto';
-  
-  // Change text to "Fortsetzen" (Continue in German)
-  const labelNode = customBtn.querySelector('yt-formatted-string');
-  if (labelNode) {
-    labelNode.textContent = 'Fortsetzen';
+  if (attempt <= 6) {
+    window._playlistButtonDumpUrl = currentUrl;
+    try {
+      const targetHostForDump = (parentContainer || container);
+      const existingCustomBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
+      const dump = {
+        page,
+        baseButtonsBefore: baseButtons.length,
+        parentButtonsBefore: parentButtons.length,
+        baseTag: baseContainer.tagName,
+        baseClass: baseContainer.className,
+        baseOuterHTML: baseContainer.outerHTML,
+        parentTag: parentContainer?.tagName,
+        parentClass: parentContainer?.className,
+        parentOuterHTML: parentContainer?.outerHTML,
+        targetTag: targetHostForDump.tagName,
+        targetClass: targetHostForDump.className,
+        targetOuterHTML: targetHostForDump.outerHTML,
+        targetParentTag: targetHostForDump.parentElement?.tagName,
+        targetParentClass: targetHostForDump.parentElement?.className,
+        targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
+        buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
+        allButtonOuterHTML: Array.from(container.querySelectorAll('ytlr-button-renderer')).map((btn) => btn.outerHTML),
+        existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
+      };
+      console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 60);
+    } catch (e) {
+      console.log('[PLAYLIST_BUTTON_JSON] Failed to stringify button container', e?.message || e);
+    }
   }
-  
-  // ⭐ NEW: Click handler to play next unwatched video
-  const playNextUnwatched = (evt) => {
+
+  if (existingButtons.length === 0) return;
+
+  const templateBtn = existingButtons.reduce((best, btn) => {
+    if (!best) return btn;
+    const a = getButtonRect(best);
+    const b = getButtonRect(btn);
+    if (b.top > a.top + 1) return btn;
+    if (Math.abs(b.top - a.top) <= 1 && b.left > a.left) return btn;
+    return best;
+  }, null) || existingButtons[existingButtons.length - 1];
+  const runRefresh = (evt) => {
     evt?.preventDefault?.();
     evt?.stopPropagation?.();
-    
-    console.log('[CONTINUE_BTN] Finding next unwatched video...');
-    
-    // Get all video tiles in the playlist
-    const videoTiles = Array.from(document.querySelectorAll('ytlr-tile-renderer'));
-    console.log('[CONTINUE_BTN] Found', videoTiles.length, 'video tiles');
-    
-    if (videoTiles.length === 0) {
-      console.log('[CONTINUE_BTN] No videos found');
-      return;
-    }
-    
-    const threshold = Number(configRead('hideWatchedVideosThreshold') || 90);
-    
-    // Find first unwatched video
-    let targetVideo = null;
-    
-    for (const tile of videoTiles) {
-      const videoId = tile.getAttribute('video-id') || 
-                     tile.getAttribute('data-video-id') ||
-                     tile.dataset?.videoId;
-      
-      if (!videoId) continue;
-      
-      // Check if video has progress bar
-      const progressBar = tile.querySelector('[class*="progress"]') ||
-                         tile.querySelector('[class*="thumbnail-overlay-resume"]');
-      
-      if (!progressBar) {
-        // No progress = unwatched
-        targetVideo = tile;
-        console.log('[CONTINUE_BTN] Found unwatched video (no progress):', videoId);
-        break;
+    resolveCommand({
+      signalAction: {
+        signal: 'SOFT_RELOAD_PAGE'
       }
-      
-      // Check progress percentage
-      const progressStyle = progressBar.style?.width || '0%';
-      const progressMatch = progressStyle.match(/(\d+)/);
-      const progress = progressMatch ? Number(progressMatch[1]) : 0;
-      
-      if (progress < threshold) {
-        targetVideo = tile;
-        console.log('[CONTINUE_BTN] Found unwatched video (progress:', progress + '%):', videoId);
-        break;
-      }
+    });
+  };
+
+  const setupCustomButton = (btn) => {
+    btn.setAttribute('data-tizentube-collection-btn', '1');
+    btn.removeAttribute('id');
+    btn.setAttribute('tabindex', '0');
+    btn.removeAttribute('aria-hidden');
+    btn.removeAttribute('style');
+    btn.style.pointerEvents = 'auto';
+    btn.style.opacity = '1';
+    btn.style.visibility = 'visible';
+    btn.style.position = '';
+    btn.style.left = '';
+    btn.style.top = '';
+    btn.style.width = '';
+    btn.style.height = '';
+    btn.style.display = '';
+    btn.style.transform = '';
+    btn.style.zIndex = '';
+    btn.style.removeProperty('right');
+    btn.style.removeProperty('inset');
+    btn.style.removeProperty('margin-left');
+    btn.removeAttribute('disablehybridnavinsubtree');
+    btn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+    btn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
+    btn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
+
+    const labelNode = btn.querySelector('yt-formatted-string');
+    if (labelNode) {
+      labelNode.textContent = 'Refresh Filters';
     }
-    
-    // If no unwatched video found, use first video
-    if (!targetVideo) {
-      targetVideo = videoTiles[0];
-      console.log('[CONTINUE_BTN] All watched, using first video');
-    }
-    
-    // Click the video to play it
-    if (targetVideo) {
-      try {
-        targetVideo.click();
-        console.log('[CONTINUE_BTN] Clicked video successfully');
-      } catch (e) {
-        console.error('[CONTINUE_BTN] Failed to click:', e);
-        
-        // Fallback: Try to navigate directly
-        const videoId = targetVideo.getAttribute('video-id') || 
-                       targetVideo.getAttribute('data-video-id');
-        if (videoId) {
-          const playlistId = new URLSearchParams(window.location.hash.split('?')[1]).get('list');
-          const url = `#/watch?v=${videoId}${playlistId ? '&list=' + playlistId : ''}`;
-          console.log('[CONTINUE_BTN] Fallback navigation to:', url);
-          window.location.hash = url;
+
+    if (btn.dataset.tizentubeRefreshBound !== '1') {
+      btn.addEventListener('click', runRefresh);
+      btn.addEventListener('keydown', (evt) => {
+        if (evt.key === 'Enter' || evt.key === ' ') {
+          runRefresh(evt);
         }
+      });
+      btn.dataset.tizentubeRefreshBound = '1';
+    }
+
+    const innerButton = btn.querySelector('button');
+    if (innerButton) {
+      innerButton.style.pointerEvents = 'auto';
+      innerButton.removeAttribute('disabled');
+      innerButton.setAttribute('tabindex', '0');
+      if (innerButton.dataset.tizentubeRefreshBound !== '1') {
+        innerButton.addEventListener('click', runRefresh);
+        innerButton.dataset.tizentubeRefreshBound = '1';
       }
     }
   };
-  
-  customBtn.addEventListener('click', playNextUnwatched);
-  customBtn.addEventListener('keydown', (evt) => {
-    if (evt.key === 'Enter' || evt.key === ' ') {
-      playNextUnwatched(evt);
-    }
+
+  let customBtn = container.querySelector('[data-tizentube-collection-btn="1"]');
+  if (!customBtn) {
+    customBtn = templateBtn.cloneNode(true);
+  }
+  setupCustomButton(customBtn);
+
+  const nativeButtonRects = existingButtons.map((btn, idx) => {
+    const r = btn.getBoundingClientRect();
+    return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
   });
-  
-  // ⭐ CRITICAL: Insert AFTER last button using insertAdjacentElement
-  templateButton.parentElement.insertBefore(customBtn, templateButton.nextSibling);
-  
-  console.log('[PLAYLIST_BUTTON] Continue button injected');
-  
-  // ⭐ FORCE FOCUS UPDATE: Trigger Tizen's focus system
-  setTimeout(() => {
-    try {
-      // Force the TV to recalculate focusable elements
-      const event = new Event('focus', { bubbles: true });
-      customBtn.dispatchEvent(event);
-      
-      // Verify button is visible
-      const rect = customBtn.getBoundingClientRect();
-      console.log('[PLAYLIST_BUTTON] Button rect:', {
-        top: rect.top,
-        left: rect.left,
-        width: rect.width,
-        height: rect.height,
-        visible: rect.height > 0 && rect.width > 0
-      });
-      
-      // Log all buttons for debugging
-      const afterButtons = Array.from(document.querySelectorAll('ytlr-button-renderer'));
-      console.log('[PLAYLIST_BUTTON] Total buttons after injection:', afterButtons.length);
-      afterButtons.forEach((btn, idx) => {
-        const isCustom = btn.getAttribute('data-tizentube-continue-btn') === '1';
-        const r = btn.getBoundingClientRect();
-        console.log('[PLAYLIST_BUTTON]', idx + 1, isCustom ? '(CONTINUE)' : '(native)', '| Y:', r.top, '| X:', r.left);
-      });
-    } catch (e) {
-      console.warn('[PLAYLIST_BUTTON] Focus update failed:', e);
+  console.log('[PLAYLIST_BUTTON] Native button rects:', JSON.stringify(nativeButtonRects));
+
+  // Keep custom button directly after the current last native button.
+  if (templateBtn.nextElementSibling !== customBtn) {
+    templateBtn.insertAdjacentElement('afterend', customBtn);
+  }
+
+  window._playlistButtonInjectedUrl = currentUrl;
+
+  const crect = container.getBoundingClientRect();
+  const rect = customBtn.getBoundingClientRect();
+  console.log('[PLAYLIST_BUTTON] Injected button at y=', Math.round(rect.top), 'h=', Math.round(rect.height), '| container y=', Math.round(crect.top), 'h=', Math.round(crect.height));
+
+  try {
+    const postButtons = Array.from(container.querySelectorAll('ytlr-button-renderer'));
+    const postButtonRects = postButtons.map((btn, idx) => {
+      const r = btn.getBoundingClientRect();
+      return { idx, y: Math.round(r.top), h: Math.round(r.height), w: Math.round(r.width), id: null, custom: btn.getAttribute('data-tizentube-collection-btn') === '1' };
+    });
+
+    const afterDump = {
+      page,
+      attempt,
+      clonedCustomButtonOuterHTML: customBtn.outerHTML,
+      clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
+      containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
+      templateMetrics: { top: Math.round(templateBtn.offsetTop || 0), left: Math.round(templateBtn.offsetLeft || 0), height: Math.round(templateBtn.offsetHeight || 0), width: Math.round(templateBtn.offsetWidth || 0) },
+      nativeButtonRectsBefore: nativeButtonRects,
+      parentButtonsAfter: postButtons.length,
+      nativeButtonRectsAfter: postButtonRects,
+      baseOuterHTMLAfter: baseContainer.outerHTML,
+      parentOuterHTMLAfter: parentContainer?.outerHTML || null,
+    };
+    if (attempt <= 6) {
+      logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 60);
     }
-  }, 100);
+  } catch (e) {
+    console.log('[PLAYLIST_BUTTON_JSON_AFTER] Failed to stringify injected button', e?.message || e);
+  }
 }
 
-// Update the interval check
+
 if (typeof window !== 'undefined') {
   setTimeout(() => { addPlaylistControlButtons(1); cleanupPlaylistHelperTiles(); }, 2500);
   let lastPlaylistButtonHref = window.location.href;
@@ -2114,7 +2111,7 @@ if (typeof window !== 'undefined') {
     const page = getCurrentPage();
     if (page === 'playlist' || page === 'playlists') {
       cleanupPlaylistHelperTiles();
-      if (!document.querySelector('[data-tizentube-continue-btn="1"]') && page === 'playlist') {
+      if (!document.querySelector('[data-tizentube-collection-btn="1"]') && page === 'playlist') {
         addPlaylistControlButtons(7);
       }
     }
