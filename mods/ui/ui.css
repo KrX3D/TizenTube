@@ -85,7 +85,6 @@ div[idomkey="shadow"] {
 }
 
 /* Fixes shorts having a black background */
-
 .ytLrTileHeaderRendererShorts {
   background-image: none !important;
 }
