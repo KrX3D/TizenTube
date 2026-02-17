@@ -320,8 +320,8 @@ jobs:
 
           CERT_PASSWORD="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
 
-          rm -rf wgt-app wgt-out
-          mkdir -p wgt-app/dist wgt-out
+          rm -rf wgt-app wgt-out wgt
+          mkdir -p wgt-app/dist wgt-out wgt
 
           cp dist/userScript.js wgt-app/dist/userScript.js
           cp dist/service.js wgt-app/dist/service.js
@@ -354,6 +354,7 @@ jobs:
 
           tizen version
 
+          mkdir -p "${HOME}/tizen-studio-data/keystore/author"
           tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
           tizen security-profiles add             -n tizentube-ci             -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"             -p "$CERT_PASSWORD"
 
@@ -675,4 +676,5 @@ jobs:
           echo "Individual purge attempts complete"
 
       - name: Cache purge complete
+        if: steps.publish_npm.outcome == 'success'
         run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"
