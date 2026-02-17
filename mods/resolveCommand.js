@@ -29,6 +29,27 @@ export function findFunction(funcName) {
 
 // Patch resolveCommand to be able to change TizenTube settings
 
+function extractCustomAction(cmd) {
+    if (!cmd || typeof cmd !== 'object') return null;
+
+    if (cmd.customAction?.action) return cmd.customAction;
+    if (cmd.signalAction?.customAction?.action) return cmd.signalAction.customAction;
+    if (cmd.showEngagementPanelEndpoint?.customAction?.action) return cmd.showEngagementPanelEndpoint.customAction;
+    if (cmd.playlistEditEndpoint?.customAction?.action) return cmd.playlistEditEndpoint.customAction;
+    if (cmd.serviceEndpoint?.customAction?.action) return cmd.serviceEndpoint.customAction;
+    if (cmd.navigationEndpoint?.customAction?.action) return cmd.navigationEndpoint.customAction;
+
+    const commands = cmd.commandExecutorCommand?.commands;
+    if (Array.isArray(commands)) {
+        for (const command of commands) {
+            const nested = extractCustomAction(command);
+            if (nested) return nested;
+        }
+    }
+
+    return null;
+}
+
 export function patchResolveCommand() {
     for (const key in window._yttv) {
         if (window._yttv[key] && window._yttv[key].instance && window._yttv[key].instance.resolveCommand) {
@@ -65,19 +86,15 @@ export function patchResolveCommand() {
                             return true;
                         }
                     }
-                } else if (cmd.customAction) {
-                    customAction(cmd.customAction.action, cmd.customAction.parameters);
+                }
+
+                const customActionPayload = extractCustomAction(cmd);
+                if (customActionPayload) {
+                    customAction(customActionPayload.action, customActionPayload.parameters);
                     return true;
-                } else if (cmd?.signalAction?.customAction) {
-                    customAction(cmd.signalAction.customAction.action, cmd.signalAction.customAction.parameters);
-                    return true;
-                } else if (cmd?.showEngagementPanelEndpoint?.customAction) {
-                    customAction(cmd.showEngagementPanelEndpoint.customAction.action, cmd.showEngagementPanelEndpoint.customAction.parameters);
-                    return true;
-                } else if (cmd?.playlistEditEndpoint?.customAction) {
-                    customAction(cmd.playlistEditEndpoint.customAction.action, cmd.playlistEditEndpoint.customAction.parameters);
-                    return true;
-                } else if (cmd?.openPopupAction?.uniqueId === 'playback-settings') {
+                }
+
+                if (cmd?.openPopupAction?.uniqueId === 'playback-settings') {
                     // Patch the playback settings popup to use TizenTube speed settings
                     const items = cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items;
                     for (const item of items) {
