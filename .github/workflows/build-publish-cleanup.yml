@@ -330,7 +330,11 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
-          CERT_PASSWORD="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
+          CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
+          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -cd 'A-Za-z0-9' | head -c 24)"
+          if [ -z "$CERT_PASSWORD" ]; then
+            CERT_PASSWORD='tizentubecipass1234'
+          fi
 
           rm -rf wgt-app wgt-out wgt
           mkdir -p wgt-app/dist wgt-out wgt
@@ -367,8 +371,10 @@ jobs:
           tizen version
 
           mkdir -p "${HOME}/tizen-studio-data/keystore/author"
+          rm -f "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"
+          tizen security-profiles remove -n tizentube-ci || true
           tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
-          tizen security-profiles add             -n tizentube-ci             -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"             -p "$CERT_PASSWORD"
+          tizen security-profiles add -n tizentube-ci -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12" -p "$CERT_PASSWORD"
           tizen cli-config "profiles.path=${HOME}/tizen-studio-data/profile/profiles.xml"
 
           pushd wgt-app
