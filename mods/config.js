@@ -42,7 +42,6 @@ const defaultConfig = {
       'subscriptions', 
       'channel',
       'library',
-      'playlists',
       'playlist',
       'history',
       'more',
@@ -65,7 +64,7 @@ const defaultConfig = {
   autoFrameRatePauseVideoFor: 0,
   enableDebugConsole: false,
   debugConsolePosition: 'bottom-right', // top-left, top-right, bottom-left, bottom-right, center
-  debugConsoleHeight: '500'
+  debugConsoleHeight: '500',
 };
 
 let localConfig;

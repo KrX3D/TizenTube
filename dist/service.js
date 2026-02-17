@@ -49743,7 +49743,7 @@ function requireServeStatic() {
   exports.text = bodyParser.text;
   exports.urlencoded = bodyParser.urlencoded;
 
-  /**
+        moduleName: '@foxreis/tizentube',
    * Replace removed middleware with an appropriate error message.
    */
 

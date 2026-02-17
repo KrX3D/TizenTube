@@ -1,6 +1,6 @@
 import { configRead } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer, scrollPaneRenderer, overlayMessageRenderer, QrCodeRenderer } from './ytUI.js';
-import { getUserLanguageOptionName } from '../features/moreSubtitles.js';
+import { getUserLanguageOptionName } from '../main/features/moreSubtitles.js';
 import qrcode from 'qrcode-npm';
 
 const qrcodes = {};
@@ -809,6 +809,144 @@ export default function modernUI(update, parameters) {
                         ]
                     },
                     {
+                        name: 'Remote Logging',
+                        icon: 'LANGUAGE',
+                        value: 'enableRemoteLogging'
+                    },
+                    {
+                        name: 'Remote Logging Transport',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-transport',
+                        menuHeader: {
+                            title: 'Remote Logging Transport',
+                            subtitle: 'Choose one active transport (HTTP or WebSocket)'
+                        },
+                        options: [
+                            {
+                                name: 'HTTP only',
+                                key: 'remoteLoggingTransport',
+                                value: 'http'
+                            },
+                            {
+                                name: 'WebSocket only',
+                                key: 'remoteLoggingTransport',
+                                value: 'ws'
+                            },                        ]
+                    },
+                    {
+                        name: 'Remote HTTP Endpoint',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-url',
+                        menuHeader: {
+                            title: 'Remote HTTP Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. http://192.168.70.124:9000/log'
+                        },
+                        options: [
+                            {
+                                name: 'Preset: Disabled (empty URL)',
+                                key: 'remoteLoggingUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Preset: http://192.168.70.124:9000/log',
+                                key: 'remoteLoggingUrl',
+                                value: 'http://192.168.70.124:9000/log'
+                            },
+                            {
+                                name: 'Set HTTP endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_HTTP_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote WebSocket Endpoint',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-ws-url',
+                        menuHeader: {
+                            title: 'Remote WebSocket Endpoint',
+                            subtitle: 'Use LAN IP of your PC, e.g. ws://192.168.70.124:9001'
+                        },
+                        options: [
+                            {
+                                name: 'Preset: Disabled (empty URL)',
+                                key: 'remoteLoggingWsUrl',
+                                value: ''
+                            },
+                            {
+                                name: 'Preset: ws://192.168.70.124:9001',
+                                key: 'remoteLoggingWsUrl',
+                                value: 'ws://192.168.70.124:9001'
+                            },
+                            {
+                                name: 'Set WebSocket endpoint (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_WS_ENDPOINT'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        name: 'Remote Logging Auth Token',
+                        icon: 'SETTINGS',
+                        value: null,
+                        menuId: 'tt-remote-log-token',
+                        menuHeader: {
+                            title: 'Remote Logging Auth Token',
+                            subtitle: 'Optional token sent in HTTP Authorization and WS auth payload'
+                        },
+                        options: [
+                            {
+                                name: 'Clear token',
+                                key: 'remoteLoggingAuthToken',
+                                value: ''
+                            },
+                            {
+                                name: 'Set token (input)',
+                                icon: 'SETTINGS',
+                                value: null,
+                                commands: [
+                                    {
+                                        customAction: {
+                                            action: 'SET_REMOTE_AUTH_TOKEN'
+                                        }
+                                    },
+                                    {
+                                        signalAction: {
+                                            signal: 'POPUP_BACK'
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
                         name: '🧪 Test Console',
                         icon: 'SETTINGS',
                         value: null,
@@ -831,8 +969,9 @@ export default function modernUI(update, parameters) {
                                             }
                                         }
                                     ]
-                                )
-                            ])
+                                ),
+                                
+                                ])
                         }
                     }
                 ];
@@ -951,7 +1090,6 @@ export function optionShow(parameters, update) {
         return;
     }
     const buttons = [];
-    const options = (parameters.options || []).filter(Boolean);
 
     // Check if this is the legacy sponsorBlockManualSkips (array-based) or new boolean-based options
     const isArrayBasedOptions = parameters.arrayToEdit !== undefined;
@@ -959,7 +1097,7 @@ export function optionShow(parameters, update) {
     if (isArrayBasedOptions) {
         // Legacy handling for sponsorBlockManualSkips
         const value = configRead(parameters.arrayToEdit);
-        for (const option of options) {
+        for (const option of parameters.options) {
             buttons.push(
                 buttonItem(
                     { title: option.name, subtitle: option.subtitle },
@@ -998,6 +1136,7 @@ export function optionShow(parameters, update) {
             );
         }
     } else {
+        // New handling for boolean-based options (like subtitle localization)
         let index = 0;
         for (const option of parameters.options) {
             if (!option) continue;
@@ -1008,7 +1147,6 @@ export function optionShow(parameters, update) {
             }
             const isRadioChoice = option.key !== null && option.key !== undefined;
             const currentVal = configRead(isRadioChoice ? option.key : option.value);
-            
             buttons.push(
                 buttonItem(
                     { title: option.name, subtitle: option.subtitle },
@@ -1048,8 +1186,8 @@ export function optionShow(parameters, update) {
                                 action: 'OPTIONS_SHOW',
                                 parameters: {
                                     options: parameters.options,
-                                    selectedIndex: index, // Keep current selection highlighted
-                                    update: true, // FORCE UPDATE to refresh the UI
+                                    selectedIndex: index,
+                                    update: parameters.options?.title ? 'customUI' : true,
                                     menuId: parameters.menuId,
                                     arrayToEdit: parameters.arrayToEdit,
                                     menuHeader: parameters.menuHeader
@@ -1075,7 +1213,7 @@ export function optionShow(parameters, update) {
                                 parameters: {
                                     options: parameters.options,
                                     selectedIndex: index,
-                                    update: true, // FORCE UPDATE
+                                    update: parameters.options?.title ? 'customUI' : true,
                                     menuId: parameters.menuId,
                                     arrayToEdit: parameters.arrayToEdit,
                                     menuHeader: parameters.menuHeader

@@ -1,11 +1,17 @@
 import { configWrite, configRead } from './config.js';
-import { enablePip } from './features/pictureInPicture.js';
+import { enablePip } from './main/features/pictureInPicture.js';
 import modernUI, { optionShow } from './ui/settings.js';
 import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
-import checkForUpdates from './features/updater.js';
+import checkForUpdates from './main/updater.js';
+import appPkg from '../package.json';
+const APP_VERSION = appPkg.version;
+const APP_VERSION_LABEL = `v${APP_VERSION.split('.').pop()}`;
 
 export default function resolveCommand(cmd, _) {
+    // resolveCommand function is pretty OP, it can do from opening modals, changing client settings and way more.
+    // Because the client might change, we should find it first.
+
     for (const key in window._yttv) {
         if (window._yttv[key] && window._yttv[key].instance && window._yttv[key].instance.resolveCommand) {
             return window._yttv[key].instance.resolveCommand(cmd, _);
@@ -21,6 +27,8 @@ export function findFunction(funcName) {
     }
 }
 
+// Patch resolveCommand to be able to change TizenTube settings
+
 export function patchResolveCommand() {
     for (const key in window._yttv) {
         if (window._yttv[key] && window._yttv[key].instance && window._yttv[key].instance.resolveCommand) {
@@ -28,6 +36,7 @@ export function patchResolveCommand() {
             const ogResolve = window._yttv[key].instance.resolveCommand;
             window._yttv[key].instance.resolveCommand = function (cmd, _) {
                 if (cmd.setClientSettingEndpoint) {
+                    // Command to change client settings. Use TizenTube configuration to change settings.
                     for (const settings of cmd.setClientSettingEndpoint.settingDatas) {
                         if (!settings.clientSettingEnum.item.includes('_')) {
                             for (const setting of cmd.setClientSettingEndpoint.settingDatas) {
@@ -69,6 +78,7 @@ export function patchResolveCommand() {
                     customAction(cmd.playlistEditEndpoint.customAction.action, cmd.playlistEditEndpoint.customAction.parameters);
                     return true;
                 } else if (cmd?.openPopupAction?.uniqueId === 'playback-settings') {
+                    // Patch the playback settings popup to use TizenTube speed settings
                     const items = cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items;
                     for (const item of items) {
                         if (item?.compactLinkRenderer?.icon?.iconType === 'SLOW_MOTION_VIDEO') {
@@ -177,7 +187,7 @@ function customAction(action, parameters) {
         case 'FORCE_SHOW_CONSOLE':
             console.log('========================================');
             console.log('FORCE SHOW CONSOLE TEST');
-            console.log('[Console] Visual Console v10');
+            console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' (' + APP_VERSION + ')');
             console.log('========================================');
             console.log('Time:', new Date().toISOString());
             console.error('This is an ERROR message');
@@ -188,11 +198,58 @@ function customAction(action, parameters) {
             if (consoleDiv) {
                 consoleDiv.style.display = 'block';
                 consoleDiv.style.zIndex = '999999';
-                console.log('✓ Console DIV found and forced visible');
+                console.log('✓ Console DIV found and forced visible')
                 showToast('Console', 'Console should be visible now');
             } else {
                 console.error('✗ Console DIV not found!');
                 showToast('Console', 'ERROR: Console DIV not found');
+            }
+            break;
+        case 'SET_REMOTE_HTTP_ENDPOINT': {
+            const current = configRead('remoteLoggingUrl') || '';
+            const value = window.prompt ? window.prompt('Enter HTTP endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingUrl', String(value).trim());
+                showToast('Remote Logging', 'HTTP endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_WS_ENDPOINT': {
+            const current = configRead('remoteLoggingWsUrl') || '';
+            const value = window.prompt ? window.prompt('Enter WebSocket endpoint for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingWsUrl', String(value).trim());
+                showToast('Remote Logging', 'WebSocket endpoint updated');
+            }
+            break;
+        }
+        case 'SET_REMOTE_AUTH_TOKEN': {
+            const current = configRead('remoteLoggingAuthToken') || '';
+            const value = window.prompt ? window.prompt('Enter optional auth token for remote logging', current) : current;
+            if (value !== null && value !== undefined) {
+                configWrite('remoteLoggingAuthToken', String(value).trim());
+                showToast('Remote Logging', 'Auth token updated');
+            }
+            break;
+        }
+        case 'TEST_REMOTE_CONNECTION':
+            if (window.remoteLogger && typeof window.remoteLogger.testConnection === 'function') {
+                window.remoteLogger.testConnection().then((result) => {
+                    showToast('Remote Logging', `HTTP: ${result.http} | WS: ${result.ws}`);
+                }).catch(() => {
+                    showToast('Remote Logging', 'Connection test failed');
+                });
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
+            }
+            break;
+
+        case 'TEST_REMOTE_LOGGING':
+            if (window.remoteLogger && typeof window.remoteLogger.test === 'function') {
+                window.remoteLogger.test();
+                showToast('Remote Logging', 'Test log sent (if URL is configured)');
+            } else {
+                showToast('Remote Logging', 'Remote logger not available');
             }
             break;
     }
