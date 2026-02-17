@@ -375,10 +375,10 @@ jobs:
           tizen build-web -- .
           if [ -d .buildResult ]; then
             pushd .buildResult
-            tizen package -t wgt -s tizentube-ci
+            tizen package -t wgt -s tizentube-ci -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
             popd
           else
-            tizen package -t wgt -s tizentube-ci
+            tizen package -t wgt -s tizentube-ci -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
           fi
           popd
 
