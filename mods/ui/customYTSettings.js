@@ -12,7 +12,7 @@ function PatchSettings(settingsObject) {
                 parameters: []
             }
         },
-        `Version: ${APP_VERSION}`,
+        `Version: 1.12.7`,
         'https://www.gstatic.com/ytlr/img/parent_code.png'
     )
 
