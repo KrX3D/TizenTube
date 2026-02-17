@@ -357,10 +357,13 @@ jobs:
           mkdir -p "${HOME}/tizen-studio-data/keystore/author"
           tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
           tizen security-profiles add             -n tizentube-ci             -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"             -p "$CERT_PASSWORD"
+          tizen cli-config "profiles.path=${HOME}/tizen-studio-data/profile/profiles.xml"
 
-          tizen package -t wgt -s tizentube-ci -- wgt-app -- "$(pwd)/wgt-out"
+          pushd wgt-app
+          tizen package -t wgt -s tizentube-ci
+          popd
 
-          WGT_FILE=$(find wgt-out -maxdepth 1 -name '*.wgt' | head -n1)
+          WGT_FILE=$(find wgt-app -maxdepth 1 -name '*.wgt' | head -n1)
           test -n "$WGT_FILE"
           cp "$WGT_FILE" wgt/TizenTube.wgt
           echo "Created signed WGT: $WGT_FILE"

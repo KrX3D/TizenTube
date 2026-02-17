@@ -26,7 +26,7 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 
 ## CI Artifacts
 
-GitHub Actions now also builds a **signed `.wgt` package** automatically on `release` and `workflow_dispatch` runs.
+GitHub Actions now also builds a **signed `.wgt` package** automatically in the main CI workflow runs.
 
 - Output artifact: `wgt/TizenTube.wgt`
 - The workflow generates a signing certificate (or uses `TIZEN_CERT_PASSWORD` if set) and signs the package before upload.
