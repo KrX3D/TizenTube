@@ -31,3 +31,4 @@ GitHub Actions now also builds a **signed `.wgt` package** automatically in the 
 - Output artifact: `wgt/TizenTube.wgt`
 - The workflow generates a signing certificate (or uses `TIZEN_CERT_PASSWORD` if set) and signs the package before upload.
 - The signed WGT is uploaded as a workflow artifact (`signed-wgt-<run_number>`).
+- Manual workflow runs can set `skip_wgt=true` to skip WGT creation when only npm publish/cleanup is needed.

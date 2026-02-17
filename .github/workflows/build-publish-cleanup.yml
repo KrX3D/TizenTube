@@ -118,6 +118,15 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      skip_wgt:
+        description: 'Skip signed WGT creation (manual runs only)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 # Allow this workflow to push back changes to the repo
 permissions:
@@ -298,12 +307,14 @@ jobs:
       # Build signed WGT artifact (release/workflow_dispatch)
       # ----------------------------
       - name: Install tools for Tizen packaging
+        if: inputs.skip_wgt != 'true'
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y unzip zip curl ca-certificates
 
       - name: Install Tizen CLI
+        if: inputs.skip_wgt != 'true'
         run: |
           set -euo pipefail
           curl -L -o /tmp/tizen-web-cli.bin             https://download.tizen.org/sdk/Installer/tizen-studio_5.1/web-cli_Tizen_Studio_5.1_ubuntu-64.bin
@@ -312,6 +323,7 @@ jobs:
           echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
 
       - name: Build signed WGT package
+        if: inputs.skip_wgt != 'true'
         env:
           TIZEN_CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
         run: |
@@ -360,15 +372,23 @@ jobs:
           tizen cli-config "profiles.path=${HOME}/tizen-studio-data/profile/profiles.xml"
 
           pushd wgt-app
-          tizen package -t wgt -s tizentube-ci
+          tizen build-web -- .
+          if [ -d .buildResult ]; then
+            pushd .buildResult
+            tizen package -t wgt -s tizentube-ci
+            popd
+          else
+            tizen package -t wgt -s tizentube-ci
+          fi
           popd
 
-          WGT_FILE=$(find wgt-app -maxdepth 1 -name '*.wgt' | head -n1)
+          WGT_FILE=$(find wgt-app -maxdepth 2 -name '*.wgt' | head -n1)
           test -n "$WGT_FILE"
           cp "$WGT_FILE" wgt/TizenTube.wgt
           echo "Created signed WGT: $WGT_FILE"
 
       - name: Upload signed WGT artifact
+        if: inputs.skip_wgt != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: signed-wgt-${{ github.run_number }}
