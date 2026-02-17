@@ -293,6 +293,88 @@ jobs:
           echo "Pushing changes back to main..."
           git push origin HEAD:main
 
+
+      # ----------------------------
+      # Build signed WGT artifact (release/workflow_dispatch)
+      # ----------------------------
+      - name: Install tools for Tizen packaging
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y unzip zip curl ca-certificates
+
+      - name: Install Tizen CLI
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          curl -L -o /tmp/tizen-web-cli.bin             https://download.tizen.org/sdk/Installer/tizen-studio_5.1/web-cli_Tizen_Studio_5.1_ubuntu-64.bin
+          chmod +x /tmp/tizen-web-cli.bin
+          /tmp/tizen-web-cli.bin --accept-license "$HOME/tizen-studio"
+          echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
+
+      - name: Build signed WGT package
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        env:
+          TIZEN_CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
+
+          CERT_PASSWORD="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
+
+          rm -rf wgt-app wgt-out
+          mkdir -p wgt-app/dist wgt-out
+
+          cp dist/userScript.js wgt-app/dist/userScript.js
+          cp dist/service.js wgt-app/dist/service.js
+
+          cat > wgt-app/index.html <<'HTML'
+          <!doctype html>
+          <html>
+            <head><meta charset="utf-8"><title>TizenTube</title></head>
+            <body><script src="./dist/userScript.js"></script></body>
+          </html>
+          HTML
+
+          cat > wgt-app/config.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <widget xmlns="http://www.w3.org/ns/widgets"
+                  xmlns:tizen="http://tizen.org/ns/widgets"
+                  id="http://krx3d.github.io/tizentube"
+                  version="1.0.0"
+                  viewmodes="maximized">
+            <name>TizenTube</name>
+            <content src="index.html"/>
+            <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+            <tizen:application id="KrX3D.TizenTube" package="KrX3DTT" required_version="2.4"/>
+            <tizen:profile name="tv-samsung"/>
+            <icon src="icon.png"/>
+          </widget>
+          XML
+
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > wgt-app/icon.png
+
+          tizen version
+
+          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
+          tizen security-profiles add             -n tizentube-ci             -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"             -p "$CERT_PASSWORD"
+
+          tizen package -t wgt -s tizentube-ci -- wgt-app -- "$(pwd)/wgt-out"
+
+          WGT_FILE=$(find wgt-out -maxdepth 1 -name '*.wgt' | head -n1)
+          test -n "$WGT_FILE"
+          cp "$WGT_FILE" dist/TizenTube.wgt
+          echo "Created signed WGT: $WGT_FILE"
+
+      - name: Upload signed WGT artifact
+        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-wgt-${{ github.run_number }}
+          path: dist/TizenTube.wgt
+          retention-days: 30
+
       # --------------------
       # NPM AUTH
       # --------------------
