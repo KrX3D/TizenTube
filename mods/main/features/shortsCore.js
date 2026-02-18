@@ -162,20 +162,7 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-        
-        // Extended check for 90-180 seconds Shorts can be nowt till 3min
-        if (totalSeconds <= 180) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
+        if (totalSeconds <= 90) return true;
       }
     }
   }
