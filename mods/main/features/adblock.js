@@ -13,11 +13,11 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
+import { shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems, getVideoId, getVideoTitle, collectVideoIdsFromShelf } from './shortsCore.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { cleanupPlaylistHelperTiles as cleanupPlaylistHelperTilesFeature } from './playlistCleanup.js';
-import { addPlaylistControlButtons as addPlaylistControlButtonsFeature, detectPlaylistButtons as detectPlaylistButtonsFeature, initPlaylistButtonMaintenance } from './playlistButtonInsertion.js';
+import { trackRemovedPlaylistHelpers, isLikelyPlaylistHelperItem, getVideoKey, trackRemovedPlaylistHelperKeys, isInCollectionMode, getFilteredVideoIds, startCollectionMode, finishCollectionAndFilter, exitFilterMode } from './playlistHelpers.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
 const LOG_SHORTS = false;   // Set false to disable shorts logging  
@@ -36,30 +36,6 @@ window.adblock.setDebugEnabled = function(value) {
 
 // Listen for config changes to update DEBUG_ENABLED cache
 if (typeof window !== 'undefined') {
-  if (!window._playlistButtonObserver) {
-    window._playlistButtonObserver = new MutationObserver(() => {
-      const page = getCurrentPage();
-      if (page !== 'playlist') return;
-      const hasCustom = !!document.querySelector('[data-tizentube-collection-btn="1"]');
-      if (!hasCustom) {
-        addPlaylistControlButtons(7);
-      }
-    });
-
-    const observe = () => {
-      const target = document.querySelector('yt-virtual-list') || document.body;
-      if (!target) return;
-      try {
-        window._playlistButtonObserver.observe(target, { childList: true, subtree: true });
-      } catch (_) {}
-    };
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', observe, { once: true });
-    } else {
-      observe();
-    }
-  }
   setTimeout(() => {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (e) => {
@@ -70,92 +46,6 @@ if (typeof window !== 'undefined') {
       });
     }
   }, 100);
-}
-
-// ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
-// Trying to hide them causes empty space and layout issues
-function trackRemovedPlaylistHelpers(helperIds) {
-  if (!window._playlistRemovedHelpers) {
-    window._playlistRemovedHelpers = new Set();
-  }
-  if (!window._playlistRemovedHelperKeys) {
-    window._playlistRemovedHelperKeys = new Set();
-  }
-  if (!window._playlistRemovedHelperQueue) {
-    window._playlistRemovedHelperQueue = [];
-  }
-
-  helperIds.forEach((helperId) => {
-    if (!helperId || helperId === 'unknown') return;
-    if (!window._playlistRemovedHelpers.has(helperId)) {
-      window._playlistRemovedHelpers.add(helperId);
-      window._playlistRemovedHelperQueue.push(helperId);
-    }
-  });
-
-  const MAX_REMOVED_HELPERS = 25;
-  while (window._playlistRemovedHelperQueue.length > MAX_REMOVED_HELPERS) {
-    const oldest = window._playlistRemovedHelperQueue.shift();
-    window._playlistRemovedHelpers.delete(oldest);
-  }
-}
-
-
-function isLikelyPlaylistHelperItem(item) {
-  if (!item || typeof item !== 'object') return false;
-  if (item.continuationItemRenderer) return true;
-  if (item?.tileRenderer?.onSelectCommand?.continuationCommand) return true;
-  if (item?.tileRenderer?.onSelectCommand?.continuationEndpoint) return true;
-  if (item?.continuationEndpoint || item?.continuationCommand) return true;
-
-  const videoId = getVideoId(item);
-  if (videoId) return false;
-
-  const textParts = getVideoTitle(item).toLowerCase();
-
-  return /scroll|weiter|weiteres|mehr|more|helper|continuation|fortsetzen|laden/.test(textParts);
-}
-
-
-function getVideoKey(item) {
-  const id = getVideoId(item);
-  const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
-    item?.videoRenderer?.title?.runs?.[0]?.text ||
-    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.compactVideoRenderer?.title?.simpleText || '';
-  return `${id || 'unknown'}|${title}`;
-}
-
-function trackRemovedPlaylistHelperKeys(helperVideos) {
-  window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
-  window._playlistRemovedHelperKeyQueue = window._playlistRemovedHelperKeyQueue || [];
-
-  helperVideos.forEach((video) => {
-    const key = getVideoKey(video);
-    if (!key || key === 'unknown|') return;
-    if (!window._playlistRemovedHelperKeys.has(key)) {
-      window._playlistRemovedHelperKeys.add(key);
-      window._playlistRemovedHelperKeyQueue.push(key);
-    }
-  });
-
-  const MAX_KEYS = 40;
-  while (window._playlistRemovedHelperKeyQueue.length > MAX_KEYS) {
-    const oldest = window._playlistRemovedHelperKeyQueue.shift();
-    window._playlistRemovedHelperKeys.delete(oldest);
-  }
-}
-
-function shouldHideWatchedForPage(configPages, page) {
-  if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  if (configPages.includes(page)) return true;
-
-  // Library playlist overview / watch-next should follow library watched-filter setting.
-  if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
-    return true;
-  }
-
-  return false;
 }
 
 function directFilterArray(arr, page, context = '') {
@@ -266,7 +156,7 @@ function directFilterArray(arr, page, context = '') {
     // ⭐ DON'T insert helpers into new batch - they're already rendered!
     // Just track them for removal if they appear
     trackRemovedPlaylistHelpers(helperIdsToRemove);
-    trackRemovedPlaylistHelperKeys(window._lastHelperVideos);
+    trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
     
     // Clear helpers immediately (don't wait for last batch)
     if (!isLastBatch) {
@@ -305,7 +195,7 @@ function directFilterArray(arr, page, context = '') {
                         item.richItemRenderer?.content?.videoRenderer;
     
     if (!isVideoItem) {
-      if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
+      if (isPlaylistPage && isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle)) {
         return false;
       }
       return true;
@@ -325,8 +215,8 @@ function directFilterArray(arr, page, context = '') {
       return false;
     }
 
-    const videoKey = getVideoKey(item);
-    if (isPlaylistPage && isLikelyPlaylistHelperItem(item)) {
+    const videoKey = getVideoKey(item, getVideoId);
+    if (isPlaylistPage && isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle)) {
       return false;
     }
     if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys?.has(videoKey))) {
@@ -449,7 +339,7 @@ function directFilterArray(arr, page, context = '') {
       }
       const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
       trackRemovedPlaylistHelpers(helperIdsToTrack);
-      trackRemovedPlaylistHelperKeys(window._lastHelperVideos);
+      trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
@@ -666,75 +556,6 @@ function startPlaylistAutoLoad() {
   }, 500);
 }
 
-// ⭐ PLAYLIST COLLECTION MODE: Store unwatched videos, then reload filtered
-const PLAYLIST_STORAGE_KEY = 'tizentube_playlist_unwatched';
-
-function isInCollectionMode() {
-  const stored = localStorage.getItem(PLAYLIST_STORAGE_KEY);
-  if (!stored) return false;
-  
-  try {
-    const data = JSON.parse(stored);
-    // Collection mode expires after 5 minutes
-    if (Date.now() - data.timestamp > 5 * 60 * 1000) {
-      localStorage.removeItem(PLAYLIST_STORAGE_KEY);
-      return false;
-    }
-    return data.mode === 'collecting';
-  } catch {
-    return false;
-  }
-}
-
-function getFilteredVideoIds() {
-  const stored = localStorage.getItem(PLAYLIST_STORAGE_KEY);
-  if (!stored) return null;
-  
-  try {
-    const data = JSON.parse(stored);
-    if (data.mode === 'filtering' && Array.isArray(data.videoIds)) {
-      if (data.videoIds.length === 0) {
-        localStorage.removeItem(PLAYLIST_STORAGE_KEY);
-        return null;
-      }
-      return new Set(data.videoIds);
-    }
-  } catch {}
-  return null;
-}
-
-function startCollectionMode() {
-  console.log('🔄🔄🔄 STARTING COLLECTION MODE');
-  localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify({
-    mode: 'collecting',
-    timestamp: Date.now(),
-    videoIds: []
-  }));
-  
-  // Reload page to start fresh
-  window.location.reload();
-}
-
-function finishCollectionAndFilter(unwatchedIds) {
-  console.log('🔄🔄🔄 COLLECTION COMPLETE - Switching to filter mode');
-  console.log('🔄 Total unwatched videos:', unwatchedIds.length);
-  
-  localStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify({
-    mode: 'filtering',
-    timestamp: Date.now(),
-    videoIds: unwatchedIds
-  }));
-  
-  // Reload page in filter mode
-  window.location.reload();
-}
-
-function exitFilterMode() {
-  console.log('🔄🔄🔄 EXITING FILTER MODE');
-  localStorage.removeItem(PLAYLIST_STORAGE_KEY);
-  window.location.reload();
-}
-
 // ⭐ Track collected unwatched videos during collection mode
 window._collectedUnwatched = window._collectedUnwatched || [];
 
@@ -877,14 +698,6 @@ JSON.parse = function () {
         }, 2000);
       }
   
-      setTimeout(() => {
-        detectPlaylistButtons();
-      }, 2000);
-      
-      // ⭐ Wait even longer for buttons to inject (buttons load slowly)
-      setTimeout(() => {
-        addPlaylistControlButtons();
-      }, 4000);
     } else {
       console.log('═══ More batches to come...');
       window._isLastPlaylistBatch = false;
@@ -1687,36 +1500,6 @@ function triggerPlaylistContinuationLoad() {
 }
 
 
-function cleanupPlaylistHelperTiles() {
-  return cleanupPlaylistHelperTilesFeature({
-    getCurrentPage,
-    getVideoId,
-    debugEnabled: DEBUG_ENABLED,
-    triggerPlaylistContinuationLoad
-  });
-}
-
-function detectPlaylistButtons() {
-  return detectPlaylistButtonsFeature({
-    getCurrentPage,
-    addPlaylistControlButtons
-  });
-}
-
-function addPlaylistControlButtons(attempt = 1) {
-  return addPlaylistControlButtonsFeature(attempt, {
-    getCurrentPage,
-    debugEnabled: DEBUG_ENABLED,
-    resolveCommand,
-    logChunkedByLines
-  });
-}
-
-initPlaylistButtonMaintenance({
-  getCurrentPage,
-  addPlaylistControlButtons,
-  cleanupPlaylistHelperTiles
-});
 
 export {
   trackRemovedPlaylistHelpers,
@@ -1740,8 +1523,5 @@ export {
   findProgressBar,
   getCurrentPage,
   logChunkedByLines,
-  triggerPlaylistContinuationLoad,
-  cleanupPlaylistHelperTiles,
-  detectPlaylistButtons,
-  addPlaylistControlButtons
+  triggerPlaylistContinuationLoad
 };
