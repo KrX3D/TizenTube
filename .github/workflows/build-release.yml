@@ -75,8 +75,8 @@ jobs:
           export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
           CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
-          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -d '\r\n')"
-          [ -n "$CERT_PASSWORD" ] || CERT_PASSWORD='tizentubecipass1234'
+          CERT_PASSWORD_HASH="$(printf '%s' "$CERT_PASSWORD_RAW" | sha256sum | cut -c1-24)"
+          CERT_PASSWORD="Aa1${CERT_PASSWORD_HASH}"
 
           PROFILE_NAME="tizentube-ci-${GITHUB_RUN_ID:-local}"
           CERT_DIR="${HOME}/tizen-studio-data/keystore/author"
@@ -124,15 +124,16 @@ jobs:
           tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
           tizen cli-config "profiles.path=${PROFILE_XML}"
           test -f "$PROFILE_XML"
+          tizen security-profiles list
 
           pushd wgt-app
           tizen build-web -- .
           if [ -d .buildResult ]; then
             pushd .buildResult
-            tizen package -t wgt -s "$PROFILE_NAME" -- .
+            tizen package -t wgt -s "$PROFILE_NAME" -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
             popd
           else
-            tizen package -t wgt -s "$PROFILE_NAME" -- .
+            tizen package -t wgt -s "$PROFILE_NAME" -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
           fi
           popd
 

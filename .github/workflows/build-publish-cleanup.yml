@@ -331,10 +331,8 @@ jobs:
           export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
           CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
-          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -d '\r\n')"
-          if [ -z "$CERT_PASSWORD" ]; then
-            CERT_PASSWORD='tizentubecipass1234'
-          fi
+          CERT_PASSWORD_HASH="$(printf '%s' "$CERT_PASSWORD_RAW" | sha256sum | cut -c1-24)"
+          CERT_PASSWORD="Aa1${CERT_PASSWORD_HASH}"
 
           PROFILE_NAME="tizentube-ci-${GITHUB_RUN_ID:-local}"
           CERT_DIR="${HOME}/tizen-studio-data/keystore/author"
