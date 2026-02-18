@@ -1,0 +1,38 @@
+#!/usr/bin/expect -f
+
+# AIDEV-NOTE: Automated WGT packaging for TizenTube with password handling
+
+set timeout 30
+
+# Change to the correct directory
+cd /tizen/tizentube-app
+
+# Spawn the Tizen package command
+spawn tizen package -t wgt -s TizenTube
+
+# Handle different possible prompts
+expect {
+    "Author password:" {
+        send "1234\r"
+        exp_continue
+    }
+    "Continue?" {
+        send "y\r"
+        exp_continue
+    }
+    "Package File Location:" {
+        # Success case - package completed
+        expect eof
+    }
+    "BUILD SUCCESSFUL" {
+        # Another success indicator
+        expect eof
+    }
+    eof {
+        # Command completed
+    }
+    timeout {
+        puts "Timeout waiting for packaging to complete"
+        exit 1
+    }
+}
