@@ -331,10 +331,15 @@ jobs:
           export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
           CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
-          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -cd 'A-Za-z0-9' | head -c 24)"
+          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -d '\r\n')"
           if [ -z "$CERT_PASSWORD" ]; then
             CERT_PASSWORD='tizentubecipass1234'
           fi
+
+          PROFILE_NAME="tizentube-ci-${GITHUB_RUN_ID:-local}"
+          CERT_DIR="${HOME}/tizen-studio-data/keystore/author"
+          CERT_PATH="${CERT_DIR}/${PROFILE_NAME}.p12"
+          PROFILE_XML="${HOME}/tizen-studio-data/profile/profiles.xml"
 
           rm -rf wgt-app wgt-out wgt
           mkdir -p wgt-app/dist wgt-out wgt
@@ -370,21 +375,23 @@ jobs:
 
           tizen version
 
-          mkdir -p "${HOME}/tizen-studio-data/keystore/author"
-          rm -f "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12"
-          tizen security-profiles remove -n tizentube-ci || true
-          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f tizentube-ci -- "${HOME}/tizen-studio-data/keystore/author"
-          tizen security-profiles add -n tizentube-ci -a "${HOME}/tizen-studio-data/keystore/author/tizentube-ci.p12" -p "$CERT_PASSWORD"
-          tizen cli-config "profiles.path=${HOME}/tizen-studio-data/profile/profiles.xml"
+          mkdir -p "$CERT_DIR" "$(dirname "$PROFILE_XML")"
+          rm -f "$CERT_PATH" "$PROFILE_XML"
+          tizen cli-config "profiles.path=${PROFILE_XML}"
+
+          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f "$PROFILE_NAME" -- "$CERT_DIR"
+          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
+          tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
+          tizen security-profiles list
 
           pushd wgt-app
           tizen build-web -- .
           if [ -d .buildResult ]; then
             pushd .buildResult
-            tizen package -t wgt -s tizentube-ci -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
+            tizen package -t wgt -s "$PROFILE_NAME" -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
             popd
           else
-            tizen package -t wgt -s tizentube-ci -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
+            tizen package -t wgt -s "$PROFILE_NAME" -- . || { echo 'Package failed, dumping Tizen CLI log'; cat "$HOME/tizen-studio-data/cli/logs/cli.log" || true; exit 1; }
           fi
           popd
 
