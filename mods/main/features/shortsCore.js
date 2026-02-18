@@ -1,3 +1,51 @@
+
+
+export function getVideoId(item) {
+  return item?.tileRenderer?.contentId ||
+    item?.videoRenderer?.videoId ||
+    item?.playlistVideoRenderer?.videoId ||
+    item?.gridVideoRenderer?.videoId ||
+    item?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    null;
+}
+
+export function getVideoTitle(item) {
+  return (
+    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+    item?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.compactVideoRenderer?.title?.simpleText ||
+    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
+    ''
+  );
+}
+
+export function collectVideoIdsFromShelf(shelf) {
+  const ids = [];
+  const seen = new Set();
+  const pushFrom = (arr) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach((item) => {
+      const id = getVideoId(item);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+  };
+
+  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
+  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
+  pushFrom(shelf?.richSectionRenderer?.content?.richShelfRenderer?.content?.richGridRenderer?.contents);
+  pushFrom(shelf?.gridRenderer?.items);
+
+  return ids;
+}
+
 export function initShortsTrackingState() {
   window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
   window._shortsTitlesFromShelves = window._shortsTitlesFromShelves || new Set();
@@ -8,8 +56,12 @@ export function shouldFilterShorts(shortsEnabled, page) {
 }
 
 export function isShortsShelfTitle(title = '') {
-  const t = String(title).toLowerCase();
-  return t.includes('shorts') || t.includes('short');
+  const t = String(title).trim().toLowerCase();
+  // Keep this strict to avoid false positives such as
+  // "short film", "short tutorial", etc.
+  if (!t) return false;
+  if (t === 'shorts' || t === '#shorts') return true;
+  return /^shorts\b/.test(t) || /\bshorts$/.test(t);
 }
 
 export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle) {
@@ -180,6 +232,38 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   return false;
 }
 
+
+
+export function filterShelvesShorts(shelves, { page = 'other', shortsEnabled, onRemoveShelf } = {}) {
+  if (!Array.isArray(shelves)) return;
+  if (!shouldFilterShorts(shortsEnabled, page)) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    if (!shelf) {
+      shelves.splice(i, 1);
+      continue;
+    }
+
+    if (!shelf.shelfRenderer?.content?.horizontalListRenderer?.items) continue;
+
+    if (shelf.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+      onRemoveShelf?.(shelf);
+      shelves.splice(i, 1);
+      continue;
+    }
+
+    const items = shelf.shelfRenderer.content.horizontalListRenderer.items || [];
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+      (item) => !isShortItem(item, { currentPage: page })
+    );
+
+    if (shelf.shelfRenderer.content.horizontalListRenderer.items.length === 0) {
+      onRemoveShelf?.(shelf);
+      shelves.splice(i, 1);
+    }
+  }
+}
 export function getShelfTitle(shelf) {
   const titleText = (title) => {
     if (!title) return '';

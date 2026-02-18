@@ -56,6 +56,15 @@ export function patchResolveCommand() {
 
             const ogResolve = window._yttv[key].instance.resolveCommand;
             window._yttv[key].instance.resolveCommand = function (cmd, _) {
+                if (Array.isArray(cmd?.commandExecutorCommand?.commands)) {
+                    // Execute each nested command in order (e.g. setClientSettingEndpoint + customAction)
+                    // so toggles/array selections are applied before reopening menus.
+                    for (const nestedCmd of cmd.commandExecutorCommand.commands) {
+                        this.resolveCommand(nestedCmd, _);
+                    }
+                    return true;
+                }
+
                 if (cmd.setClientSettingEndpoint) {
                     // Command to change client settings. Use TizenTube configuration to change settings.
                     for (const settings of cmd.setClientSettingEndpoint.settingDatas) {
