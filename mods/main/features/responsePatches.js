@@ -246,7 +246,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
-  const skipUniversalFilter = currentPage === 'watch';
+  const skipUniversalFilter = effectivePage === 'watch';
   if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, effectivePage);

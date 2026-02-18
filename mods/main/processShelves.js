@@ -15,6 +15,7 @@ function getShelfItemsRef(shelf) {
     ['shelfRenderer', 'content', 'verticalListRenderer', 'items'],
     ['richShelfRenderer', 'content', 'richGridRenderer', 'contents'],
     ['richSectionRenderer', 'content', 'richShelfRenderer', 'content', 'richGridRenderer', 'contents'],
+    ['reelShelfRenderer', 'items'],
     ['gridRenderer', 'items']
   ];
 

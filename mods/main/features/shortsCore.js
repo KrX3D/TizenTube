@@ -11,6 +11,7 @@ export function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.reelItemRenderer?.videoId ||
     null;
 }
 
@@ -22,6 +23,7 @@ export function getVideoTitle(item) {
     item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
     item?.compactVideoRenderer?.title?.simpleText ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.reelItemRenderer?.headline?.simpleText ||
     ''
   );
 }
@@ -224,6 +226,7 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   }
 
   if (item.richItemRenderer?.content?.reelItemRenderer) return true;
+  if (item.reelItemRenderer) return true;
 
   if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
     const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
@@ -306,7 +309,8 @@ function hasVideoItemsArray(arr) {
     item?.gridVideoRenderer ||
     item?.compactVideoRenderer ||
     item?.richItemRenderer?.content?.videoRenderer ||
-    item?.richItemRenderer?.content?.reelItemRenderer
+    item?.richItemRenderer?.content?.reelItemRenderer ||
+    item?.reelItemRenderer
   );
 }
 
