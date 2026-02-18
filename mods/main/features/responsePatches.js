@@ -14,6 +14,26 @@ import { directFilterArray, scanAndFilterAllArrays } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
 
+
+let DEBUG_ENABLED = configRead('enableDebugConsole');
+window.adblock = window.adblock || {};
+window.adblock.setDebugEnabled = function(value) {
+  DEBUG_ENABLED = !!value;
+  console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
+};
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (window.configChangeEmitter) {
+      window.configChangeEmitter.addEventListener('configChange', (event) => {
+        if (event.detail?.key === 'enableDebugConsole') {
+          DEBUG_ENABLED = !!event.detail.value;
+        }
+      });
+    }
+  }, 100);
+}
+
 function buildShelfProcessingOptions() {
   return {
     deArrowEnabled: configRead('enableDeArrow'),
@@ -25,8 +45,8 @@ function buildShelfProcessingOptions() {
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
     shortsEnabled: configRead('enableShorts'),
     page: detectCurrentPage(),
-    debugEnabled: configRead('enableDebugConsole'),
-    logShorts: configRead('enableDebugConsole')
+    debugEnabled: DEBUG_ENABLED,
+    logShorts: DEBUG_ENABLED
   };
 }
 

@@ -1,5 +1,6 @@
 import { configRead } from '../../config.js';
-import { hideWatchedVideos } from './hideWatchedVideos.js';
+import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
+import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
 
 
 
@@ -312,21 +313,96 @@ function hasShelvesArray(arr) {
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
-  let out = arr;
+  const isPlaylistPage = page === 'playlist' || page === 'playlists';
+  const filterIds = getFilteredVideoIds();
+  const hideWatchedEnabled = configRead('enableHideWatchedVideos');
+  const hideWatchedPages = configRead('hideWatchedVideosPages') || [];
+  const watchedThreshold = configRead('hideWatchedVideosThreshold');
+  const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
 
-  if (!configRead('enableShorts')) {
-    out = filterShortItems(out, { page }).items;
+  window._playlistScrollHelpers = window._playlistScrollHelpers || new Set();
+  window._lastHelperVideos = window._lastHelperVideos || [];
+  window._playlistRemovedHelpers = window._playlistRemovedHelpers || new Set();
+  window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
+
+  const out = [];
+  const helperVideos = [];
+
+  for (const item of arr) {
+    if (!item || typeof item !== 'object') continue;
+
+    const videoId = getVideoId(item);
+    const videoKey = getVideoKey(item, getVideoId);
+
+    if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys.has(videoKey))) {
+      continue;
+    }
+
+    if (isPlaylistPage && isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle)) {
+      helperVideos.push(item);
+      continue;
+    }
+
+    if (!configRead('enableShorts') && isShortItem(item, { currentPage: page })) {
+      continue;
+    }
+
+    if (isPlaylistPage && filterIds) {
+      if (!videoId || !filterIds.has(videoId)) continue;
+    }
+
+    if (shouldHideWatched) {
+      const progressBar = findProgressBar(item);
+      if (progressBar) {
+        const percentWatched = progressBar.percentDurationWatched || 0;
+        if (percentWatched > watchedThreshold) {
+          continue;
+        }
+      } else if (isPlaylistPage && !filterIds) {
+        if (!isInCollectionMode()) {
+          out.push(item);
+        }
+        continue;
+      }
+    }
+
+    out.push(item);
   }
 
-  if (configRead('enableHideWatchedVideos')) {
-    out = hideWatchedVideos(
-      out,
-      configRead('hideWatchedVideosPages') || [],
-      configRead('hideWatchedVideosThreshold')
-    );
+  if (isPlaylistPage) {
+    if (helperVideos.length) {
+      window._lastHelperVideos = helperVideos;
+      const helperIdsToTrack = helperVideos.map((video) => getVideoId(video)).filter(Boolean);
+      trackRemovedPlaylistHelpers(helperIdsToTrack);
+      trackRemovedPlaylistHelperKeys(helperVideos, getVideoId);
+    }
+
+    // Keep one helper so continuation can still load if everything got filtered.
+    if (out.length === 0 && helperVideos.length > 0 && !filterIds && !isInCollectionMode()) {
+      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0];
+      if (fallbackHelper) {
+        out.push(fallbackHelper);
+      }
+    }
+
+    if (isInCollectionMode()) {
+      const noProgress = arr
+        .filter((item) => !isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle))
+        .filter((item) => !findProgressBar(item))
+        .map((item) => getVideoId(item))
+        .filter(Boolean);
+
+      if (noProgress.length > 0) {
+        window._collectedUnwatched = window._collectedUnwatched || [];
+        const merged = new Set([...(window._collectedUnwatched || []), ...noProgress]);
+        window._collectedUnwatched = Array.from(merged);
+      }
+    }
   }
 
-  return out;
+  return shouldHideWatched && !isPlaylistPage
+    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold)
+    : out;
 }
 
 export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
