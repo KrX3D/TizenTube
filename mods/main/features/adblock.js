@@ -1,6 +1,6 @@
-import { configRead } from '../config.js';
-import Chapters from '../ui/chapters.js';
-import resolveCommand from '../resolveCommand.js';
+import { configRead } from '../../config.js';
+import Chapters from '../../ui/chapters.js';
+import resolveCommand from '../../resolveCommand.js';
 import { addLongPress } from './longPress.js';
 import { addPreviews } from './previews.js';
 import { hideShorts } from './hideShorts.js';
@@ -14,7 +14,7 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems } from './shortsCore.js';
-import { PatchSettings } from '../ui/customYTSettings.js';
+import { PatchSettings } from '../../ui/customYTSettings.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
 const LOG_SHORTS = false;   // Set false to disable shorts logging  
