@@ -115,6 +115,7 @@ on:
       - 'LICENSE'
       - 'README.md'
       - 'package.json'
+      - 'dist/**'
   release:
     types: [published]
   workflow_dispatch:
@@ -381,7 +382,10 @@ jobs:
           tizen cli-config "profiles.path=${PROFILE_XML}"
 
           tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f "$PROFILE_NAME" -- "$CERT_DIR"
-          openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
+          if ! openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout; then
+            echo "OpenSSL default provider failed, retrying with -legacy (RC2 support)"
+            openssl pkcs12 -legacy -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
+          fi
           tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
           tizen security-profiles list
 
