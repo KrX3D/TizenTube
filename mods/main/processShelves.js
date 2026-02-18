@@ -4,6 +4,7 @@ import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos } from './features/hideWatchedVideos.js';
 import { hideShorts, removeShortsShelvesByTitle } from './features/hideShorts.js';
+import { detectCurrentPage } from './pageDetection.js';
 
 function getVideoId(item) {
   return item?.tileRenderer?.contentId ||
@@ -62,11 +63,13 @@ export function processShelves(shelves, options) {
     hideWatchedPages,
     hideWatchedThreshold,
     shortsEnabled,
+    page = detectCurrentPage(),
     debugEnabled = false,
     logShorts = false
   } = options;
 
   removeShortsShelvesByTitle(shelves, {
+    page,
     shortsEnabled,
     collectVideoIdsFromShelf,
     getVideoTitle,

@@ -9,6 +9,7 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
+import { detectCurrentPage } from '../pageDetection.js';
 
 function buildShelfProcessingOptions() {
   return {
@@ -20,6 +21,7 @@ function buildShelfProcessingOptions() {
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
     shortsEnabled: configRead('enableShorts'),
+    page: detectCurrentPage(),
     debugEnabled: configRead('enableDebugConsole'),
     logShorts: configRead('enableDebugConsole')
   };
