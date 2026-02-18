@@ -74,9 +74,9 @@ jobs:
           set -euo pipefail
           export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
-          CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
-          CERT_PASSWORD_HASH="$(printf '%s' "$CERT_PASSWORD_RAW" | sha256sum | cut -c1-24)"
-          CERT_PASSWORD="Aa1${CERT_PASSWORD_HASH}"
+          # Use a simple fixed password with a legacy-compatible PKCS#12 export.
+          # This avoids recurring Tizen Java signer "Invaild password" failures.
+          CERT_PASSWORD='tizentube-author'
 
           PROFILE_NAME="tizentube-ci-${GITHUB_RUN_ID:-local}"
           CERT_DIR="${HOME}/tizen-studio-data/keystore/author"
@@ -116,11 +116,11 @@ jobs:
 
           printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > wgt-app/icon.png
 
-          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f "$PROFILE_NAME" -- "$CERT_DIR"
-          if ! openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout; then
-            echo "OpenSSL default provider failed, retrying with -legacy (RC2 support)"
-            openssl pkcs12 -legacy -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
-          fi
+          openssl req -newkey rsa:2048 -nodes -x509 -days 3650             -subj "/CN=TizenTube CI/O=TizenTube"             -keyout author.key -out author.crt
+          # Export using legacy algorithms for Tizen CLI Java compatibility.
+          openssl pkcs12 -export -legacy -out "$CERT_PATH"             -inkey author.key -in author.crt -passout "pass:${CERT_PASSWORD}"
+          rm -f author.key author.crt
+          openssl pkcs12 -legacy -in "$CERT_PATH" -passin "pass:${CERT_PASSWORD}" -noout
           tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
           tizen cli-config "profiles.path=${PROFILE_XML}"
           test -f "$PROFILE_XML"
