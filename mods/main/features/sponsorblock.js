@@ -395,20 +395,32 @@ window.sponsorblock = null;
 window.addEventListener(
   'hashchange',
   () => {
-    const newURL = new URL(location.hash.substring(1), location.href);
-    // A hack, but it works, so...
-    const videoID = newURL.search.replace('?v=', '').split('&')[0];
+    const hash = location.hash ? location.hash.substring(1) : '';
+    const newURL = new URL(hash || '/', location.href);
+    const isWatchLike = hash.includes('/watch') || newURL.pathname.includes('/watch');
+    const videoID = isWatchLike ? (newURL.searchParams.get('v') || '') : '';
     const needsReload =
-      videoID &&
+      !!videoID &&
       (!window.sponsorblock || window.sponsorblock.videoID != videoID);
 
     console.info(
       'hashchange',
-      videoID,
+      videoID || '(no-watch-video)',
       window.sponsorblock,
       window.sponsorblock ? window.sponsorblock.videoID : null,
       needsReload
     );
+
+    if (!videoID && window.sponsorblock) {
+      // Leaving watch pages: clear current handler.
+      try {
+        window.sponsorblock.destroy();
+      } catch (err) {
+        console.warn('window.sponsorblock.destroy() failed!', err);
+      }
+      window.sponsorblock = null;
+      return;
+    }
 
     if (needsReload) {
       if (window.sponsorblock) {
