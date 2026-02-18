@@ -10,7 +10,7 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { directFilterArray, scanAndFilterAllArrays } from './shortsCore.js';
+import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
 
@@ -64,6 +64,8 @@ function processSecondaryNav(sections, currentPage) {
     const sectionRenderer = section?.tvSecondaryNavSectionRenderer;
     if (!sectionRenderer) continue;
 
+    pruneShortsSecondaryNavItems(sectionRenderer, currentPage);
+
     if (Array.isArray(sectionRenderer.tabs)) {
       for (const tab of sectionRenderer.tabs) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
@@ -100,6 +102,34 @@ function processSecondaryNav(sections, currentPage) {
 
 if (typeof window !== 'undefined') {
   window._collectedUnwatched = window._collectedUnwatched || [];
+}
+
+function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
+  if (!Array.isArray(sectionRenderer?.items) || configRead('enableShorts')) return;
+
+  sectionRenderer.items = sectionRenderer.items.filter((item) => {
+    const content = item?.tvSecondaryNavItemRenderer?.content;
+    if (!content) return true;
+
+    const title = getShelfTitle(content)
+      || item?.tvSecondaryNavItemRenderer?.title?.simpleText
+      || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
+      || '';
+
+    const isShortsTitle = isShortsShelfTitle(title) || String(title).trim().toLowerCase() === 'short';
+    if (!isShortsTitle) return true;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed secondary-nav title=', title, '| page=', currentPage, '| path=secondaryNav.items');
+    }
+    return false;
+  });
+}
+
+function filterContinuationItemContainer(container, page, path) {
+  if (!Array.isArray(container)) return container;
+  scanAndFilterAllArrays(container, page, path);
+  return directFilterArray(container, page);
 }
 
 registerJsonParseHook((parsedResponse) => {
@@ -168,10 +198,44 @@ registerJsonParseHook((parsedResponse) => {
 
   if (parsedResponse?.onResponseReceivedActions) {
     for (const action of parsedResponse.onResponseReceivedActions) {
-      const items = action?.appendContinuationItemsAction?.continuationItems;
-      if (Array.isArray(items)) {
-        scanAndFilterAllArrays(items, currentPage, 'onResponseReceivedActions');
-        action.appendContinuationItemsAction.continuationItems = directFilterArray(items, currentPage);
+      const appendItems = action?.appendContinuationItemsAction?.continuationItems;
+      if (Array.isArray(appendItems)) {
+        action.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
+          appendItems,
+          currentPage,
+          'onResponseReceivedActions.append'
+        );
+      }
+
+      const reloadItems = action?.reloadContinuationItemsCommand?.continuationItems;
+      if (Array.isArray(reloadItems)) {
+        action.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
+          reloadItems,
+          currentPage,
+          'onResponseReceivedActions.reload'
+        );
+      }
+    }
+  }
+
+  if (parsedResponse?.onResponseReceivedEndpoints) {
+    for (const endpoint of parsedResponse.onResponseReceivedEndpoints) {
+      const appendItems = endpoint?.appendContinuationItemsAction?.continuationItems;
+      if (Array.isArray(appendItems)) {
+        endpoint.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
+          appendItems,
+          currentPage,
+          'onResponseReceivedEndpoints.append'
+        );
+      }
+
+      const reloadItems = endpoint?.reloadContinuationItemsCommand?.continuationItems;
+      if (Array.isArray(reloadItems)) {
+        endpoint.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
+          reloadItems,
+          currentPage,
+          'onResponseReceivedEndpoints.reload'
+        );
       }
     }
   }
