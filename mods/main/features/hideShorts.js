@@ -1,40 +1,32 @@
-function getShelfTitle(shelve) {
-  return (
-    shelve?.shelfRenderer?.title?.runs?.[0]?.text ||
-    shelve?.shelfRenderer?.title?.simpleText ||
-    shelve?.richShelfRenderer?.title?.runs?.[0]?.text ||
-    shelve?.richShelfRenderer?.title?.simpleText ||
-    shelve?.richSectionRenderer?.content?.richShelfRenderer?.title?.runs?.[0]?.text ||
-    shelve?.richSectionRenderer?.content?.richShelfRenderer?.title?.simpleText ||
-    ''
-  );
-}
+import { isShortItem } from './shortsCore.js';
 
 export function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
-  if (shortsEnabled) return;
+  if (shortsEnabled || !Array.isArray(shelves)) return;
 
-  for (const shelve of shelves) {
-    if (!shelve) continue;
-
-    const title = getShelfTitle(shelve).toLowerCase();
-    if (title.includes('short')) {
-      onRemoveShelf?.(shelve);
-      shelves.splice(shelves.indexOf(shelve), 1);
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    if (!shelf) {
+      shelves.splice(i, 1);
       continue;
     }
 
-    if (!shelve.shelfRenderer?.content?.horizontalListRenderer?.items) continue;
+    if (!shelf.shelfRenderer?.content?.horizontalListRenderer?.items) continue;
 
-    if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-      onRemoveShelf?.(shelve);
-      shelves.splice(shelves.indexOf(shelve), 1);
+    if (shelf.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+      onRemoveShelf?.(shelf);
+      shelves.splice(i, 1);
       continue;
     }
 
-    shelve.shelfRenderer.content.horizontalListRenderer.items =
-      shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
-        (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
-      );
+    const items = shelf.shelfRenderer.content.horizontalListRenderer.items || [];
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+      (item) => !isShortItem(item)
+    );
+
+    if (shelf.shelfRenderer.content.horizontalListRenderer.items.length === 0) {
+      onRemoveShelf?.(shelf);
+      shelves.splice(i, 1);
+    }
   }
 }
 

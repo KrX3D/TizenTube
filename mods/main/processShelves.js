@@ -3,54 +3,7 @@ import { hqify } from './features/hqify.js';
 import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos } from './features/hideWatchedVideos.js';
-import { hideShorts, removeShortsShelvesByTitle } from './features/hideShorts.js';
-import { detectCurrentPage } from './pageDetection.js';
-
-function getVideoId(item) {
-  return item?.tileRenderer?.contentId ||
-    item?.videoRenderer?.videoId ||
-    item?.playlistVideoRenderer?.videoId ||
-    item?.gridVideoRenderer?.videoId ||
-    item?.compactVideoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
-    null;
-}
-
-function getVideoTitle(item) {
-  return (
-    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
-    item?.videoRenderer?.title?.runs?.[0]?.text ||
-    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.compactVideoRenderer?.title?.simpleText ||
-    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
-    ''
-  );
-}
-
-function collectVideoIdsFromShelf(shelf) {
-  const ids = [];
-  const seen = new Set();
-  const pushFrom = (arr) => {
-    if (!Array.isArray(arr)) return;
-    arr.forEach((item) => {
-      const id = getVideoId(item);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-    });
-  };
-
-  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
-  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
-  pushFrom(shelf?.richSectionRenderer?.content?.richShelfRenderer?.content?.richGridRenderer?.contents);
-  pushFrom(shelf?.gridRenderer?.items);
-
-  return ids;
-}
+import { hideShorts } from './features/hideShorts.js';
 
 export function processShelves(shelves, options) {
   const {
@@ -62,21 +15,8 @@ export function processShelves(shelves, options) {
     previewsEnabled,
     hideWatchedPages,
     hideWatchedThreshold,
-    shortsEnabled,
-    page = detectCurrentPage(),
-    debugEnabled = false,
-    logShorts = false
+    shortsEnabled
   } = options;
-
-  removeShortsShelvesByTitle(shelves, {
-    page,
-    shortsEnabled,
-    collectVideoIdsFromShelf,
-    getVideoTitle,
-    debugEnabled,
-    logShorts,
-    path: 'processShelves'
-  });
 
   for (const shelve of shelves) {
     if (!shelve.shelfRenderer) continue;
