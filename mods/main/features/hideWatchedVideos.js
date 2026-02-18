@@ -28,3 +28,35 @@ export function hideWatchedVideos(items, pages, watchedThreshold) {
     return percentWatched <= watchedThreshold;
   });
 }
+
+export function findProgressBar(item) {
+  if (!item) return null;
+
+  const checkRenderer = (renderer) => {
+    if (!renderer) return null;
+    const overlays = renderer?.header?.tileHeaderRenderer?.thumbnailOverlays || renderer?.thumbnailOverlays || [];
+    if (!Array.isArray(overlays)) return null;
+    return overlays.find((o) => o?.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer || null;
+  };
+
+  const rendererTypes = [
+    item.tileRenderer,
+    item.playlistVideoRenderer,
+    item.compactVideoRenderer,
+    item.gridVideoRenderer,
+    item.videoRenderer,
+    item.richItemRenderer?.content?.videoRenderer,
+    item.richItemRenderer?.content?.reelItemRenderer
+  ];
+
+  for (const renderer of rendererTypes) {
+    const result = checkRenderer(renderer);
+    if (result) return result;
+  }
+
+  return null;
+}
+
+export function hideVideo(items, pages, watchedThreshold) {
+  return hideWatchedVideos(items, pages, watchedThreshold);
+}

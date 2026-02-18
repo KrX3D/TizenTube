@@ -49,3 +49,8 @@ export function detectCurrentPage() {
 
   return 'other';
 }
+
+
+export function getCurrentPage() {
+  return detectCurrentPage();
+}

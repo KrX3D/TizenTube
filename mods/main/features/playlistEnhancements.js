@@ -8,11 +8,11 @@ import {
 } from './playlistButtonInsertion.js';
 import { cleanupPlaylistHelperTiles as cleanupPlaylistHelperTilesFeature } from './playlistCleanup.js';
 
-function getCurrentPage() {
+export function getCurrentPage() {
   return detectCurrentPage();
 }
 
-function logChunkedByLines(prefix, text, linesPerChunk = 60) {
+export function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
   const lines = String(text).split('\n');
   const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
@@ -23,7 +23,7 @@ function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   }
 }
 
-function triggerPlaylistContinuationLoad() {
+export function triggerPlaylistContinuationLoad() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
@@ -115,3 +115,30 @@ export function initPlaylistEnhancements() {
 }
 
 initPlaylistEnhancements();
+
+
+export function startPlaylistAutoLoad() {
+  const page = getCurrentPage();
+  if (page !== 'playlist') return;
+
+  let stableCount = 0;
+  let lastVideoCount = 0;
+  const interval = setInterval(() => {
+    const cards = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-item-renderer');
+    const currentCount = cards.length;
+
+    try {
+      window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+    } catch (_) {}
+
+    if (currentCount === lastVideoCount) {
+      stableCount += 1;
+      if (stableCount >= 8) {
+        clearInterval(interval);
+      }
+    } else {
+      stableCount = 0;
+      lastVideoCount = currentCount;
+    }
+  }, 500);
+}
