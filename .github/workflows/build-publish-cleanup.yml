@@ -376,8 +376,7 @@ jobs:
           tizen version
 
           mkdir -p "$CERT_DIR" "$(dirname "$PROFILE_XML")"
-          rm -f "$CERT_PATH" "$PROFILE_XML"
-          tizen cli-config "profiles.path=${PROFILE_XML}"
+          rm -f "$CERT_PATH"
 
           tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f "$PROFILE_NAME" -- "$CERT_DIR"
           if ! openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout; then
@@ -385,6 +384,8 @@ jobs:
             openssl pkcs12 -legacy -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
           fi
           tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
+          tizen cli-config "profiles.path=${PROFILE_XML}"
+          test -f "$PROFILE_XML"
           tizen security-profiles list
 
           pushd wgt-app

@@ -2,251 +2,161 @@ name: Build TizenTube WGT
 
 on:
   push:
-    branches: [ main ]
     tags:
       - 'v*'
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
     inputs:
       tag_name:
         description: 'Release tag name (e.g., v1.0.0)'
-        required: true
+        required: false
         type: string
+      skip_release:
+        description: 'Build only (skip GitHub release creation)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
-# Allow this workflow to push back changes to the repo
 permissions:
   contents: write
 
 jobs:
   build-wgt:
     runs-on: ubuntu-latest
-    env:
-      IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Test Local Build (Node.js)
-      if: env.IS_RELEASE == 'false'
-      run: |
-        echo "🧪 Testing local build process..."
-        cd mods
-        # Install pnpm
-        corepack enable pnpm
-        pnpm install
-        pnpm run build
-        echo "✅ Mods build successful"
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
-        cd ../standalone
-        pnpm install
-        pnpm run build
-        echo "✅ Standalone build successful"
+      - name: Build dist assets (mods + service)
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          mkdir -p dist
 
-        # Verify build outputs
-        ls -la dist/
-        echo "📦 Build output verified"
+          cd mods
+          npm ci
+          npx rollup -c
+          cd ..
 
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+          cd service
+          npm ci
+          npx rollup -c
+          cd ..
 
-    - name: Cache Tizen Studio
-      uses: actions/cache@v4
-      with:
-        path: web-cli_Tizen_Studio_5.1_ubuntu-64.bin
-        key: tizen-studio-5.1-${{ hashFiles('docker/build-docker.sh') }}
+          test -f dist/userScript.js
+          test -f dist/service.js
 
-    - name: Download Tizen Studio (if not cached)
-      run: |
-        if [ ! -f "web-cli_Tizen_Studio_5.1_ubuntu-64.bin" ]; then
-          echo "📥 Downloading Tizen Studio..."
-          sudo apt-get update && sudo apt-get install -y aria2
-          aria2c -j 16 -s 16 -x 16 \
-            -o "web-cli_Tizen_Studio_5.1_ubuntu-64.bin" \
-            --header='Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8' \
-            --header='Accept-Language: en-US,en;q=0.6' \
-            --header='Referer: https://developer.tizen.org/' \
-            -U 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' \
-            https://download.tizen.org/sdk/Installer/tizen-studio_5.1/web-cli_Tizen_Studio_5.1_ubuntu-64.bin
-          chmod +x "web-cli_Tizen_Studio_5.1_ubuntu-64.bin"
-        else
-          echo "✅ Using cached Tizen Studio"
-        fi
+      - name: Install tools for Tizen packaging
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y unzip zip curl ca-certificates openssl
 
-    - name: Build Docker image
-      run: |
-        echo "🔨 Building TizenTube Docker image..."
-        docker buildx build --platform linux/amd64 --load -t tizentube-builder .
+      - name: Install Tizen CLI
+        run: |
+          set -euo pipefail
+          curl -L -o /tmp/tizen-web-cli.bin https://download.tizen.org/sdk/Installer/tizen-studio_5.1/web-cli_Tizen_Studio_5.1_ubuntu-64.bin
+          chmod +x /tmp/tizen-web-cli.bin
+          /tmp/tizen-web-cli.bin --accept-license "$HOME/tizen-studio"
+          echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
 
-    - name: Create output and certificates directories
-      run: |
-        mkdir -p output certificates
-        chmod 777 output certificates
+      - name: Build signed WGT
+        env:
+          TIZEN_CERT_PASSWORD: ${{ secrets.TIZEN_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/tizen-studio/tools/ide/bin:$PATH"
 
-    - name: Build WGT using Docker
-      run: |
-        echo "🚀 Building TizenTube WGT..."
-        docker run --platform linux/amd64 --rm \
-          -v "$(pwd)/output:/output" \
-          -v "$(pwd)/certificates:/tizen/tizen-studio-data/keystore/author" \
-          tizentube-builder
+          CERT_PASSWORD_RAW="${TIZEN_CERT_PASSWORD:-tizentube-ci-password}"
+          CERT_PASSWORD="$(printf '%s' "$CERT_PASSWORD_RAW" | tr -d '\r\n')"
+          [ -n "$CERT_PASSWORD" ] || CERT_PASSWORD='tizentubecipass1234'
 
-    - name: Verify WGT creation
-      run: |
-        if [ -f "output/TizenTube.wgt" ]; then
-          echo "✅ WGT created successfully"
+          PROFILE_NAME="tizentube-ci-${GITHUB_RUN_ID:-local}"
+          CERT_DIR="${HOME}/tizen-studio-data/keystore/author"
+          CERT_PATH="${CERT_DIR}/${PROFILE_NAME}.p12"
+          PROFILE_XML="${HOME}/tizen-studio-data/profile/profiles.xml"
+
+          rm -rf wgt-app output
+          mkdir -p wgt-app/dist output "$CERT_DIR" "$(dirname "$PROFILE_XML")"
+          rm -f "$CERT_PATH"
+
+          cp dist/userScript.js wgt-app/dist/userScript.js
+          cp dist/service.js wgt-app/dist/service.js
+
+          cat > wgt-app/index.html <<'HTML'
+          <!doctype html>
+          <html>
+            <head><meta charset="utf-8"><title>TizenTube</title></head>
+            <body><script src="./dist/userScript.js"></script></body>
+          </html>
+          HTML
+
+          cat > wgt-app/config.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <widget xmlns="http://www.w3.org/ns/widgets"
+                  xmlns:tizen="http://tizen.org/ns/widgets"
+                  id="http://krx3d.github.io/tizentube"
+                  version="1.0.0"
+                  viewmodes="maximized">
+            <name>TizenTube</name>
+            <content src="index.html"/>
+            <feature name="http://tizen.org/feature/screen.size.normal.1080.1920"/>
+            <tizen:application id="KrX3D.TizenTube" package="KrX3DTT" required_version="2.4"/>
+            <tizen:profile name="tv-samsung"/>
+            <icon src="icon.png"/>
+          </widget>
+          XML
+
+          printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=' | base64 -d > wgt-app/icon.png
+
+          tizen certificate -a TizenTubeCI -p "$CERT_PASSWORD" -f "$PROFILE_NAME" -- "$CERT_DIR"
+          if ! openssl pkcs12 -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout; then
+            echo "OpenSSL default provider failed, retrying with -legacy (RC2 support)"
+            openssl pkcs12 -legacy -in "$CERT_PATH" -passin pass:"$CERT_PASSWORD" -noout
+          fi
+          tizen security-profiles add -n "$PROFILE_NAME" -a "$CERT_PATH" -p "$CERT_PASSWORD"
+          tizen cli-config "profiles.path=${PROFILE_XML}"
+          test -f "$PROFILE_XML"
+
+          pushd wgt-app
+          tizen build-web -- .
+          if [ -d .buildResult ]; then
+            pushd .buildResult
+            tizen package -t wgt -s "$PROFILE_NAME" -- .
+            popd
+          else
+            tizen package -t wgt -s "$PROFILE_NAME" -- .
+          fi
+          popd
+
+          WGT_FILE=$(find wgt-app -maxdepth 2 -name '*.wgt' | head -n1)
+          test -n "$WGT_FILE"
+          cp "$WGT_FILE" output/TizenTube.wgt
           ls -lah output/TizenTube.wgt
-          echo "📊 WGT size: $(stat -c%s output/TizenTube.wgt | numfmt --to=iec)"
 
-          # Enhanced WGT validation (from test workflow)
-          echo "🔍 Verifying WGT contents..."
-          unzip -l output/TizenTube.wgt
+      - name: Upload WGT artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizentube-wgt-${{ github.run_number }}
+          path: output/TizenTube.wgt
+          retention-days: 30
 
-          # Check for required files
-          echo "🔍 Testing WGT structure..."
-          unzip -t output/TizenTube.wgt
-          echo "✅ WGT structure is valid"
-        else
-          echo "❌ WGT creation failed"
-          ls -la output/
-          exit 1
-        fi
-
-    - name: Upload test build artifact
-      if: env.IS_RELEASE == 'false'
-      uses: actions/upload-artifact@v4
-      with:
-        name: tizentube-test-build-${{ github.run_number }}
-        path: output/TizenTube.wgt
-        retention-days: 7
-
-    - name: Get current date
-      if: env.IS_RELEASE == 'true'
-      id: date
-      run: echo "date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_OUTPUT
-
-    - name: Generate release notes
-      if: env.IS_RELEASE == 'true'
-      id: release_notes
-      run: |
-        cat > release_notes.md << EOF
-        # TizenTube Standalone Release
-
-        ## 🚀 Installation
-
-        ### Quick Install (Recommended)
-        1. Download \`TizenTube.wgt\` from this release
-        2. Copy to USB drive and install on your Samsung TV
-        3. Launch TizenTube from your TV's app menu
-
-        ### Developer Install
-        \`\`\`bash
-        # Connect to your TV and install directly
-        tizen install -t 0 -n TizenTube.wgt
-        \`\`\`
-
-        ## ✨ Features
-        - **Ad-free YouTube TV** - Complete ad blocking
-        - **SponsorBlock integration** - Skip sponsored segments
-        - **Speed controls** - Adjust playback speed
-        - **Custom themes** - Personalize your experience
-        - **Long press support** - Enhanced navigation
-        - **No TizenBrew required** - Direct TV installation
-
-        ## 🔧 Technical Details
-        - **App ID**: \`nz.bickford.tizentube\`
-        - **Min Tizen Version**: 2.4+
-        - **Compatible**: Samsung Tizen TVs (2018+)
-        - **Size**: $(stat -c%s output/TizenTube.wgt | numfmt --to=iec)
-        - **Build**: GitHub Actions automated build
-
-        ## 🛠️ Build from Source
-        \`\`\`bash
-        git clone https://github.com/gardner/TizenTube.git
-        cd TizenTube
-        ./docker/build-docker.sh
-        \`\`\`
-
-        ## 💬 Support
-        - [Discord Community](https://discord.gg/m2P7v8Y2qR)
-        - [GitHub Issues](https://github.com/gardner/TizenTube/issues)
-        EOF
-
-    - name: Create Release
-      if: env.IS_RELEASE == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
-        name: TizenTube Standalone ${{ github.event.inputs.tag_name || github.ref_name }}
-        body_path: release_notes.md
-        files: |
-          output/TizenTube.wgt
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Upload build artifacts
-      if: env.IS_RELEASE == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: tizentube-wgt-${{ github.event.inputs.tag_name || github.ref_name }}
-        path: output/TizenTube.wgt
-        retention-days: 30
-
-    - name: Update latest tag
-      if: env.IS_RELEASE == 'true'
-      run: |
-        echo "🏷️ Updating 'latest' tag to point to ${{ github.event.inputs.tag_name || github.ref_name }}"
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-
-        # Delete existing latest tag (locally and remotely)
-        git tag -d latest || true
-        git push origin :refs/tags/latest || true
-
-        # Create new latest tag pointing to current release
-        git tag latest
-        git push origin latest
-
-        echo "✅ 'latest' tag updated successfully"
-
-    - name: Create/Update Latest Release
-      if: env.IS_RELEASE == 'true'
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: latest
-        name: TizenTube Standalone (Latest)
-        body: |
-          # 🚀 TizenTube Latest Release
-
-          This is always the most recent stable release of TizenTube Standalone.
-
-          **Current Version:** ${{ github.event.inputs.tag_name || github.ref_name }}
-          **Build Date:** ${{ steps.date.outputs.date }}
-
-          ## 📦 Quick Install
-
-          1. Download `TizenTube.wgt` below
-          2. Copy to USB drive and install on Samsung TV
-          3. Launch TizenTube from TV app menu
-
-          ## ✨ What's Included
-
-          - **Ad-free YouTube TV** - Complete ad removal
-          - **SponsorBlock integration** - Skip sponsored segments
-          - **Speed controls** - Adjust playback speed
-          - **Custom themes** - Personalize your experience
-          - **DIAL casting support** - Cast from phone/computer
-
-          ---
-
-          **Latest Release:** [${{ github.event.inputs.tag_name || github.ref_name }}](https://github.com/gardner/TizenTube/releases/tag/${{ github.event.inputs.tag_name || github.ref_name }})
-
-          **Support:** [Discord Community](https://discord.gg/m2P7v8Y2qR) | [GitHub Issues](https://github.com/gardner/TizenTube/issues)
-        files: |
-          output/TizenTube.wgt
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.skip_release != 'true')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: TizenTube Standalone ${{ github.event.inputs.tag_name || github.ref_name }}
+          files: |
+            output/TizenTube.wgt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
