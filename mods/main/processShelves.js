@@ -2,12 +2,49 @@ import { deArrowify } from './features/deArrowify.js';
 import { hqify } from './features/hqify.js';
 import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
-import { hideWatchedVideos } from './features/hideWatchedVideos.js';
-import { hideShorts } from './features/hideShorts.js';
-import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle } from './features/shortsCore.js';
+import { hideWatchedVideos, shouldHideWatchedForPage } from './features/hideWatchedVideos.js';
+import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems } from './features/shortsCore.js';
 import { detectCurrentPage } from './pageDetection.js';
 
-export function processShelves(shelves, options) {
+function getShelfItemsRef(shelf) {
+  if (!shelf || typeof shelf !== 'object') return null;
+
+  const refs = [
+    ['shelfRenderer', 'content', 'horizontalListRenderer', 'items'],
+    ['shelfRenderer', 'content', 'gridRenderer', 'items'],
+    ['shelfRenderer', 'content', 'verticalListRenderer', 'items'],
+    ['richShelfRenderer', 'content', 'richGridRenderer', 'contents'],
+    ['richSectionRenderer', 'content', 'richShelfRenderer', 'content', 'richGridRenderer', 'contents'],
+    ['gridRenderer', 'items']
+  ];
+
+  for (const path of refs) {
+    let parent = shelf;
+    for (let i = 0; i < path.length - 1; i++) {
+      parent = parent?.[path[i]];
+      if (!parent) break;
+    }
+    const key = path[path.length - 1];
+    if (parent && Array.isArray(parent[key])) {
+      return { parent, key, items: parent[key] };
+    }
+  }
+
+  return null;
+}
+
+function applyItemEnhancements(items, { deArrowEnabled, deArrowThumbnailsEnabled, hqThumbnailsEnabled, longPressEnabled, previewsEnabled, shouldAddPreviews }) {
+  deArrowify(items, deArrowEnabled, deArrowThumbnailsEnabled);
+  hqify(items, hqThumbnailsEnabled);
+  addLongPress(items, longPressEnabled);
+  if (shouldAddPreviews) {
+    addPreviews(items, previewsEnabled);
+  }
+}
+
+export function processShelves(shelves, options = {}) {
+  if (!Array.isArray(shelves) || shelves.length === 0) return;
+
   const {
     shouldAddPreviews = true,
     deArrowEnabled,
@@ -23,6 +60,8 @@ export function processShelves(shelves, options) {
     logShorts = false
   } = options;
 
+  const shouldHideWatched = shouldHideWatchedForPage(hideWatchedPages, page);
+
   removeShortsShelvesByTitle(shelves, {
     page,
     shortsEnabled,
@@ -33,41 +72,64 @@ export function processShelves(shelves, options) {
     path: 'processShelves'
   });
 
-  for (const shelve of shelves) {
-    if (!shelve.shelfRenderer) continue;
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const ref = getShelfItemsRef(shelf);
+    if (!ref) continue;
 
-    const items = shelve.shelfRenderer.content.horizontalListRenderer.items;
-    deArrowify(items, deArrowEnabled, deArrowThumbnailsEnabled);
-    hqify(items, hqThumbnailsEnabled);
-    addLongPress(items, longPressEnabled);
-
-    if (shouldAddPreviews) {
-      addPreviews(items, previewsEnabled);
+    let items = Array.isArray(ref.items) ? ref.items : [];
+    if (items.length === 0) {
+      shelves.splice(i, 1);
+      continue;
     }
 
-    shelve.shelfRenderer.content.horizontalListRenderer.items = hideWatchedVideos(
-      shelve.shelfRenderer.content.horizontalListRenderer.items,
-      hideWatchedPages,
-      hideWatchedThreshold
-    );
-  }
+    const originalItems = items.slice();
 
-  hideShorts(shelves, shortsEnabled, undefined, page);
+    applyItemEnhancements(items, {
+      deArrowEnabled,
+      deArrowThumbnailsEnabled,
+      hqThumbnailsEnabled,
+      longPressEnabled,
+      previewsEnabled,
+      shouldAddPreviews
+    });
+
+    if (!shortsEnabled) {
+      items = filterShortItems(items, { page, debugEnabled, logShorts }).items;
+    }
+
+    if (shouldHideWatched) {
+      const watchedFiltered = hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
+      if (watchedFiltered.length === 0 && originalItems.length > 0) {
+        // Preserve one populated shelf to avoid TV rendering gaps / stalled continuation loads.
+        items = originalItems;
+      } else {
+        items = watchedFiltered;
+      }
+    }
+
+    ref.parent[ref.key] = items;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      shelves.splice(i, 1);
+    }
+  }
 }
 
-export function processHorizontalItems(items, options) {
+export function processHorizontalItems(items, options = {}) {
   const {
     deArrowEnabled,
     deArrowThumbnailsEnabled,
     hqThumbnailsEnabled,
     longPressEnabled,
     hideWatchedPages,
-    hideWatchedThreshold
+    hideWatchedThreshold,
+    page = detectCurrentPage()
   } = options;
 
   deArrowify(items, deArrowEnabled, deArrowThumbnailsEnabled);
   hqify(items, hqThumbnailsEnabled);
   addLongPress(items, longPressEnabled);
 
-  return hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold);
+  return hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
 }

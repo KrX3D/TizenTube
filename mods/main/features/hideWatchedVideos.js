@@ -11,18 +11,13 @@ export function shouldHideWatchedForPage(configPages, page) {
   return false;
 }
 
-export function hideWatchedVideos(items, pages, watchedThreshold) {
+export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage) {
+  const pageName = resolvedPage || detectCurrentPage();
+  if (!shouldHideWatchedForPage(pages, pageName)) return items;
+
   return items.filter((item) => {
-    if (!item.tileRenderer) return true;
-
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays
-      ?.find((overlay) => overlay.thumbnailOverlayResumePlaybackRenderer)
-      ?.thumbnailOverlayResumePlaybackRenderer;
-
+    const progressBar = findProgressBar(item);
     if (!progressBar) return true;
-
-    const pageName = detectCurrentPage();
-    if (!shouldHideWatchedForPage(pages, pageName)) return true;
 
     const percentWatched = progressBar.percentDurationWatched || 0;
     return percentWatched <= watchedThreshold;
@@ -35,14 +30,10 @@ export function findProgressBar(item) {
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
 
-    // Comprehensive overlay paths
     const overlayPaths = [
-      // Standard paths
       renderer.thumbnailOverlays,
       renderer.header?.tileHeaderRenderer?.thumbnailOverlays,
       renderer.thumbnail?.thumbnailOverlays,
-
-      // Alternative paths seen on older/variant UIs
       renderer.thumbnailOverlayRenderer,
       renderer.overlay,
       renderer.overlays
@@ -82,6 +73,6 @@ export function findProgressBar(item) {
   return null;
 }
 
-export function hideVideo(items, pages, watchedThreshold) {
-  return hideWatchedVideos(items, pages, watchedThreshold);
+export function hideVideo(items, pages, watchedThreshold, page) {
+  return hideWatchedVideos(items, pages, watchedThreshold, page);
 }

@@ -199,7 +199,7 @@ function customAction(action, parameters) {
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
                 
-                // ⭐ UPDATE: Manually update the cached DEBUG_ENABLED in adblock.js
+                // Update the cached DEBUG_ENABLED value used by response patches
                 const newValue = configRead('enableDebugConsole');
                 if (window.adblock && window.adblock.setDebugEnabled) {
                     window.adblock.setDebugEnabled(newValue);
