@@ -2123,3 +2123,30 @@ if (typeof window !== 'undefined') {
     }
   }, 1200);
 }
+export {
+  trackRemovedPlaylistHelpers,
+  getVideoId,
+  getVideoTitle,
+  collectVideoIdsFromShelf,
+  isLikelyPlaylistHelperItem,
+  getVideoKey,
+  trackRemovedPlaylistHelperKeys,
+  shouldHideWatchedForPage,
+  directFilterArray,
+  scanAndFilterAllArrays,
+  startPlaylistAutoLoad,
+  isInCollectionMode,
+  getFilteredVideoIds,
+  startCollectionMode,
+  finishCollectionAndFilter,
+  exitFilterMode,
+  processShelves,
+  hideVideo,
+  findProgressBar,
+  getCurrentPage,
+  logChunkedByLines,
+  triggerPlaylistContinuationLoad,
+  cleanupPlaylistHelperTiles,
+  detectPlaylistButtons,
+  addPlaylistControlButtons
+};
