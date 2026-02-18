@@ -1,0 +1,38 @@
+{
+  "name": "@tizentube/standalone",
+  "version": "1.0.0",
+  "description": "TizenTube Standalone Tizen Web App",
+  "type": "module",
+  "scripts": {
+    "build-mods": "cd ../mods && pnpm run build",
+    "build": "pnpm run build-mods && rollup -c rollup.config.js",
+    "dev": "pnpm run build && pnpm run package",
+    "package": "tizen build-web -- ./dist && tizen package -t wgt -s TizenTubeProfile -- ./dist/.buildResult",
+    "package-docker": "../docker/build-docker.sh",
+    "install-tv": "tizen install -n TizenTube.wgt -t 0 -- ./dist/.buildResult",
+    "deploy": "pnpm run build && pnpm run package && pnpm run install-tv",
+    "deploy-docker": "pnpm run package-docker && tizen install -n TizenTube.wgt -t 0 -- ../output"
+  },
+  "keywords": [
+    "tizen",
+    "samsung-tv",
+    "youtube",
+    "adblock",
+    "sponsorblock"
+  ],
+  "author": "TizenTube Contributors",
+  "license": "GPL-3.0-only",
+  "devDependencies": {
+    "@babel/preset-env": "^7.22.9",
+    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.3",
+    "rollup": "^3.26.2",
+    "rollup-plugin-copy": "^3.5.0",
+    "rollup-plugin-string": "^3.0.0"
+  },
+  "dependencies": {
+    "tiny-sha256": "^1.0.2",
+    "whatwg-fetch": "^3.6.2"
+  }
+}

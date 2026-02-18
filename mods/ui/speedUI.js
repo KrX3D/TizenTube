@@ -4,7 +4,7 @@ import { showModal, buttonItem, overlayPanelItemListRenderer } from './ytUI.js';
 const interval = setInterval(() => {
     const videoElement = document.querySelector('video');
     if (videoElement) {
-        execute_once_dom_loaded_speed();
+        //execute_once_dom_loaded_speed();
         clearInterval(interval);
     }
 }, 1000);

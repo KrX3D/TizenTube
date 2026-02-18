@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=960, height=540">
+    <title>TizenTube</title>
+    <style>
+        body { 
+            background: #000; 
+            color: #fff; 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 200px 50px; 
+            margin: 0;
+        }
+        .logo { 
+            font-size: 48px; 
+            margin-bottom: 20px; 
+            font-weight: bold;
+        }
+        .status { 
+            font-size: 18px; 
+            margin-bottom: 30px; 
+            opacity: 0.8;
+        }
+        .spinner { 
+            border: 4px solid #333; 
+            border-top: 4px solid #fff; 
+            border-radius: 50%; 
+            width: 40px; 
+            height: 40px; 
+            animation: spin 1s linear infinite; 
+            margin: 20px auto; 
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        .error {
+            color: #ff4444;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo">TizenTube</div>
+    <div id="status" class="status">Initializing ad-free YouTube TV...</div>
+    <div id="spinner" class="spinner"></div>
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <!-- Load TizenTube user scripts first so they're active when YouTube launches -->
+    <script src="js/userScript.js"></script>
+    <script src="js/launcher.js"></script>
+</body>
+</html>
