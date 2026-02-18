@@ -8,8 +8,12 @@ export function shouldFilterShorts(shortsEnabled, page) {
 }
 
 export function isShortsShelfTitle(title = '') {
-  const t = String(title).toLowerCase();
-  return t.includes('shorts') || t.includes('short');
+  const t = String(title).trim().toLowerCase();
+  // Keep this strict to avoid false positives such as
+  // "short film", "short tutorial", etc.
+  if (!t) return false;
+  if (t === 'shorts' || t === '#shorts') return true;
+  return /^shorts\b/.test(t) || /\bshorts$/.test(t);
 }
 
 export function rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle) {
