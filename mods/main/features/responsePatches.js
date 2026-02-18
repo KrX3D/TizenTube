@@ -70,6 +70,7 @@ function processSecondaryNav(sections, currentPage) {
       for (const tab of sectionRenderer.tabs) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabShelves)) {
+          scanAndFilterAllArrays(tabShelves, currentPage, 'secondaryNav.tabs');
           processShelves(tabShelves, buildShelfProcessingOptions());
         }
       }
@@ -82,17 +83,20 @@ function processSecondaryNav(sections, currentPage) {
 
         const shelf = content?.shelfRenderer;
         if (shelf) {
+          scanAndFilterAllArrays(content, currentPage, 'secondaryNav.items.shelf');
           processShelves([content], buildShelfProcessingOptions());
           continue;
         }
 
         const richGridItems = content?.richGridRenderer?.contents;
         if (Array.isArray(richGridItems)) {
+          scanAndFilterAllArrays(richGridItems, currentPage, 'secondaryNav.items.richGrid');
           content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage);
         }
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contentShelves)) {
+          scanAndFilterAllArrays(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           processShelves(contentShelves, buildShelfProcessingOptions());
         }
       }
@@ -134,6 +138,7 @@ function filterContinuationItemContainer(container, page, path) {
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
+  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
@@ -171,7 +176,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, currentPage);
+    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, effectivePage);
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
@@ -193,7 +198,7 @@ registerJsonParseHook((parsedResponse) => {
       }, 1200);
     }
 
-    maybeStartPlaylistAutoload(currentPage);
+    maybeStartPlaylistAutoload(effectivePage);
   }
 
   if (parsedResponse?.onResponseReceivedActions) {
@@ -202,7 +207,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         action.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          currentPage,
+          effectivePage,
           'onResponseReceivedActions.append'
         );
       }
@@ -211,7 +216,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         action.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          currentPage,
+          effectivePage,
           'onResponseReceivedActions.reload'
         );
       }
@@ -224,7 +229,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         endpoint.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          currentPage,
+          effectivePage,
           'onResponseReceivedEndpoints.append'
         );
       }
@@ -233,7 +238,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         endpoint.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          currentPage,
+          effectivePage,
           'onResponseReceivedEndpoints.reload'
         );
       }
@@ -242,9 +247,9 @@ registerJsonParseHook((parsedResponse) => {
 
   const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   const skipUniversalFilter = currentPage === 'watch';
-  if (criticalPages.includes(currentPage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, currentPage);
+    scanAndFilterAllArrays(parsedResponse, effectivePage);
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));

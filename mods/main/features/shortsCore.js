@@ -300,9 +300,11 @@ function hasVideoItemsArray(arr) {
   return arr.some((item) =>
     item?.tileRenderer ||
     item?.videoRenderer ||
+    item?.playlistVideoRenderer ||
     item?.gridVideoRenderer ||
     item?.compactVideoRenderer ||
-    item?.richItemRenderer?.content?.videoRenderer
+    item?.richItemRenderer?.content?.videoRenderer ||
+    item?.richItemRenderer?.content?.reelItemRenderer
   );
 }
 
