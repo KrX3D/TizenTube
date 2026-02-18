@@ -61,13 +61,18 @@ export function processShelves(shelves, options) {
     previewsEnabled,
     hideWatchedPages,
     hideWatchedThreshold,
-    shortsEnabled
+    shortsEnabled,
+    debugEnabled = false,
+    logShorts = false
   } = options;
 
   removeShortsShelvesByTitle(shelves, {
     shortsEnabled,
     collectVideoIdsFromShelf,
-    getVideoTitle
+    getVideoTitle,
+    debugEnabled,
+    logShorts,
+    path: 'processShelves'
   });
 
   for (const shelve of shelves) {
