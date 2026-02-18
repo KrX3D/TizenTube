@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets"
+        xmlns:tizen="http://tizen.org/ns/tizen"
+        id="nz.bickford.tizentube"
+        version="1.1.8">
+
+    <tizen:application id="nz.bickford.tizentube" required_version="5.0"/>
+    <name>TizenTube</name>
+    <description>Ad-free YouTube TV with SponsorBlock</description>
+
+    <!-- Critical privileges for app launching and network access -->
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.info"/>
+    <tizen:privilege name="http://tizen.org/privilege/filesystem.write"/>
+
+    <!-- Samsung TV optimizations -->
+    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.network" value="true"/>
+
+    <content src="index.html"/>
+    <icon src="assets/icons/icon-256.png"/>
+
+    <!-- Tizen TV profile and settings -->
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>
