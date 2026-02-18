@@ -4,7 +4,7 @@
 # WHAT THIS WORKFLOW DOES
 # -----------------------
 # - Runs on every push to the `main` branch (build + verification + version bump)
-# - Runs again when a GitHub Release is published (build + npm publish + cleanup)
+# - Runs on push to main and manual dispatch (build + npm publish + cleanup)
 # - Builds:
 #     - dist/userScript.js  (browser userscript, bundled & minified)
 #     - dist/service.js     (DIAL service, bundled with Rollup)
@@ -21,7 +21,7 @@
 #   - Commits updated package.json + dist outputs back to repo
 #   - Does NOT publish to npm
 #
-# release (published):
+# push/workflow_dispatch:
 #   - Builds the project
 #   - Publishes to npm
 #   - Removes old versions (≤72 hours old, keeps current version only)
@@ -116,8 +116,6 @@ on:
       - 'README.md'
       - 'package.json'
       - 'dist/**'
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       skip_wgt:
@@ -306,7 +304,7 @@ jobs:
 
 
       # ----------------------------
-      # Build signed WGT artifact (release/workflow_dispatch)
+      # Build signed WGT artifact (no Docker required; uses Tizen CLI directly)
       # ----------------------------
       - name: Install tools for Tizen packaging
         if: inputs.skip_wgt != 'true'
