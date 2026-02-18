@@ -13,8 +13,9 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
-import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems } from './shortsCore.js';
+import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems, getVideoId, getVideoTitle, collectVideoIdsFromShelf } from './shortsCore.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
+import { detectCurrentPage } from '../pageDetection.js';
 
 // ⭐ CONFIGURATION: Set these to control logging output
 const LOG_SHORTS = false;   // Set false to disable shorts logging  
@@ -97,75 +98,6 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
-
-function getVideoId(item) {
-  return item?.tileRenderer?.contentId ||
-    item?.videoRenderer?.videoId ||
-    item?.playlistVideoRenderer?.videoId ||
-    item?.gridVideoRenderer?.videoId ||
-    item?.compactVideoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
-    null;
-}
-
-function getVideoTitle(item) {
-  return (
-    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
-    item?.videoRenderer?.title?.runs?.[0]?.text ||
-    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.compactVideoRenderer?.title?.simpleText ||
-    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
-    ''
-  );
-}
-
-function collectVideoIdsFromShelf(shelf) {
-  const ids = [];
-  const seen = new Set();
-  const pushFrom = (arr) => {
-    if (!Array.isArray(arr)) return;
-    arr.forEach((item) => {
-      const id = getVideoId(item);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-    });
-  };
-
-  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
-  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
-  pushFrom(shelf?.gridRenderer?.items);
-
-  // Fallback: recurse through shelf object to catch Tizen 5.5 variants where
-  // Shorts shelf videos are rendered in non-standard branches.
-  const stack = [shelf];
-  while (stack.length) {
-    const node = stack.pop();
-    if (!node || typeof node !== 'object') continue;
-    if (Array.isArray(node)) {
-      for (const entry of node) stack.push(entry);
-      continue;
-    }
-
-    const id = getVideoId(node);
-    if (id && !seen.has(id)) {
-      seen.add(id);
-      ids.push(id);
-    }
-
-    for (const key in node) {
-      if (Object.prototype.hasOwnProperty.call(node, key)) {
-        stack.push(node[key]);
-      }
-    }
-  }
-
-  return ids;
-}
 
 function isLikelyPlaylistHelperItem(item) {
   if (!item || typeof item !== 'object') return false;
@@ -1689,119 +1621,22 @@ function findProgressBar(item) {
   return null;
 }
 
-// Track last page to detect changes
-let lastDetectedPage = null;
-let lastFullUrl = null;
-
 function getCurrentPage() {
-  const hash = location.hash ? location.hash.substring(1) : '';
-  const path = location.pathname || '';
-  const search = location.search || '';
-  const href = location.href || '';
-  
-  const cleanHash = hash.split('?additionalDataUrl')[0];
-  
-  // Extract browse parameters
-  let browseParam = '';
-  const cMatch = hash.match(/[?&]c=([^&]+)/i);
-  if (cMatch) {
-    browseParam = cMatch[1].toLowerCase();
-  }
-  
-  const browseIdMatch = hash.match(/\/browse\/([^?&#]+)/i);
-  if (browseIdMatch) {
-    const browseId = browseIdMatch[1].toLowerCase();
-    if (!browseParam) browseParam = browseId;
-  }
-  
-  const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href + ' ' + browseParam).toLowerCase();
-  
-  let detectedPage = 'other';
-  
-  // PRIORITY 1: Check browse parameters (Tizen TV uses these!)
-  
-  // Subscriptions
-  if (browseParam.includes('fesubscription')) {
-    detectedPage = 'subscriptions';
-  }
-  
-  // Library and its sub-pages
-  else if (browseParam === 'felibrary') {
-    detectedPage = 'library';
-  }
-  else if (browseParam === 'fehistory') {
-    detectedPage = 'history';
-  }
-  else if (browseParam === 'femy_youtube') {
-    detectedPage = 'playlist'; // Watch Later via library tab
-  }
-  else if (browseParam === 'feplaylist_aggregation') {
-    detectedPage = 'playlists';
-  }
-  
-  // Individual playlists (VL prefix = Video List)
-  else if (browseParam.startsWith('vlpl')) {
-    detectedPage = 'playlist'; // User playlist
-  }
-  else if (browseParam === 'vlwl') {
-    detectedPage = 'playlist'; // Watch Later
-  }
-  else if (browseParam === 'vlll') {
-    detectedPage = 'playlist'; // Liked Videos
-  }
-  
-  // Topics (home variations)
-  else if (browseParam.includes('fetopics_music') || browseParam.includes('music')) {
-    detectedPage = 'music';
-  }
-  else if (browseParam.includes('fetopics_gaming') || browseParam.includes('gaming')) {
-    detectedPage = 'gaming';
-  }
-  else if (browseParam.includes('fetopics')) {
-    detectedPage = 'home';
-  }
-  
-  // Channel pages
-  else if (browseParam.startsWith('uc') && browseParam.length > 10) {
-    detectedPage = 'channel';
-  }
-  
-  // PRIORITY 2: Check traditional patterns
-  else if (cleanHash.includes('/playlist') || combined.includes('list=')) {
-    detectedPage = 'playlist';
-  }
-  else if (cleanHash.includes('/results') || cleanHash.includes('/search')) {
-    detectedPage = 'search';
-  }
-  else if (cleanHash.includes('/watch')) {
-    detectedPage = 'watch';
-  }
-  else if (cleanHash.includes('/@') || cleanHash.includes('/channel/')) {
-    detectedPage = 'channel';
-  }
-  else if (cleanHash.includes('/browse') && !browseParam) {
-    detectedPage = 'home';
-  }
-  else if (cleanHash === '' || cleanHash === '/') {
-    detectedPage = 'home';
-  }
-  
-  // Logging
+  const detectedPage = detectCurrentPage();
+
   const fullUrl = location.href;
   const lastDetectedPage = window._lastDetectedPage;
   const lastFullUrl = window._lastFullUrl;
-  
+
   if (detectedPage !== lastDetectedPage || fullUrl !== lastFullUrl) {
     if (DEBUG_ENABLED) {
-      console.log(`[PAGE] ${lastDetectedPage||'initial'} → ${detectedPage}`);
-      console.log(`[PAGE] Hash: "${cleanHash}"`);
-      if (browseParam) console.log(`[PAGE] Browse param: "${browseParam}"`);
+      console.log(`[PAGE] ${lastDetectedPage || 'initial'} → ${detectedPage}`);
     }
-    
+
     window._lastDetectedPage = detectedPage;
     window._lastFullUrl = fullUrl;
   }
-  
+
   return detectedPage;
 }
 
@@ -2123,3 +1958,30 @@ if (typeof window !== 'undefined') {
     }
   }, 1200);
 }
+export {
+  trackRemovedPlaylistHelpers,
+  getVideoId,
+  getVideoTitle,
+  collectVideoIdsFromShelf,
+  isLikelyPlaylistHelperItem,
+  getVideoKey,
+  trackRemovedPlaylistHelperKeys,
+  shouldHideWatchedForPage,
+  directFilterArray,
+  scanAndFilterAllArrays,
+  startPlaylistAutoLoad,
+  isInCollectionMode,
+  getFilteredVideoIds,
+  startCollectionMode,
+  finishCollectionAndFilter,
+  exitFilterMode,
+  processShelves,
+  hideVideo,
+  findProgressBar,
+  getCurrentPage,
+  logChunkedByLines,
+  triggerPlaylistContinuationLoad,
+  cleanupPlaylistHelperTiles,
+  detectPlaylistButtons,
+  addPlaylistControlButtons
+};
