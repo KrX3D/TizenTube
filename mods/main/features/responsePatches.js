@@ -9,6 +9,30 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
+import { detectCurrentPage } from '../pageDetection.js';
+import { directFilterArray, scanAndFilterAllArrays } from './shortsCore.js';
+import { startPlaylistAutoLoad } from './playlistEnhancements.js';
+import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
+
+
+let DEBUG_ENABLED = configRead('enableDebugConsole');
+window.adblock = window.adblock || {};
+window.adblock.setDebugEnabled = function(value) {
+  DEBUG_ENABLED = !!value;
+  console.log('[CONFIG] Debug console ' + (DEBUG_ENABLED ? 'ENABLED' : 'DISABLED'));
+};
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (window.configChangeEmitter) {
+      window.configChangeEmitter.addEventListener('configChange', (event) => {
+        if (event.detail?.key === 'enableDebugConsole') {
+          DEBUG_ENABLED = !!event.detail.value;
+        }
+      });
+    }
+  }, 100);
+}
 
 function buildShelfProcessingOptions() {
   return {
@@ -19,17 +43,31 @@ function buildShelfProcessingOptions() {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts')
+    shortsEnabled: configRead('enableShorts'),
+    page: detectCurrentPage(),
+    debugEnabled: DEBUG_ENABLED,
+    logShorts: DEBUG_ENABLED
   };
 }
 
+function maybeStartPlaylistAutoload(page) {
+  if (page !== 'playlist' && page !== 'playlists') return;
+  if (window._ttPlaylistAutoLoadStartedAt && Date.now() - window._ttPlaylistAutoLoadStartedAt < 1500) return;
+  window._ttPlaylistAutoLoadStartedAt = Date.now();
+  startPlaylistAutoLoad();
+}
+
+if (typeof window !== 'undefined') {
+  window._collectedUnwatched = window._collectedUnwatched || [];
+}
+
 registerJsonParseHook((parsedResponse) => {
+  const currentPage = detectCurrentPage();
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
   applyPaidContentOverlay(parsedResponse, configRead('enablePaidPromotionOverlay'));
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
-
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
@@ -79,6 +117,35 @@ registerJsonParseHook((parsedResponse) => {
     );
 
     applyQueueShelf(parsedResponse);
+  }
+
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
+    const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
+    window._isLastPlaylistBatch = !hasContinuation;
+
+    if (!hasContinuation && isInCollectionMode()) {
+      setTimeout(() => {
+        finishCollectionAndFilter(window._collectedUnwatched || []);
+      }, 1200);
+    }
+
+    maybeStartPlaylistAutoload(currentPage);
+  }
+
+  if (parsedResponse?.onResponseReceivedActions) {
+    for (const action of parsedResponse.onResponseReceivedActions) {
+      const items = action?.appendContinuationItemsAction?.continuationItems;
+      if (Array.isArray(items)) {
+        action.appendContinuationItemsAction.continuationItems = directFilterArray(items, currentPage);
+      }
+    }
+  }
+
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
+  const skipUniversalFilter = currentPage === 'watch';
+  if (criticalPages.includes(currentPage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+    parsedResponse.__universalFilterApplied = true;
+    scanAndFilterAllArrays(parsedResponse, currentPage);
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));

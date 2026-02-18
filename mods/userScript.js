@@ -39,3 +39,4 @@ import "./main/features/enableFeatures.js";
 import "./ui/customUI.js";
 import "./ui/customGuideAction.js";
 import "./main/features/autoFrameRate.js";
+import "./main/features/playlistEnhancements.js";
