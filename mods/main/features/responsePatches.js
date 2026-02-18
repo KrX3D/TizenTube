@@ -19,7 +19,9 @@ function buildShelfProcessingOptions() {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts')
+    shortsEnabled: configRead('enableShorts'),
+    debugEnabled: configRead('enableDebugConsole'),
+    logShorts: configRead('enableDebugConsole')
   };
 }
 
