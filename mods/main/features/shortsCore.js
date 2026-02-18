@@ -218,7 +218,7 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) return true;
+        if (totalSeconds <= 180) return true;
       }
     }
   }
@@ -317,16 +317,35 @@ export function directFilterArray(arr, page = 'other') {
   const filterIds = getFilteredVideoIds();
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const hideWatchedPages = configRead('hideWatchedVideosPages') || [];
-  const watchedThreshold = configRead('hideWatchedVideosThreshold');
+  const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
+  const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
 
   window._playlistScrollHelpers = window._playlistScrollHelpers || new Set();
   window._lastHelperVideos = window._lastHelperVideos || [];
   window._playlistRemovedHelpers = window._playlistRemovedHelpers || new Set();
   window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
 
+  let isLastBatch = false;
+  if (isPlaylistPage && window._isLastPlaylistBatch === true) {
+    isLastBatch = true;
+    window._isLastPlaylistBatch = false;
+  }
+
+  // New batch arrived after we inserted helper fallback in previous call.
+  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+    const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
+    trackRemovedPlaylistHelpers(helperIdsToTrack);
+    trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
+    if (!isLastBatch) {
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+    }
+  }
+
   const out = [];
   const helperVideos = [];
+  let playlistUnwatchedCount = 0;
 
   for (const item of arr) {
     if (!item || typeof item !== 'object') continue;
@@ -343,7 +362,11 @@ export function directFilterArray(arr, page = 'other') {
       continue;
     }
 
-    if (!configRead('enableShorts') && isShortItem(item, { currentPage: page })) {
+    if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
+      continue;
+    }
+
+    if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
       continue;
     }
 
@@ -354,15 +377,12 @@ export function directFilterArray(arr, page = 'other') {
     if (shouldHideWatched) {
       const progressBar = findProgressBar(item);
       if (progressBar) {
-        const percentWatched = progressBar.percentDurationWatched || 0;
-        if (percentWatched > watchedThreshold) {
+        const percentWatched = Number(progressBar.percentDurationWatched || 0);
+        if (percentWatched >= watchedThreshold) {
           continue;
         }
       } else if (isPlaylistPage && !filterIds) {
-        if (!isInCollectionMode()) {
-          out.push(item);
-        }
-        continue;
+        playlistUnwatchedCount += 1;
       }
     }
 
@@ -377,11 +397,18 @@ export function directFilterArray(arr, page = 'other') {
       trackRemovedPlaylistHelperKeys(helperVideos, getVideoId);
     }
 
-    // Keep one helper so continuation can still load if everything got filtered.
-    if (out.length === 0 && helperVideos.length > 0 && !filterIds && !isInCollectionMode()) {
-      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0];
+    // Keep one card so TV keeps requesting continuation even when this batch filtered to zero.
+    if (out.length === 0 && arr.length > 0 && !isLastBatch && !filterIds && !isInCollectionMode()) {
+      const fallbackHelper = helperVideos.find((video) => getVideoId(video))
+        || [...arr].reverse().find((item) => !!getVideoId(item))
+        || helperVideos[0]
+        || arr[arr.length - 1];
       if (fallbackHelper) {
-        out.push(fallbackHelper);
+        const fallbackId = getVideoId(fallbackHelper) || 'unknown';
+        window._lastHelperVideos = [fallbackHelper];
+        window._playlistScrollHelpers.clear();
+        window._playlistScrollHelpers.add(fallbackId);
+        return [fallbackHelper];
       }
     }
 
@@ -398,10 +425,23 @@ export function directFilterArray(arr, page = 'other') {
         window._collectedUnwatched = Array.from(merged);
       }
     }
+
+    if (playlistUnwatchedCount > 0 && window._lastHelperVideos.length > 0) {
+      const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
+      trackRemovedPlaylistHelpers(helperIdsToTrack);
+      trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+    }
+
+    if (isLastBatch) {
+      window._lastHelperVideos = [];
+      window._playlistScrollHelpers.clear();
+    }
   }
 
   return shouldHideWatched && !isPlaylistPage
-    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold)
+    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page)
     : out;
 }
 

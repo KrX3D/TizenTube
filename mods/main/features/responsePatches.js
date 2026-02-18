@@ -57,6 +57,47 @@ function maybeStartPlaylistAutoload(page) {
   startPlaylistAutoLoad();
 }
 
+function processSecondaryNav(sections, currentPage) {
+  if (!Array.isArray(sections)) return;
+
+  for (const section of sections) {
+    const sectionRenderer = section?.tvSecondaryNavSectionRenderer;
+    if (!sectionRenderer) continue;
+
+    if (Array.isArray(sectionRenderer.tabs)) {
+      for (const tab of sectionRenderer.tabs) {
+        const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(tabShelves)) {
+          processShelves(tabShelves, buildShelfProcessingOptions());
+        }
+      }
+    }
+
+    if (Array.isArray(sectionRenderer.items)) {
+      for (const item of sectionRenderer.items) {
+        const content = item?.tvSecondaryNavItemRenderer?.content;
+        if (!content) continue;
+
+        const shelf = content?.shelfRenderer;
+        if (shelf) {
+          processShelves([content], buildShelfProcessingOptions());
+          continue;
+        }
+
+        const richGridItems = content?.richGridRenderer?.contents;
+        if (Array.isArray(richGridItems)) {
+          content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage);
+        }
+
+        const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(contentShelves)) {
+          processShelves(contentShelves, buildShelfProcessingOptions());
+        }
+      }
+    }
+  }
+}
+
 if (typeof window !== 'undefined') {
   window._collectedUnwatched = window._collectedUnwatched || [];
 }
@@ -100,14 +141,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    for (const section of parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
-      for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(
-          tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
-          buildShelfProcessingOptions()
-        );
-      }
-    }
+    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, currentPage);
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
@@ -136,6 +170,7 @@ registerJsonParseHook((parsedResponse) => {
     for (const action of parsedResponse.onResponseReceivedActions) {
       const items = action?.appendContinuationItemsAction?.continuationItems;
       if (Array.isArray(items)) {
+        scanAndFilterAllArrays(items, currentPage, 'onResponseReceivedActions');
         action.appendContinuationItemsAction.continuationItems = directFilterArray(items, currentPage);
       }
     }

@@ -101,8 +101,9 @@ export function processShelves(shelves, options = {}) {
     if (shouldHideWatched) {
       const watchedFiltered = hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
       if (watchedFiltered.length === 0 && originalItems.length > 0) {
-        // Preserve one populated shelf to avoid TV rendering gaps / stalled continuation loads.
-        items = originalItems;
+        // Playlist pages need at least one tile for continuation; other pages can remove empty shelves.
+        const keepShelfForContinuation = page === 'playlist' || page === 'playlists';
+        items = keepShelfForContinuation ? originalItems : [];
       } else {
         items = watchedFiltered;
       }

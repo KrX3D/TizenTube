@@ -17,39 +17,43 @@ export function detectCurrentPage() {
 
   const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href + ' ' + browseParam).toLowerCase();
 
+  let detectedPage = 'other';
+
   // PRIORITY 1: Tizen browse parameters
-  if (browseParam.includes('fesubscription')) return 'subscriptions';
-
-  // Library and sub-pages
-  if (browseParam === 'felibrary') return 'library';
-  if (browseParam === 'fehistory') return 'history';
-  if (browseParam === 'femy_youtube') return 'playlist';
-  if (browseParam === 'feplaylist_aggregation') return 'playlists';
-
-  // Individual playlists
-  if (browseParam.startsWith('vlpl')) return 'playlist';
-  if (browseParam === 'vlwl') return 'playlist';
-  if (browseParam === 'vlll') return 'playlist';
-
-  // Topics / home variants
-  if (browseParam.includes('fetopics_music') || browseParam.includes('music')) return 'music';
-  if (browseParam.includes('fetopics_gaming') || browseParam.includes('gaming')) return 'gaming';
-  if (browseParam.includes('fetopics')) return 'home';
-
-  // Channel pages
-  if (browseParam.startsWith('uc') && browseParam.length > 10) return 'channel';
+  if (browseParam.includes('fesubscription')) detectedPage = 'subscriptions';
+  else if (browseParam === 'felibrary') detectedPage = 'library';
+  else if (browseParam === 'fehistory') detectedPage = 'history';
+  else if (browseParam === 'femy_youtube') detectedPage = 'playlist';
+  else if (browseParam === 'feplaylist_aggregation') detectedPage = 'playlists';
+  else if (browseParam.startsWith('vlpl')) detectedPage = 'playlist';
+  else if (browseParam === 'vlwl') detectedPage = 'playlist';
+  else if (browseParam === 'vlll') detectedPage = 'playlist';
+  else if (browseParam.includes('fetopics_music') || browseParam.includes('music')) detectedPage = 'music';
+  else if (browseParam.includes('fetopics_gaming') || browseParam.includes('gaming')) detectedPage = 'gaming';
+  else if (browseParam.includes('fetopics')) detectedPage = 'home';
+  else if (browseParam.startsWith('uc') && browseParam.length > 10) detectedPage = 'channel';
 
   // PRIORITY 2: URL patterns
-  if (cleanHash.includes('/playlist') || combined.includes('list=')) return 'playlist';
-  if (cleanHash.includes('/results') || cleanHash.includes('/search')) return 'search';
-  if (cleanHash.includes('/watch')) return 'watch';
-  if (cleanHash.includes('/@') || cleanHash.includes('/channel/')) return 'channel';
-  if (cleanHash.includes('/browse') && !browseParam) return 'home';
-  if (cleanHash === '' || cleanHash === '/') return 'home';
+  else if (cleanHash.includes('/playlist') || combined.includes('list=')) detectedPage = 'playlist';
+  else if (cleanHash.includes('/results') || cleanHash.includes('/search')) detectedPage = 'search';
+  else if (cleanHash.includes('/watch')) detectedPage = 'watch';
+  else if (cleanHash.includes('/@') || cleanHash.includes('/channel/')) detectedPage = 'channel';
+  else if (cleanHash.includes('/browse') && !browseParam) detectedPage = 'home';
+  else if (cleanHash === '' || cleanHash === '/') detectedPage = 'home';
 
-  return 'other';
+  if (typeof window !== 'undefined') {
+    if (detectedPage !== 'other') {
+      window._lastDetectedPage = detectedPage;
+      window._lastFullUrl = href;
+      return detectedPage;
+    }
+    if (window._lastDetectedPage) {
+      return window._lastDetectedPage;
+    }
+  }
+
+  return detectedPage;
 }
-
 
 export function getCurrentPage() {
   return detectCurrentPage();
