@@ -1,3 +1,51 @@
+
+
+export function getVideoId(item) {
+  return item?.tileRenderer?.contentId ||
+    item?.videoRenderer?.videoId ||
+    item?.playlistVideoRenderer?.videoId ||
+    item?.gridVideoRenderer?.videoId ||
+    item?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    null;
+}
+
+export function getVideoTitle(item) {
+  return (
+    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+    item?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.compactVideoRenderer?.title?.simpleText ||
+    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
+    ''
+  );
+}
+
+export function collectVideoIdsFromShelf(shelf) {
+  const ids = [];
+  const seen = new Set();
+  const pushFrom = (arr) => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach((item) => {
+      const id = getVideoId(item);
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    });
+  };
+
+  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
+  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
+  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
+  pushFrom(shelf?.richSectionRenderer?.content?.richShelfRenderer?.content?.richGridRenderer?.contents);
+  pushFrom(shelf?.gridRenderer?.items);
+
+  return ids;
+}
+
 export function initShortsTrackingState() {
   window._shortsVideoIdsFromShelves = window._shortsVideoIdsFromShelves || new Set();
   window._shortsTitlesFromShelves = window._shortsTitlesFromShelves || new Set();

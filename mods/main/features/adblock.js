@@ -13,7 +13,7 @@ import { applyPaidContentOverlay } from './paidContentOverlay.js';
 import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
-import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems } from './shortsCore.js';
+import { isShortItem, initShortsTrackingState, shouldFilterShorts, isKnownShortFromShelfMemory, rememberShortsFromShelf, removeShortsShelvesByTitle, filterShortItems, getVideoId, getVideoTitle, collectVideoIdsFromShelf } from './shortsCore.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { detectCurrentPage } from '../pageDetection.js';
 
@@ -98,75 +98,6 @@ function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
-
-function getVideoId(item) {
-  return item?.tileRenderer?.contentId ||
-    item?.videoRenderer?.videoId ||
-    item?.playlistVideoRenderer?.videoId ||
-    item?.gridVideoRenderer?.videoId ||
-    item?.compactVideoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.videoRenderer?.videoId ||
-    null;
-}
-
-function getVideoTitle(item) {
-  return (
-    item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
-    item?.videoRenderer?.title?.runs?.[0]?.text ||
-    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
-    item?.compactVideoRenderer?.title?.simpleText ||
-    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
-    ''
-  );
-}
-
-function collectVideoIdsFromShelf(shelf) {
-  const ids = [];
-  const seen = new Set();
-  const pushFrom = (arr) => {
-    if (!Array.isArray(arr)) return;
-    arr.forEach((item) => {
-      const id = getVideoId(item);
-      if (id && !seen.has(id)) {
-        seen.add(id);
-        ids.push(id);
-      }
-    });
-  };
-
-  pushFrom(shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.gridRenderer?.items);
-  pushFrom(shelf?.shelfRenderer?.content?.verticalListRenderer?.items);
-  pushFrom(shelf?.richShelfRenderer?.content?.richGridRenderer?.contents);
-  pushFrom(shelf?.gridRenderer?.items);
-
-  // Fallback: recurse through shelf object to catch Tizen 5.5 variants where
-  // Shorts shelf videos are rendered in non-standard branches.
-  const stack = [shelf];
-  while (stack.length) {
-    const node = stack.pop();
-    if (!node || typeof node !== 'object') continue;
-    if (Array.isArray(node)) {
-      for (const entry of node) stack.push(entry);
-      continue;
-    }
-
-    const id = getVideoId(node);
-    if (id && !seen.has(id)) {
-      seen.add(id);
-      ids.push(id);
-    }
-
-    for (const key in node) {
-      if (Object.prototype.hasOwnProperty.call(node, key)) {
-        stack.push(node[key]);
-      }
-    }
-  }
-
-  return ids;
-}
 
 function isLikelyPlaylistHelperItem(item) {
   if (!item || typeof item !== 'object') return false;

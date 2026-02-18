@@ -4,6 +4,7 @@ import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos } from './features/hideWatchedVideos.js';
 import { hideShorts } from './features/hideShorts.js';
+import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle } from './features/shortsCore.js';
 import { detectCurrentPage } from './pageDetection.js';
 
 export function processShelves(shelves, options) {
@@ -17,8 +18,20 @@ export function processShelves(shelves, options) {
     hideWatchedPages,
     hideWatchedThreshold,
     shortsEnabled,
-    page = detectCurrentPage()
+    page = detectCurrentPage(),
+    debugEnabled = false,
+    logShorts = false
   } = options;
+
+  removeShortsShelvesByTitle(shelves, {
+    page,
+    shortsEnabled,
+    collectVideoIdsFromShelf,
+    getVideoTitle,
+    debugEnabled,
+    logShorts,
+    path: 'processShelves'
+  });
 
   for (const shelve of shelves) {
     if (!shelve.shelfRenderer) continue;

@@ -21,7 +21,9 @@ function buildShelfProcessingOptions() {
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
     shortsEnabled: configRead('enableShorts'),
-    page: detectCurrentPage()
+    page: detectCurrentPage(),
+    debugEnabled: configRead('enableDebugConsole'),
+    logShorts: configRead('enableDebugConsole')
   };
 }
 
