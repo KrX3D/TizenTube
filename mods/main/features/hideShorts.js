@@ -37,3 +37,5 @@ export function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       );
   }
 }
+
+export { removeShortsShelvesByTitle } from './shortsCore.js';
