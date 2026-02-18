@@ -64,7 +64,7 @@ export function isShortsShelfTitle(title = '') {
   // Keep this strict to avoid false positives such as
   // "short film", "short tutorial", etc.
   if (!t) return false;
-  if (t === 'shorts' || t === '#shorts') return true;
+  if (t === 'shorts' || t === '#shorts' || t === 'short') return true;
   return /^shorts\b/.test(t) || /\bshorts$/.test(t);
 }
 
@@ -282,6 +282,8 @@ export function getShelfTitle(shelf) {
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
+    shelf?.reelShelfRenderer?.title,
+    shelf?.itemSectionRenderer?.header?.shelfHeaderRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
@@ -309,7 +311,13 @@ function hasVideoItemsArray(arr) {
 }
 
 function hasShelvesArray(arr) {
-  return arr.some((item) => item?.shelfRenderer || item?.richShelfRenderer || item?.gridRenderer);
+  return arr.some((item) =>
+    item?.shelfRenderer ||
+    item?.richShelfRenderer ||
+    item?.reelShelfRenderer ||
+    item?.itemSectionRenderer ||
+    item?.gridRenderer
+  );
 }
 
 export function directFilterArray(arr, page = 'other') {

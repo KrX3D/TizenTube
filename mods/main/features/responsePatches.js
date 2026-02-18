@@ -34,7 +34,7 @@ if (typeof window !== 'undefined') {
   }, 100);
 }
 
-function buildShelfProcessingOptions() {
+function buildShelfProcessingOptions(pageOverride) {
   return {
     deArrowEnabled: configRead('enableDeArrow'),
     deArrowThumbnailsEnabled: configRead('enableDeArrowThumbnails'),
@@ -44,7 +44,7 @@ function buildShelfProcessingOptions() {
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
     shortsEnabled: configRead('enableShorts'),
-    page: detectCurrentPage(),
+    page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
     logShorts: DEBUG_ENABLED
   };
@@ -71,7 +71,7 @@ function processSecondaryNav(sections, currentPage) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabShelves)) {
           scanAndFilterAllArrays(tabShelves, currentPage, 'secondaryNav.tabs');
-          processShelves(tabShelves, buildShelfProcessingOptions());
+          processShelves(tabShelves, buildShelfProcessingOptions(currentPage));
         }
       }
     }
@@ -84,7 +84,7 @@ function processSecondaryNav(sections, currentPage) {
         const shelf = content?.shelfRenderer;
         if (shelf) {
           scanAndFilterAllArrays(content, currentPage, 'secondaryNav.items.shelf');
-          processShelves([content], buildShelfProcessingOptions());
+          processShelves([content], buildShelfProcessingOptions(currentPage));
           continue;
         }
 
@@ -97,7 +97,7 @@ function processSecondaryNav(sections, currentPage) {
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contentShelves)) {
           scanAndFilterAllArrays(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
-          processShelves(contentShelves, buildShelfProcessingOptions());
+          processShelves(contentShelves, buildShelfProcessingOptions(currentPage));
         }
       }
     }
@@ -149,7 +149,7 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     processShelves(
       parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
-      buildShelfProcessingOptions()
+      buildShelfProcessingOptions(effectivePage)
     );
   }
 
@@ -161,17 +161,17 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
-    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions());
+    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions());
+    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
     parsedResponse.continuationContents.horizontalListContinuation.items = processHorizontalItems(
       parsedResponse.continuationContents.horizontalListContinuation.items,
-      buildShelfProcessingOptions()
+      buildShelfProcessingOptions(effectivePage)
     );
   }
 
@@ -182,7 +182,7 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     processShelves(
       parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
-      { ...buildShelfProcessingOptions(), shouldAddPreviews: false }
+      { ...buildShelfProcessingOptions(effectivePage), shouldAddPreviews: false }
     );
 
     applyQueueShelf(parsedResponse);
