@@ -13,9 +13,10 @@ import { detectCurrentPage } from '../pageDetection.js';
 import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
+import { getDebugEnabled, getShortsEnabled, getLogShortsEnabled } from '../runtimeToggles.js';
 
 
-let DEBUG_ENABLED = configRead('enableDebugConsole');
+let DEBUG_ENABLED = getDebugEnabled(configRead);
 window.adblock = window.adblock || {};
 window.adblock.setDebugEnabled = function(value) {
   DEBUG_ENABLED = !!value;
@@ -27,7 +28,7 @@ if (typeof window !== 'undefined') {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (event) => {
         if (event.detail?.key === 'enableDebugConsole') {
-          DEBUG_ENABLED = !!event.detail.value;
+          DEBUG_ENABLED = getDebugEnabled(configRead);
         }
       });
     }
@@ -43,10 +44,10 @@ function buildShelfProcessingOptions(pageOverride) {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts'),
+    shortsEnabled: getShortsEnabled(configRead),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
-    logShorts: DEBUG_ENABLED
+    logShorts: getLogShortsEnabled(configRead)
   };
 }
 
@@ -70,6 +71,7 @@ function processSecondaryNav(sections, currentPage) {
       for (const tab of sectionRenderer.tabs) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabShelves)) {
+          pruneShortsShelvesByTitle(tabShelves, currentPage, 'secondaryNav.tabs');
           scanAndFilterAllArrays(tabShelves, currentPage, 'secondaryNav.tabs');
           processShelves(tabShelves, buildShelfProcessingOptions(currentPage));
         }
@@ -79,6 +81,13 @@ function processSecondaryNav(sections, currentPage) {
     if (Array.isArray(sectionRenderer.items)) {
       for (const item of sectionRenderer.items) {
         const content = item?.tvSecondaryNavItemRenderer?.content;
+        const itemTitle = item?.tvSecondaryNavItemRenderer?.title?.simpleText
+          || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
+          || '';
+        if (!getShortsEnabled(configRead) && isShortsShelfTitle(itemTitle)) {
+          if (DEBUG_ENABLED) console.log('[SHORTS_SHELF] removed item title=', itemTitle, '| page=', currentPage, '| path=secondaryNav.items.title');
+          continue;
+        }
         if (!content) continue;
 
         const shelf = content?.shelfRenderer;
@@ -96,11 +105,27 @@ function processSecondaryNav(sections, currentPage) {
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contentShelves)) {
+          pruneShortsShelvesByTitle(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           scanAndFilterAllArrays(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           processShelves(contentShelves, buildShelfProcessingOptions(currentPage));
         }
       }
     }
+  }
+}
+
+function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const title = getShelfTitle(shelf);
+    if (!isShortsShelfTitle(title)) continue;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
+    }
+    shelves.splice(i, 1);
   }
 }
 
@@ -138,7 +163,11 @@ function filterContinuationItemContainer(container, page, path) {
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
-  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  const url = (window.location.href || '').toLowerCase();
+  let effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  if (effectivePage === 'other' && (url.includes('/channel/') || url.includes('/@') || /\bbrowse\/uc[\w-]+/i.test(url))) {
+    effectivePage = 'channel';
+  }
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);

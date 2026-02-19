@@ -1,6 +1,8 @@
 import resolveCommand from '../../resolveCommand.js';
 import { getVideoId } from './shortsCore.js';
 import { detectCurrentPage } from '../pageDetection.js';
+import { getDebugEnabled } from '../runtimeToggles.js';
+import { configRead } from '../../config.js';
 import {
   addPlaylistControlButtons as addPlaylistControlButtonsFeature,
   detectPlaylistButtons as detectPlaylistButtonsFeature,
@@ -14,12 +16,45 @@ export function getCurrentPage() {
 
 export function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
-  const lines = String(text).split('\n');
-  const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
+
+  const metrics = window?._ttConsoleMetrics || null;
+  const charsPerLine = Math.max(40, Number(metrics?.charsPerLine) || 0);
+  const effectiveLinesPerChunk = Math.max(1, Number(metrics?.visibleLines) ? (metrics.visibleLines - 2) : linesPerChunk);
+  const maxWrappedLines = Math.max(effectiveLinesPerChunk * 8, 200);
+  const maxInputChars = 30000;
+
+  let inputText = String(text);
+  if (inputText.length > maxInputChars) {
+    inputText = inputText.slice(0, maxInputChars) + '\n...[TRUNCATED: input too large]';
+  }
+
+  const rawLines = inputText.split('\n');
+  const lines = [];
+  let wrappedCount = 0;
+
+  for (const line of rawLines) {
+    if (wrappedCount >= maxWrappedLines) break;
+    if (!charsPerLine || line.length <= charsPerLine) {
+      lines.push(line);
+      wrappedCount += 1;
+      continue;
+    }
+    for (let i = 0; i < line.length; i += charsPerLine) {
+      lines.push(line.slice(i, i + charsPerLine));
+      wrappedCount += 1;
+      if (wrappedCount >= maxWrappedLines) break;
+    }
+  }
+
+  if (wrappedCount >= maxWrappedLines) {
+    lines.push('...[TRUNCATED: wrapped line cap reached]');
+  }
+
+  const total = Math.max(1, Math.ceil(lines.length / effectiveLinesPerChunk));
   for (let partIndex = total; partIndex >= 1; partIndex--) {
-    const startLine = (partIndex - 1) * linesPerChunk;
-    const part = lines.slice(startLine, startLine + linesPerChunk).join('\n');
-    console.log(`${prefix} [${partIndex}/${total}] lines=${Math.min(linesPerChunk, lines.length - startLine)} ${part}`);
+    const startLine = (partIndex - 1) * effectiveLinesPerChunk;
+    const part = lines.slice(startLine, startLine + effectiveLinesPerChunk).join('\n');
+    console.log(`${prefix} [${partIndex}/${total}] lines=${Math.min(effectiveLinesPerChunk, lines.length - startLine)} ${part}`);
   }
 }
 
@@ -53,7 +88,7 @@ export function triggerPlaylistContinuationLoad() {
 function addPlaylistControlButtons(attempt = 1) {
   return addPlaylistControlButtonsFeature(attempt, {
     getCurrentPage,
-    debugEnabled: false,
+    debugEnabled: getDebugEnabled(configRead),
     resolveCommand,
     logChunkedByLines
   });
@@ -63,7 +98,7 @@ function cleanupPlaylistHelperTiles() {
   return cleanupPlaylistHelperTilesFeature({
     getCurrentPage,
     getVideoId,
-    debugEnabled: false,
+    debugEnabled: getDebugEnabled(configRead),
     triggerPlaylistContinuationLoad
   });
 }

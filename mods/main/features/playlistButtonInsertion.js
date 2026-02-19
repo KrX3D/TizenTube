@@ -15,6 +15,11 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
   }
 
   const parentContainer = baseContainer.parentElement;
+  const trimHtml = (value, max = 1200) => {
+    const str = String(value || '');
+    if (str.length <= max) return str;
+    return str.slice(0, max) + `...[+${str.length - max} chars]`;
+  };
 
   const getVisibleButtons = (root) => {
     if (!root) return [];
@@ -70,7 +75,7 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
     return;
   }
 
-  if (attempt <= 6) {
+  if (attempt <= 2 && debugEnabled) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
@@ -81,19 +86,19 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
         parentButtonsBefore: parentButtons.length,
         baseTag: baseContainer.tagName,
         baseClass: baseContainer.className,
-        baseOuterHTML: baseContainer.outerHTML,
+        baseOuterHTML: trimHtml(baseContainer.outerHTML),
         parentTag: parentContainer?.tagName,
         parentClass: parentContainer?.className,
-        parentOuterHTML: parentContainer?.outerHTML,
+        parentOuterHTML: trimHtml(parentContainer?.outerHTML),
         targetTag: targetHostForDump.tagName,
         targetClass: targetHostForDump.className,
-        targetOuterHTML: targetHostForDump.outerHTML,
+        targetOuterHTML: trimHtml(targetHostForDump.outerHTML),
         targetParentTag: targetHostForDump.parentElement?.tagName,
         targetParentClass: targetHostForDump.parentElement?.className,
-        targetParentOuterHTML: targetHostForDump.parentElement?.outerHTML,
-        buttonOuterHTML: existingButtons.map((btn) => btn.outerHTML),
-        allButtonOuterHTML: Array.from(container.querySelectorAll('ytlr-button-renderer')).map((btn) => btn.outerHTML),
-        existingCustomButtonOuterHTML: existingCustomBtn?.outerHTML || null,
+        targetParentOuterHTML: trimHtml(targetHostForDump.parentElement?.outerHTML),
+        buttonOuterHTML: existingButtons.map((btn) => trimHtml(btn.outerHTML, 700)),
+        allButtonOuterHTML: Array.from(container.querySelectorAll('ytlr-button-renderer')).slice(0, 6).map((btn) => trimHtml(btn.outerHTML, 700)),
+        existingCustomButtonOuterHTML: existingCustomBtn ? trimHtml(existingCustomBtn.outerHTML, 700) : null,
       };
       console.log('[PLAYLIST_BUTTON_JSON] Dumping button/container snapshot attempt=', attempt);
       logChunkedByLines('[PLAYLIST_BUTTON_JSON]', JSON.stringify(dump, null, 2), 60);
@@ -169,18 +174,14 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
   }
 
   const templateRect = templateBtn.getBoundingClientRect();
-  const lastNativeRect = existingButtons[existingButtons.length - 1]?.getBoundingClientRect();
-  const previousNativeRect = existingButtons[existingButtons.length - 2]?.getBoundingClientRect();
-  const computedGap = previousNativeRect ? Math.round(lastNativeRect.top - previousNativeRect.top) : Math.round(templateRect.height);
-  const gap = Math.max(Math.round(templateRect.height), computedGap);
-  const desiredTranslateY = Math.round((lastNativeRect?.top || templateRect.top) - templateRect.top + gap);
-  if (Number.isFinite(desiredTranslateY)) {
-    customBtn.style.transform = `translateY(${desiredTranslateY}px)`;
-  }
+  customBtn.style.transform = templateBtn.style.transform || '';
+  customBtn.style.position = '';
+  customBtn.style.top = '';
+  customBtn.style.left = '';
 
   if (container) {
     container.style.overflow = 'visible';
-    container.style.minHeight = `${Math.max(container.getBoundingClientRect().height, desiredTranslateY + templateRect.height + 8)}px`;
+    container.style.minHeight = `${Math.max(container.getBoundingClientRect().height, templateRect.height * (existingButtons.length + 1) + 8)}px`;
   }
   if (parentContainer) {
     parentContainer.style.overflow = 'visible';
@@ -202,17 +203,17 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
     const afterDump = {
       page,
       attempt,
-      clonedCustomButtonOuterHTML: customBtn.outerHTML,
+      clonedCustomButtonOuterHTML: trimHtml(customBtn.outerHTML, 700),
       clonedCustomButtonRect: { y: Math.round(rect.top), h: Math.round(rect.height), w: Math.round(rect.width) },
       containerRect: { y: Math.round(crect.top), h: Math.round(crect.height), w: Math.round(crect.width) },
       templateMetrics: { top: Math.round(templateBtn.offsetTop || 0), left: Math.round(templateBtn.offsetLeft || 0), height: Math.round(templateBtn.offsetHeight || 0), width: Math.round(templateBtn.offsetWidth || 0) },
       nativeButtonRectsBefore: nativeButtonRects,
       parentButtonsAfter: postButtons.length,
       nativeButtonRectsAfter: postButtonRects,
-      baseOuterHTMLAfter: baseContainer.outerHTML,
-      parentOuterHTMLAfter: parentContainer?.outerHTML || null,
+      baseOuterHTMLAfter: trimHtml(baseContainer.outerHTML),
+      parentOuterHTMLAfter: trimHtml(parentContainer?.outerHTML),
     };
-    if (attempt <= 6) {
+    if (attempt <= 2 && debugEnabled) {
       logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 60);
     }
   } catch (e) {
