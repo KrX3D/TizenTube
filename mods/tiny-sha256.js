@@ -55,7 +55,6 @@ var sha256 = function sha256(ascii) {
 		hash = hash.slice(0, 8);
 
 		for (i = 0; i < 64; i++) {
-			var i2 = i + j;
 			// Expand the message into 64 words
 			// Used below if 
 			var w15 = w[i - 15], w2 = w[i - 2];
