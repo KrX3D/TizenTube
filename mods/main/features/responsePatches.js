@@ -70,6 +70,7 @@ function processSecondaryNav(sections, currentPage) {
       for (const tab of sectionRenderer.tabs) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabShelves)) {
+          pruneShortsShelvesByTitle(tabShelves, currentPage, 'secondaryNav.tabs');
           scanAndFilterAllArrays(tabShelves, currentPage, 'secondaryNav.tabs');
           processShelves(tabShelves, buildShelfProcessingOptions(currentPage));
         }
@@ -96,11 +97,27 @@ function processSecondaryNav(sections, currentPage) {
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contentShelves)) {
+          pruneShortsShelvesByTitle(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           scanAndFilterAllArrays(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           processShelves(contentShelves, buildShelfProcessingOptions(currentPage));
         }
       }
     }
+  }
+}
+
+function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const title = getShelfTitle(shelf);
+    if (!isShortsShelfTitle(title)) continue;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
+    }
+    shelves.splice(i, 1);
   }
 }
 

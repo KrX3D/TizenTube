@@ -2,6 +2,22 @@ import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
 
+let DEBUG_ENABLED = !!configRead('enableDebugConsole');
+let LOG_SHORTS = DEBUG_ENABLED;
+let filterCallCounter = 0;
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = !!event.detail.value;
+        LOG_SHORTS = DEBUG_ENABLED;
+      }
+    });
+  }, 100);
+}
+
 
 
 export function getVideoId(item) {
@@ -291,12 +307,17 @@ export function getShelfTitle(shelf) {
   };
 
   const titlePaths = [
+    shelf?.title,
+    shelf?.shelfRenderer?.title,
     shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
+    shelf?.richSectionRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
+    shelf?.tvSecondaryNavItemRenderer?.title,
+    shelf?.tvSecondaryNavSectionRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
   ];
@@ -329,6 +350,8 @@ function hasShelvesArray(arr) {
 
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
+
+  const callId = ++filterCallCounter;
 
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;

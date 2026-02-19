@@ -2,10 +2,17 @@ import { detectCurrentPage } from '../pageDetection.js';
 
 export function shouldHideWatchedForPage(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  if (configPages.includes(page)) return true;
+  const normalizedPage = String(page || '').toLowerCase();
+  const normalizedConfigPages = configPages.map((entry) => String(entry || '').toLowerCase());
+
+  if (normalizedConfigPages.includes(normalizedPage)) return true;
+
+  // Allow singular/plural aliases used by older configs.
+  if (normalizedPage === 'channel' && normalizedConfigPages.includes('channels')) return true;
+  if (normalizedPage === 'channels' && normalizedConfigPages.includes('channel')) return true;
 
   // Library playlist overview / watch-next should follow library watched-filter setting.
-  if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
+  if (normalizedConfigPages.includes('library') && (normalizedPage === 'playlist' || normalizedPage === 'watch')) {
     return true;
   }
 
