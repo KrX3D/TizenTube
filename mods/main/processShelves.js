@@ -3,7 +3,8 @@ import { hqify } from './features/hqify.js';
 import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos, shouldHideWatchedForPage } from './features/hideWatchedVideos.js';
-import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems } from './features/shortsCore.js';
+import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems, rememberShortsFromShelf } from './features/shortsCore.js';
+import { hideShorts } from './features/hideShorts.js';
 import { detectCurrentPage } from './pageDetection.js';
 
 function getShelfItemsRef(shelf) {
@@ -62,6 +63,11 @@ export function processShelves(shelves, options = {}) {
   } = options;
 
   const shouldHideWatched = shouldHideWatchedForPage(hideWatchedPages, page);
+
+  const horizontalShelves = shelves.filter((shelf) => shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  hideShorts(horizontalShelves, shortsEnabled, (removedShelf) => {
+    rememberShortsFromShelf(removedShelf, collectVideoIdsFromShelf, getVideoTitle);
+  }, page);
 
   removeShortsShelvesByTitle(shelves, {
     page,
