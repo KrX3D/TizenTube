@@ -196,6 +196,38 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
     window._ttConsoleMetrics = { charsPerLine, visibleLines };
   }
 
+  function updateConsoleMetrics() {
+    if (!consoleDiv) return;
+
+    const style = window.getComputedStyle(consoleDiv);
+    const fontSize = parseFloat(style.fontSize) || 13;
+    const fontFamily = style.fontFamily || 'monospace';
+    const lineHeight = parseFloat(style.lineHeight) || Math.round(fontSize * 1.3);
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const innerWidth = Math.max(100, consoleDiv.clientWidth - padLeft - padRight);
+    const innerHeight = Math.max(60, consoleDiv.clientHeight - padTop - padBottom);
+
+    let charWidth = Math.max(6, fontSize * 0.6);
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = `${fontSize}px ${fontFamily}`;
+        const measured = ctx.measureText('M').width;
+        if (Number.isFinite(measured) && measured > 0) {
+          charWidth = measured;
+        }
+      }
+    } catch (_) {}
+
+    const charsPerLine = Math.max(28, Math.floor(innerWidth / charWidth));
+    const visibleLines = Math.max(8, Math.floor(innerHeight / Math.max(14, lineHeight)));
+    window._ttConsoleMetrics = { charsPerLine, visibleLines };
+  }
+
   function safeStringify(value) {
     if (typeof value === 'string') return value;
     if (value === null || value === undefined) return String(value);
@@ -420,6 +452,9 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
       }
     } catch (e) {}
   }, 500);
+
+  window.addEventListener('resize', updateConsoleMetrics);
+  updateConsoleMetrics();
 
   window.addEventListener('resize', updateConsoleMetrics);
   updateConsoleMetrics();

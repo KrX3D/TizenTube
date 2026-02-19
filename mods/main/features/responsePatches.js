@@ -1,7 +1,7 @@
 import { configRead } from '../../config.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { registerJsonParseHook } from '../jsonParseHooks.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering, applyShortsAdFiltering } from './adCleanup.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from '../processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './sponsorblock.js';
@@ -183,6 +183,7 @@ registerJsonParseHook((parsedResponse) => {
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
+  applyShortsAdFiltering(parsedResponse, adBlockEnabled);
   applyPaidContentOverlay(parsedResponse, configRead('enablePaidPromotionOverlay'));
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
