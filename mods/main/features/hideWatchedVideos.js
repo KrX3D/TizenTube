@@ -10,6 +10,10 @@ export function shouldHideWatchedForPage(configPages, page) {
   // Allow singular/plural aliases used by older configs.
   if (normalizedPage === 'channel' && normalizedConfigPages.includes('channels')) return true;
   if (normalizedPage === 'channels' && normalizedConfigPages.includes('channel')) return true;
+  if ((normalizedPage === 'channel' || normalizedPage === 'channels') && normalizedConfigPages.length > 0) {
+    // Channel filtering should remain active for legacy configs that missed the key.
+    return true;
+  }
 
   // Library playlist overview / watch-next should follow library watched-filter setting.
   if (normalizedConfigPages.includes('library') && (normalizedPage === 'playlist' || normalizedPage === 'watch')) {

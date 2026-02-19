@@ -1,6 +1,23 @@
 import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
+import { getDebugEnabled, getShortsEnabled, getLogShortsEnabled } from './visualConsole.js';
+
+let DEBUG_ENABLED = getDebugEnabled(configRead);
+let LOG_SHORTS = getLogShortsEnabled(configRead);
+let filterCallCounter = 0;
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = getDebugEnabled(configRead);
+        LOG_SHORTS = getLogShortsEnabled(configRead);
+      }
+    });
+  }, 100);
+}
 
 let DEBUG_ENABLED = !!configRead('enableDebugConsole');
 let LOG_SHORTS = DEBUG_ENABLED;
@@ -368,7 +385,7 @@ export function directFilterArray(arr, page = 'other') {
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
+  const shouldApplyShortsFilter = shouldFilterShorts(getShortsEnabled(configRead), page);
 
   // ⭐ Initialize scroll helpers tracker
 
@@ -545,11 +562,11 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
     if (hasShelvesArray(obj)) {
       removeShortsShelvesByTitle(obj, {
         page,
-        shortsEnabled: configRead('enableShorts'),
+        shortsEnabled: getShortsEnabled(configRead),
         collectVideoIdsFromShelf,
         getVideoTitle,
-        debugEnabled: configRead('enableDebugConsole'),
-        logShorts: configRead('enableDebugConsole'),
+        debugEnabled: DEBUG_ENABLED,
+        logShorts: LOG_SHORTS,
         path
       });
     }

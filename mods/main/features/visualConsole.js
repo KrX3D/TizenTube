@@ -1,3 +1,24 @@
+// Central runtime toggles (requested single place).
+// Set to true/false here to force values globally.
+export const FORCE_DEBUG_ENABLED = true;
+export const FORCE_SHORTS_ENABLED = false;
+export const FORCE_LOG_SHORTS = false;
+
+export function getDebugEnabled(configRead) {
+  if (typeof FORCE_DEBUG_ENABLED === 'boolean') return FORCE_DEBUG_ENABLED;
+  return !!configRead?.('enableDebugConsole');
+}
+
+export function getShortsEnabled(configRead) {
+  if (typeof FORCE_SHORTS_ENABLED === 'boolean') return FORCE_SHORTS_ENABLED;
+  return !!configRead?.('enableShorts');
+}
+
+export function getLogShortsEnabled(configRead) {
+  if (typeof FORCE_LOG_SHORTS === 'boolean') return FORCE_LOG_SHORTS;
+  return !!configRead?.('enableDebugConsole');
+}
+
 export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveCommand, configWrite }) {
   const CONFIG_KEY = 'ytaf-configuration';
 

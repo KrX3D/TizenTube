@@ -1,6 +1,8 @@
 import resolveCommand from '../../resolveCommand.js';
 import { getVideoId } from './shortsCore.js';
 import { detectCurrentPage } from '../pageDetection.js';
+import { getDebugEnabled } from './visualConsole.js';
+import { configRead } from '../../config.js';
 import {
   addPlaylistControlButtons as addPlaylistControlButtonsFeature,
   detectPlaylistButtons as detectPlaylistButtonsFeature,
@@ -86,7 +88,7 @@ export function triggerPlaylistContinuationLoad() {
 function addPlaylistControlButtons(attempt = 1) {
   return addPlaylistControlButtonsFeature(attempt, {
     getCurrentPage,
-    debugEnabled: false,
+    debugEnabled: getDebugEnabled(configRead),
     resolveCommand,
     logChunkedByLines
   });
@@ -96,7 +98,7 @@ function cleanupPlaylistHelperTiles() {
   return cleanupPlaylistHelperTilesFeature({
     getCurrentPage,
     getVideoId,
-    debugEnabled: false,
+    debugEnabled: getDebugEnabled(configRead),
     triggerPlaylistContinuationLoad
   });
 }

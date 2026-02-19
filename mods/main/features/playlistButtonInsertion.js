@@ -75,7 +75,7 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
     return;
   }
 
-  if (attempt <= 6) {
+  if (attempt <= 2 && debugEnabled) {
     window._playlistButtonDumpUrl = currentUrl;
     try {
       const targetHostForDump = (parentContainer || container);
@@ -174,38 +174,14 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
   }
 
   const templateRect = templateBtn.getBoundingClientRect();
-  const lastNativeRect = existingButtons[existingButtons.length - 1]?.getBoundingClientRect();
-  const previousNativeRect = existingButtons[existingButtons.length - 2]?.getBoundingClientRect();
-  const getTranslateY = (el) => {
-    if (!el) return 0;
-    try {
-      const transform = window.getComputedStyle(el).transform;
-      if (!transform || transform === 'none') return 0;
-      const match2d = transform.match(/^matrix\(([^)]+)\)$/);
-      if (match2d) {
-        const parts = match2d[1].split(',').map((p) => Number(p.trim()));
-        return Number.isFinite(parts[5]) ? parts[5] : 0;
-      }
-      const match3d = transform.match(/^matrix3d\(([^)]+)\)$/);
-      if (match3d) {
-        const parts = match3d[1].split(',').map((p) => Number(p.trim()));
-        return Number.isFinite(parts[13]) ? parts[13] : 0;
-      }
-    } catch (_) {}
-    return 0;
-  };
-
-  const computedGap = previousNativeRect ? Math.round(lastNativeRect.top - previousNativeRect.top) : Math.round(templateRect.height);
-  const gap = Math.max(Math.round(templateRect.height), computedGap);
-  const templateTranslateY = getTranslateY(templateBtn);
-  const desiredTranslateY = Math.round(templateTranslateY + gap);
-  if (Number.isFinite(desiredTranslateY)) {
-    customBtn.style.transform = `translateY(${desiredTranslateY}px)`;
-  }
+  customBtn.style.transform = templateBtn.style.transform || '';
+  customBtn.style.position = '';
+  customBtn.style.top = '';
+  customBtn.style.left = '';
 
   if (container) {
     container.style.overflow = 'visible';
-    container.style.minHeight = `${Math.max(container.getBoundingClientRect().height, desiredTranslateY + templateRect.height + 8)}px`;
+    container.style.minHeight = `${Math.max(container.getBoundingClientRect().height, templateRect.height * (existingButtons.length + 1) + 8)}px`;
   }
   if (parentContainer) {
     parentContainer.style.overflow = 'visible';
@@ -237,7 +213,7 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
       baseOuterHTMLAfter: trimHtml(baseContainer.outerHTML),
       parentOuterHTMLAfter: trimHtml(parentContainer?.outerHTML),
     };
-    if (attempt <= 6) {
+    if (attempt <= 2 && debugEnabled) {
       logChunkedByLines('[PLAYLIST_BUTTON_JSON_AFTER]', JSON.stringify(afterDump, null, 2), 60);
     }
   } catch (e) {
