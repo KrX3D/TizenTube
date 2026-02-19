@@ -15,7 +15,7 @@
     "@formatjs/intl-displaynames": "^6.8.13",
     "@formatjs/intl-getcanonicallocales": "^3.2.1",
     "@formatjs/intl-locale": "^4.2.13",
-    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-babel": "^6.1.0",
     "@rollup/plugin-terser": "^0.4.3",
     "core-js": "^3.48.0",
     "esprima": "^4.0.1",
