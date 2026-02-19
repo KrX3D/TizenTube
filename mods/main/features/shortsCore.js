@@ -19,6 +19,22 @@ if (typeof window !== 'undefined') {
   }, 100);
 }
 
+let DEBUG_ENABLED = !!configRead('enableDebugConsole');
+let LOG_SHORTS = DEBUG_ENABLED;
+let filterCallCounter = 0;
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = !!event.detail.value;
+        LOG_SHORTS = DEBUG_ENABLED;
+      }
+    });
+  }, 100);
+}
+
 
 
 export function getVideoId(item) {
