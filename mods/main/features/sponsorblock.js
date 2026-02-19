@@ -113,7 +113,7 @@ class SponsorBlockHandler {
         this.segmentsoverlay.style.setProperty('top', `${sliderRect.top}px`, 'important');
       }
       this.scheduleSkip();
-    }
+    };
     this.durationChangeHandler = () => this.buildOverlay();
 
     this.attachVideo();
