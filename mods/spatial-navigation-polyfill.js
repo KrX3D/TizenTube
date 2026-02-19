@@ -209,7 +209,6 @@
         }
       } else {
         // when the previous search origin became offscreen
-        container = container.getSpatialNavigationContainer();
       }
     }
 
