@@ -16,20 +16,36 @@ export function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
 
   const metrics = window?._ttConsoleMetrics || null;
-  const charsPerLine = Math.max(24, Number(metrics?.charsPerLine) || 0);
+  const charsPerLine = Math.max(40, Number(metrics?.charsPerLine) || 0);
   const effectiveLinesPerChunk = Math.max(1, Number(metrics?.visibleLines) ? (metrics.visibleLines - 2) : linesPerChunk);
+  const maxWrappedLines = Math.max(effectiveLinesPerChunk * 8, 200);
+  const maxInputChars = 30000;
 
-  const rawLines = String(text).split('\n');
+  let inputText = String(text);
+  if (inputText.length > maxInputChars) {
+    inputText = inputText.slice(0, maxInputChars) + '\n...[TRUNCATED: input too large]';
+  }
+
+  const rawLines = inputText.split('\n');
   const lines = [];
+  let wrappedCount = 0;
 
   for (const line of rawLines) {
+    if (wrappedCount >= maxWrappedLines) break;
     if (!charsPerLine || line.length <= charsPerLine) {
       lines.push(line);
+      wrappedCount += 1;
       continue;
     }
     for (let i = 0; i < line.length; i += charsPerLine) {
       lines.push(line.slice(i, i + charsPerLine));
+      wrappedCount += 1;
+      if (wrappedCount >= maxWrappedLines) break;
     }
+  }
+
+  if (wrappedCount >= maxWrappedLines) {
+    lines.push('...[TRUNCATED: wrapped line cap reached]');
   }
 
   const total = Math.max(1, Math.ceil(lines.length / effectiveLinesPerChunk));
