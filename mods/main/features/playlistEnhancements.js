@@ -14,12 +14,29 @@ export function getCurrentPage() {
 
 export function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
-  const lines = String(text).split('\n');
-  const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
+
+  const metrics = window?._ttConsoleMetrics || null;
+  const charsPerLine = Math.max(24, Number(metrics?.charsPerLine) || 0);
+  const effectiveLinesPerChunk = Math.max(1, Number(metrics?.visibleLines) ? (metrics.visibleLines - 2) : linesPerChunk);
+
+  const rawLines = String(text).split('\n');
+  const lines = [];
+
+  for (const line of rawLines) {
+    if (!charsPerLine || line.length <= charsPerLine) {
+      lines.push(line);
+      continue;
+    }
+    for (let i = 0; i < line.length; i += charsPerLine) {
+      lines.push(line.slice(i, i + charsPerLine));
+    }
+  }
+
+  const total = Math.max(1, Math.ceil(lines.length / effectiveLinesPerChunk));
   for (let partIndex = total; partIndex >= 1; partIndex--) {
-    const startLine = (partIndex - 1) * linesPerChunk;
-    const part = lines.slice(startLine, startLine + linesPerChunk).join('\n');
-    console.log(`${prefix} [${partIndex}/${total}] lines=${Math.min(linesPerChunk, lines.length - startLine)} ${part}`);
+    const startLine = (partIndex - 1) * effectiveLinesPerChunk;
+    const part = lines.slice(startLine, startLine + effectiveLinesPerChunk).join('\n');
+    console.log(`${prefix} [${partIndex}/${total}] lines=${Math.min(effectiveLinesPerChunk, lines.length - startLine)} ${part}`);
   }
 }
 
