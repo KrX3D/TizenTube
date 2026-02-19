@@ -23,7 +23,7 @@
   "author": "TizenTube Contributors",
   "license": "GPL-3.0-only",
   "devDependencies": {
-    "@babel/preset-env": "^7.22.9",
+    "@babel/preset-env": "^7.29.0",
     "@rollup/plugin-babel": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^0.4.3",
