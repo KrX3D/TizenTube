@@ -15,8 +15,23 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
   }
 
   const parentContainer = baseContainer.parentElement;
-  const baseButtons = Array.from(baseContainer.querySelectorAll('ytlr-button-renderer'));
-  const parentButtons = parentContainer ? Array.from(parentContainer.querySelectorAll('ytlr-button-renderer')) : [];
+
+  const getVisibleButtons = (root) => {
+    if (!root) return [];
+    return Array.from(root.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
+      if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
+      const rect = btn.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return false;
+      const style = window.getComputedStyle(btn);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+      if (btn.getAttribute('aria-hidden') === 'true') return false;
+      const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
+      return !!text;
+    });
+  };
+
+  const baseButtons = getVisibleButtons(baseContainer);
+  const parentButtons = getVisibleButtons(parentContainer);
 
   if (attempt === 1 && debugEnabled) {
     console.log('[PLAYLIST_BUTTON] base buttons:', baseButtons.length, '| parent buttons:', parentButtons.length);
@@ -32,17 +47,7 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
     }
   });
 
-  const getNativeButtons = () => Array.from(container.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
-    if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
-    const rect = btn.getBoundingClientRect();
-    if (rect.width < 10 || rect.height < 10) return false;
-    const style = window.getComputedStyle(btn);
-    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
-    if (btn.getAttribute('aria-hidden') === 'true') return false;
-    const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!text) return false;
-    return true;
-  });
+  const getNativeButtons = () => getVisibleButtons(container);
 
   const existingButtons = getNativeButtons();
   const getButtonRect = (btn) => {
@@ -114,26 +119,15 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
 
   const setupCustomButton = (btn) => {
     btn.setAttribute('data-tizentube-collection-btn', '1');
+    btn.removeAttribute('idomkey');
     btn.removeAttribute('id');
     btn.setAttribute('tabindex', '0');
     btn.removeAttribute('aria-hidden');
-    btn.removeAttribute('style');
     btn.style.pointerEvents = 'auto';
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
-    btn.style.position = '';
-    btn.style.left = '';
-    btn.style.top = '';
-    btn.style.width = '';
-    btn.style.height = '';
-    btn.style.display = '';
-    btn.style.transform = '';
-    btn.style.zIndex = '';
-    btn.style.removeProperty('right');
-    btn.style.removeProperty('inset');
-    btn.style.removeProperty('margin-left');
     btn.removeAttribute('disablehybridnavinsubtree');
-    btn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
+    btn.querySelectorAll('[idomkey]').forEach((el) => el.removeAttribute('idomkey'));
     btn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
     btn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
 
@@ -172,6 +166,24 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
 
   if (templateBtn.nextElementSibling !== customBtn) {
     templateBtn.insertAdjacentElement('afterend', customBtn);
+  }
+
+  const templateRect = templateBtn.getBoundingClientRect();
+  const lastNativeRect = existingButtons[existingButtons.length - 1]?.getBoundingClientRect();
+  const previousNativeRect = existingButtons[existingButtons.length - 2]?.getBoundingClientRect();
+  const computedGap = previousNativeRect ? Math.round(lastNativeRect.top - previousNativeRect.top) : Math.round(templateRect.height);
+  const gap = Math.max(Math.round(templateRect.height), computedGap);
+  const desiredTranslateY = Math.round((lastNativeRect?.top || templateRect.top) - templateRect.top + gap);
+  if (Number.isFinite(desiredTranslateY)) {
+    customBtn.style.transform = `translateY(${desiredTranslateY}px)`;
+  }
+
+  if (container) {
+    container.style.overflow = 'visible';
+    container.style.minHeight = `${Math.max(container.getBoundingClientRect().height, desiredTranslateY + templateRect.height + 8)}px`;
+  }
+  if (parentContainer) {
+    parentContainer.style.overflow = 'visible';
   }
 
   window._playlistButtonInjectedUrl = currentUrl;
