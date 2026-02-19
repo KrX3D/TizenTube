@@ -1686,7 +1686,7 @@
         }
       }
 
-      if (!parentContainer && container) {
+      if (container) {
         // Getting out from the current spatnav container
         const candidates = filteredCandidates(eventTarget, getSpatialNavigationCandidates(container, option), dir, container);
 
