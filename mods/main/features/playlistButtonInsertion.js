@@ -23,16 +23,21 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
 
   const getVisibleButtons = (root) => {
     if (!root) return [];
-    return Array.from(root.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
+    const all = Array.from(root.querySelectorAll('ytlr-button-renderer')).filter((btn) => {
       if (btn.getAttribute('data-tizentube-collection-btn') === '1') return false;
       const rect = btn.getBoundingClientRect();
       if (rect.width < 10 || rect.height < 10) return false;
       const style = window.getComputedStyle(btn);
       if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
       if (btn.getAttribute('aria-hidden') === 'true') return false;
+      return true;
+    });
+
+    const withText = all.filter((btn) => {
       const text = (btn.textContent || '').replace(/\s+/g, ' ').trim();
       return !!text;
     });
+    return withText.length > 0 ? withText : all;
   };
 
   const baseButtons = getVisibleButtons(baseContainer);

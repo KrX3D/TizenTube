@@ -10,8 +10,14 @@ export function shouldHideWatchedForPage(configPages, page) {
   // Allow singular/plural aliases used by older configs.
   if (normalizedPage === 'channel' && normalizedConfigPages.includes('channels')) return true;
   if (normalizedPage === 'channels' && normalizedConfigPages.includes('channel')) return true;
+  if (normalizedPage === 'subscriptions' && normalizedConfigPages.includes('subscription')) return true;
+  if (normalizedPage === 'subscription' && normalizedConfigPages.includes('subscriptions')) return true;
   if ((normalizedPage === 'channel' || normalizedPage === 'channels') && normalizedConfigPages.length > 0) {
     // Channel filtering should remain active for legacy configs that missed the key.
+    return true;
+  }
+  if ((normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') && normalizedConfigPages.length > 0) {
+    // Keep watched filtering active on key browse pages for TV builds.
     return true;
   }
 

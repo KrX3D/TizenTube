@@ -391,8 +391,10 @@ export function directFilterArray(arr, page = 'other') {
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (isPlaylistPage && window._isLastPlaylistBatch === true) {
-    console.log('--------------------------------->> Using last batch flag from response');
-    console.log('--------------------------------->> This IS the last batch!');
+    if (DEBUG_ENABLED) {
+      console.log('--------------------------------->> Using last batch flag from response');
+      console.log('--------------------------------->> This IS the last batch!');
+    }
     isLastBatch = true;
     // Clear the flag
     window._isLastPlaylistBatch = false;
@@ -400,7 +402,9 @@ export function directFilterArray(arr, page = 'other') {
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    }
     
     // Store the helper IDs for filtering
     const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
@@ -409,7 +413,7 @@ export function directFilterArray(arr, page = 'other') {
     if (!isLastBatch) {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
-      console.log('[CLEANUP] Helpers cleared');
+      if (DEBUG_ENABLED) console.log('[CLEANUP] Helpers cleared');
     }
   }
 
