@@ -308,7 +308,7 @@ class SponsorBlockHandler {
       const skipName = barTypes[segment.category]?.name || segment.category;
       console.info(this.videoID, 'Skipping', segment);
       if (!this.manualSkippableCategories.includes(segment.category)) {
-        const wasSkippedBefore = this.skippedCategories.get(segment.UUID)
+        const wasSkippedBefore = this.skippedCategories.get(segment.UUID);
         if (wasSkippedBefore) {
           wasSkippedBefore.count++;
           wasSkippedBefore.lastSkipped = Date.now();
