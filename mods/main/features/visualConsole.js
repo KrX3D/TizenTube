@@ -109,6 +109,17 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
     }
   }
 
+  function escapeHtml(value) {
+    const str = value === null || value === undefined ? String(value) : String(value);
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\//g, '&#x2F;');
+  }
+
   function formatConsoleArgs(args) {
     return args.map((arg) => safeStringify(arg)).join(' ');
   }
@@ -173,7 +184,9 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
 
     const color = type === 'error' ? '#f00' : type === 'warn' ? '#ff0' : '#0f0';
     const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${timestamp}] ${message}</div>`;
+    const safeTimestamp = escapeHtml(timestamp);
+    const safeMessage = escapeHtml(message);
+    const logEntry = `<div style="color:${color};margin-bottom:5px;word-wrap:break-word;white-space:pre-wrap;">[${safeTimestamp}] ${safeMessage}</div>`;
 
     logs.unshift(logEntry);
     if (logs.length > 600) logs.pop();
