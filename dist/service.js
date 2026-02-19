@@ -51167,10 +51167,26 @@ function requireService() {
   var express = requireExpress();
   var cors = requireLib$2();
   var app = express();
+  var allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(function (origin) {
+    return origin.trim();
+  }).filter(Boolean);
   var corsOptions = {
-    origin: '*',
+    origin: function origin(_origin, callback) {
+      // Allow requests without Origin header (for local device/service calls).
+      if (!_origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Explicit whitelist mode: only allow configured origins.
+      if (allowedOrigins.length > 0 && allowedOrigins.includes(_origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    credentials: false,
     optionsSuccessStatus: 204
   };
   app.use(cors(corsOptions));
