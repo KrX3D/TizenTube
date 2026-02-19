@@ -17,10 +17,10 @@ initVisualConsole({
 import "./main/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';
-import '@formatjs/intl-getcanonicallocales/polyfill.iife'
-import '@formatjs/intl-locale/polyfill.iife'
-import '@formatjs/intl-displaynames/polyfill.iife'
-import '@formatjs/intl-displaynames/locale-data/en';
+import '@formatjs/intl-getcanonicallocales/polyfill-force.js'
+import '@formatjs/intl-locale/polyfill-force.js'
+import '@formatjs/intl-displaynames/polyfill-force.js'
+import '@formatjs/intl-displaynames/locale-data/en-001.js';
 
 import "./domrect-polyfill";
 import "./main/features/responsePatches.js";
