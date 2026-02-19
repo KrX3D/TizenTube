@@ -51120,8 +51120,24 @@ function requireService() {
         if (app) {
           var parsedData = launchData.split('&').reduce(function (acc, cur) {
             var parts = cur.split('=');
-            var key = parts[0];
-            var value = parts[1];
+  var allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '').split(',').map(function (origin) {
+    return origin.trim();
+  }).filter(Boolean);
+    origin: function origin(_origin, callback) {
+      // Allow requests without Origin header (for local device/service calls).
+      if (!_origin) {
+        callback(null, true);
+        return;
+      }
+
+      // Explicit whitelist mode: only allow configured origins.
+      if (allowedOrigins.length > 0 && allowedOrigins.includes(_origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
+    credentials: false,
             if (typeof value !== 'undefined') {
               acc[key] = value;
             } else {
