@@ -4,7 +4,7 @@ import css from './ui.css';
 import { configRead, configWrite } from '../config.js';
 import updateStyle from './theme.js';
 import { showToast } from './ytUI.js';
-import modernUI from './settings.js';
+import './settings.js';
 import resolveCommand, { patchResolveCommand } from '../resolveCommand.js';
 import { pipToFullscreen } from '../main/features/pictureInPicture.js';
 import getCommandExecutor from './customCommandExecution.js';
