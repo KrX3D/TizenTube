@@ -44,7 +44,7 @@ var sha256 = function sha256(ascii) {
 		words[i >> 2] |= j << ((3 - i) % 4) * 8;
 	}
 	words[words[lengthProperty]] = ((asciiBitLength / maxWord) | 0);
-	words[words[lengthProperty]] = (asciiBitLength)
+	words[words[lengthProperty]] = (asciiBitLength);
 
 	// process each chunk
 	for (j = 0; j < words[lengthProperty];) {
