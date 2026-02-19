@@ -71,7 +71,6 @@ function processSecondaryNav(sections, currentPage) {
       for (const tab of sectionRenderer.tabs) {
         const tabShelves = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabShelves)) {
-          pruneShortsShelvesByTitle(tabShelves, currentPage, 'secondaryNav.tabs');
           scanAndFilterAllArrays(tabShelves, currentPage, 'secondaryNav.tabs');
           processShelves(tabShelves, buildShelfProcessingOptions(currentPage));
         }
@@ -81,13 +80,6 @@ function processSecondaryNav(sections, currentPage) {
     if (Array.isArray(sectionRenderer.items)) {
       for (const item of sectionRenderer.items) {
         const content = item?.tvSecondaryNavItemRenderer?.content;
-        const itemTitle = item?.tvSecondaryNavItemRenderer?.title?.simpleText
-          || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
-          || '';
-        if (!configRead('enableShorts') && isShortsShelfTitle(itemTitle)) {
-          if (DEBUG_ENABLED) console.log('[SHORTS_SHELF] removed item title=', itemTitle, '| page=', currentPage, '| path=secondaryNav.items.title');
-          continue;
-        }
         if (!content) continue;
 
         const shelf = content?.shelfRenderer;
@@ -105,7 +97,6 @@ function processSecondaryNav(sections, currentPage) {
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contentShelves)) {
-          pruneShortsShelvesByTitle(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           scanAndFilterAllArrays(contentShelves, currentPage, 'secondaryNav.items.contentShelves');
           processShelves(contentShelves, buildShelfProcessingOptions(currentPage));
         }
