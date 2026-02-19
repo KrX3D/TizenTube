@@ -308,17 +308,12 @@ export function getShelfTitle(shelf) {
   };
 
   const titlePaths = [
-    shelf?.title,
-    shelf?.shelfRenderer?.title,
     shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
-    shelf?.richSectionRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
-    shelf?.tvSecondaryNavItemRenderer?.title,
-    shelf?.tvSecondaryNavSectionRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
   ];
