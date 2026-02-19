@@ -330,34 +330,74 @@ function hasShelvesArray(arr) {
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
-  const isPlaylistPage = page === 'playlist' || page === 'playlists';
+  // ⭐ Check if this is a playlist page
+  let isPlaylistPage;
+
+  // ⭐ Check if this is a playlist page
+  isPlaylistPage = (page === 'playlist' || page === 'playlists');
+
+  // ⭐ FILTER MODE: Only show videos from our collected list
   const filterIds = getFilteredVideoIds();
   const hideWatchedEnabled = configRead('enableHideWatchedVideos');
   const hideWatchedPages = configRead('hideWatchedVideosPages') || [];
   const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+  
+  // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
+  // Shorts filtering is INDEPENDENT - always check if shorts are disabled
   const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
+
+  // ⭐ Initialize scroll helpers tracker
 
   window._playlistScrollHelpers = window._playlistScrollHelpers || new Set();
   window._lastHelperVideos = window._lastHelperVideos || [];
   window._playlistRemovedHelpers = window._playlistRemovedHelpers || new Set();
   window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
 
+  
+  // ⭐ DIAGNOSTIC: Log what we're checking
+  if (isPlaylistPage && DEBUG_ENABLED) {
+    console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');
+    console.log('>>>>>> Has helpers:', window._lastHelperVideos?.length || 0);
+    console.log('>>>>>> Array length:', arr.length);
+    console.log('>>>>>> Last batch flag:', window._isLastPlaylistBatch);
+    console.log('>>>>>> Collection mode:', isInCollectionMode());
+  }
+
+  // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (isPlaylistPage && window._isLastPlaylistBatch === true) {
+    console.log('--------------------------------->> Using last batch flag from response');
+    console.log('--------------------------------->> This IS the last batch!');
     isLastBatch = true;
+    // Clear the flag
     window._isLastPlaylistBatch = false;
   }
 
-  // New batch arrived after we inserted helper fallback in previous call.
+  // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
+    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    
+    // Store the helper IDs for filtering
     const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
     trackRemovedPlaylistHelpers(helperIdsToTrack);
     trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
     if (!isLastBatch) {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
+      console.log('[CLEANUP] Helpers cleared');
     }
+  }
+
+  // ⭐ DEBUG: Log configuration
+  if (DEBUG_ENABLED && (shouldApplyShortsFilter || shouldHideWatched)) {
+    console.log('[FILTER_START #' + callId + '] ========================================');
+    console.log('[FILTER_START #' + callId + '] Page:', page);
+    console.log('[FILTER_START #' + callId + '] Is Playlist:', isPlaylistPage);
+    console.log('[FILTER_START #' + callId + '] Total items:', arr.length);
+    console.log('[FILTER_CONFIG #' + callId + '] Threshold:', watchedThreshold + '%');
+    console.log('[FILTER_CONFIG #' + callId + '] Hide watched:', shouldHideWatched);
+    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldApplyShortsFilter);
   }
 
   const out = [];
@@ -380,6 +420,9 @@ export function directFilterArray(arr, page = 'other') {
     }
 
     if (isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle)) {
+      if (LOG_SHORTS && DEBUG_ENABLED) {
+        console.log('[SHORTS_SHELF] Removing item by previously removed shorts shelf memory:', videoId);
+      }
       continue;
     }
 
@@ -465,6 +508,7 @@ export function directFilterArray(arr, page = 'other') {
 export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
   if (!obj || typeof obj !== 'object') return obj;
 
+  // If this is an array with video items, filter it
   if (Array.isArray(obj)) {
     if (obj.length === 0) return obj;
 
