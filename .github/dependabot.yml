@@ -1,30 +1,59 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+# Dependabot configuration for version and security updates.
+# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  # GitHub Actions workflow dependencies (actions/*)
+  # GitHub Actions workflow dependencies
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   # Root package.json
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      root-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   # mods/package.json
   - package-ecosystem: "npm"
     directory: "/mods"
     schedule:
       interval: "weekly"
+    groups:
+      mods-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
 
   # service/package.json
   - package-ecosystem: "npm"
     directory: "/service"
     schedule:
       interval: "weekly"
+    groups:
+      service-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  # standalone/package.json + pnpm lockfile
+  - package-ecosystem: "npm"
+    directory: "/standalone"
+    schedule:
+      interval: "weekly"
+    groups:
+      standalone-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
