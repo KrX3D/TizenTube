@@ -1,21 +1,15 @@
-// Central runtime toggles (requested single place).
-// Set to true/false here to force values globally.
-export const FORCE_DEBUG_ENABLED = true;
-export const FORCE_SHORTS_ENABLED = false;
-export const FORCE_LOG_SHORTS = false;
+// Global logging toggles used by feature modules.
+// Set to true/false to force logging behavior, or null to follow app config.
+export const FORCE_DEBUG_LOGGING = null;
+export const FORCE_SHORTS_LOGGING = null;
 
-export function getDebugEnabled(configRead) {
-  if (typeof FORCE_DEBUG_ENABLED === 'boolean') return FORCE_DEBUG_ENABLED;
+export function getGlobalDebugEnabled(configRead) {
+  if (typeof FORCE_DEBUG_LOGGING === 'boolean') return FORCE_DEBUG_LOGGING;
   return !!configRead?.('enableDebugConsole');
 }
 
-export function getShortsEnabled(configRead) {
-  if (typeof FORCE_SHORTS_ENABLED === 'boolean') return FORCE_SHORTS_ENABLED;
-  return !!configRead?.('enableShorts');
-}
-
-export function getLogShortsEnabled(configRead) {
-  if (typeof FORCE_LOG_SHORTS === 'boolean') return FORCE_LOG_SHORTS;
+export function getGlobalLogShorts(configRead) {
+  if (typeof FORCE_SHORTS_LOGGING === 'boolean') return FORCE_SHORTS_LOGGING;
   return !!configRead?.('enableDebugConsole');
 }
 

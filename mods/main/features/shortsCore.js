@@ -1,10 +1,10 @@
 import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
-import { getDebugEnabled, getShortsEnabled, getLogShortsEnabled } from './visualConsole.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 
-let DEBUG_ENABLED = getDebugEnabled(configRead);
-let LOG_SHORTS = getLogShortsEnabled(configRead);
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+let LOG_SHORTS = getGlobalLogShorts(configRead);
 let filterCallCounter = 0;
 
 if (typeof window !== 'undefined') {
@@ -12,24 +12,8 @@ if (typeof window !== 'undefined') {
     if (!window.configChangeEmitter) return;
     window.configChangeEmitter.addEventListener('configChange', (event) => {
       if (event.detail?.key === 'enableDebugConsole') {
-        DEBUG_ENABLED = getDebugEnabled(configRead);
-        LOG_SHORTS = getLogShortsEnabled(configRead);
-      }
-    });
-  }, 100);
-}
-
-let DEBUG_ENABLED = !!configRead('enableDebugConsole');
-let LOG_SHORTS = DEBUG_ENABLED;
-let filterCallCounter = 0;
-
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    if (!window.configChangeEmitter) return;
-    window.configChangeEmitter.addEventListener('configChange', (event) => {
-      if (event.detail?.key === 'enableDebugConsole') {
-        DEBUG_ENABLED = !!event.detail.value;
-        LOG_SHORTS = DEBUG_ENABLED;
+        DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+        LOG_SHORTS = getGlobalLogShorts(configRead);
       }
     });
   }, 100);

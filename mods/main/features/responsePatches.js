@@ -13,10 +13,10 @@ import { detectCurrentPage } from '../pageDetection.js';
 import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
-import { getDebugEnabled, getShortsEnabled, getLogShortsEnabled } from './visualConsole.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 
 
-let DEBUG_ENABLED = getDebugEnabled(configRead);
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
 window.adblock.setDebugEnabled = function(value) {
   DEBUG_ENABLED = !!value;
@@ -28,7 +28,7 @@ if (typeof window !== 'undefined') {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (event) => {
         if (event.detail?.key === 'enableDebugConsole') {
-          DEBUG_ENABLED = getDebugEnabled(configRead);
+          DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
         }
       });
     }
@@ -47,7 +47,7 @@ function buildShelfProcessingOptions(pageOverride) {
     shortsEnabled: getShortsEnabled(configRead),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
-    logShorts: getLogShortsEnabled(configRead)
+    logShorts: getGlobalLogShorts(configRead)
   };
 }
 
@@ -84,7 +84,7 @@ function processSecondaryNav(sections, currentPage) {
         const itemTitle = item?.tvSecondaryNavItemRenderer?.title?.simpleText
           || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
           || '';
-        if (!getShortsEnabled(configRead) && isShortsShelfTitle(itemTitle)) {
+        if (!configRead('enableShorts') && isShortsShelfTitle(itemTitle)) {
           if (DEBUG_ENABLED) console.log('[SHORTS_SHELF] removed item title=', itemTitle, '| page=', currentPage, '| path=secondaryNav.items.title');
           continue;
         }
@@ -115,7 +115,7 @@ function processSecondaryNav(sections, currentPage) {
 }
 
 function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
-  if (!Array.isArray(shelves) || getShortsEnabled(configRead)) return;
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
 
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelf = shelves[i];
