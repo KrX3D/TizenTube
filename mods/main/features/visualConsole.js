@@ -352,14 +352,14 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
         currentHeight = newHeight;
         if (consoleDiv) {
           consoleDiv.style.height = newHeight + 'px';
-          updateConsoleMetrics();
+          //updateConsoleMetrics();
         }
       }
     } catch (e) {}
   }, 500);
 
-  window.addEventListener('resize', updateConsoleMetrics);
-  updateConsoleMetrics();
+  //window.addEventListener('resize', updateConsoleMetrics);
+  //updateConsoleMetrics();
 
   console.log('[Console] ========================================');
   console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' - NEWEST FIRST');
