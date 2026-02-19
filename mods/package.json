@@ -11,7 +11,7 @@
   "author": "Reis Can, YouTube WebOs contributors",
   "license": "GPL-3.0-only",
   "dependencies": {
-    "@babel/preset-env": "^7.22.9",
+    "@babel/preset-env": "^7.29.0",
     "@formatjs/intl-displaynames": "^6.8.13",
     "@formatjs/intl-getcanonicallocales": "^3.2.1",
     "@formatjs/intl-locale": "^5.2.1",
