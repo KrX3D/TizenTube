@@ -56,6 +56,15 @@ export function patchResolveCommand() {
 
             const ogResolve = window._yttv[key].instance.resolveCommand;
             window._yttv[key].instance.resolveCommand = function (cmd, _) {
+                if (Array.isArray(cmd?.commandExecutorCommand?.commands)) {
+                    // Execute each nested command in order (e.g. setClientSettingEndpoint + customAction)
+                    // so toggles/array selections are applied before reopening menus.
+                    for (const nestedCmd of cmd.commandExecutorCommand.commands) {
+                        this.resolveCommand(nestedCmd, _);
+                    }
+                    return true;
+                }
+
                 if (cmd.setClientSettingEndpoint) {
                     // Command to change client settings. Use TizenTube configuration to change settings.
                     for (const settings of cmd.setClientSettingEndpoint.settingDatas) {
@@ -190,7 +199,7 @@ function customAction(action, parameters) {
             if (typeof window.toggleDebugConsole === 'function') {
                 window.toggleDebugConsole();
                 
-                // ⭐ UPDATE: Manually update the cached DEBUG_ENABLED in adblock.js
+                // Update the cached DEBUG_ENABLED value used by response patches
                 const newValue = configRead('enableDebugConsole');
                 if (window.adblock && window.adblock.setDebugEnabled) {
                     window.adblock.setDebugEnabled(newValue);
@@ -215,7 +224,7 @@ function customAction(action, parameters) {
             if (consoleDiv) {
                 consoleDiv.style.display = 'block';
                 consoleDiv.style.zIndex = '999999';
-                console.log('✓ Console DIV found and forced visible')
+                console.log('✓ Console DIV found and forced visible');
                 showToast('Console', 'Console should be visible now');
             } else {
                 console.error('✗ Console DIV not found!');

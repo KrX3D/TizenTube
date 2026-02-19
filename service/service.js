@@ -3,10 +3,29 @@ const express = require('express');
 const cors = require('cors');
 const app = express();
 
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 const corsOptions = {
-    origin: '*',
+    origin(origin, callback) {
+        // Allow requests without Origin header (for local device/service calls).
+        if (!origin) {
+            callback(null, true);
+            return;
+        }
+
+        // Explicit whitelist mode: only allow configured origins.
+        if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+        }
+
+        callback(null, false);
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    credentials: false,
     optionsSuccessStatus: 204
 };
 
@@ -73,7 +92,7 @@ const dialServer = new dial.Server({
                 
                 if (parsedData.yumi) {
                     app.additionalData = parsedData;
-                    app.state = "running"
+                    app.state = "running";
                     callback("");
                     return;
                 }

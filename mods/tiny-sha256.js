@@ -44,7 +44,7 @@ var sha256 = function sha256(ascii) {
 		words[i >> 2] |= j << ((3 - i) % 4) * 8;
 	}
 	words[words[lengthProperty]] = ((asciiBitLength / maxWord) | 0);
-	words[words[lengthProperty]] = (asciiBitLength)
+	words[words[lengthProperty]] = (asciiBitLength);
 
 	// process each chunk
 	for (j = 0; j < words[lengthProperty];) {
@@ -55,7 +55,6 @@ var sha256 = function sha256(ascii) {
 		hash = hash.slice(0, 8);
 
 		for (i = 0; i < 64; i++) {
-			var i2 = i + j;
 			// Expand the message into 64 words
 			// Used below if 
 			var w15 = w[i - 15], w2 = w[i - 2];

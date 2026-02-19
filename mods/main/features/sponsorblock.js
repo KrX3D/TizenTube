@@ -113,7 +113,7 @@ class SponsorBlockHandler {
         this.segmentsoverlay.style.setProperty('top', `${sliderRect.top}px`, 'important');
       }
       this.scheduleSkip();
-    }
+    };
     this.durationChangeHandler = () => this.buildOverlay();
 
     this.attachVideo();
@@ -308,7 +308,7 @@ class SponsorBlockHandler {
       const skipName = barTypes[segment.category]?.name || segment.category;
       console.info(this.videoID, 'Skipping', segment);
       if (!this.manualSkippableCategories.includes(segment.category)) {
-        const wasSkippedBefore = this.skippedCategories.get(segment.UUID)
+        const wasSkippedBefore = this.skippedCategories.get(segment.UUID);
         if (wasSkippedBefore) {
           wasSkippedBefore.count++;
           wasSkippedBefore.lastSkipped = Date.now();
@@ -395,20 +395,32 @@ window.sponsorblock = null;
 window.addEventListener(
   'hashchange',
   () => {
-    const newURL = new URL(location.hash.substring(1), location.href);
-    // A hack, but it works, so...
-    const videoID = newURL.search.replace('?v=', '').split('&')[0];
+    const hash = location.hash ? location.hash.substring(1) : '';
+    const newURL = new URL(hash || '/', location.href);
+    const isWatchLike = hash.includes('/watch') || newURL.pathname.includes('/watch');
+    const videoID = isWatchLike ? (newURL.searchParams.get('v') || '') : '';
     const needsReload =
-      videoID &&
+      !!videoID &&
       (!window.sponsorblock || window.sponsorblock.videoID != videoID);
 
     console.info(
       'hashchange',
-      videoID,
+      videoID || '(no-watch-video)',
       window.sponsorblock,
       window.sponsorblock ? window.sponsorblock.videoID : null,
       needsReload
     );
+
+    if (!videoID && window.sponsorblock) {
+      // Leaving watch pages: clear current handler.
+      try {
+        window.sponsorblock.destroy();
+      } catch (err) {
+        console.warn('window.sponsorblock.destroy() failed!', err);
+      }
+      window.sponsorblock = null;
+      return;
+    }
 
     if (needsReload) {
       if (window.sponsorblock) {
