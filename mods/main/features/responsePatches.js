@@ -155,6 +155,7 @@ function resolveEffectivePage(currentPage) {
   const combined = `${href} ${hash}`;
 
   if (combined.includes('fesubscription')) return 'subscriptions';
+  if (combined.includes('subscription')) return 'subscriptions';
   if (combined.includes('felibrary')) return 'library';
   if (combined.includes('fehistory')) return 'history';
   if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
@@ -311,7 +312,7 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = effectivePage === 'watch';
   if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;

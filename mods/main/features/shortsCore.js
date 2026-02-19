@@ -140,6 +140,28 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
   return removed;
 }
 
+
+function getRendererDurationSeconds(renderer) {
+  if (!renderer || typeof renderer !== 'object') return null;
+
+  const overlayText = Array.isArray(renderer.thumbnailOverlays)
+    ? renderer.thumbnailOverlays.find((o) => o?.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    : null;
+
+  const directLength = renderer.lengthText?.simpleText
+    || (Array.isArray(renderer.lengthText?.runs) ? renderer.lengthText.runs.map((run) => run.text).join('') : null)
+    || renderer.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    || overlayText
+    || null;
+
+  const match = String(directLength || '').trim().match(/^(\d+):(\d{2})$/);
+  if (!match) return null;
+
+  const minutes = parseInt(match[1], 10);
+  const seconds = parseInt(match[2], 10);
+  return minutes * 60 + seconds;
+}
+
 export function filterShortItems(items, { page, debugEnabled = false, logShorts = false } = {}) {
   if (!Array.isArray(items)) return { items: [], removed: 0 };
   const filtered = items.filter((item) => !isShortItem(item, { debugEnabled, logShorts, currentPage: page || 'other' }));
@@ -214,44 +236,29 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   const videoTitle = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || '';
   if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) return true;
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((o) => o.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
-    }
+  let durationSeconds = getRendererDurationSeconds(item.videoRenderer)
+    ?? getRendererDurationSeconds(item.gridVideoRenderer)
+    ?? getRendererDurationSeconds(item.compactVideoRenderer);
 
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (i) => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
+  if (durationSeconds == null && item.tileRenderer) {
+    const tileOverlayText = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)
+      ?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText;
 
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const minutes = parseInt(durationMatch[1], 10);
-        const seconds = parseInt(durationMatch[2], 10);
-        const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-        
-        // Extended check for 90-180 seconds Shorts can be nowt till 3min
-        if (totalSeconds <= 180) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-      }
+    const tileLineText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (i) => i?.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+
+    const durationMatch = String(tileOverlayText || tileLineText || '').trim().match(/^(\d+):(\d{2})$/);
+    if (durationMatch) {
+      durationSeconds = parseInt(durationMatch[1], 10) * 60 + parseInt(durationMatch[2], 10);
     }
+  }
+
+  if (durationSeconds != null && durationSeconds <= 180) {
+    if (debugEnabled && logShorts) {
+      console.log('[SHORTS] Detected by duration (≤ 180s):', videoId, '| Duration:', durationSeconds + 's');
+    }
+    return true;
   }
 
   if (item.richItemRenderer?.content?.reelItemRenderer) return true;
