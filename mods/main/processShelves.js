@@ -75,6 +75,13 @@ export function processShelves(shelves, options = {}) {
 
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelf = shelves[i];
+
+    // Cleanup: remove null/undefined shelves
+    if (!shelf || typeof shelf !== 'object') {
+      shelves.splice(i, 1);
+      continue;
+    }
+
     const ref = getShelfItemsRef(shelf);
     if (!ref) continue;
 
@@ -113,7 +120,11 @@ export function processShelves(shelves, options = {}) {
     ref.parent[ref.key] = items;
 
     if (!Array.isArray(items) || items.length === 0) {
+      if (debugEnabled) {
+        console.log('[SHELF_CLEANUP] Removing empty shelf');
+      }
       shelves.splice(i, 1);
+      continue;
     }
   }
 }
