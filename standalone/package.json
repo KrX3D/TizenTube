@@ -24,7 +24,7 @@
   "license": "GPL-3.0-only",
   "devDependencies": {
     "@babel/preset-env": "^7.22.9",
-    "@rollup/plugin-babel": "^6.0.3",
+    "@rollup/plugin-babel": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-terser": "^0.4.3",
     "rollup": "^4.57.1",
