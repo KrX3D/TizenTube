@@ -1,6 +1,23 @@
 import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
+
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+let LOG_SHORTS = getGlobalLogShorts(configRead);
+let filterCallCounter = 0;
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+        LOG_SHORTS = getGlobalLogShorts(configRead);
+      }
+    });
+  }, 100);
+}
 
 
 
@@ -123,6 +140,28 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
   return removed;
 }
 
+
+function getRendererDurationSeconds(renderer) {
+  if (!renderer || typeof renderer !== 'object') return null;
+
+  const overlayText = Array.isArray(renderer.thumbnailOverlays)
+    ? renderer.thumbnailOverlays.find((o) => o?.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    : null;
+
+  const directLength = renderer.lengthText?.simpleText
+    || (Array.isArray(renderer.lengthText?.runs) ? renderer.lengthText.runs.map((run) => run.text).join('') : null)
+    || renderer.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    || overlayText
+    || null;
+
+  const match = String(directLength || '').trim().match(/^(\d+):(\d{2})$/);
+  if (!match) return null;
+
+  const minutes = parseInt(match[1], 10);
+  const seconds = parseInt(match[2], 10);
+  return minutes * 60 + seconds;
+}
+
 export function filterShortItems(items, { page, debugEnabled = false, logShorts = false } = {}) {
   if (!Array.isArray(items)) return { items: [], removed: 0 };
   const filtered = items.filter((item) => !isShortItem(item, { debugEnabled, logShorts, currentPage: page || 'other' }));
@@ -197,44 +236,29 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   const videoTitle = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || '';
   if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) return true;
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((o) => o.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
-    }
+  let durationSeconds = getRendererDurationSeconds(item.videoRenderer)
+    ?? getRendererDurationSeconds(item.gridVideoRenderer)
+    ?? getRendererDurationSeconds(item.compactVideoRenderer);
 
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (i) => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
+  if (durationSeconds == null && item.tileRenderer) {
+    const tileOverlayText = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)
+      ?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText;
 
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const minutes = parseInt(durationMatch[1], 10);
-        const seconds = parseInt(durationMatch[2], 10);
-        const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-        
-        // Extended check for 90-180 seconds Shorts can be nowt till 3min
-        if (totalSeconds <= 180) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-      }
+    const tileLineText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (i) => i?.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+
+    const durationMatch = String(tileOverlayText || tileLineText || '').trim().match(/^(\d+):(\d{2})$/);
+    if (durationMatch) {
+      durationSeconds = parseInt(durationMatch[1], 10) * 60 + parseInt(durationMatch[2], 10);
     }
+  }
+
+  if (durationSeconds != null && durationSeconds <= 180) {
+    if (debugEnabled && logShorts) {
+      console.log('[SHORTS] Detected by duration (≤ 180s):', videoId, '| Duration:', durationSeconds + 's');
+    }
+    return true;
   }
 
   if (item.richItemRenderer?.content?.reelItemRenderer) return true;
@@ -330,6 +354,8 @@ function hasShelvesArray(arr) {
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
+  const callId = ++filterCallCounter;
+
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
 
@@ -367,8 +393,10 @@ export function directFilterArray(arr, page = 'other') {
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (isPlaylistPage && window._isLastPlaylistBatch === true) {
-    console.log('--------------------------------->> Using last batch flag from response');
-    console.log('--------------------------------->> This IS the last batch!');
+    if (DEBUG_ENABLED) {
+      console.log('--------------------------------->> Using last batch flag from response');
+      console.log('--------------------------------->> This IS the last batch!');
+    }
     isLastBatch = true;
     // Clear the flag
     window._isLastPlaylistBatch = false;
@@ -376,7 +404,9 @@ export function directFilterArray(arr, page = 'other') {
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    }
     
     // Store the helper IDs for filtering
     const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
@@ -385,7 +415,7 @@ export function directFilterArray(arr, page = 'other') {
     if (!isLastBatch) {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
-      console.log('[CLEANUP] Helpers cleared');
+      if (DEBUG_ENABLED) console.log('[CLEANUP] Helpers cleared');
     }
   }
 
@@ -525,8 +555,8 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
         shortsEnabled: configRead('enableShorts'),
         collectVideoIdsFromShelf,
         getVideoTitle,
-        debugEnabled: configRead('enableDebugConsole'),
-        logShorts: configRead('enableDebugConsole'),
+        debugEnabled: DEBUG_ENABLED,
+        logShorts: LOG_SHORTS,
         path
       });
     }
