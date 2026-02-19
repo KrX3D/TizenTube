@@ -371,7 +371,7 @@ export function directFilterArray(arr, page = 'other') {
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
+  const shouldApplyShortsFilter = shouldFilterShorts(getShortsEnabled(configRead), page);
 
   // ⭐ Initialize scroll helpers tracker
 
@@ -552,7 +552,7 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
     if (hasShelvesArray(obj)) {
       removeShortsShelvesByTitle(obj, {
         page,
-        shortsEnabled: configRead('enableShorts'),
+        shortsEnabled: getShortsEnabled(configRead),
         collectVideoIdsFromShelf,
         getVideoTitle,
         debugEnabled: DEBUG_ENABLED,
