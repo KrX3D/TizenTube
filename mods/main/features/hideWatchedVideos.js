@@ -6,6 +6,8 @@ export function shouldHideWatchedForPage(configPages, page) {
 
   // Library playlist overview / watch-next should follow library watched-filter setting.
   if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
+    return true;
+  }
 
   return false;
 }
