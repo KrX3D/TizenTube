@@ -146,6 +146,39 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
   });
 }
 
+
+function resolveEffectivePage(currentPage) {
+  if (currentPage && currentPage !== 'other') return currentPage;
+
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  const combined = `${href} ${hash}`;
+
+  if (combined.includes('fesubscription')) return 'subscriptions';
+  if (combined.includes('felibrary')) return 'library';
+  if (combined.includes('fehistory')) return 'history';
+  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+  if (combined.includes('/channel/') || combined.includes('/@') || /\/browse\/(uc|hc)/.test(combined)) return 'channel';
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
+}
+
+function processBrowseTabs(tabs, effectivePage, path) {
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
+    if (!Array.isArray(contents)) continue;
+
+    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+      maybeStartPlaylistAutoload(effectivePage);
+    }
+
+    processShelves(contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(contents, effectivePage, path);
+  }
+}
+
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
@@ -154,7 +187,7 @@ function filterContinuationItemContainer(container, page, path) {
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
-  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  const effectivePage = resolveEffectivePage(currentPage);
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
@@ -179,6 +212,19 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.title?.runs) {
     PatchSettings(parsedResponse);
   }
+
+
+  processBrowseTabs(
+    parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'singleColumnBrowseResultsRenderer.tabs'
+  );
+
+  processBrowseTabs(
+    parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'twoColumnBrowseResultsRenderer.tabs'
+  );
 
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
     processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
