@@ -9,31 +9,6 @@ const interval = setInterval(() => {
     }
 }, 1000);
 
-function execute_once_dom_loaded_speed() {
-    document.querySelector('video').addEventListener('canplay', () => {
-        document.getElementsByTagName('video')[0].playbackRate = configRead('videoSpeed');;
-    });
-
-    const eventHandler = (evt) => {
-        if (evt.keyCode == 406 || evt.keyCode == 191) {
-            evt.preventDefault();
-            evt.stopPropagation();
-            if (evt.type === 'keydown') {
-                speedSettings();
-                return false;
-            }
-            return true;
-        };
-    }
-
-    // Red, Green, Yellow, Blue
-    // 403, 404, 405, 406
-    // ---, 172, 170, 191
-    document.addEventListener('keydown', eventHandler, true);
-    document.addEventListener('keypress', eventHandler, true);
-    document.addEventListener('keyup', eventHandler, true);
-}
-
 function speedSettings() {
     const currentSpeed = configRead('videoSpeed');
     let selectedIndex = 0;
