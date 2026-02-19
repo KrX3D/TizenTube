@@ -6,6 +6,7 @@ export function detectCurrentPage() {
 
   const cleanHash = hash.split('?additionalDataUrl')[0];
 
+  // Extract browse parameters
   let browseParam = '';
   const cMatch = hash.match(/[?&]c=([^&]+)/i);
   if (cMatch) browseParam = cMatch[1].toLowerCase();
@@ -25,12 +26,17 @@ export function detectCurrentPage() {
   else if (browseParam === 'fehistory') detectedPage = 'history';
   else if (browseParam === 'femy_youtube') detectedPage = 'playlist';
   else if (browseParam === 'feplaylist_aggregation') detectedPage = 'playlists';
-  else if (browseParam.startsWith('vlpl')) detectedPage = 'playlist';
-  else if (browseParam === 'vlwl') detectedPage = 'playlist';
-  else if (browseParam === 'vlll') detectedPage = 'playlist';
+  // Individual playlists (VL prefix = Video List)
+  else if (browseParam.startsWith('vlpl')) detectedPage = 'playlist'; // User playlist
+  else if (browseParam === 'vlwl') detectedPage = 'playlist'; // Watch Later
+  else if (browseParam === 'vlll') detectedPage = 'playlist'; // Liked Videos
+
+  // Topics (home variations)
   else if (browseParam.includes('fetopics_music') || browseParam.includes('music')) detectedPage = 'music';
   else if (browseParam.includes('fetopics_gaming') || browseParam.includes('gaming')) detectedPage = 'gaming';
   else if (browseParam.includes('fetopics')) detectedPage = 'home';
+  
+  // Channel pages
   else if (browseParam.startsWith('uc') && browseParam.length > 10) detectedPage = 'channel';
 
   // PRIORITY 2: URL patterns

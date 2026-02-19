@@ -4,6 +4,7 @@ export function shouldHideWatchedForPage(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
   if (configPages.includes(page)) return true;
 
+  // Library playlist overview / watch-next should follow library watched-filter setting.
   if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
     return true;
   }
@@ -30,10 +31,14 @@ export function findProgressBar(item) {
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
 
+    // Comprehensive overlay paths
     const overlayPaths = [
+      // Standard paths (Tizen 6.5)
       renderer.thumbnailOverlays,
       renderer.header?.tileHeaderRenderer?.thumbnailOverlays,
       renderer.thumbnail?.thumbnailOverlays,
+      
+      // Alternative paths (Tizen 5.0)
       renderer.thumbnailOverlayRenderer,
       renderer.overlay,
       renderer.overlays
@@ -42,19 +47,22 @@ export function findProgressBar(item) {
     for (const overlays of overlayPaths) {
       if (!overlays) continue;
 
+      // Handle array
       if (Array.isArray(overlays)) {
         const progressOverlay = overlays.find((o) => o?.thumbnailOverlayResumePlaybackRenderer);
         if (progressOverlay) {
           return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
         }
-      } else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
+      }
+      // Handle direct object
+      else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
         return overlays.thumbnailOverlayResumePlaybackRenderer;
       }
     }
-
     return null;
   };
 
+  // Check all renderer types
   const rendererTypes = [
     item.tileRenderer,
     item.playlistVideoRenderer,

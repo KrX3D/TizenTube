@@ -1,5 +1,8 @@
+// ⭐ PLAYLIST COLLECTION MODE: Store unwatched videos, then reload filtered
 const PLAYLIST_STORAGE_KEY = 'tizentube_playlist_unwatched';
 
+// ⭐ NO CSS HIDING - Helpers will be visible, but that's OK
+// Trying to hide them causes empty space and layout issues
 export function trackRemovedPlaylistHelpers(helperIds) {
   if (!window._playlistRemovedHelpers) {
     window._playlistRemovedHelpers = new Set();
@@ -75,6 +78,7 @@ export function isInCollectionMode() {
 
   try {
     const data = JSON.parse(stored);
+    // Collection mode expires after 5 minutes
     if (Date.now() - data.timestamp > 5 * 60 * 1000) {
       localStorage.removeItem(PLAYLIST_STORAGE_KEY);
       return false;
@@ -109,6 +113,7 @@ export function startCollectionMode() {
     timestamp: Date.now(),
     videoIds: []
   }));
+  // Reload page to start fresh
   window.location.reload();
 }
 
@@ -121,6 +126,7 @@ export function finishCollectionAndFilter(unwatchedIds) {
     timestamp: Date.now(),
     videoIds: unwatchedIds
   }));
+  // Reload page in filter mode
   window.location.reload();
 }
 
