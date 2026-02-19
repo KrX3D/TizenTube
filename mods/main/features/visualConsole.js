@@ -1,3 +1,24 @@
+// Central runtime toggles (requested single place).
+// Set to true/false here to force values globally.
+export const FORCE_DEBUG_ENABLED = true;
+export const FORCE_SHORTS_ENABLED = false;
+export const FORCE_LOG_SHORTS = false;
+
+export function getDebugEnabled(configRead) {
+  if (typeof FORCE_DEBUG_ENABLED === 'boolean') return FORCE_DEBUG_ENABLED;
+  return !!configRead?.('enableDebugConsole');
+}
+
+export function getShortsEnabled(configRead) {
+  if (typeof FORCE_SHORTS_ENABLED === 'boolean') return FORCE_SHORTS_ENABLED;
+  return !!configRead?.('enableShorts');
+}
+
+export function getLogShortsEnabled(configRead) {
+  if (typeof FORCE_LOG_SHORTS === 'boolean') return FORCE_LOG_SHORTS;
+  return !!configRead?.('enableDebugConsole');
+}
+
 export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveCommand, configWrite }) {
   const CONFIG_KEY = 'ytaf-configuration';
 
@@ -84,6 +105,38 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
 
   let logs = [];
   window.consoleAutoScroll = true;
+
+  function updateConsoleMetrics() {
+    if (!consoleDiv) return;
+
+    const style = window.getComputedStyle(consoleDiv);
+    const fontSize = parseFloat(style.fontSize) || 13;
+    const fontFamily = style.fontFamily || 'monospace';
+    const lineHeight = parseFloat(style.lineHeight) || Math.round(fontSize * 1.3);
+    const padLeft = parseFloat(style.paddingLeft) || 0;
+    const padRight = parseFloat(style.paddingRight) || 0;
+    const padTop = parseFloat(style.paddingTop) || 0;
+    const padBottom = parseFloat(style.paddingBottom) || 0;
+    const innerWidth = Math.max(100, consoleDiv.clientWidth - padLeft - padRight);
+    const innerHeight = Math.max(60, consoleDiv.clientHeight - padTop - padBottom);
+
+    let charWidth = Math.max(6, fontSize * 0.6);
+    try {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = `${fontSize}px ${fontFamily}`;
+        const measured = ctx.measureText('M').width;
+        if (Number.isFinite(measured) && measured > 0) {
+          charWidth = measured;
+        }
+      }
+    } catch (_) {}
+
+    const charsPerLine = Math.max(28, Math.floor(innerWidth / charWidth));
+    const visibleLines = Math.max(8, Math.floor(innerHeight / Math.max(14, lineHeight)));
+    window._ttConsoleMetrics = { charsPerLine, visibleLines };
+  }
 
   function safeStringify(value) {
     if (typeof value === 'string') return value;
@@ -302,10 +355,16 @@ export function initVisualConsole({ APP_VERSION, APP_VERSION_LABEL, resolveComma
       const newHeight = config.debugConsoleHeight || '500';
       if (newHeight !== currentHeight) {
         currentHeight = newHeight;
-        if (consoleDiv) consoleDiv.style.height = newHeight + 'px';
+        if (consoleDiv) {
+          consoleDiv.style.height = newHeight + 'px';
+          updateConsoleMetrics();
+        }
       }
     } catch (e) {}
   }, 500);
+
+  window.addEventListener('resize', updateConsoleMetrics);
+  updateConsoleMetrics();
 
   console.log('[Console] ========================================');
   console.log('[Console] Visual Console ' + APP_VERSION_LABEL + ' - NEWEST FIRST');
