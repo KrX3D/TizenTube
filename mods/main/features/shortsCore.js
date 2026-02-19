@@ -11,7 +11,6 @@ export function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
-    item?.reelItemRenderer?.videoId ||
     null;
 }
 
@@ -220,13 +219,25 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
         const minutes = parseInt(durationMatch[1], 10);
         const seconds = parseInt(durationMatch[2], 10);
         const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 180) return true;
+        if (totalSeconds <= 90) {
+          if (debugEnabled && logShorts) {
+            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
+          }
+          return true;
+        }
+        
+        // Extended check for 90-180 seconds Shorts can be nowt till 3min
+        if (totalSeconds <= 180) {
+          if (debugEnabled && logShorts) {
+            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
+          }
+          return true;
+        }
       }
     }
   }
 
   if (item.richItemRenderer?.content?.reelItemRenderer) return true;
-  if (item.reelItemRenderer) return true;
 
   if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) {
     const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
@@ -285,8 +296,6 @@ export function getShelfTitle(shelf) {
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
-    shelf?.reelShelfRenderer?.title,
-    shelf?.itemSectionRenderer?.header?.shelfHeaderRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
@@ -300,26 +309,20 @@ export function getShelfTitle(shelf) {
   return '';
 }
 
-
 function hasVideoItemsArray(arr) {
   return arr.some((item) =>
-    item?.tileRenderer ||
-    item?.videoRenderer ||
-    item?.playlistVideoRenderer ||
-    item?.gridVideoRenderer ||
-    item?.compactVideoRenderer ||
-    item?.richItemRenderer?.content?.videoRenderer ||
-    item?.richItemRenderer?.content?.reelItemRenderer ||
-    item?.reelItemRenderer
-  );
+      item?.tileRenderer || 
+      item?.videoRenderer || 
+      item?.gridVideoRenderer ||
+      item?.compactVideoRenderer ||
+      item?.richItemRenderer?.content?.videoRenderer
+    );
 }
 
 function hasShelvesArray(arr) {
   return arr.some((item) =>
     item?.shelfRenderer ||
     item?.richShelfRenderer ||
-    item?.reelShelfRenderer ||
-    item?.itemSectionRenderer ||
     item?.gridRenderer
   );
 }
@@ -466,6 +469,9 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
     if (obj.length === 0) return obj;
 
     if (hasVideoItemsArray(obj)) {
+      if (DEBUG_ENABLED) {
+        console.log('[SCAN] Found video array at:', path, '| Length:', obj.length);
+      }
       return directFilterArray(obj, page);
     }
 
