@@ -739,7 +739,7 @@
     currentOption = {candidates: getSpatialNavigationCandidates(container, {mode: option}), container};
 
     // Behavior after 'navnotarget' - Getting out from the current spatnav container
-    if ((!parentContainer && container) && focusingController(eventTarget.spatialNavigationSearch(dir, currentOption), dir)) return;
+    if (container && focusingController(eventTarget.spatialNavigationSearch(dir, currentOption), dir)) return;
 
     if (!createSpatNavEvents('notarget', currentOption.container, eventTarget, dir)) return;
 
