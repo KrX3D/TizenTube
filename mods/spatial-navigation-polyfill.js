@@ -978,7 +978,7 @@
       scrollerRect = new DOMRect(0, 0, window.innerWidth, window.innerHeight);
     }
    
-    if (isInside(scrollerRect, elementRect, 'left') && isInside(scrollerRect, elementRect, 'down'))
+    if (isInside(scrollerRect, elementRect) && isInside(scrollerRect, elementRect))
       return true; 
     else
       return false;
