@@ -12,7 +12,7 @@
   "license": "GPL-3.0-only",
   "dependencies": {
     "@babel/preset-env": "^7.29.0",
-    "@formatjs/intl-displaynames": "^6.8.13",
+    "@formatjs/intl-displaynames": "^7.2.1",
     "@formatjs/intl-getcanonicallocales": "^3.2.1",
     "@formatjs/intl-locale": "^5.2.1",
     "@rollup/plugin-babel": "^6.1.0",
