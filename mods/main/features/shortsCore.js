@@ -1,6 +1,23 @@
 import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
+
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+let LOG_SHORTS = getGlobalLogShorts(configRead);
+let filterCallCounter = 0;
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+        LOG_SHORTS = getGlobalLogShorts(configRead);
+      }
+    });
+  }, 100);
+}
 
 
 
@@ -291,12 +308,17 @@ export function getShelfTitle(shelf) {
   };
 
   const titlePaths = [
+    shelf?.title,
+    shelf?.shelfRenderer?.title,
     shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
+    shelf?.richSectionRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
+    shelf?.tvSecondaryNavItemRenderer?.title,
+    shelf?.tvSecondaryNavSectionRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
   ];
@@ -330,6 +352,8 @@ function hasShelvesArray(arr) {
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
+  const callId = ++filterCallCounter;
+
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
 
@@ -345,7 +369,7 @@ export function directFilterArray(arr, page = 'other') {
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
+  const shouldApplyShortsFilter = shouldFilterShorts(getShortsEnabled(configRead), page);
 
   // ⭐ Initialize scroll helpers tracker
 
@@ -367,8 +391,10 @@ export function directFilterArray(arr, page = 'other') {
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (isPlaylistPage && window._isLastPlaylistBatch === true) {
-    console.log('--------------------------------->> Using last batch flag from response');
-    console.log('--------------------------------->> This IS the last batch!');
+    if (DEBUG_ENABLED) {
+      console.log('--------------------------------->> Using last batch flag from response');
+      console.log('--------------------------------->> This IS the last batch!');
+    }
     isLastBatch = true;
     // Clear the flag
     window._isLastPlaylistBatch = false;
@@ -376,7 +402,9 @@ export function directFilterArray(arr, page = 'other') {
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    }
     
     // Store the helper IDs for filtering
     const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
@@ -385,7 +413,7 @@ export function directFilterArray(arr, page = 'other') {
     if (!isLastBatch) {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
-      console.log('[CLEANUP] Helpers cleared');
+      if (DEBUG_ENABLED) console.log('[CLEANUP] Helpers cleared');
     }
   }
 
@@ -522,11 +550,11 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
     if (hasShelvesArray(obj)) {
       removeShortsShelvesByTitle(obj, {
         page,
-        shortsEnabled: configRead('enableShorts'),
+        shortsEnabled: getShortsEnabled(configRead),
         collectVideoIdsFromShelf,
         getVideoTitle,
-        debugEnabled: configRead('enableDebugConsole'),
-        logShorts: configRead('enableDebugConsole'),
+        debugEnabled: DEBUG_ENABLED,
+        logShorts: LOG_SHORTS,
         path
       });
     }
