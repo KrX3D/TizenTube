@@ -128,10 +128,23 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
     btn.removeAttribute('id');
     btn.setAttribute('tabindex', '0');
     btn.removeAttribute('aria-hidden');
+    btn.removeAttribute('style');
     btn.style.pointerEvents = 'auto';
     btn.style.opacity = '1';
     btn.style.visibility = 'visible';
+    btn.style.position = '';
+    btn.style.left = '';
+    btn.style.top = '';
+    btn.style.width = '';
+    btn.style.height = '';
+    btn.style.display = '';
+    btn.style.transform = '';
+    btn.style.zIndex = '';
+    btn.style.removeProperty('right');
+    btn.style.removeProperty('inset');
+    btn.style.removeProperty('margin-left');
     btn.removeAttribute('disablehybridnavinsubtree');
+    btn.querySelectorAll('[style]').forEach((el) => el.removeAttribute('style'));
     btn.querySelectorAll('[idomkey]').forEach((el) => el.removeAttribute('idomkey'));
     btn.querySelectorAll('[disablehybridnavinsubtree]').forEach((el) => el.removeAttribute('disablehybridnavinsubtree'));
     btn.querySelectorAll('[aria-hidden]').forEach((el) => el.setAttribute('aria-hidden', 'false'));
@@ -174,7 +187,7 @@ export function addPlaylistControlButtons(attempt = 1, { getCurrentPage, debugEn
   }
 
   const templateRect = templateBtn.getBoundingClientRect();
-  customBtn.style.transform = templateBtn.style.transform || '';
+  customBtn.style.transform = '';
   customBtn.style.position = '';
   customBtn.style.top = '';
   customBtn.style.left = '';

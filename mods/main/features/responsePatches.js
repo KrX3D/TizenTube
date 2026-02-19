@@ -165,6 +165,18 @@ registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const url = (window.location.href || '').toLowerCase();
   let effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  if (effectivePage === 'other' && (url.includes('fesubscription') || url.includes('/feed/subscriptions'))) {
+    effectivePage = 'subscriptions';
+  }
+  if (effectivePage === 'other' && (url.includes('felibrary') || url.includes('/feed/library'))) {
+    effectivePage = 'library';
+  }
+  if (effectivePage === 'other' && (url.includes('fehistory') || url.includes('/feed/history'))) {
+    effectivePage = 'history';
+  }
+  if (effectivePage === 'other' && (url.includes('vlwl') || url.includes('vlll') || url.includes('list='))) {
+    effectivePage = 'playlist';
+  }
   if (effectivePage === 'other' && (url.includes('/channel/') || url.includes('/@') || /\bbrowse\/uc[\w-]+/i.test(url))) {
     effectivePage = 'channel';
   }
@@ -176,6 +188,9 @@ registerJsonParseHook((parsedResponse) => {
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
+    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+      maybeStartPlaylistAutoload(effectivePage);
+    }
     processShelves(
       parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
       buildShelfProcessingOptions(effectivePage)
