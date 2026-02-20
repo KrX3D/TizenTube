@@ -336,10 +336,11 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const skipUniversalFilter = effectivePage === 'watch';
-  if (!parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
+
+  if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, effectivePage);
+    scanAndFilterAllArrays(parsedResponse, currentPage);
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));
