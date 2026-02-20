@@ -451,6 +451,29 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
+
+  if (parsedResponse?.onResponseReceivedCommands) {
+    for (const command of parsedResponse.onResponseReceivedCommands) {
+      const appendItems = command?.appendContinuationItemsAction?.continuationItems;
+      if (Array.isArray(appendItems)) {
+        command.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
+          appendItems,
+          pageForFiltering,
+          'onResponseReceivedCommands.append'
+        );
+      }
+
+      const reloadItems = command?.reloadContinuationItemsCommand?.continuationItems;
+      if (Array.isArray(reloadItems)) {
+        command.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
+          reloadItems,
+          pageForFiltering,
+          'onResponseReceivedCommands.reload'
+        );
+      }
+    }
+  }
+
   const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = pageForFiltering === 'watch' || !!window._skipUniversalFilter;
   const alreadyScannedMainPaths = !!(

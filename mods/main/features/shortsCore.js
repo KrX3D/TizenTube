@@ -538,7 +538,12 @@ export function directFilterArray(arr, page = 'other') {
         || !!item?.continuationCommand
       ) || null;
 
-      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0] || continuationFallback;
+      const fallbackHelper = helperVideos.find((video) => getVideoId(video))
+        || helperVideos[0]
+        || continuationFallback
+        || [...arr].reverse().find((item) => !!getVideoId(item))
+        || arr[arr.length - 1]
+        || null;
       if (fallbackHelper) {
         const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
         window._lastHelperVideos = [fallbackHelper];
