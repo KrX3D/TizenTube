@@ -124,6 +124,8 @@ export function startPlaylistAutoLoad() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
+  window._skipUniversalFilter = true;
+
   let stableCount = 0;
   let lastVideoCount = 0;
   const interval = setInterval(() => {
@@ -138,10 +140,17 @@ export function startPlaylistAutoLoad() {
       stableCount += 1;
       if (stableCount >= 8) {
         clearInterval(interval);
+        window._skipUniversalFilter = false;
       }
     } else {
       stableCount = 0;
       lastVideoCount = currentCount;
     }
   }, 500);
+
+  setTimeout(() => {
+    if (window._skipUniversalFilter) {
+      window._skipUniversalFilter = false;
+    }
+  }, 25000);
 }

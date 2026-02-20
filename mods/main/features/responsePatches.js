@@ -214,6 +214,41 @@ function processPlaylistSingleColumnBrowse(parsedResponse, effectivePage) {
   }
 }
 
+
+function processSubscriptionsSecondaryNav(parsedResponse, effectivePage) {
+  if (effectivePage !== 'subscriptions' && effectivePage !== 'subscription') return false;
+  if (!parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) return false;
+  if (parsedResponse.__tizentubeProcessedSubs) return true;
+
+  parsedResponse.__tizentubeProcessedSubs = true;
+  const sections = parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections || [];
+
+  sections.forEach((section, sectionIdx) => {
+    const items = section?.tvSecondaryNavSectionRenderer?.items;
+    if (!Array.isArray(items)) return;
+
+    items.forEach((item, itemIdx) => {
+      if (item?.compactLinkRenderer) return;
+
+      const content = item?.tvSecondaryNavItemRenderer?.content;
+      if (!content) return;
+
+      if (content?.shelfRenderer) {
+        processShelves([content], buildShelfProcessingOptions(effectivePage));
+        scanAndFilterAllArrays(content, effectivePage, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
+        return;
+      }
+
+      if (Array.isArray(content?.richGridRenderer?.contents)) {
+        scanAndFilterAllArrays(content.richGridRenderer.contents, effectivePage, `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`);
+        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, effectivePage);
+      }
+    });
+  });
+
+  return true;
+}
+
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
@@ -293,7 +328,9 @@ registerJsonParseHook((parsedResponse) => {
     );
   }
 
-  if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+  const handledSubscriptionsSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, effectivePage);
+
+  if (!handledSubscriptionsSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, effectivePage);
   }
 
@@ -364,7 +401,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
-  const skipUniversalFilter = effectivePage === 'watch';
+  const skipUniversalFilter = effectivePage === 'watch' || !!window._skipUniversalFilter;
   const alreadyScannedMainPaths = !!(
     parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
     || parsedResponse?.contents?.singleColumnBrowseResultsRenderer
