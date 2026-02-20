@@ -45,6 +45,22 @@ function applyItemEnhancements(items, { deArrowEnabled, deArrowThumbnailsEnabled
   }
 }
 
+function isLikelyVisualPlaceholder(item) {
+  if (!item || typeof item !== 'object') return true;
+
+  if (item.continuationItemRenderer) return true;
+
+  if (item.richItemRenderer && !item.richItemRenderer.content) return true;
+
+  if (item.tileRenderer && !item.tileRenderer.contentId) {
+    const hasTitle = !!item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText;
+    const hasPlayableCommand = !!item?.tileRenderer?.onSelectCommand;
+    if (!hasTitle && !hasPlayableCommand) return true;
+  }
+
+  return false;
+}
+
 export function processShelves(shelves, options = {}) {
   if (!Array.isArray(shelves) || shelves.length === 0) return;
 
@@ -126,6 +142,12 @@ export function processShelves(shelves, options = {}) {
       } else {
         items = watchedFiltered;
       }
+    }
+
+    const isPlaylistPage = page === 'playlist' || page === 'playlists';
+    if (!isPlaylistPage) {
+      items = items.filter((item) => !isLikelyPlaylistHelperItem(item));
+      items = items.filter((item) => !isLikelyVisualPlaceholder(item));
     }
 
     ref.parent[ref.key] = items;

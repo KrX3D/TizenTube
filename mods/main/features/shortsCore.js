@@ -3,6 +3,14 @@ import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 import { getItemDisplayTitle, getPathLabel } from './filterStableCore.js';
+import {
+  initPlaylistBatchState,
+  consumePlaylistLastBatchFlag,
+  cleanupStoredHelpersBeforeBatch,
+  rememberCurrentHelperVideos,
+  setPlaylistFallbackHelper,
+  clearPlaylistHelpersState
+} from './playlistBatchCleanup.js';
 
 let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 let LOG_SHORTS = getGlobalLogShorts(configRead);
@@ -474,11 +482,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
   const shouldApplyShortsFilter = shouldFilterShorts(getShortsEnabled(configRead), page);
 
   // ⭐ Initialize scroll helpers tracker
-
-  window._playlistScrollHelpers = window._playlistScrollHelpers || new Set();
-  window._lastHelperVideos = window._lastHelperVideos || [];
-  window._playlistRemovedHelpers = window._playlistRemovedHelpers || new Set();
-  window._playlistRemovedHelperKeys = window._playlistRemovedHelperKeys || new Set();
+  initPlaylistBatchState();
 
   
   // ⭐ DIAGNOSTIC: Log what we're checking
@@ -491,33 +495,17 @@ export function directFilterArray(arr, page = 'other', path = '') {
   }
 
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
-  let isLastBatch = false;
-  if (isPlaylistPage && window._isLastPlaylistBatch === true) {
-    if (DEBUG_ENABLED) {
-      console.log('--------------------------------->> Using last batch flag from response');
-      console.log('--------------------------------->> This IS the last batch!');
-    }
-    isLastBatch = true;
-    // Clear the flag
-    window._isLastPlaylistBatch = false;
-  }
+  const isLastBatch = consumePlaylistLastBatchFlag(isPlaylistPage, DEBUG_ENABLED);
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
-  if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    if (DEBUG_ENABLED) {
-      console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
-    }
-    
-    // Store the helper IDs for filtering
-    const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
-    trackRemovedPlaylistHelpers(helperIdsToTrack);
-    trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
-    if (!isLastBatch) {
-      window._lastHelperVideos = [];
-      window._playlistScrollHelpers.clear();
-      if (DEBUG_ENABLED) console.log('[CLEANUP] Helpers cleared');
-    }
-  }
+  cleanupStoredHelpersBeforeBatch({
+    isPlaylistPage,
+    arrLength: arr.length,
+    debugEnabled: DEBUG_ENABLED,
+    getVideoId,
+    trackRemovedPlaylistHelpers,
+    trackRemovedPlaylistHelperKeys
+  });
 
 
   const out = [];
@@ -582,10 +570,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
 
   if (isPlaylistPage) {
     if (helperVideos.length) {
-      window._lastHelperVideos = helperVideos;
-      const helperIdsToTrack = helperVideos.map((video) => getVideoId(video)).filter(Boolean);
-      trackRemovedPlaylistHelpers(helperIdsToTrack);
-      trackRemovedPlaylistHelperKeys(helperVideos, getVideoId);
+      rememberCurrentHelperVideos(helperVideos, getVideoId, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys);
     }
 
     // Keep one helper/continuation card so TV keeps requesting continuation,
@@ -614,9 +599,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
           : isLikelyPlaylistHelperItem(fallbackHelper, getVideoId, getVideoTitle)
             ? 'playlistHelperItem'
             : (nonProgressFallback === fallbackHelper ? 'nonProgressFallback' : 'watched-last-resort');
-        window._lastHelperVideos = [fallbackHelper];
-        window._playlistScrollHelpers.clear();
-        window._playlistScrollHelpers.add(fallbackId);
+        setPlaylistFallbackHelper(fallbackHelper, getVideoId);
         if (DEBUG_ENABLED) {
           console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
         }
@@ -646,13 +629,11 @@ export function directFilterArray(arr, page = 'other', path = '') {
       const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
       trackRemovedPlaylistHelpers(helperIdsToTrack);
       trackRemovedPlaylistHelperKeys(window._lastHelperVideos, getVideoId);
-      window._lastHelperVideos = [];
-      window._playlistScrollHelpers.clear();
+      clearPlaylistHelpersState();
     }
 
     if (isLastBatch) {
-      window._lastHelperVideos = [];
-      window._playlistScrollHelpers.clear();
+      clearPlaylistHelpersState();
     }
   }
 
