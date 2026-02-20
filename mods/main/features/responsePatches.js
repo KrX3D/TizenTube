@@ -1,7 +1,7 @@
 import { configRead } from '../../config.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { registerJsonParseHook } from '../jsonParseHooks.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering, applyShortsAdFiltering } from './adCleanup.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from '../processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './sponsorblock.js';
@@ -13,9 +13,10 @@ import { detectCurrentPage } from '../pageDetection.js';
 import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 
 
-let DEBUG_ENABLED = configRead('enableDebugConsole');
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
 window.adblock.setDebugEnabled = function(value) {
   DEBUG_ENABLED = !!value;
@@ -27,7 +28,7 @@ if (typeof window !== 'undefined') {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (event) => {
         if (event.detail?.key === 'enableDebugConsole') {
-          DEBUG_ENABLED = !!event.detail.value;
+          DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
         }
       });
     }
@@ -46,7 +47,7 @@ function buildShelfProcessingOptions(pageOverride) {
     shortsEnabled: configRead('enableShorts'),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
-    logShorts: DEBUG_ENABLED
+    logShorts: getGlobalLogShorts(configRead)
   };
 }
 
@@ -104,6 +105,21 @@ function processSecondaryNav(sections, currentPage) {
   }
 }
 
+function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const title = getShelfTitle(shelf);
+    if (!isShortsShelfTitle(title)) continue;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
+    }
+    shelves.splice(i, 1);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window._collectedUnwatched = window._collectedUnwatched || [];
 }
@@ -130,6 +146,40 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
   });
 }
 
+
+function resolveEffectivePage(currentPage) {
+  if (currentPage && currentPage !== 'other') return currentPage;
+
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  const combined = `${href} ${hash}`;
+
+  if (combined.includes('fesubscription')) return 'subscriptions';
+  if (combined.includes('subscription')) return 'subscriptions';
+  if (combined.includes('felibrary')) return 'library';
+  if (combined.includes('fehistory')) return 'history';
+  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+  if (combined.includes('/channel/') || combined.includes('/@') || /\/browse\/(uc|hc)/.test(combined)) return 'channel';
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
+}
+
+function processBrowseTabs(tabs, effectivePage, path) {
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
+    if (!Array.isArray(contents)) continue;
+
+    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+      maybeStartPlaylistAutoload(effectivePage);
+    }
+
+    processShelves(contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(contents, effectivePage, path);
+  }
+}
+
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
@@ -138,15 +188,19 @@ function filterContinuationItemContainer(container, page, path) {
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
-  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  const effectivePage = resolveEffectivePage(currentPage);
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
+  applyShortsAdFiltering(parsedResponse, adBlockEnabled);
   applyPaidContentOverlay(parsedResponse, configRead('enablePaidPromotionOverlay'));
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
+    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+      maybeStartPlaylistAutoload(effectivePage);
+    }
     processShelves(
       parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
       buildShelfProcessingOptions(effectivePage)
@@ -159,6 +213,19 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.title?.runs) {
     PatchSettings(parsedResponse);
   }
+
+
+  processBrowseTabs(
+    parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'singleColumnBrowseResultsRenderer.tabs'
+  );
+
+  processBrowseTabs(
+    parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'twoColumnBrowseResultsRenderer.tabs'
+  );
 
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
     processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
@@ -245,7 +312,7 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
+  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = effectivePage === 'watch';
   if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
