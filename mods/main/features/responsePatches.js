@@ -45,7 +45,7 @@ function buildShelfProcessingOptions(pageOverride) {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts'),
+    shortsEnabled: getShortsEnabled(configRead),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
     logShorts: getGlobalLogShorts(configRead)
@@ -126,7 +126,7 @@ if (typeof window !== 'undefined') {
 }
 
 function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
-  if (!Array.isArray(sectionRenderer?.items) || configRead('enableShorts')) return;
+  if (!Array.isArray(sectionRenderer?.items) || getShortsEnabled(configRead)) return;
 
   sectionRenderer.items = sectionRenderer.items.filter((item) => {
     const content = item?.tvSecondaryNavItemRenderer?.content;
@@ -462,6 +462,15 @@ registerJsonParseHook((parsedResponse) => {
   const isFinalPlaylistPayload = (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')
     && !!parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents
     && !parsedResponse?.continuationContents?.playlistVideoListContinuation?.continuations;
+
+  if (DEBUG_ENABLED) {
+    const marker = `${pageForFiltering}|${currentPage}`;
+    if (window._lastFilterPageMarker !== marker) {
+      console.log('[FILTER_PAGE] current=', currentPage, '| effective=', effectivePage, '| inferred=', pageForFiltering);
+      window._lastFilterPageMarker = marker;
+    }
+  }
+
 
   if (DEBUG_ENABLED) {
     const marker = `${pageForFiltering}|${currentPage}`;
