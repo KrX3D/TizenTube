@@ -107,6 +107,11 @@ export function findProgressBar(item) {
       return node;
     }
 
+    const parsedPercent = Number(node.percentDurationWatched);
+    if (Number.isFinite(parsedPercent) && parsedPercent >= 0) {
+      return { percentDurationWatched: parsedPercent };
+    }
+
     if (Array.isArray(node)) {
       for (const entry of node) stack.push(entry);
       continue;

@@ -266,7 +266,9 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
 
   let durationSeconds = getRendererDurationSeconds(item.videoRenderer)
     ?? getRendererDurationSeconds(item.gridVideoRenderer)
-    ?? getRendererDurationSeconds(item.compactVideoRenderer);
+    ?? getRendererDurationSeconds(item.compactVideoRenderer)
+    ?? getRendererDurationSeconds(item.playlistVideoRenderer)
+    ?? getRendererDurationSeconds(item.richItemRenderer?.content?.videoRenderer);
 
   if (durationSeconds == null && item.tileRenderer) {
     const tileOverlayText = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)
@@ -363,11 +365,14 @@ export function getShelfTitle(shelf) {
 
 function hasVideoItemsArray(arr) {
   return arr.some((item) =>
-      item?.tileRenderer || 
-      item?.videoRenderer || 
+      item?.tileRenderer ||
+      item?.videoRenderer ||
+      item?.playlistVideoRenderer ||
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.videoRenderer
+      item?.richItemRenderer?.content?.videoRenderer ||
+      item?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.reelItemRenderer
     );
 }
 
@@ -375,6 +380,8 @@ function hasShelvesArray(arr) {
   return arr.some((item) =>
     item?.shelfRenderer ||
     item?.richShelfRenderer ||
+    item?.richSectionRenderer ||
+    item?.reelShelfRenderer ||
     item?.gridRenderer
   );
 }
@@ -515,12 +522,10 @@ export function directFilterArray(arr, page = 'other') {
       trackRemovedPlaylistHelperKeys(helperVideos, getVideoId);
     }
 
-    // Keep one card so TV keeps requesting continuation even when this batch filtered to zero.
+    // Keep one helper/continuation card so TV keeps requesting continuation,
+    // but do not re-introduce watched videos as fallback.
     if (out.length === 0 && arr.length > 0 && !isLastBatch && !filterIds && !isInCollectionMode()) {
-      const fallbackHelper = helperVideos.find((video) => getVideoId(video))
-        || [...arr].reverse().find((item) => !!getVideoId(item))
-        || helperVideos[0]
-        || arr[arr.length - 1];
+      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0] || null;
       if (fallbackHelper) {
         const fallbackId = getVideoId(fallbackHelper) || 'unknown';
         window._lastHelperVideos = [fallbackHelper];
