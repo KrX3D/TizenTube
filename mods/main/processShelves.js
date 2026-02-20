@@ -3,7 +3,9 @@ import { hqify } from './features/hqify.js';
 import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos, shouldHideWatchedForPage } from './features/hideWatchedVideos.js';
-import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems } from './features/shortsCore.js';
+import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems, rememberShortsFromShelf } from './features/shortsCore.js';
+import { isLikelyPlaylistHelperItem } from './features/playlistHelpers.js';
+import { hideShorts } from './features/hideShorts.js';
 import { detectCurrentPage } from './pageDetection.js';
 
 function getShelfItemsRef(shelf) {
@@ -63,6 +65,11 @@ export function processShelves(shelves, options = {}) {
 
   const shouldHideWatched = shouldHideWatchedForPage(hideWatchedPages, page);
 
+  const horizontalShelves = shelves.filter((shelf) => shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  hideShorts(horizontalShelves, shortsEnabled, (removedShelf) => {
+    rememberShortsFromShelf(removedShelf, collectVideoIdsFromShelf, getVideoTitle);
+  }, page);
+
   removeShortsShelvesByTitle(shelves, {
     page,
     shortsEnabled,
@@ -109,9 +116,13 @@ export function processShelves(shelves, options = {}) {
     if (shouldHideWatched) {
       const watchedFiltered = hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
       if (watchedFiltered.length === 0 && originalItems.length > 0) {
-        // Playlist pages need at least one tile for continuation; other pages can remove empty shelves.
-        const keepShelfForContinuation = page === 'playlist' || page === 'playlists';
-        items = keepShelfForContinuation ? originalItems : [];
+        const isPlaylistPage = page === 'playlist' || page === 'playlists';
+        if (isPlaylistPage) {
+          // Keep only helper/continuation entries so watched videos stay hidden on playlists.
+          items = originalItems.filter((item) => isLikelyPlaylistHelperItem(item));
+        } else {
+          items = [];
+        }
       } else {
         items = watchedFiltered;
       }
