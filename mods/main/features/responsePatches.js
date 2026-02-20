@@ -213,6 +213,13 @@ function inferFilteringPage(parsedResponse, effectivePage) {
     return 'playlist';
   }
 
+  if (parsedResponse?.continuationContents?.tvSurfaceContentContinuation) {
+    const lastPage = (typeof window !== 'undefined' ? (window._lastDetectedPage || '') : '') || '';
+    if (lastPage === 'playlist' || lastPage === 'playlists') {
+      return 'playlist';
+    }
+  }
+
   if (effectivePage && effectivePage !== 'other') return effectivePage;
 
   if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) return 'playlist';
@@ -312,6 +319,24 @@ function filterContinuationItemContainer(container, page, path) {
   return directFilterArray(container, page, path);
 }
 
+function processTvSurfaceContinuation(parsedResponse, pageForFiltering) {
+  const tvSurface = parsedResponse?.continuationContents?.tvSurfaceContentContinuation?.content;
+  if (!tvSurface) return;
+
+  const sectionListContents = tvSurface?.sectionListRenderer?.contents;
+  if (Array.isArray(sectionListContents)) {
+    // First filter arrays recursively, then compact/remove emptied shelves/rows.
+    scanAndFilterAllArrays(sectionListContents, pageForFiltering, 'continuation.tvSurface.sectionList');
+    processShelves(sectionListContents, buildShelfProcessingOptions(pageForFiltering));
+  }
+
+  const gridItems = tvSurface?.gridRenderer?.items;
+  if (Array.isArray(gridItems)) {
+    scanAndFilterAllArrays(gridItems, pageForFiltering, 'continuation.tvSurface.grid');
+    tvSurface.gridRenderer.items = directFilterArray(gridItems, pageForFiltering, 'continuation.tvSurface.grid');
+  }
+}
+
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
@@ -355,10 +380,12 @@ registerJsonParseHook((parsedResponse) => {
 
 
 
-  if ((pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription' || pageForFiltering === 'channel' || pageForFiltering === 'channels')
+  if ((pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription' || pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'playlist' || pageForFiltering === 'playlists')
       && parsedResponse?.continuationContents) {
     scanAndFilterAllArrays(parsedResponse.continuationContents, pageForFiltering, 'continuationContents.root');
   }
+
+  processTvSurfaceContinuation(parsedResponse, pageForFiltering);
 
   if (parsedResponse?.contents?.singleColumnBrowseResultsRenderer) {
     scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, pageForFiltering, 'singleColumnBrowseResultsRenderer');
