@@ -119,6 +119,34 @@ export function isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle) {
   return !!title && !!window._shortsTitlesFromShelves?.has(title);
 }
 
+
+function isShortsShelfObject(shelf, title = '') {
+  if (!shelf || typeof shelf !== 'object') return false;
+  if (isShortsShelfTitle(title)) return true;
+
+  const shelfType = shelf?.shelfRenderer?.tvhtml5ShelfRendererType || '';
+  if (String(shelfType).toUpperCase().includes('SHORTS')) return true;
+
+  const reelShelfType = shelf?.reelShelfRenderer?.trackingParams;
+  if (reelShelfType && shelf?.reelShelfRenderer?.items) return true;
+
+  const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items
+    || shelf?.shelfRenderer?.content?.gridRenderer?.items
+    || shelf?.richShelfRenderer?.content?.richGridRenderer?.contents
+    || shelf?.richSectionRenderer?.content?.richShelfRenderer?.content?.richGridRenderer?.contents
+    || [];
+
+  if (!Array.isArray(items) || items.length === 0) return false;
+  const reelLike = items.filter((item) =>
+    !!item?.reelItemRenderer ||
+    !!item?.richItemRenderer?.content?.reelItemRenderer ||
+    !!item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint ||
+    !!item?.videoRenderer?.navigationEndpoint?.reelWatchEndpoint
+  ).length;
+
+  return reelLike > 0 && reelLike >= Math.ceil(items.length * 0.5);
+}
+
 export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, collectVideoIdsFromShelf, getVideoTitle, debugEnabled = false, logShorts = false, path = '' } = {}) {
   if (!Array.isArray(shelves) || shortsEnabled) return 0;
   initShortsTrackingState();
@@ -127,7 +155,7 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelf = shelves[i];
     const title = getShelfTitle(shelf);
-    if (!isShortsShelfTitle(title)) continue;
+    if (!isShortsShelfObject(shelf, title)) continue;
 
     const ids = rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
     if (debugEnabled || logShorts) {
@@ -353,6 +381,8 @@ function hasShelvesArray(arr) {
 
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
+
+  const callId = ++filterCallCounter;
 
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
