@@ -441,6 +441,11 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
+    scanAndFilterAllArrays(
+      parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
+      pageForFiltering,
+      'singleColumnWatchNextResults.pivot.sectionListRenderer'
+    );
     processShelves(
       parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
       { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false }
@@ -529,8 +534,8 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
-  const skipUniversalFilter = pageForFiltering === 'watch' || !!window._skipUniversalFilter;
+  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels', 'watch'];
+  const skipUniversalFilter = !!window._skipUniversalFilter;
   if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'universal.root');
