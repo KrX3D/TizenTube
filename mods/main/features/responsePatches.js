@@ -166,7 +166,7 @@ function resolveEffectivePage(currentPage) {
   return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
 }
 
-function processBrowseTabs(tabs, effectivePage, path) {
+function processBrowseTabs(tabs, pageForFiltering, path) {
   if (!Array.isArray(tabs)) return;
 
   for (const tab of tabs) {
@@ -177,12 +177,12 @@ function processBrowseTabs(tabs, effectivePage, path) {
       || null;
 
     if (Array.isArray(sectionListContents)) {
-      if (effectivePage === 'playlist' || effectivePage === 'playlists') {
-        maybeStartPlaylistAutoload(effectivePage);
+      if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
+        maybeStartPlaylistAutoload(pageForFiltering);
       }
 
-      processShelves(sectionListContents, buildShelfProcessingOptions(effectivePage));
-      scanAndFilterAllArrays(sectionListContents, effectivePage, `${path}.sectionList`);
+      processShelves(sectionListContents, buildShelfProcessingOptions(pageForFiltering));
+      scanAndFilterAllArrays(sectionListContents, pageForFiltering, `${path}.sectionList`);
     }
 
     const richGridContents = tabContent?.richGridRenderer?.contents
@@ -190,33 +190,56 @@ function processBrowseTabs(tabs, effectivePage, path) {
       || null;
 
     if (Array.isArray(richGridContents)) {
-      scanAndFilterAllArrays(richGridContents, effectivePage, `${path}.richGrid`);
+      scanAndFilterAllArrays(richGridContents, pageForFiltering, `${path}.richGrid`);
       if (tabContent?.richGridRenderer?.contents) {
-        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering);
       } else if (tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents) {
-        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering);
       }
     }
   }
 }
 
 
-function processPlaylistSingleColumnBrowse(parsedResponse, effectivePage) {
-  if (effectivePage !== 'playlist' && effectivePage !== 'playlists') return;
+
+function inferFilteringPage(parsedResponse, effectivePage) {
+  if (effectivePage && effectivePage !== 'other') return effectivePage;
+
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) return 'playlist';
+
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  if ((href.includes('list=') || hash.includes('list=')) && parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
+    return 'playlist';
+  }
+
+  if (parsedResponse?.metadata?.channelMetadataRenderer || parsedResponse?.header?.c4TabbedHeaderRenderer) {
+    return 'channel';
+  }
+
+  if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+    return 'subscriptions';
+  }
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || effectivePage) : effectivePage);
+}
+
+function processPlaylistSingleColumnBrowse(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'playlist' && pageForFiltering !== 'playlists') return;
   const tabs = parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs;
   if (!Array.isArray(tabs)) return;
 
   for (const tab of tabs) {
     const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
     if (!Array.isArray(contents)) continue;
-    processShelves(contents, buildShelfProcessingOptions(effectivePage));
-    scanAndFilterAllArrays(contents, effectivePage, 'playlist.singleColumnBrowseResultsRenderer.tabs');
+    processShelves(contents, buildShelfProcessingOptions(pageForFiltering));
+    scanAndFilterAllArrays(contents, pageForFiltering, 'playlist.singleColumnBrowseResultsRenderer.tabs');
   }
 }
 
 
-function processSubscriptionsSecondaryNav(parsedResponse, effectivePage) {
-  if (effectivePage !== 'subscriptions' && effectivePage !== 'subscription') return false;
+function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'subscriptions' && pageForFiltering !== 'subscription') return false;
   if (!parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) return false;
   if (parsedResponse.__tizentubeProcessedSubs) return true;
 
@@ -234,14 +257,14 @@ function processSubscriptionsSecondaryNav(parsedResponse, effectivePage) {
       if (!content) return;
 
       if (content?.shelfRenderer) {
-        processShelves([content], buildShelfProcessingOptions(effectivePage));
-        scanAndFilterAllArrays(content, effectivePage, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
+        processShelves([content], buildShelfProcessingOptions(pageForFiltering));
+        scanAndFilterAllArrays(content, pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
         return;
       }
 
       if (Array.isArray(content?.richGridRenderer?.contents)) {
-        scanAndFilterAllArrays(content.richGridRenderer.contents, effectivePage, `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`);
-        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, effectivePage);
+        scanAndFilterAllArrays(content.richGridRenderer.contents, pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`);
+        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, pageForFiltering);
       }
     });
   });
@@ -258,6 +281,7 @@ function filterContinuationItemContainer(container, page, path) {
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
+  const pageForFiltering = inferFilteringPage(parsedResponse, effectivePage);
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
@@ -267,15 +291,15 @@ registerJsonParseHook((parsedResponse) => {
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
-    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
-      maybeStartPlaylistAutoload(effectivePage);
+    if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
+      maybeStartPlaylistAutoload(pageForFiltering);
     }
     const browseShelves = parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
     processShelves(
       browseShelves,
-      buildShelfProcessingOptions(effectivePage)
+      buildShelfProcessingOptions(pageForFiltering)
     );
-    scanAndFilterAllArrays(browseShelves, effectivePage, 'tvBrowse.sectionList');
+    scanAndFilterAllArrays(browseShelves, pageForFiltering, 'tvBrowse.sectionList');
   }
 
   applyEndscreen(parsedResponse, configRead('enableHideEndScreenCards'));
@@ -287,57 +311,56 @@ registerJsonParseHook((parsedResponse) => {
 
 
   if (parsedResponse?.contents?.singleColumnBrowseResultsRenderer) {
-    scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, effectivePage, 'singleColumnBrowseResultsRenderer');
+    scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, pageForFiltering, 'singleColumnBrowseResultsRenderer');
   }
 
   if (parsedResponse?.contents?.twoColumnBrowseResultsRenderer) {
-    scanAndFilterAllArrays(parsedResponse.contents.twoColumnBrowseResultsRenderer, effectivePage, 'twoColumnBrowseResultsRenderer');
+    scanAndFilterAllArrays(parsedResponse.contents.twoColumnBrowseResultsRenderer, pageForFiltering, 'twoColumnBrowseResultsRenderer');
   }
 
-  processPlaylistSingleColumnBrowse(parsedResponse, effectivePage);
+  processPlaylistSingleColumnBrowse(parsedResponse, pageForFiltering);
 
-  if (effectivePage !== 'playlist' && effectivePage !== 'playlists') {
+  if (pageForFiltering !== 'playlist' && pageForFiltering !== 'playlists') {
     processBrowseTabs(
       parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
-      effectivePage,
+      pageForFiltering,
       'singleColumnBrowseResultsRenderer.tabs'
     );
   }
 
   processBrowseTabs(
     parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
-    effectivePage,
+    pageForFiltering,
     'twoColumnBrowseResultsRenderer.tabs'
   );
 
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
-    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
-    scanAndFilterAllArrays(parsedResponse.contents.sectionListRenderer.contents, effectivePage, 'contents.sectionListRenderer');
+    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(pageForFiltering));
+    scanAndFilterAllArrays(parsedResponse.contents.sectionListRenderer.contents, pageForFiltering, 'contents.sectionListRenderer');
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
-    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
-    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
-    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, pageForFiltering, 'continuation.sectionListContinuation');
+    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(pageForFiltering));
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
     parsedResponse.continuationContents.horizontalListContinuation.items = processHorizontalItems(
       parsedResponse.continuationContents.horizontalListContinuation.items,
-      buildShelfProcessingOptions(effectivePage)
+      buildShelfProcessingOptions(pageForFiltering)
     );
   }
 
-  const handledSubscriptionsSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, effectivePage);
+  const handledSubscriptionsSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
 
   if (!handledSubscriptionsSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, effectivePage);
+    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, pageForFiltering);
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     processShelves(
       parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
-      { ...buildShelfProcessingOptions(effectivePage), shouldAddPreviews: false }
+      { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false }
     );
 
     applyQueueShelf(parsedResponse);
@@ -353,7 +376,7 @@ registerJsonParseHook((parsedResponse) => {
       }, 1200);
     }
 
-    maybeStartPlaylistAutoload(effectivePage);
+    maybeStartPlaylistAutoload(pageForFiltering);
   }
 
   if (parsedResponse?.onResponseReceivedActions) {
@@ -362,7 +385,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         action.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedActions.append'
         );
       }
@@ -371,7 +394,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         action.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedActions.reload'
         );
       }
@@ -384,7 +407,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         endpoint.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedEndpoints.append'
         );
       }
@@ -393,7 +416,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         endpoint.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedEndpoints.reload'
         );
       }
@@ -401,7 +424,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
-  const skipUniversalFilter = effectivePage === 'watch' || !!window._skipUniversalFilter;
+  const skipUniversalFilter = pageForFiltering === 'watch' || !!window._skipUniversalFilter;
   const alreadyScannedMainPaths = !!(
     parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
     || parsedResponse?.contents?.singleColumnBrowseResultsRenderer
@@ -409,9 +432,9 @@ registerJsonParseHook((parsedResponse) => {
     || parsedResponse?.contents?.sectionListRenderer?.contents
     || parsedResponse?.continuationContents?.sectionListContinuation?.contents
   );
-  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter && !alreadyScannedMainPaths) {
+  if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter && !alreadyScannedMainPaths) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, currentPage);
+    scanAndFilterAllArrays(parsedResponse, pageForFiltering);
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));
