@@ -209,15 +209,27 @@ function inferFilteringPage(parsedResponse, effectivePage) {
 
   const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
   const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
-  if ((href.includes('list=') || hash.includes('list=')) && parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
+  const combined = `${href} ${hash}`;
+
+  if ((combined.includes('list=') || combined.includes('/playlist')) && parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
     return 'playlist';
   }
 
-  if (parsedResponse?.metadata?.channelMetadataRenderer || parsedResponse?.header?.c4TabbedHeaderRenderer) {
+  if (
+    parsedResponse?.metadata?.channelMetadataRenderer
+    || parsedResponse?.header?.c4TabbedHeaderRenderer
+    || combined.includes('/channel/')
+    || combined.includes('/@')
+    || /\/browse\/(uc|hc)/.test(combined)
+  ) {
     return 'channel';
   }
 
-  if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+  if (
+    combined.includes('fesubscription')
+    || combined.includes('subscription')
+    || parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections
+  ) {
     return 'subscriptions';
   }
 
@@ -283,6 +295,15 @@ registerJsonParseHook((parsedResponse) => {
   const effectivePage = resolveEffectivePage(currentPage);
   const pageForFiltering = inferFilteringPage(parsedResponse, effectivePage);
   const adBlockEnabled = configRead('enableAdBlock');
+
+  if (DEBUG_ENABLED) {
+    const marker = `${pageForFiltering}|${currentPage}`;
+    if (window._lastFilterPageMarker !== marker) {
+      console.log('[FILTER_PAGE] current=', currentPage, '| effective=', effectivePage, '| inferred=', pageForFiltering);
+      window._lastFilterPageMarker = marker;
+    }
+  }
+
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
   applyShortsAdFiltering(parsedResponse, adBlockEnabled);
