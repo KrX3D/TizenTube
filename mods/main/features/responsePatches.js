@@ -311,14 +311,6 @@ registerJsonParseHook((parsedResponse) => {
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
-  // Force one early recursive pass for pages that still miss branch-specific payload handlers.
-  // This helps subscription/channel responses where payload shape differs by TV firmware.
-  if ((pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription' || pageForFiltering === 'channel' || pageForFiltering === 'channels')
-      && !parsedResponse.__targetedRootScanApplied) {
-    parsedResponse.__targetedRootScanApplied = true;
-    scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'targeted.root');
-  }
-
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
@@ -339,6 +331,12 @@ registerJsonParseHook((parsedResponse) => {
     PatchSettings(parsedResponse);
   }
 
+
+
+  if ((pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription' || pageForFiltering === 'channel' || pageForFiltering === 'channels')
+      && parsedResponse?.continuationContents) {
+    scanAndFilterAllArrays(parsedResponse.continuationContents, pageForFiltering, 'continuationContents.root');
+  }
 
   if (parsedResponse?.contents?.singleColumnBrowseResultsRenderer) {
     scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, pageForFiltering, 'singleColumnBrowseResultsRenderer');

@@ -530,9 +530,17 @@ export function directFilterArray(arr, page = 'other') {
     // Keep one helper/continuation card so TV keeps requesting continuation,
     // but do not re-introduce watched videos as fallback.
     if (out.length === 0 && arr.length > 0 && !isLastBatch && !filterIds && !isInCollectionMode()) {
-      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0] || null;
+      const continuationFallback = arr.find((item) =>
+        !!item?.continuationItemRenderer
+        || !!item?.tileRenderer?.onSelectCommand?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationEndpoint
+        || !!item?.continuationEndpoint
+        || !!item?.continuationCommand
+      ) || null;
+
+      const fallbackHelper = helperVideos.find((video) => getVideoId(video)) || helperVideos[0] || continuationFallback;
       if (fallbackHelper) {
-        const fallbackId = getVideoId(fallbackHelper) || 'unknown';
+        const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
         window._lastHelperVideos = [fallbackHelper];
         window._playlistScrollHelpers.clear();
         window._playlistScrollHelpers.add(fallbackId);
