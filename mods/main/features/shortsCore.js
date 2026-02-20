@@ -497,8 +497,12 @@ export function directFilterArray(arr, page = 'other', path = '') {
   
   // ⭐ DIAGNOSTIC: Log what we're checking
   if (isPlaylistPage && DEBUG_ENABLED) {
+    const storedHelperTitles = (window._lastHelperVideos || []).map((item) => getItemDisplayTitle(item));
     console.log('>>>>>> PRE-CLEANUP CHECK <<<<<<');
     console.log('>>>>>> Has helpers:', window._lastHelperVideos?.length || 0);
+    if (storedHelperTitles.length) {
+      console.log('>>>>>> Stored helpers titles:', storedHelperTitles.join(' || '));
+    }
     console.log('>>>>>> Array length:', arr.length);
     console.log('>>>>>> Last batch flag:', window._isLastPlaylistBatch);
     console.log('>>>>>> Collection mode:', isInCollectionMode());
@@ -580,6 +584,9 @@ export function directFilterArray(arr, page = 'other', path = '') {
 
   if (isPlaylistPage) {
     if (helperVideos.length) {
+      if (DEBUG_ENABLED) {
+        console.log('[HELPERS_DETECTED] path=', getPathLabel(path), '| count=', helperVideos.length, '| titles=', helperVideos.map((item) => getItemDisplayTitle(item)).join(' || '));
+      }
       rememberCurrentHelperVideos(helperVideos, getVideoId, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys);
     }
 

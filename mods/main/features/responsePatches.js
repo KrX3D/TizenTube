@@ -357,6 +357,31 @@ function forceCompactWatchNextShelves(parsedResponse, pageForFiltering) {
   }
 }
 
+function stripPlaylistHelpersDeep(node) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      const isContinuationLike = !!item?.continuationItemRenderer
+        || !!item?.continuationEndpoint
+        || !!item?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationEndpoint;
+      if (isContinuationLike) {
+        node.splice(i, 1);
+        continue;
+      }
+      stripPlaylistHelpersDeep(item);
+    }
+    return;
+  }
+
+  for (const key of Object.keys(node)) {
+    stripPlaylistHelpersDeep(node[key]);
+  }
+}
+
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
@@ -506,6 +531,10 @@ registerJsonParseHook((parsedResponse) => {
     }
 
     maybeStartPlaylistAutoload(pageForFiltering);
+
+    if (!hasContinuation && (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')) {
+      stripPlaylistHelpersDeep(parsedResponse.continuationContents.playlistVideoListContinuation.contents);
+    }
   }
 
   if (parsedResponse?.onResponseReceivedActions) {

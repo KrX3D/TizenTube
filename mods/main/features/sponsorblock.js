@@ -403,13 +403,15 @@ window.addEventListener(
       !!videoID &&
       (!window.sponsorblock || window.sponsorblock.videoID != videoID);
 
-    console.info(
-      'hashchange',
-      videoID || '(no-watch-video)',
-      window.sponsorblock,
-      window.sponsorblock ? window.sponsorblock.videoID : null,
-      needsReload
-    );
+    if (configRead('enableDebugConsole')) {
+      console.info(
+        'hashchange',
+        videoID || '(no-watch-video)',
+        window.sponsorblock,
+        window.sponsorblock ? window.sponsorblock.videoID : null,
+        needsReload
+      );
+    }
 
     if (!videoID && window.sponsorblock) {
       // Leaving watch pages: clear current handler.
@@ -435,8 +437,6 @@ window.addEventListener(
       if (configRead('enableSponsorBlock')) {
         window.sponsorblock = new SponsorBlockHandler(videoID);
         window.sponsorblock.init();
-      } else {
-        console.info('SponsorBlock disabled, not loading');
       }
     }
   },
