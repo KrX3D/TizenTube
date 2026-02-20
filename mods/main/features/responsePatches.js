@@ -200,6 +200,20 @@ function processBrowseTabs(tabs, effectivePage, path) {
   }
 }
 
+
+function processPlaylistSingleColumnBrowse(parsedResponse, effectivePage) {
+  if (effectivePage !== 'playlist' && effectivePage !== 'playlists') return;
+  const tabs = parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs;
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
+    if (!Array.isArray(contents)) continue;
+    processShelves(contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(contents, effectivePage, 'playlist.singleColumnBrowseResultsRenderer.tabs');
+  }
+}
+
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
@@ -245,11 +259,15 @@ registerJsonParseHook((parsedResponse) => {
     scanAndFilterAllArrays(parsedResponse.contents.twoColumnBrowseResultsRenderer, effectivePage, 'twoColumnBrowseResultsRenderer');
   }
 
-  processBrowseTabs(
-    parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
-    effectivePage,
-    'singleColumnBrowseResultsRenderer.tabs'
-  );
+  processPlaylistSingleColumnBrowse(parsedResponse, effectivePage);
+
+  if (effectivePage !== 'playlist' && effectivePage !== 'playlists') {
+    processBrowseTabs(
+      parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
+      effectivePage,
+      'singleColumnBrowseResultsRenderer.tabs'
+    );
+  }
 
   processBrowseTabs(
     parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
@@ -345,8 +363,16 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
+  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = effectivePage === 'watch';
-  if (!parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+  const alreadyScannedMainPaths = !!(
+    parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
+    || parsedResponse?.contents?.singleColumnBrowseResultsRenderer
+    || parsedResponse?.contents?.twoColumnBrowseResultsRenderer
+    || parsedResponse?.contents?.sectionListRenderer?.contents
+    || parsedResponse?.continuationContents?.sectionListContinuation?.contents
+  );
+  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter && !alreadyScannedMainPaths) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, currentPage);
   }
