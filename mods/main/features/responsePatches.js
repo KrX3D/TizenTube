@@ -14,6 +14,7 @@ import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelf
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
+import { findProgressBar } from './hideWatchedVideos.js';
 
 
 let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
@@ -382,11 +383,94 @@ function stripPlaylistHelpersDeep(node) {
   }
 }
 
+function forceCompactSectionShelves(contents, pageForFiltering, basePath) {
+  if (!Array.isArray(contents)) return;
+
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const section = contents[i];
+    const shelfItems = section?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (Array.isArray(shelfItems)) {
+      const filteredShelfItems = directFilterArray(
+        shelfItems,
+        pageForFiltering,
+        `${basePath}[${i}].shelfRenderer.content.horizontalListRenderer.items`
+      );
+      section.shelfRenderer.content.horizontalListRenderer.items = filteredShelfItems;
+      if (!filteredShelfItems.length) {
+        contents.splice(i, 1);
+        continue;
+      }
+    }
+
+    const richItems = section?.richShelfRenderer?.content?.richGridRenderer?.contents;
+    if (Array.isArray(richItems)) {
+      const filteredRichItems = directFilterArray(
+        richItems,
+        pageForFiltering,
+        `${basePath}[${i}].richShelfRenderer.content.richGridRenderer.contents`
+      );
+      section.richShelfRenderer.content.richGridRenderer.contents = filteredRichItems;
+      if (!filteredRichItems.length) {
+        contents.splice(i, 1);
+      }
+    }
+  }
+}
+
+function isVideoLikeNode(item) {
+  return !!(
+    item?.tileRenderer
+    || item?.videoRenderer
+    || item?.playlistVideoRenderer
+    || item?.gridVideoRenderer
+    || item?.compactVideoRenderer
+    || item?.richItemRenderer?.content?.videoRenderer
+  );
+}
+
+function hardPruneWatchedDeep(node, watchedThreshold) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      if (isVideoLikeNode(item)) {
+        const progressBar = findProgressBar(item);
+        if (progressBar) {
+          const watched = Number(progressBar.percentDurationWatched || 0);
+          if (watched >= watchedThreshold) {
+            node.splice(i, 1);
+            continue;
+          }
+        }
+      }
+      hardPruneWatchedDeep(item, watchedThreshold);
+    }
+    return;
+  }
+
+  for (const key of Object.keys(node)) {
+    hardPruneWatchedDeep(node[key], watchedThreshold);
+  }
+}
+
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
   const pageForFiltering = inferFilteringPage(parsedResponse, effectivePage);
   const adBlockEnabled = configRead('enableAdBlock');
+  const isFinalPlaylistPayload = (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')
+    && !!parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents
+    && !parsedResponse?.continuationContents?.playlistVideoListContinuation?.continuations;
+
+  if (DEBUG_ENABLED) {
+    const marker = `${pageForFiltering}|${currentPage}`;
+    if (window._lastFilterPageMarker !== marker) {
+      console.log('[FILTER_PAGE] current=', currentPage, '| effective=', effectivePage, '| inferred=', pageForFiltering);
+      window._lastFilterPageMarker = marker;
+    }
+  }
+
 
   if (DEBUG_ENABLED) {
     const marker = `${pageForFiltering}|${currentPage}`;
@@ -471,6 +555,7 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
     scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, pageForFiltering, 'continuation.sectionListContinuation');
     processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(pageForFiltering));
+    forceCompactSectionShelves(parsedResponse.continuationContents.sectionListContinuation.contents, pageForFiltering, 'continuation.sectionListContinuation');
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
@@ -517,7 +602,11 @@ registerJsonParseHook((parsedResponse) => {
     const watchPivotContents = parsedResponse.contents.singleColumnWatchNextResults?.pivot?.sectionListRenderer?.contents;
     if (Array.isArray(watchPivotContents)) {
       processShelves(watchPivotContents, { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false });
+      forceCompactSectionShelves(watchPivotContents, pageForFiltering, 'watch.final.singleColumnWatchNextResults.pivot.sectionListRenderer');
       forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
+
+      const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+      hardPruneWatchedDeep(parsedResponse.contents.singleColumnWatchNextResults, watchedThreshold);
     }
   }
 
@@ -534,7 +623,12 @@ registerJsonParseHook((parsedResponse) => {
 
     if (!hasContinuation && (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')) {
       stripPlaylistHelpersDeep(parsedResponse.continuationContents.playlistVideoListContinuation.contents);
+      stripPlaylistHelpersDeep(parsedResponse);
     }
+  }
+
+  if (isFinalPlaylistPayload) {
+    stripPlaylistHelpersDeep(parsedResponse);
   }
 
   if (parsedResponse?.onResponseReceivedActions) {

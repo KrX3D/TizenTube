@@ -94,10 +94,14 @@ class SponsorBlockHandler {
     const results = await resp.json();
 
     const result = results.find((v) => v.videoID === this.videoID);
-    console.info(this.videoID, 'Got it:', result);
+    if (configRead('enableDebugConsole')) {
+      console.info(this.videoID, 'Got it:', result);
+    }
 
     if (!result || !result.segments || !result.segments.length) {
-      console.info(this.videoID, 'No segments found.');
+      if (configRead('enableDebugConsole')) {
+        console.info(this.videoID, 'No segments found.');
+      }
       return;
     }
 
@@ -223,7 +227,9 @@ class SponsorBlockHandler {
         if (m.removedNodes) {
           for (const node of m.removedNodes) {
             if (node === this.segmentsoverlay) {
-              console.info('bringing back segments overlay');
+              //if (configRead('enableDebugConsole')) {
+                //console.info('bringing back segments overlay');
+              //}
               this.slider.appendChild(this.segmentsoverlay);
             }
           }
@@ -276,7 +282,9 @@ class SponsorBlockHandler {
     nextSegments.sort((s1, s2) => s1.segment[0] - s2.segment[0]);
 
     if (!nextSegments.length) {
-      console.info(this.videoID, 'No more segments');
+      if (configRead('enableDebugConsole')) {
+        console.info(this.videoID, 'No more segments');
+      }
       return;
     }
 
