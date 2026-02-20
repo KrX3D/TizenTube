@@ -337,6 +337,26 @@ function processTvSurfaceContinuation(parsedResponse, pageForFiltering) {
   }
 }
 
+function forceCompactWatchNextShelves(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'watch') return;
+
+  const contents = parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer?.contents;
+  if (!Array.isArray(contents)) return;
+
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const shelf = contents[i];
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!Array.isArray(items)) continue;
+
+    const filtered = directFilterArray(items, pageForFiltering, `watch.forceCompact[${i}].shelfRenderer.content.horizontalListRenderer.items`);
+    shelf.shelfRenderer.content.horizontalListRenderer.items = filtered;
+
+    if (!Array.isArray(filtered) || filtered.length === 0) {
+      contents.splice(i, 1);
+    }
+  }
+}
+
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
@@ -453,6 +473,8 @@ registerJsonParseHook((parsedResponse) => {
 
     applyQueueShelf(parsedResponse);
   }
+
+  forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
 
   if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
     const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
