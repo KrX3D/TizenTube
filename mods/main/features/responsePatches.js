@@ -221,10 +221,12 @@ registerJsonParseHook((parsedResponse) => {
     if (effectivePage === 'playlist' || effectivePage === 'playlists') {
       maybeStartPlaylistAutoload(effectivePage);
     }
+    const browseShelves = parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
     processShelves(
-      parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
+      browseShelves,
       buildShelfProcessingOptions(effectivePage)
     );
+    scanAndFilterAllArrays(browseShelves, effectivePage, 'tvBrowse.sectionList');
   }
 
   applyEndscreen(parsedResponse, configRead('enableHideEndScreenCards'));
@@ -249,10 +251,12 @@ registerJsonParseHook((parsedResponse) => {
 
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
     processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.contents.sectionListRenderer.contents, effectivePage, 'contents.sectionListRenderer');
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
@@ -332,9 +336,8 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = effectivePage === 'watch';
-  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+  if (!parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, effectivePage);
   }
