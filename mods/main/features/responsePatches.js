@@ -473,16 +473,12 @@ registerJsonParseHook((parsedResponse) => {
 
   const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels'];
   const skipUniversalFilter = pageForFiltering === 'watch' || !!window._skipUniversalFilter;
-  const alreadyScannedMainPaths = !!(
-    parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
-    || parsedResponse?.contents?.singleColumnBrowseResultsRenderer
-    || parsedResponse?.contents?.twoColumnBrowseResultsRenderer
-    || parsedResponse?.contents?.sectionListRenderer?.contents
-    || parsedResponse?.continuationContents?.sectionListContinuation?.contents
-  );
-  if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter && !alreadyScannedMainPaths) {
+  if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, pageForFiltering);
+    scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'universal.root');
+    if (DEBUG_ENABLED) {
+      console.log('[UNIVERSAL_SCAN] applied for page=', pageForFiltering);
+    }
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));
