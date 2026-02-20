@@ -164,12 +164,20 @@ export function isShortsShelfObject(shelf, title = '') {
 export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, collectVideoIdsFromShelf, getVideoTitle, debugEnabled = false, logShorts = false, path = '' } = {}) {
   if (!Array.isArray(shelves) || shortsEnabled) return 0;
   initShortsTrackingState();
+  const normalizedPage = String(page || '').toLowerCase();
+  const isChannelPage = normalizedPage === 'channel' || normalizedPage === 'channels';
 
   let removed = 0;
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelf = shelves[i];
     const title = getShelfTitle(shelf);
-    if (!isShortsShelfObject(shelf, title)) continue;
+    const normalizedTitle = String(title || '').trim().toLowerCase();
+    if (isChannelPage && debugEnabled) {
+      console.log('[SHELF_TITLE] path=', path || i, '| title=', title || '(empty)');
+    }
+
+    const removeByStrictChannelTitle = isChannelPage && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short');
+    if (!removeByStrictChannelTitle && !isShortsShelfObject(shelf, title)) continue;
 
     const ids = rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
     if (debugEnabled || logShorts) {
@@ -418,8 +426,10 @@ export function getShelfTitle(shelf) {
   };
 
   const titlePaths = [
+    shelf?.shelfRenderer?.title,
     shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
+    shelf?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
