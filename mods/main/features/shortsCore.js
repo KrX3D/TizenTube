@@ -473,6 +473,7 @@ export function directFilterArray(arr, page = 'other') {
   const out = [];
   const helperVideos = [];
   let playlistUnwatchedCount = 0;
+  let watchedRemoved = 0;
 
   for (const item of arr) {
     if (!item || typeof item !== 'object') continue;
@@ -509,6 +510,7 @@ export function directFilterArray(arr, page = 'other') {
       if (progressBar) {
         const percentWatched = Number(progressBar.percentDurationWatched || 0);
         if (percentWatched >= watchedThreshold) {
+          watchedRemoved += 1;
           continue;
         }
       } else if (isPlaylistPage && !filterIds) {
@@ -579,6 +581,10 @@ export function directFilterArray(arr, page = 'other') {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
     }
+  }
+
+  if (DEBUG_ENABLED && shouldHideWatched) {
+    console.log('[WATCHED_FILTER_ARRAY] page=', page, '| removedInArray=', watchedRemoved, '| remaining=', out.length, '| isPlaylist=', isPlaylistPage);
   }
 
   return shouldHideWatched && !isPlaylistPage

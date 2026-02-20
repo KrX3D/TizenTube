@@ -83,7 +83,8 @@ export function initPlaylistEnhancements() {
   if (window._ttPlaylistEnhancementsInitialized) return;
   window._ttPlaylistEnhancementsInitialized = true;
 
-  detectPlaylistButtons();
+  // TEMP: disabled for isolation while debugging filtering regressions.
+  // detectPlaylistButtons();
 
   if (!window._ttPlaylistButtonObserver) {
     window._ttPlaylistButtonObserver = new MutationObserver(() => {
@@ -91,7 +92,8 @@ export function initPlaylistEnhancements() {
       if (page !== 'playlist') return;
       const hasCustom = !!document.querySelector('[data-tizentube-collection-btn="1"]');
       if (!hasCustom) {
-        addPlaylistControlButtons(7);
+        // TEMP: disabled for isolation while debugging filtering regressions.
+        // addPlaylistControlButtons(7);
       }
     });
 
@@ -110,11 +112,12 @@ export function initPlaylistEnhancements() {
     }
   }
 
-  initPlaylistButtonMaintenance({
-    getCurrentPage,
-    addPlaylistControlButtons,
-    cleanupPlaylistHelperTiles
-  });
+  // TEMP: disabled for isolation while debugging filtering regressions.
+  // initPlaylistButtonMaintenance({
+  //   getCurrentPage,
+  //   addPlaylistControlButtons,
+  //   cleanupPlaylistHelperTiles
+  // });
 }
 
 initPlaylistEnhancements();

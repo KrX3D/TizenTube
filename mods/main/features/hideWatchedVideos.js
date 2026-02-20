@@ -31,15 +31,25 @@ export function shouldHideWatchedForPage(configPages, page) {
 
 export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage) {
   const pageName = resolvedPage || detectCurrentPage();
-  if (!shouldHideWatchedForPage(pages, pageName)) return items;
+  const shouldApply = shouldHideWatchedForPage(pages, pageName);
+  if (!shouldApply) return items;
 
-  return items.filter((item) => {
+  let removed = 0;
+  const filtered = items.filter((item) => {
     const progressBar = findProgressBar(item);
     if (!progressBar) return true;
 
-    const percentWatched = progressBar.percentDurationWatched || 0;
-    return percentWatched <= watchedThreshold;
+    const percentWatched = Number(progressBar.percentDurationWatched || 0);
+    const keep = percentWatched <= watchedThreshold;
+    if (!keep) removed += 1;
+    return keep;
   });
+
+  if (removed > 0 && typeof window !== 'undefined') {
+    console.log('[WATCHED_FILTER] page=', pageName, '| removed=', removed, '| kept=', filtered.length, '| threshold=', watchedThreshold);
+  }
+
+  return filtered;
 }
 
 export function findProgressBar(item) {

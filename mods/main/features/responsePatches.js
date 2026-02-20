@@ -254,6 +254,7 @@ function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
   if (pageForFiltering !== 'subscriptions' && pageForFiltering !== 'subscription' && pageForFiltering !== 'channel' && pageForFiltering !== 'channels') return false;
   if (!parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) return false;
   const sections = parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections || [];
+  if (DEBUG_ENABLED) console.log('[SECONDARY_NAV_TARGETED] page=', pageForFiltering, '| sections=', sections.length);
 
   sections.forEach((section, sectionIdx) => {
     const items = section?.tvSecondaryNavSectionRenderer?.items;
@@ -379,6 +380,7 @@ registerJsonParseHook((parsedResponse) => {
   const handledTargetedSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
 
   if (!handledTargetedSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+    if (DEBUG_ENABLED) console.log('[SECONDARY_NAV_GENERIC] page=', pageForFiltering);
     processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, pageForFiltering);
   }
 
