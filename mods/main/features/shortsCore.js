@@ -320,6 +320,11 @@ function getShortDetectionReason(item, page) {
 
   if (item.videoRenderer?.navigationEndpoint?.reelWatchEndpoint) return 'video-reel-watch-endpoint';
   if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) return 'tile-reel-watch-endpoint';
+  if (item.tileRenderer?.onSelectCommand) {
+    const cmdStr = JSON.stringify(item.tileRenderer.onSelectCommand);
+    if (cmdStr.includes('reelWatch')) return 'tile-onSelect-reelWatch';
+    if (cmdStr.includes('/shorts/')) return 'tile-onSelect-shorts-url';
+  }
   if (url.includes('/shorts/')) return 'shorts-url';
 
   const hasShortsBadge = (overlays = []) => overlays.some((overlay) =>
@@ -329,6 +334,12 @@ function getShortDetectionReason(item, page) {
   if (hasShortsBadge(item.videoRenderer?.thumbnailOverlays)) return 'video-shorts-badge';
   if (hasShortsBadge(item.gridVideoRenderer?.thumbnailOverlays)) return 'grid-shorts-badge';
   if (hasShortsBadge(item.compactVideoRenderer?.thumbnailOverlays)) return 'compact-shorts-badge';
+  if (hasShortsBadge(item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays)) return 'tile-shorts-badge';
+
+  const videoTitle = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || '';
+  if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) {
+    return 'title-has-shorts-hashtag';
+  }
 
   const durationSeconds = getRendererDurationSeconds(item.videoRenderer)
     ?? getRendererDurationSeconds(item.gridVideoRenderer)
@@ -337,13 +348,24 @@ function getShortDetectionReason(item, page) {
     ?? getRendererDurationSeconds(item.richItemRenderer?.content?.videoRenderer);
   if (durationSeconds != null && durationSeconds <= 180) return `duration<=180(${durationSeconds}s)`;
 
+  const tileOverlayText = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)
+    ?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText;
+  const tileLineText = item.tileRenderer?.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+    (i) => i?.lineItemRenderer?.text?.simpleText
+  )?.lineItemRenderer?.text?.simpleText;
+  const durationMatch = String(tileOverlayText || tileLineText || '').trim().match(/^(\d+):(\d{2})$/);
+  if (durationMatch) {
+    const seconds = parseInt(durationMatch[1], 10) * 60 + parseInt(durationMatch[2], 10);
+    if (seconds <= 180) return `tile-duration<=180(${seconds}s)`;
+  }
+
   if (item.richItemRenderer?.content?.reelItemRenderer) return 'rich-reel-item-renderer';
   if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
     const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
     if (thumb.height > thumb.width) return 'portrait-thumbnail';
   }
 
-  return `shorts-heuristic-${page || 'other'}`;
+  return `shorts-heuristic-fallback(${page || 'other'})`;
 }
 
 
@@ -507,6 +529,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
     if (!item || typeof item !== 'object') continue;
 
     const videoId = getVideoId(item);
+    const videoTitle = getVideoTitle(item) || videoId || 'unknown';
     const videoKey = getVideoKey(item, getVideoId);
 
     if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys.has(videoKey))) {
@@ -528,7 +551,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
     if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
       shortsRemoved += 1;
       if (DEBUG_ENABLED) {
-        console.log('[REMOVE_SHORT] path=', path || 'unknown', '| page=', page, '| videoId=', videoId, '| reason=', getShortDetectionReason(item, page));
+        console.log('[REMOVE_SHORT] via=directFilterArray.shortCheck', '| path=', path || 'unknown', '| title=', videoTitle, '| reason=', getShortDetectionReason(item, page));
       }
       continue;
     }
@@ -544,7 +567,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
         if (percentWatched >= watchedThreshold) {
           watchedRemoved += 1;
           if (DEBUG_ENABLED) {
-            console.log('[REMOVE_WATCHED] path=', path || 'unknown', '| page=', page, '| videoId=', videoId, '| watched=', percentWatched);
+            console.log('[REMOVE_WATCHED] via=directFilterArray.watchCheck', '| path=', path || 'unknown', '| title=', videoTitle, '| watched=', percentWatched);
           }
           continue;
         }
@@ -580,19 +603,21 @@ export function directFilterArray(arr, page = 'other', path = '') {
         || helperVideos[0]
         || continuationFallback
         || nonProgressFallback
+        || arr[arr.length - 1]
         || null;
       if (fallbackHelper) {
         const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
+        const fallbackTitle = getVideoTitle(fallbackHelper) || fallbackId || 'unknown';
         const fallbackType = fallbackHelper?.continuationItemRenderer
           ? 'continuationItemRenderer'
           : isLikelyPlaylistHelperItem(fallbackHelper, getVideoId, getVideoTitle)
             ? 'playlistHelperItem'
-            : 'nonProgressFallback';
+            : (nonProgressFallback === fallbackHelper ? 'nonProgressFallback' : 'watched-last-resort');
         window._lastHelperVideos = [fallbackHelper];
         window._playlistScrollHelpers.clear();
         window._playlistScrollHelpers.add(fallbackId);
         if (DEBUG_ENABLED) {
-          console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| keptFallback=', fallbackType, '| videoId=', fallbackId, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+          console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
         }
         return [fallbackHelper];
       }
