@@ -391,7 +391,7 @@ function hasShelvesArray(arr) {
   );
 }
 
-export function directFilterArray(arr, page = 'other') {
+export function directFilterArray(arr, page = 'other', path = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
   const callId = ++filterCallCounter;
@@ -459,21 +459,12 @@ export function directFilterArray(arr, page = 'other') {
     }
   }
 
-  // ⭐ DEBUG: Log configuration
-  if (DEBUG_ENABLED && (shouldApplyShortsFilter || shouldHideWatched)) {
-    console.log('[FILTER_START #' + callId + '] ========================================');
-    console.log('[FILTER_START #' + callId + '] Page:', page);
-    console.log('[FILTER_START #' + callId + '] Is Playlist:', isPlaylistPage);
-    console.log('[FILTER_START #' + callId + '] Total items:', arr.length);
-    console.log('[FILTER_CONFIG #' + callId + '] Threshold:', watchedThreshold + '%');
-    console.log('[FILTER_CONFIG #' + callId + '] Hide watched:', shouldHideWatched);
-    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldApplyShortsFilter);
-  }
 
   const out = [];
   const helperVideos = [];
   let playlistUnwatchedCount = 0;
   let watchedRemoved = 0;
+  let shortsRemoved = 0;
 
   for (const item of arr) {
     if (!item || typeof item !== 'object') continue;
@@ -498,6 +489,10 @@ export function directFilterArray(arr, page = 'other') {
     }
 
     if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
+      shortsRemoved += 1;
+      if (DEBUG_ENABLED) {
+        console.log('[REMOVE_SHORT] path=', path || 'unknown', '| page=', page, '| videoId=', videoId);
+      }
       continue;
     }
 
@@ -511,6 +506,9 @@ export function directFilterArray(arr, page = 'other') {
         const percentWatched = Number(progressBar.percentDurationWatched || 0);
         if (percentWatched >= watchedThreshold) {
           watchedRemoved += 1;
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_WATCHED] path=', path || 'unknown', '| page=', page, '| videoId=', videoId, '| watched=', percentWatched);
+          }
           continue;
         }
       } else if (isPlaylistPage && !filterIds) {
@@ -588,7 +586,7 @@ export function directFilterArray(arr, page = 'other') {
   }
 
   return shouldHideWatched && !isPlaylistPage
-    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page)
+    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page, path)
     : out;
 }
 
@@ -603,7 +601,7 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
       if (DEBUG_ENABLED) {
         console.log('[SCAN] Found video array at:', path, '| Length:', obj.length);
       }
-      return directFilterArray(obj, page);
+      return directFilterArray(obj, page, path);
     }
 
     if (hasShelvesArray(obj)) {

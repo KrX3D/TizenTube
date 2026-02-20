@@ -478,9 +478,6 @@ registerJsonParseHook((parsedResponse) => {
   if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'universal.root');
-    if (DEBUG_ENABLED) {
-      console.log('[UNIVERSAL_SCAN] applied for page=', pageForFiltering);
-    }
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));

@@ -29,25 +29,23 @@ export function shouldHideWatchedForPage(configPages, page) {
   return false;
 }
 
-export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage) {
+export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage, sourcePath = '') {
   const pageName = resolvedPage || detectCurrentPage();
   const shouldApply = shouldHideWatchedForPage(pages, pageName);
   if (!shouldApply) return items;
 
-  let removed = 0;
   const filtered = items.filter((item) => {
     const progressBar = findProgressBar(item);
     if (!progressBar) return true;
 
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const keep = percentWatched <= watchedThreshold;
-    if (!keep) removed += 1;
+    if (!keep && typeof window !== 'undefined') {
+      const id = item?.tileRenderer?.contentId || item?.videoRenderer?.videoId || item?.playlistVideoRenderer?.videoId || item?.gridVideoRenderer?.videoId || item?.compactVideoRenderer?.videoId || 'unknown';
+      console.log('[REMOVE_WATCHED] path=', sourcePath || 'hideWatchedVideos', '| page=', pageName, '| videoId=', id, '| watched=', percentWatched);
+    }
     return keep;
   });
-
-  if (removed > 0 && typeof window !== 'undefined') {
-    console.log('[WATCHED_FILTER] page=', pageName, '| removed=', removed, '| kept=', filtered.length, '| threshold=', watchedThreshold);
-  }
 
   return filtered;
 }
