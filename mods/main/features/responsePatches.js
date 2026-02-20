@@ -430,9 +430,14 @@ registerJsonParseHook((parsedResponse) => {
 
   const handledTargetedSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
 
-  if (!handledTargetedSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+  if ((!handledTargetedSecondaryNav || pageForFiltering === 'channel' || pageForFiltering === 'channels')
+      && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     if (DEBUG_ENABLED) console.log('[SECONDARY_NAV_GENERIC] page=', pageForFiltering);
     processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, pageForFiltering);
+  }
+
+  if (pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription') {
+    scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'critical.forceRoot');
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {

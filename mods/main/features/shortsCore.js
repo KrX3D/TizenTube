@@ -518,7 +518,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
   });
 
 
-  const out = [];
+  let out = [];
   const helperVideos = [];
   let playlistUnwatchedCount = 0;
   let watchedRemoved = 0;
@@ -618,6 +618,18 @@ export function directFilterArray(arr, page = 'other', path = '') {
 
       if (DEBUG_ENABLED) {
         console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| noFallbackFound=true', '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+      }
+    }
+
+    if (isLastBatch) {
+      const beforeLastBatchCleanup = out.length;
+      out = out.filter((item) => !isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle)
+        && !item?.continuationItemRenderer
+        && !item?.continuationEndpoint
+        && !item?.continuationCommand
+      );
+      if (DEBUG_ENABLED && beforeLastBatchCleanup !== out.length) {
+        console.log('[PLAYLIST_LAST_BATCH_CLEANUP] path=', getPathLabel(path), '| removedHelpers=', beforeLastBatchCleanup - out.length, '| remaining=', out.length);
       }
     }
 
