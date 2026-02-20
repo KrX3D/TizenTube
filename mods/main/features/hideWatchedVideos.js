@@ -2,27 +2,63 @@ import { detectCurrentPage } from '../pageDetection.js';
 
 export function shouldHideWatchedForPage(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  if (configPages.includes(page)) return true;
+  const normalizedPage = String(page || '').toLowerCase();
+  const normalizedConfigPages = configPages.map((entry) => String(entry || '').toLowerCase());
+
+  if (normalizedConfigPages.includes(normalizedPage)) return true;
+
+  // Allow singular/plural aliases used by older configs.
+  if (normalizedPage === 'channel' && normalizedConfigPages.includes('channels')) return true;
+  if (normalizedPage === 'channels' && normalizedConfigPages.includes('channel')) return true;
+  if (normalizedPage === 'subscriptions' && normalizedConfigPages.includes('subscription')) return true;
+  if (normalizedPage === 'subscription' && normalizedConfigPages.includes('subscriptions')) return true;
+  if ((normalizedPage === 'channel' || normalizedPage === 'channels') && normalizedConfigPages.length > 0) {
+    // Channel filtering should remain active for legacy configs that missed the key.
+    return true;
+  }
+  if ((normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') && normalizedConfigPages.length > 0) {
+    // Keep watched filtering active on key browse pages for TV builds.
+    return true;
+  }
 
   // Library playlist overview / watch-next should follow library watched-filter setting.
-  if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
+  if (normalizedConfigPages.includes('library') && (normalizedPage === 'playlist' || normalizedPage === 'watch')) {
     return true;
   }
 
   return false;
 }
 
-export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage) {
+export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage, sourcePath = '') {
   const pageName = resolvedPage || detectCurrentPage();
-  if (!shouldHideWatchedForPage(pages, pageName)) return items;
+  const shouldApply = shouldHideWatchedForPage(pages, pageName);
+  if (!shouldApply) return items;
 
-  return items.filter((item) => {
+  const filtered = items.filter((item) => {
     const progressBar = findProgressBar(item);
     if (!progressBar) return true;
 
-    const percentWatched = progressBar.percentDurationWatched || 0;
-    return percentWatched <= watchedThreshold;
+    const percentWatched = Number(progressBar.percentDurationWatched || 0);
+    const keep = percentWatched <= watchedThreshold;
+    if (!keep && typeof window !== 'undefined') {
+      const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
+        || item?.videoRenderer?.title?.runs?.[0]?.text
+        || item?.playlistVideoRenderer?.title?.runs?.[0]?.text
+        || item?.gridVideoRenderer?.title?.runs?.[0]?.text
+        || item?.compactVideoRenderer?.title?.simpleText
+        || item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text
+        || item?.tileRenderer?.contentId
+        || item?.videoRenderer?.videoId
+        || item?.playlistVideoRenderer?.videoId
+        || item?.gridVideoRenderer?.videoId
+        || item?.compactVideoRenderer?.videoId
+        || 'unknown';
+      console.log('[REMOVE_WATCHED] via=hideWatchedVideos.filter', '| path=', sourcePath || `hideWatchedVideos.${pageName || 'unknown'}`, '| title=', title, '| watched=', percentWatched);
+    }
+    return keep;
   });
+
+  return filtered;
 }
 
 export function findProgressBar(item) {
@@ -76,6 +112,33 @@ export function findProgressBar(item) {
   for (const renderer of rendererTypes) {
     const result = checkRenderer(renderer);
     if (result) return result;
+  }
+
+  // Fallback: recursively search for any object carrying percentDurationWatched.
+  const stack = [item];
+  const seen = new Set();
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+
+    if (typeof node.percentDurationWatched === 'number') {
+      return node;
+    }
+
+    const parsedPercent = Number(node.percentDurationWatched);
+    if (Number.isFinite(parsedPercent) && parsedPercent >= 0) {
+      return { percentDurationWatched: parsedPercent };
+    }
+
+    if (Array.isArray(node)) {
+      for (const entry of node) stack.push(entry);
+      continue;
+    }
+
+    for (const key of Object.keys(node)) {
+      stack.push(node[key]);
+    }
   }
 
   return null;
