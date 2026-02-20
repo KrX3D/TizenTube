@@ -1,6 +1,8 @@
 import resolveCommand from '../../resolveCommand.js';
 import { getVideoId } from './shortsCore.js';
 import { detectCurrentPage } from '../pageDetection.js';
+import { getGlobalDebugEnabled } from './visualConsole.js';
+import { configRead } from '../../config.js';
 import {
   addPlaylistControlButtons as addPlaylistControlButtonsFeature,
   detectPlaylistButtons as detectPlaylistButtonsFeature,
@@ -16,6 +18,7 @@ export function logChunkedByLines(prefix, text, linesPerChunk = 60) {
   if (!text) return;
   const lines = String(text).split('\n');
   const total = Math.max(1, Math.ceil(lines.length / linesPerChunk));
+
   for (let partIndex = total; partIndex >= 1; partIndex--) {
     const startLine = (partIndex - 1) * linesPerChunk;
     const part = lines.slice(startLine, startLine + linesPerChunk).join('\n');
@@ -53,7 +56,7 @@ export function triggerPlaylistContinuationLoad() {
 function addPlaylistControlButtons(attempt = 1) {
   return addPlaylistControlButtonsFeature(attempt, {
     getCurrentPage,
-    debugEnabled: false,
+    debugEnabled: getGlobalDebugEnabled(configRead),
     resolveCommand,
     logChunkedByLines
   });
@@ -63,7 +66,7 @@ function cleanupPlaylistHelperTiles() {
   return cleanupPlaylistHelperTilesFeature({
     getCurrentPage,
     getVideoId,
-    debugEnabled: false,
+    debugEnabled: getGlobalDebugEnabled(configRead),
     triggerPlaylistContinuationLoad
   });
 }
@@ -121,6 +124,8 @@ export function startPlaylistAutoLoad() {
   const page = getCurrentPage();
   if (page !== 'playlist') return;
 
+  window._skipUniversalFilter = true;
+
   let stableCount = 0;
   let lastVideoCount = 0;
   const interval = setInterval(() => {
@@ -135,10 +140,17 @@ export function startPlaylistAutoLoad() {
       stableCount += 1;
       if (stableCount >= 8) {
         clearInterval(interval);
+        window._skipUniversalFilter = false;
       }
     } else {
       stableCount = 0;
       lastVideoCount = currentCount;
     }
   }, 500);
+
+  setTimeout(() => {
+    if (window._skipUniversalFilter) {
+      window._skipUniversalFilter = false;
+    }
+  }, 25000);
 }
