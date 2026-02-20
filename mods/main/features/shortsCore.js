@@ -1,6 +1,28 @@
 import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
+
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+let LOG_SHORTS = getGlobalLogShorts(configRead);
+let filterCallCounter = 0;
+
+
+function getShortsEnabled(configReadFn) {
+  return !!configReadFn?.('enableShorts');
+}
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (!window.configChangeEmitter) return;
+    window.configChangeEmitter.addEventListener('configChange', (event) => {
+      if (event.detail?.key === 'enableDebugConsole') {
+        DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
+        LOG_SHORTS = getGlobalLogShorts(configRead);
+      }
+    });
+  }, 100);
+}
 
 
 
@@ -102,6 +124,34 @@ export function isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle) {
   return !!title && !!window._shortsTitlesFromShelves?.has(title);
 }
 
+
+export function isShortsShelfObject(shelf, title = '') {
+  if (!shelf || typeof shelf !== 'object') return false;
+  if (isShortsShelfTitle(title)) return true;
+
+  const shelfType = shelf?.shelfRenderer?.tvhtml5ShelfRendererType || '';
+  if (String(shelfType).toUpperCase().includes('SHORTS')) return true;
+
+  const reelShelfType = shelf?.reelShelfRenderer?.trackingParams;
+  if (reelShelfType && shelf?.reelShelfRenderer?.items) return true;
+
+  const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items
+    || shelf?.shelfRenderer?.content?.gridRenderer?.items
+    || shelf?.richShelfRenderer?.content?.richGridRenderer?.contents
+    || shelf?.richSectionRenderer?.content?.richShelfRenderer?.content?.richGridRenderer?.contents
+    || [];
+
+  if (!Array.isArray(items) || items.length === 0) return false;
+  const reelLike = items.filter((item) =>
+    !!item?.reelItemRenderer ||
+    !!item?.richItemRenderer?.content?.reelItemRenderer ||
+    !!item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint ||
+    !!item?.videoRenderer?.navigationEndpoint?.reelWatchEndpoint
+  ).length;
+
+  return reelLike > 0 && reelLike >= Math.ceil(items.length * 0.5);
+}
+
 export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, collectVideoIdsFromShelf, getVideoTitle, debugEnabled = false, logShorts = false, path = '' } = {}) {
   if (!Array.isArray(shelves) || shortsEnabled) return 0;
   initShortsTrackingState();
@@ -110,7 +160,7 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelf = shelves[i];
     const title = getShelfTitle(shelf);
-    if (!isShortsShelfTitle(title)) continue;
+    if (!isShortsShelfObject(shelf, title)) continue;
 
     const ids = rememberShortsFromShelf(shelf, collectVideoIdsFromShelf, getVideoTitle);
     if (debugEnabled || logShorts) {
@@ -121,6 +171,28 @@ export function removeShortsShelvesByTitle(shelves, { page, shortsEnabled, colle
   }
 
   return removed;
+}
+
+
+function getRendererDurationSeconds(renderer) {
+  if (!renderer || typeof renderer !== 'object') return null;
+
+  const overlayText = Array.isArray(renderer.thumbnailOverlays)
+    ? renderer.thumbnailOverlays.find((o) => o?.thumbnailOverlayTimeStatusRenderer)?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    : null;
+
+  const directLength = renderer.lengthText?.simpleText
+    || (Array.isArray(renderer.lengthText?.runs) ? renderer.lengthText.runs.map((run) => run.text).join('') : null)
+    || renderer.thumbnailOverlayTimeStatusRenderer?.text?.simpleText
+    || overlayText
+    || null;
+
+  const match = String(directLength || '').trim().match(/^(\d+):(\d{2})$/);
+  if (!match) return null;
+
+  const minutes = parseInt(match[1], 10);
+  const seconds = parseInt(match[2], 10);
+  return minutes * 60 + seconds;
 }
 
 export function filterShortItems(items, { page, debugEnabled = false, logShorts = false } = {}) {
@@ -197,44 +269,31 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   const videoTitle = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || '';
   if (videoTitle.toLowerCase().includes('#shorts') || videoTitle.toLowerCase().includes('#short')) return true;
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((o) => o.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
-    }
+  let durationSeconds = getRendererDurationSeconds(item.videoRenderer)
+    ?? getRendererDurationSeconds(item.gridVideoRenderer)
+    ?? getRendererDurationSeconds(item.compactVideoRenderer)
+    ?? getRendererDurationSeconds(item.playlistVideoRenderer)
+    ?? getRendererDurationSeconds(item.richItemRenderer?.content?.videoRenderer);
 
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (i) => i.lineItemRenderer?.badge || i.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
+  if (durationSeconds == null && item.tileRenderer) {
+    const tileOverlayText = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find((o) => o?.thumbnailOverlayTimeStatusRenderer)
+      ?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText;
 
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const minutes = parseInt(durationMatch[1], 10);
-        const seconds = parseInt(durationMatch[2], 10);
-        const totalSeconds = minutes * 60 + seconds;
-        if (totalSeconds <= 90) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration (≤ 90s):', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-        
-        // Extended check for 90-180 seconds Shorts can be nowt till 3min
-        if (totalSeconds <= 180) {
-          if (debugEnabled && logShorts) {
-            console.log('[SHORTS] Detected by duration + shelf memory:', videoId, '| Duration:', totalSeconds + 's');
-          }
-          return true;
-        }
-      }
+    const tileLineText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (i) => i?.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+
+    const durationMatch = String(tileOverlayText || tileLineText || '').trim().match(/^(\d+):(\d{2})$/);
+    if (durationMatch) {
+      durationSeconds = parseInt(durationMatch[1], 10) * 60 + parseInt(durationMatch[2], 10);
     }
+  }
+
+  if (durationSeconds != null && durationSeconds <= 180) {
+    if (debugEnabled && logShorts) {
+      console.log('[SHORTS] Detected by duration (≤ 180s):', videoId, '| Duration:', durationSeconds + 's');
+    }
+    return true;
   }
 
   if (item.richItemRenderer?.content?.reelItemRenderer) return true;
@@ -311,11 +370,14 @@ export function getShelfTitle(shelf) {
 
 function hasVideoItemsArray(arr) {
   return arr.some((item) =>
-      item?.tileRenderer || 
-      item?.videoRenderer || 
+      item?.tileRenderer ||
+      item?.videoRenderer ||
+      item?.playlistVideoRenderer ||
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.videoRenderer
+      item?.richItemRenderer?.content?.videoRenderer ||
+      item?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.reelItemRenderer
     );
 }
 
@@ -323,12 +385,16 @@ function hasShelvesArray(arr) {
   return arr.some((item) =>
     item?.shelfRenderer ||
     item?.richShelfRenderer ||
+    item?.richSectionRenderer ||
+    item?.reelShelfRenderer ||
     item?.gridRenderer
   );
 }
 
-export function directFilterArray(arr, page = 'other') {
+export function directFilterArray(arr, page = 'other', path = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
+
+  const callId = ++filterCallCounter;
 
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
@@ -345,7 +411,7 @@ export function directFilterArray(arr, page = 'other') {
   // Check if we should filter watched videos on this page (EXACT match)
   const shouldHideWatched = hideWatchedEnabled && shouldHideWatchedForPage(hideWatchedPages, page);
   // Shorts filtering is INDEPENDENT - always check if shorts are disabled
-  const shouldApplyShortsFilter = shouldFilterShorts(configRead('enableShorts'), page);
+  const shouldApplyShortsFilter = shouldFilterShorts(getShortsEnabled(configRead), page);
 
   // ⭐ Initialize scroll helpers tracker
 
@@ -367,8 +433,10 @@ export function directFilterArray(arr, page = 'other') {
   // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (isPlaylistPage && window._isLastPlaylistBatch === true) {
-    console.log('--------------------------------->> Using last batch flag from response');
-    console.log('--------------------------------->> This IS the last batch!');
+    if (DEBUG_ENABLED) {
+      console.log('--------------------------------->> Using last batch flag from response');
+      console.log('--------------------------------->> This IS the last batch!');
+    }
     isLastBatch = true;
     // Clear the flag
     window._isLastPlaylistBatch = false;
@@ -376,7 +444,9 @@ export function directFilterArray(arr, page = 'other') {
 
   // ⭐ FIXED: Trigger cleanup when we have stored helpers AND this is a new batch with content
   if (isPlaylistPage && window._lastHelperVideos.length > 0 && arr.length > 0) {
-    console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    if (DEBUG_ENABLED) {
+      console.log('[CLEANUP_TRIGGER] New batch detected! Stored helpers:', window._lastHelperVideos.length, '| new videos:', arr.length);
+    }
     
     // Store the helper IDs for filtering
     const helperIdsToTrack = window._lastHelperVideos.map((video) => getVideoId(video)).filter(Boolean);
@@ -385,24 +455,16 @@ export function directFilterArray(arr, page = 'other') {
     if (!isLastBatch) {
       window._lastHelperVideos = [];
       window._playlistScrollHelpers.clear();
-      console.log('[CLEANUP] Helpers cleared');
+      if (DEBUG_ENABLED) console.log('[CLEANUP] Helpers cleared');
     }
   }
 
-  // ⭐ DEBUG: Log configuration
-  if (DEBUG_ENABLED && (shouldApplyShortsFilter || shouldHideWatched)) {
-    console.log('[FILTER_START #' + callId + '] ========================================');
-    console.log('[FILTER_START #' + callId + '] Page:', page);
-    console.log('[FILTER_START #' + callId + '] Is Playlist:', isPlaylistPage);
-    console.log('[FILTER_START #' + callId + '] Total items:', arr.length);
-    console.log('[FILTER_CONFIG #' + callId + '] Threshold:', watchedThreshold + '%');
-    console.log('[FILTER_CONFIG #' + callId + '] Hide watched:', shouldHideWatched);
-    console.log('[FILTER_CONFIG #' + callId + '] Filter shorts:', shouldApplyShortsFilter);
-  }
 
   const out = [];
   const helperVideos = [];
   let playlistUnwatchedCount = 0;
+  let watchedRemoved = 0;
+  let shortsRemoved = 0;
 
   for (const item of arr) {
     if (!item || typeof item !== 'object') continue;
@@ -427,6 +489,10 @@ export function directFilterArray(arr, page = 'other') {
     }
 
     if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
+      shortsRemoved += 1;
+      if (DEBUG_ENABLED) {
+        console.log('[REMOVE_SHORT] path=', path || 'unknown', '| page=', page, '| videoId=', videoId);
+      }
       continue;
     }
 
@@ -439,6 +505,10 @@ export function directFilterArray(arr, page = 'other') {
       if (progressBar) {
         const percentWatched = Number(progressBar.percentDurationWatched || 0);
         if (percentWatched >= watchedThreshold) {
+          watchedRemoved += 1;
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_WATCHED] path=', path || 'unknown', '| page=', page, '| videoId=', videoId, '| watched=', percentWatched);
+          }
           continue;
         }
       } else if (isPlaylistPage && !filterIds) {
@@ -457,14 +527,25 @@ export function directFilterArray(arr, page = 'other') {
       trackRemovedPlaylistHelperKeys(helperVideos, getVideoId);
     }
 
-    // Keep one card so TV keeps requesting continuation even when this batch filtered to zero.
+    // Keep one helper/continuation card so TV keeps requesting continuation,
+    // but do not re-introduce watched videos as fallback.
     if (out.length === 0 && arr.length > 0 && !isLastBatch && !filterIds && !isInCollectionMode()) {
+      const continuationFallback = arr.find((item) =>
+        !!item?.continuationItemRenderer
+        || !!item?.tileRenderer?.onSelectCommand?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationEndpoint
+        || !!item?.continuationEndpoint
+        || !!item?.continuationCommand
+      ) || null;
+
+      const nonProgressFallback = [...arr].reverse().find((item) => !findProgressBar(item));
       const fallbackHelper = helperVideos.find((video) => getVideoId(video))
-        || [...arr].reverse().find((item) => !!getVideoId(item))
         || helperVideos[0]
-        || arr[arr.length - 1];
+        || continuationFallback
+        || nonProgressFallback
+        || null;
       if (fallbackHelper) {
-        const fallbackId = getVideoId(fallbackHelper) || 'unknown';
+        const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
         window._lastHelperVideos = [fallbackHelper];
         window._playlistScrollHelpers.clear();
         window._playlistScrollHelpers.add(fallbackId);
@@ -501,7 +582,7 @@ export function directFilterArray(arr, page = 'other') {
   }
 
   return shouldHideWatched && !isPlaylistPage
-    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page)
+    ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page, path)
     : out;
 }
 
@@ -516,17 +597,17 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
       if (DEBUG_ENABLED) {
         console.log('[SCAN] Found video array at:', path, '| Length:', obj.length);
       }
-      return directFilterArray(obj, page);
+      return directFilterArray(obj, page, path);
     }
 
     if (hasShelvesArray(obj)) {
       removeShortsShelvesByTitle(obj, {
         page,
-        shortsEnabled: configRead('enableShorts'),
+        shortsEnabled: getShortsEnabled(configRead),
         collectVideoIdsFromShelf,
         getVideoTitle,
-        debugEnabled: configRead('enableDebugConsole'),
-        logShorts: configRead('enableDebugConsole'),
+        debugEnabled: DEBUG_ENABLED,
+        logShorts: LOG_SHORTS,
         path
       });
     }
