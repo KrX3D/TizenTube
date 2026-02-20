@@ -354,8 +354,6 @@ function hasShelvesArray(arr) {
 export function directFilterArray(arr, page = 'other') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
-  const callId = ++filterCallCounter;
-
   // ⭐ Check if this is a playlist page
   let isPlaylistPage;
 

@@ -2,27 +2,10 @@ import { detectCurrentPage } from '../pageDetection.js';
 
 export function shouldHideWatchedForPage(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
-  const normalizedPage = String(page || '').toLowerCase();
-  const normalizedConfigPages = configPages.map((entry) => String(entry || '').toLowerCase());
-
-  if (normalizedConfigPages.includes(normalizedPage)) return true;
-
-  // Allow singular/plural aliases used by older configs.
-  if (normalizedPage === 'channel' && normalizedConfigPages.includes('channels')) return true;
-  if (normalizedPage === 'channels' && normalizedConfigPages.includes('channel')) return true;
-  if (normalizedPage === 'subscriptions' && normalizedConfigPages.includes('subscription')) return true;
-  if (normalizedPage === 'subscription' && normalizedConfigPages.includes('subscriptions')) return true;
-  if ((normalizedPage === 'channel' || normalizedPage === 'channels') && normalizedConfigPages.length > 0) {
-    // Channel filtering should remain active for legacy configs that missed the key.
-    return true;
-  }
-  if ((normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') && normalizedConfigPages.length > 0) {
-    // Keep watched filtering active on key browse pages for TV builds.
-    return true;
-  }
+  if (configPages.includes(page)) return true;
 
   // Library playlist overview / watch-next should follow library watched-filter setting.
-  if (normalizedConfigPages.includes('library') && (normalizedPage === 'playlist' || normalizedPage === 'watch')) {
+  if (configPages.includes('library') && (page === 'playlist' || page === 'watch')) {
     return true;
   }
 

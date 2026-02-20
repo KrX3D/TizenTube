@@ -105,21 +105,6 @@ function processSecondaryNav(sections, currentPage) {
   }
 }
 
-function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
-  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
-
-  for (let i = shelves.length - 1; i >= 0; i--) {
-    const shelf = shelves[i];
-    const title = getShelfTitle(shelf);
-    if (!isShortsShelfTitle(title)) continue;
-
-    if (DEBUG_ENABLED) {
-      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
-    }
-    shelves.splice(i, 1);
-  }
-}
-
 if (typeof window !== 'undefined') {
   window._collectedUnwatched = window._collectedUnwatched || [];
 }
