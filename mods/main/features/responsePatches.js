@@ -1,7 +1,7 @@
 import { configRead } from '../../config.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { registerJsonParseHook } from '../jsonParseHooks.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering, applyShortsAdFiltering } from './adCleanup.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from '../processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './sponsorblock.js';
@@ -10,12 +10,13 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
+import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle, isShortsShelfObject } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 
 
-let DEBUG_ENABLED = configRead('enableDebugConsole');
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
 window.adblock.setDebugEnabled = function(value) {
   DEBUG_ENABLED = !!value;
@@ -27,7 +28,7 @@ if (typeof window !== 'undefined') {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (event) => {
         if (event.detail?.key === 'enableDebugConsole') {
-          DEBUG_ENABLED = !!event.detail.value;
+          DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
         }
       });
     }
@@ -46,7 +47,7 @@ function buildShelfProcessingOptions(pageOverride) {
     shortsEnabled: configRead('enableShorts'),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
-    logShorts: DEBUG_ENABLED
+    logShorts: getGlobalLogShorts(configRead)
   };
 }
 
@@ -104,6 +105,21 @@ function processSecondaryNav(sections, currentPage) {
   }
 }
 
+function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const title = getShelfTitle(shelf);
+    if (!isShortsShelfTitle(title)) continue;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
+    }
+    shelves.splice(i, 1);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window._collectedUnwatched = window._collectedUnwatched || [];
 }
@@ -120,7 +136,9 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
       || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
       || '';
 
-    const isShortsTitle = isShortsShelfTitle(title) || String(title).trim().toLowerCase() === 'short';
+    const isShortsTitle = isShortsShelfTitle(title)
+      || String(title).trim().toLowerCase() === 'short'
+      || isShortsShelfObject(content, title);
     if (!isShortsTitle) return true;
 
     if (DEBUG_ENABLED) {
@@ -128,6 +146,58 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
     }
     return false;
   });
+}
+
+
+function resolveEffectivePage(currentPage) {
+  if (currentPage && currentPage !== 'other') return currentPage;
+
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  const combined = `${href} ${hash}`;
+
+  if (combined.includes('fesubscription')) return 'subscriptions';
+  if (combined.includes('subscription')) return 'subscriptions';
+  if (combined.includes('felibrary')) return 'library';
+  if (combined.includes('fehistory')) return 'history';
+  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+  if (combined.includes('/channel/') || combined.includes('/@') || /\/browse\/(uc|hc)/.test(combined)) return 'channel';
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
+}
+
+function processBrowseTabs(tabs, effectivePage, path) {
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const tabContent = tab?.tabRenderer?.content;
+
+    const sectionListContents = tabContent?.sectionListRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
+      || null;
+
+    if (Array.isArray(sectionListContents)) {
+      if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+        maybeStartPlaylistAutoload(effectivePage);
+      }
+
+      processShelves(sectionListContents, buildShelfProcessingOptions(effectivePage));
+      scanAndFilterAllArrays(sectionListContents, effectivePage, `${path}.sectionList`);
+    }
+
+    const richGridContents = tabContent?.richGridRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents
+      || null;
+
+    if (Array.isArray(richGridContents)) {
+      scanAndFilterAllArrays(richGridContents, effectivePage, `${path}.richGrid`);
+      if (tabContent?.richGridRenderer?.contents) {
+        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+      } else if (tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents) {
+        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+      }
+    }
+  }
 }
 
 function filterContinuationItemContainer(container, page, path) {
@@ -138,19 +208,25 @@ function filterContinuationItemContainer(container, page, path) {
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
-  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  const effectivePage = resolveEffectivePage(currentPage);
   const adBlockEnabled = configRead('enableAdBlock');
 
   applyAdCleanup(parsedResponse, adBlockEnabled);
+  applyShortsAdFiltering(parsedResponse, adBlockEnabled);
   applyPaidContentOverlay(parsedResponse, configRead('enablePaidPromotionOverlay'));
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
+    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+      maybeStartPlaylistAutoload(effectivePage);
+    }
+    const browseShelves = parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
     processShelves(
-      parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
+      browseShelves,
       buildShelfProcessingOptions(effectivePage)
     );
+    scanAndFilterAllArrays(browseShelves, effectivePage, 'tvBrowse.sectionList');
   }
 
   applyEndscreen(parsedResponse, configRead('enableHideEndScreenCards'));
@@ -160,12 +236,27 @@ registerJsonParseHook((parsedResponse) => {
     PatchSettings(parsedResponse);
   }
 
+
+  processBrowseTabs(
+    parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'singleColumnBrowseResultsRenderer.tabs'
+  );
+
+  processBrowseTabs(
+    parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
+    effectivePage,
+    'twoColumnBrowseResultsRenderer.tabs'
+  );
+
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
     processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.contents.sectionListRenderer.contents, effectivePage, 'contents.sectionListRenderer');
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
@@ -245,9 +336,8 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
   const skipUniversalFilter = effectivePage === 'watch';
-  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+  if (!parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, effectivePage);
   }
