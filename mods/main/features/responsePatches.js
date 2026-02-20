@@ -10,7 +10,7 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
+import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle, isShortsShelfObject } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
@@ -136,7 +136,9 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
       || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
       || '';
 
-    const isShortsTitle = isShortsShelfTitle(title) || String(title).trim().toLowerCase() === 'short';
+    const isShortsTitle = isShortsShelfTitle(title)
+      || String(title).trim().toLowerCase() === 'short'
+      || isShortsShelfObject(content, title);
     if (!isShortsTitle) return true;
 
     if (DEBUG_ENABLED) {
@@ -168,15 +170,33 @@ function processBrowseTabs(tabs, effectivePage, path) {
   if (!Array.isArray(tabs)) return;
 
   for (const tab of tabs) {
-    const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
-    if (!Array.isArray(contents)) continue;
+    const tabContent = tab?.tabRenderer?.content;
 
-    if (effectivePage === 'playlist' || effectivePage === 'playlists') {
-      maybeStartPlaylistAutoload(effectivePage);
+    const sectionListContents = tabContent?.sectionListRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
+      || null;
+
+    if (Array.isArray(sectionListContents)) {
+      if (effectivePage === 'playlist' || effectivePage === 'playlists') {
+        maybeStartPlaylistAutoload(effectivePage);
+      }
+
+      processShelves(sectionListContents, buildShelfProcessingOptions(effectivePage));
+      scanAndFilterAllArrays(sectionListContents, effectivePage, `${path}.sectionList`);
     }
 
-    processShelves(contents, buildShelfProcessingOptions(effectivePage));
-    scanAndFilterAllArrays(contents, effectivePage, path);
+    const richGridContents = tabContent?.richGridRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents
+      || null;
+
+    if (Array.isArray(richGridContents)) {
+      scanAndFilterAllArrays(richGridContents, effectivePage, `${path}.richGrid`);
+      if (tabContent?.richGridRenderer?.contents) {
+        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+      } else if (tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents) {
+        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, effectivePage);
+      }
+    }
   }
 }
 

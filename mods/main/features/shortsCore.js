@@ -120,7 +120,7 @@ export function isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle) {
 }
 
 
-function isShortsShelfObject(shelf, title = '') {
+export function isShortsShelfObject(shelf, title = '') {
   if (!shelf || typeof shelf !== 'object') return false;
   if (isShortsShelfTitle(title)) return true;
 
