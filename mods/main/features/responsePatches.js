@@ -1,7 +1,7 @@
 import { configRead } from '../../config.js';
 import { PatchSettings } from '../../ui/customYTSettings.js';
 import { registerJsonParseHook } from '../jsonParseHooks.js';
-import { applyAdCleanup, applyBrowseAdFiltering } from './adCleanup.js';
+import { applyAdCleanup, applyBrowseAdFiltering, applyShortsAdFiltering } from './adCleanup.js';
 import { applyPreferredVideoCodec } from './videoCodecPreference.js';
 import { processShelves, processHorizontalItems } from '../processShelves.js';
 import { applySponsorBlockHighlight, applySponsorBlockTimelyActions } from './sponsorblock.js';
@@ -10,12 +10,13 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle } from './shortsCore.js';
+import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle, isShortsShelfObject } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
+import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 
 
-let DEBUG_ENABLED = configRead('enableDebugConsole');
+let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
 window.adblock.setDebugEnabled = function(value) {
   DEBUG_ENABLED = !!value;
@@ -27,7 +28,7 @@ if (typeof window !== 'undefined') {
     if (window.configChangeEmitter) {
       window.configChangeEmitter.addEventListener('configChange', (event) => {
         if (event.detail?.key === 'enableDebugConsole') {
-          DEBUG_ENABLED = !!event.detail.value;
+          DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
         }
       });
     }
@@ -46,7 +47,7 @@ function buildShelfProcessingOptions(pageOverride) {
     shortsEnabled: configRead('enableShorts'),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
-    logShorts: DEBUG_ENABLED
+    logShorts: getGlobalLogShorts(configRead)
   };
 }
 
@@ -91,7 +92,7 @@ function processSecondaryNav(sections, currentPage) {
         const richGridItems = content?.richGridRenderer?.contents;
         if (Array.isArray(richGridItems)) {
           scanAndFilterAllArrays(richGridItems, currentPage, 'secondaryNav.items.richGrid');
-          content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage);
+          content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage, 'secondaryNav.items.richGrid');
         }
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
@@ -101,6 +102,21 @@ function processSecondaryNav(sections, currentPage) {
         }
       }
     }
+  }
+}
+
+function pruneShortsShelvesByTitle(shelves, currentPage, path = 'secondaryNav') {
+  if (!Array.isArray(shelves) || configRead('enableShorts')) return;
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
+    const title = getShelfTitle(shelf);
+    if (!isShortsShelfTitle(title)) continue;
+
+    if (DEBUG_ENABLED) {
+      console.log('[SHORTS_SHELF] removed shelf title=', title, '| page=', currentPage, '| path=', path);
+    }
+    shelves.splice(i, 1);
   }
 }
 
@@ -120,7 +136,9 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
       || item?.tvSecondaryNavItemRenderer?.title?.runs?.map((run) => run.text).join('')
       || '';
 
-    const isShortsTitle = isShortsShelfTitle(title) || String(title).trim().toLowerCase() === 'short';
+    const isShortsTitle = isShortsShelfTitle(title)
+      || String(title).trim().toLowerCase() === 'short'
+      || isShortsShelfObject(content, title);
     if (!isShortsTitle) return true;
 
     if (DEBUG_ENABLED) {
@@ -130,27 +148,279 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
   });
 }
 
+
+function resolveEffectivePage(currentPage) {
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  const combined = `${href} ${hash}`;
+
+  // Playlist URL/hash must win even if currentPage was inferred as library.
+  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+
+  if (currentPage && currentPage !== 'other') return currentPage;
+
+  if (combined.includes('fesubscription')) return 'subscriptions';
+  if (combined.includes('subscription')) return 'subscriptions';
+  if (combined.includes('felibrary')) return 'library';
+  if (combined.includes('fehistory')) return 'history';
+  if (combined.includes('/channel/') || combined.includes('/@') || /\/browse\/(uc|hc)/.test(combined)) return 'channel';
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
+}
+
+function processBrowseTabs(tabs, pageForFiltering, path) {
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const tabContent = tab?.tabRenderer?.content;
+
+    const sectionListContents = tabContent?.sectionListRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents
+      || null;
+
+    if (Array.isArray(sectionListContents)) {
+      if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
+        maybeStartPlaylistAutoload(pageForFiltering);
+      }
+
+      processShelves(sectionListContents, buildShelfProcessingOptions(pageForFiltering));
+      scanAndFilterAllArrays(sectionListContents, pageForFiltering, `${path}.sectionList`);
+    }
+
+    const richGridContents = tabContent?.richGridRenderer?.contents
+      || tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents
+      || null;
+
+    if (Array.isArray(richGridContents)) {
+      scanAndFilterAllArrays(richGridContents, pageForFiltering, `${path}.richGrid`);
+      if (tabContent?.richGridRenderer?.contents) {
+        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering, `${path}.richGrid`);
+      } else if (tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents) {
+        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering, `${path}.richGrid`);
+      }
+    }
+  }
+}
+
+
+
+function inferFilteringPage(parsedResponse, effectivePage) {
+  const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
+  const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
+  const combined = `${href} ${hash}`;
+
+  if (combined.includes('list=') || combined.includes('/playlist')) {
+    return 'playlist';
+  }
+
+  if (parsedResponse?.continuationContents?.tvSurfaceContentContinuation) {
+    const lastPage = (typeof window !== 'undefined' ? (window._lastDetectedPage || '') : '') || '';
+    if (lastPage === 'playlist' || lastPage === 'playlists') {
+      return 'playlist';
+    }
+  }
+
+  if (effectivePage && effectivePage !== 'other') return effectivePage;
+
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) return 'playlist';
+
+  if ((combined.includes('list=') || combined.includes('/playlist')) && parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
+    return 'playlist';
+  }
+
+  if (
+    parsedResponse?.metadata?.channelMetadataRenderer
+    || parsedResponse?.header?.c4TabbedHeaderRenderer
+    || combined.includes('/channel/')
+    || combined.includes('/@')
+    || /\/browse\/(uc|hc)/.test(combined)
+  ) {
+    return 'channel';
+  }
+
+  if (
+    combined.includes('fesubscription')
+    || combined.includes('subscription')
+    || parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections
+  ) {
+    return 'subscriptions';
+  }
+
+  return (typeof window !== 'undefined' ? (window._lastDetectedPage || effectivePage) : effectivePage);
+}
+
+function processPlaylistSingleColumnBrowse(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'playlist' && pageForFiltering !== 'playlists') return;
+  const tabs = parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs;
+  if (!Array.isArray(tabs)) return;
+
+  for (const tab of tabs) {
+    const contents = tab?.tabRenderer?.content?.sectionListRenderer?.contents;
+    if (!Array.isArray(contents)) continue;
+    processShelves(contents, buildShelfProcessingOptions(pageForFiltering));
+    scanAndFilterAllArrays(contents, pageForFiltering, 'playlist.singleColumnBrowseResultsRenderer.tabs');
+  }
+}
+
+
+function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'subscriptions' && pageForFiltering !== 'subscription' && pageForFiltering !== 'channel' && pageForFiltering !== 'channels') return false;
+  if (!parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) return false;
+  const sections = parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections || [];
+  if (DEBUG_ENABLED) console.log('[SECONDARY_NAV_TARGETED] page=', pageForFiltering, '| sections=', sections.length);
+
+  sections.forEach((section, sectionIdx) => {
+    const items = section?.tvSecondaryNavSectionRenderer?.items;
+    if (!Array.isArray(items)) return;
+
+    items.forEach((item, itemIdx) => {
+      if (item?.compactLinkRenderer) return;
+
+      const content = item?.tvSecondaryNavItemRenderer?.content;
+      if (!content) return;
+
+      if (content?.shelfRenderer) {
+        const shelfContainer = [content];
+        processShelves(shelfContainer, buildShelfProcessingOptions(pageForFiltering));
+        if (shelfContainer.length === 0) {
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_EMPTY_CONTAINER] path=', `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`, '| reason=empty-shelf-after-filter');
+          }
+          items[itemIdx] = null;
+          return;
+        }
+        scanAndFilterAllArrays(shelfContainer[0], pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
+        item.tvSecondaryNavItemRenderer.content = shelfContainer[0];
+        return;
+      }
+
+      if (Array.isArray(content?.richGridRenderer?.contents)) {
+        const richGridPath = `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`;
+        scanAndFilterAllArrays(content.richGridRenderer.contents, pageForFiltering, richGridPath);
+        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, pageForFiltering, richGridPath);
+        if (content.richGridRenderer.contents.length === 0) {
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_EMPTY_CONTAINER] path=', richGridPath, '| reason=empty-rich-grid-after-filter');
+          }
+          items[itemIdx] = null;
+        }
+      }
+    });
+
+    section.tvSecondaryNavSectionRenderer.items = items.filter(Boolean);
+  });
+
+  return true;
+}
+
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
-  return directFilterArray(container, page);
+  return directFilterArray(container, page, path);
+}
+
+function processTvSurfaceContinuation(parsedResponse, pageForFiltering) {
+  const tvSurface = parsedResponse?.continuationContents?.tvSurfaceContentContinuation?.content;
+  if (!tvSurface) return;
+
+  const sectionListContents = tvSurface?.sectionListRenderer?.contents;
+  if (Array.isArray(sectionListContents)) {
+    // First filter arrays recursively, then compact/remove emptied shelves/rows.
+    scanAndFilterAllArrays(sectionListContents, pageForFiltering, 'continuation.tvSurface.sectionList');
+    processShelves(sectionListContents, buildShelfProcessingOptions(pageForFiltering));
+  }
+
+  const gridItems = tvSurface?.gridRenderer?.items;
+  if (Array.isArray(gridItems)) {
+    scanAndFilterAllArrays(gridItems, pageForFiltering, 'continuation.tvSurface.grid');
+    tvSurface.gridRenderer.items = directFilterArray(gridItems, pageForFiltering, 'continuation.tvSurface.grid');
+  }
+}
+
+function forceCompactWatchNextShelves(parsedResponse, pageForFiltering) {
+  if (pageForFiltering !== 'watch') return;
+
+  const contents = parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer?.contents;
+  if (!Array.isArray(contents)) return;
+
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const shelf = contents[i];
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!Array.isArray(items)) continue;
+
+    const filtered = directFilterArray(items, pageForFiltering, `watch.forceCompact[${i}].shelfRenderer.content.horizontalListRenderer.items`);
+    shelf.shelfRenderer.content.horizontalListRenderer.items = filtered;
+
+    if (!Array.isArray(filtered) || filtered.length === 0) {
+      contents.splice(i, 1);
+    }
+  }
+}
+
+function stripPlaylistHelpersDeep(node) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      const isContinuationLike = !!item?.continuationItemRenderer
+        || !!item?.continuationEndpoint
+        || !!item?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationCommand
+        || !!item?.tileRenderer?.onSelectCommand?.continuationEndpoint;
+      if (isContinuationLike) {
+        node.splice(i, 1);
+        continue;
+      }
+      stripPlaylistHelpersDeep(item);
+    }
+    return;
+  }
+
+  for (const key of Object.keys(node)) {
+    stripPlaylistHelpersDeep(node[key]);
+  }
 }
 
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
-  const effectivePage = currentPage === 'other' ? (window._lastDetectedPage || currentPage) : currentPage;
+  const effectivePage = resolveEffectivePage(currentPage);
+  const pageForFiltering = inferFilteringPage(parsedResponse, effectivePage);
   const adBlockEnabled = configRead('enableAdBlock');
 
+  if (DEBUG_ENABLED) {
+    const marker = `${pageForFiltering}|${currentPage}`;
+    if (window._lastFilterPageMarker !== marker) {
+      console.log('[FILTER_PAGE] current=', currentPage, '| effective=', effectivePage, '| inferred=', pageForFiltering);
+      window._lastFilterPageMarker = marker;
+    }
+  }
+
+
   applyAdCleanup(parsedResponse, adBlockEnabled);
+  applyShortsAdFiltering(parsedResponse, adBlockEnabled);
   applyPaidContentOverlay(parsedResponse, configRead('enablePaidPromotionOverlay'));
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
+  // Set last-batch flag early so playlist array filtering in this same payload can
+  // drop helpers on the final batch instead of waiting for a later response.
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
+    const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
+    window._isLastPlaylistBatch = !hasContinuation;
+  }
+
+
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
+    if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
+      maybeStartPlaylistAutoload(pageForFiltering);
+    }
+    const browseShelves = parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents;
     processShelves(
-      parsedResponse.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
-      buildShelfProcessingOptions(effectivePage)
+      browseShelves,
+      buildShelfProcessingOptions(pageForFiltering)
     );
+    scanAndFilterAllArrays(browseShelves, pageForFiltering, 'tvBrowse.sectionList');
   }
 
   applyEndscreen(parsedResponse, configRead('enableHideEndScreenCards'));
@@ -160,37 +430,99 @@ registerJsonParseHook((parsedResponse) => {
     PatchSettings(parsedResponse);
   }
 
+
+
+  if ((pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription' || pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'playlist' || pageForFiltering === 'playlists')
+      && parsedResponse?.continuationContents) {
+    scanAndFilterAllArrays(parsedResponse.continuationContents, pageForFiltering, 'continuationContents.root');
+  }
+
+  processTvSurfaceContinuation(parsedResponse, pageForFiltering);
+
+  if (parsedResponse?.contents?.singleColumnBrowseResultsRenderer) {
+    scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, pageForFiltering, 'singleColumnBrowseResultsRenderer');
+  }
+
+  if (parsedResponse?.contents?.twoColumnBrowseResultsRenderer) {
+    scanAndFilterAllArrays(parsedResponse.contents.twoColumnBrowseResultsRenderer, pageForFiltering, 'twoColumnBrowseResultsRenderer');
+  }
+
+  processPlaylistSingleColumnBrowse(parsedResponse, pageForFiltering);
+
+  if (pageForFiltering !== 'playlist' && pageForFiltering !== 'playlists') {
+    processBrowseTabs(
+      parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
+      pageForFiltering,
+      'singleColumnBrowseResultsRenderer.tabs'
+    );
+  }
+
+  processBrowseTabs(
+    parsedResponse?.contents?.twoColumnBrowseResultsRenderer?.tabs,
+    pageForFiltering,
+    'twoColumnBrowseResultsRenderer.tabs'
+  );
+
   if (parsedResponse?.contents?.sectionListRenderer?.contents) {
-    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(effectivePage));
+    processShelves(parsedResponse.contents.sectionListRenderer.contents, buildShelfProcessingOptions(pageForFiltering));
+    scanAndFilterAllArrays(parsedResponse.contents.sectionListRenderer.contents, pageForFiltering, 'contents.sectionListRenderer');
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, pageForFiltering, 'continuation.sectionListContinuation');
+    processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(pageForFiltering));
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
     parsedResponse.continuationContents.horizontalListContinuation.items = processHorizontalItems(
       parsedResponse.continuationContents.horizontalListContinuation.items,
-      buildShelfProcessingOptions(effectivePage)
+      buildShelfProcessingOptions(pageForFiltering)
     );
   }
 
-  if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, effectivePage);
+  const handledTargetedSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
+
+  if ((!handledTargetedSecondaryNav || pageForFiltering === 'channel' || pageForFiltering === 'channels')
+      && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+    if (DEBUG_ENABLED) console.log('[SECONDARY_NAV_GENERIC] page=', pageForFiltering);
+    processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, pageForFiltering);
+  }
+
+  if (pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription') {
+    scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'critical.forceRoot');
   }
 
   if (parsedResponse?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
+    scanAndFilterAllArrays(
+      parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
+      pageForFiltering,
+      'singleColumnWatchNextResults.pivot.sectionListRenderer'
+    );
     processShelves(
       parsedResponse.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents,
-      { ...buildShelfProcessingOptions(effectivePage), shouldAddPreviews: false }
+      { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false }
     );
 
     applyQueueShelf(parsedResponse);
   }
 
+  forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
+
+  if (pageForFiltering === 'watch' && parsedResponse?.contents?.singleColumnWatchNextResults) {
+    scanAndFilterAllArrays(
+      parsedResponse.contents.singleColumnWatchNextResults,
+      pageForFiltering,
+      'watch.final.singleColumnWatchNextResults'
+    );
+    const watchPivotContents = parsedResponse.contents.singleColumnWatchNextResults?.pivot?.sectionListRenderer?.contents;
+    if (Array.isArray(watchPivotContents)) {
+      processShelves(watchPivotContents, { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false });
+      forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
+    }
+  }
+
   if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
     const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
-    window._isLastPlaylistBatch = !hasContinuation;
 
     if (!hasContinuation && isInCollectionMode()) {
       setTimeout(() => {
@@ -198,7 +530,11 @@ registerJsonParseHook((parsedResponse) => {
       }, 1200);
     }
 
-    maybeStartPlaylistAutoload(effectivePage);
+    maybeStartPlaylistAutoload(pageForFiltering);
+
+    if (!hasContinuation && (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')) {
+      stripPlaylistHelpersDeep(parsedResponse.continuationContents.playlistVideoListContinuation.contents);
+    }
   }
 
   if (parsedResponse?.onResponseReceivedActions) {
@@ -207,7 +543,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         action.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedActions.append'
         );
       }
@@ -216,7 +552,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         action.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedActions.reload'
         );
       }
@@ -229,7 +565,7 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(appendItems)) {
         endpoint.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
           appendItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedEndpoints.append'
         );
       }
@@ -238,18 +574,41 @@ registerJsonParseHook((parsedResponse) => {
       if (Array.isArray(reloadItems)) {
         endpoint.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
           reloadItems,
-          effectivePage,
+          pageForFiltering,
           'onResponseReceivedEndpoints.reload'
         );
       }
     }
   }
 
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
-  const skipUniversalFilter = effectivePage === 'watch';
-  if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
+
+  if (parsedResponse?.onResponseReceivedCommands) {
+    for (const command of parsedResponse.onResponseReceivedCommands) {
+      const appendItems = command?.appendContinuationItemsAction?.continuationItems;
+      if (Array.isArray(appendItems)) {
+        command.appendContinuationItemsAction.continuationItems = filterContinuationItemContainer(
+          appendItems,
+          pageForFiltering,
+          'onResponseReceivedCommands.append'
+        );
+      }
+
+      const reloadItems = command?.reloadContinuationItemsCommand?.continuationItems;
+      if (Array.isArray(reloadItems)) {
+        command.reloadContinuationItemsCommand.continuationItems = filterContinuationItemContainer(
+          reloadItems,
+          pageForFiltering,
+          'onResponseReceivedCommands.reload'
+        );
+      }
+    }
+  }
+
+  const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels', 'watch'];
+  const skipUniversalFilter = !!window._skipUniversalFilter;
+  if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, effectivePage);
+    scanAndFilterAllArrays(parsedResponse, pageForFiltering, 'universal.root');
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));
