@@ -659,6 +659,10 @@ export function directFilterArray(arr, page = 'other', path = '') {
     }
   }
 
+  if (DEBUG_ENABLED && shouldHideWatched) {
+    console.log('[WATCHED_FILTER_ARRAY] page=', page, '| removedInArray=', watchedRemoved, '| remaining=', out.length, '| isPlaylist=', isPlaylistPage);
+  }
+
   return shouldHideWatched && !isPlaylistPage
     ? hideWatchedVideos(out, hideWatchedPages, watchedThreshold, page, path)
     : out;
