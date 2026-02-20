@@ -2,6 +2,7 @@ import { configRead } from '../../config.js';
 import { hideWatchedVideos, findProgressBar, shouldHideWatchedForPage } from './hideWatchedVideos.js';
 import { isInCollectionMode, getFilteredVideoIds, trackRemovedPlaylistHelpers, trackRemovedPlaylistHelperKeys, isLikelyPlaylistHelperItem, getVideoKey } from './playlistHelpers.js';
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
+import { getItemDisplayTitle, getPathLabel } from './filterStableCore.js';
 
 let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 let LOG_SHORTS = getGlobalLogShorts(configRead);
@@ -529,7 +530,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
     if (!item || typeof item !== 'object') continue;
 
     const videoId = getVideoId(item);
-    const videoTitle = getVideoTitle(item) || videoId || 'unknown';
+    const videoTitle = getItemDisplayTitle(item);
     const videoKey = getVideoKey(item, getVideoId);
 
     if (isPlaylistPage && (window._playlistRemovedHelpers.has(videoId) || window._playlistRemovedHelperKeys.has(videoKey))) {
@@ -551,7 +552,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
     if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
       shortsRemoved += 1;
       if (DEBUG_ENABLED) {
-        console.log('[REMOVE_SHORT] via=directFilterArray.shortCheck', '| path=', path || 'unknown', '| title=', videoTitle, '| reason=', getShortDetectionReason(item, page));
+        console.log('[REMOVE_SHORT] via=directFilterArray.shortCheck', '| path=', getPathLabel(path), '| title=', videoTitle, '| reason=', getShortDetectionReason(item, page));
       }
       continue;
     }
@@ -567,7 +568,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
         if (percentWatched >= watchedThreshold) {
           watchedRemoved += 1;
           if (DEBUG_ENABLED) {
-            console.log('[REMOVE_WATCHED] via=directFilterArray.watchCheck', '| path=', path || 'unknown', '| title=', videoTitle, '| watched=', percentWatched);
+            console.log('[REMOVE_WATCHED] via=directFilterArray.watchCheck', '| path=', getPathLabel(path), '| title=', videoTitle, '| watched=', percentWatched);
           }
           continue;
         }
@@ -617,13 +618,13 @@ export function directFilterArray(arr, page = 'other', path = '') {
         window._playlistScrollHelpers.clear();
         window._playlistScrollHelpers.add(fallbackId);
         if (DEBUG_ENABLED) {
-          console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+          console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
         }
         return [fallbackHelper];
       }
 
       if (DEBUG_ENABLED) {
-        console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| noFallbackFound=true', '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+        console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| noFallbackFound=true', '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
       }
     }
 

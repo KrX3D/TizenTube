@@ -92,7 +92,7 @@ function processSecondaryNav(sections, currentPage) {
         const richGridItems = content?.richGridRenderer?.contents;
         if (Array.isArray(richGridItems)) {
           scanAndFilterAllArrays(richGridItems, currentPage, 'secondaryNav.items.richGrid');
-          content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage);
+          content.richGridRenderer.contents = directFilterArray(richGridItems, currentPage, 'secondaryNav.items.richGrid');
         }
 
         const contentShelves = content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
@@ -150,17 +150,19 @@ function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
 
 
 function resolveEffectivePage(currentPage) {
-  if (currentPage && currentPage !== 'other') return currentPage;
-
   const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
   const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
   const combined = `${href} ${hash}`;
+
+  // Playlist URL/hash must win even if currentPage was inferred as library.
+  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
+
+  if (currentPage && currentPage !== 'other') return currentPage;
 
   if (combined.includes('fesubscription')) return 'subscriptions';
   if (combined.includes('subscription')) return 'subscriptions';
   if (combined.includes('felibrary')) return 'library';
   if (combined.includes('fehistory')) return 'history';
-  if (combined.includes('/playlist') || combined.includes('list=')) return 'playlist';
   if (combined.includes('/channel/') || combined.includes('/@') || /\/browse\/(uc|hc)/.test(combined)) return 'channel';
 
   return (typeof window !== 'undefined' ? (window._lastDetectedPage || currentPage) : currentPage);
@@ -192,9 +194,9 @@ function processBrowseTabs(tabs, pageForFiltering, path) {
     if (Array.isArray(richGridContents)) {
       scanAndFilterAllArrays(richGridContents, pageForFiltering, `${path}.richGrid`);
       if (tabContent?.richGridRenderer?.contents) {
-        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering);
+        tabContent.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering, `${path}.richGrid`);
       } else if (tabContent?.tvSurfaceContentRenderer?.content?.richGridRenderer?.contents) {
-        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering);
+        tabContent.tvSurfaceContentRenderer.content.richGridRenderer.contents = directFilterArray(richGridContents, pageForFiltering, `${path}.richGrid`);
       }
     }
   }
@@ -203,13 +205,17 @@ function processBrowseTabs(tabs, pageForFiltering, path) {
 
 
 function inferFilteringPage(parsedResponse, effectivePage) {
-  if (effectivePage && effectivePage !== 'other') return effectivePage;
-
-  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) return 'playlist';
-
   const href = (typeof window !== 'undefined' ? (window.location?.href || '') : '').toLowerCase();
   const hash = (typeof window !== 'undefined' ? (window.location?.hash || '') : '').toLowerCase();
   const combined = `${href} ${hash}`;
+
+  if (combined.includes('list=') || combined.includes('/playlist')) {
+    return 'playlist';
+  }
+
+  if (effectivePage && effectivePage !== 'other') return effectivePage;
+
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) return 'playlist';
 
   if ((combined.includes('list=') || combined.includes('/playlist')) && parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
     return 'playlist';

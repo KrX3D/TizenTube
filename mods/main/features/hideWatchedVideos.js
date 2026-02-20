@@ -1,4 +1,5 @@
 import { detectCurrentPage } from '../pageDetection.js';
+import { getItemDisplayTitle, getPathLabel } from './filterStableCore.js';
 
 export function shouldHideWatchedForPage(configPages, page) {
   if (!Array.isArray(configPages) || configPages.length === 0) return true;
@@ -41,19 +42,8 @@ export function hideWatchedVideos(items, pages, watchedThreshold, resolvedPage, 
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const keep = percentWatched <= watchedThreshold;
     if (!keep && typeof window !== 'undefined') {
-      const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
-        || item?.videoRenderer?.title?.runs?.[0]?.text
-        || item?.playlistVideoRenderer?.title?.runs?.[0]?.text
-        || item?.gridVideoRenderer?.title?.runs?.[0]?.text
-        || item?.compactVideoRenderer?.title?.simpleText
-        || item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text
-        || item?.tileRenderer?.contentId
-        || item?.videoRenderer?.videoId
-        || item?.playlistVideoRenderer?.videoId
-        || item?.gridVideoRenderer?.videoId
-        || item?.compactVideoRenderer?.videoId
-        || 'unknown';
-      console.log('[REMOVE_WATCHED] via=hideWatchedVideos.filter', '| path=', sourcePath || `hideWatchedVideos.${pageName || 'unknown'}`, '| title=', title, '| watched=', percentWatched);
+      const title = getItemDisplayTitle(item);
+      console.log('[REMOVE_WATCHED] via=hideWatchedVideos.filter', '| path=', getPathLabel(sourcePath, `hideWatchedVideos.${pageName || 'unknown'}`), '| title=', title, '| watched=', percentWatched);
     }
     return keep;
   });
