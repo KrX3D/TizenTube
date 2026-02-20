@@ -237,6 +237,14 @@ registerJsonParseHook((parsedResponse) => {
   }
 
 
+  if (parsedResponse?.contents?.singleColumnBrowseResultsRenderer) {
+    scanAndFilterAllArrays(parsedResponse.contents.singleColumnBrowseResultsRenderer, effectivePage, 'singleColumnBrowseResultsRenderer');
+  }
+
+  if (parsedResponse?.contents?.twoColumnBrowseResultsRenderer) {
+    scanAndFilterAllArrays(parsedResponse.contents.twoColumnBrowseResultsRenderer, effectivePage, 'twoColumnBrowseResultsRenderer');
+  }
+
   processBrowseTabs(
     parsedResponse?.contents?.singleColumnBrowseResultsRenderer?.tabs,
     effectivePage,
@@ -255,6 +263,7 @@ registerJsonParseHook((parsedResponse) => {
   }
 
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
     processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
     scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
   }
@@ -336,9 +345,8 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
-  const criticalPages = ['subscriptions', 'library', 'history', 'playlist', 'channel'];
-
-  if (criticalPages.includes(currentPage) && !r.__universalFilterApplied && !skipUniversalFilter) {
+  const skipUniversalFilter = effectivePage === 'watch';
+  if (!parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
     parsedResponse.__universalFilterApplied = true;
     scanAndFilterAllArrays(parsedResponse, currentPage);
   }
