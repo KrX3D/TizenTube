@@ -7,6 +7,11 @@ let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 let LOG_SHORTS = getGlobalLogShorts(configRead);
 let filterCallCounter = 0;
 
+
+function getShortsEnabled(configReadFn) {
+  return !!configReadFn?.('enableShorts');
+}
+
 if (typeof window !== 'undefined') {
   setTimeout(() => {
     if (!window.configChangeEmitter) return;
