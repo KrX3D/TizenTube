@@ -44,7 +44,7 @@ function buildShelfProcessingOptions(pageOverride) {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts'),
+    shortsEnabled: getShortsEnabled(configRead),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
     logShorts: getGlobalLogShorts(configRead)
@@ -125,7 +125,7 @@ if (typeof window !== 'undefined') {
 }
 
 function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
-  if (!Array.isArray(sectionRenderer?.items) || configRead('enableShorts')) return;
+  if (!Array.isArray(sectionRenderer?.items) || getShortsEnabled(configRead)) return;
 
   sectionRenderer.items = sectionRenderer.items.filter((item) => {
     const content = item?.tvSecondaryNavItemRenderer?.content;
@@ -283,6 +283,7 @@ registerJsonParseHook((parsedResponse) => {
   if (parsedResponse?.continuationContents?.sectionListContinuation?.contents) {
     scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
     processShelves(parsedResponse.continuationContents.sectionListContinuation.contents, buildShelfProcessingOptions(effectivePage));
+    scanAndFilterAllArrays(parsedResponse.continuationContents.sectionListContinuation.contents, effectivePage, 'continuation.sectionListContinuation');
   }
 
   if (parsedResponse?.continuationContents?.horizontalListContinuation?.items) {
@@ -373,7 +374,7 @@ registerJsonParseHook((parsedResponse) => {
   );
   if (criticalPages.includes(effectivePage) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter && !alreadyScannedMainPaths) {
     parsedResponse.__universalFilterApplied = true;
-    scanAndFilterAllArrays(parsedResponse, effectivePage);
+    scanAndFilterAllArrays(parsedResponse, currentPage);
   }
 
   applySponsorBlockTimelyActions(parsedResponse, configRead('sponsorBlockManualSkips'));
