@@ -267,16 +267,34 @@ function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
       if (!content) return;
 
       if (content?.shelfRenderer) {
-        processShelves([content], buildShelfProcessingOptions(pageForFiltering));
-        scanAndFilterAllArrays(content, pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
+        const shelfContainer = [content];
+        processShelves(shelfContainer, buildShelfProcessingOptions(pageForFiltering));
+        if (shelfContainer.length === 0) {
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_EMPTY_CONTAINER] path=', `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`, '| reason=empty-shelf-after-filter');
+          }
+          items[itemIdx] = null;
+          return;
+        }
+        scanAndFilterAllArrays(shelfContainer[0], pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.shelf`);
+        item.tvSecondaryNavItemRenderer.content = shelfContainer[0];
         return;
       }
 
       if (Array.isArray(content?.richGridRenderer?.contents)) {
-        scanAndFilterAllArrays(content.richGridRenderer.contents, pageForFiltering, `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`);
-        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, pageForFiltering);
+        const richGridPath = `subscriptions.section.${sectionIdx}.item.${itemIdx}.richGrid`;
+        scanAndFilterAllArrays(content.richGridRenderer.contents, pageForFiltering, richGridPath);
+        content.richGridRenderer.contents = directFilterArray(content.richGridRenderer.contents, pageForFiltering, richGridPath);
+        if (content.richGridRenderer.contents.length === 0) {
+          if (DEBUG_ENABLED) {
+            console.log('[REMOVE_EMPTY_CONTAINER] path=', richGridPath, '| reason=empty-rich-grid-after-filter');
+          }
+          items[itemIdx] = null;
+        }
       }
     });
+
+    section.tvSecondaryNavSectionRenderer.items = items.filter(Boolean);
   });
 
   return true;
@@ -285,7 +303,7 @@ function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
 function filterContinuationItemContainer(container, page, path) {
   if (!Array.isArray(container)) return container;
   scanAndFilterAllArrays(container, page, path);
-  return directFilterArray(container, page);
+  return directFilterArray(container, page, path);
 }
 
 registerJsonParseHook((parsedResponse) => {

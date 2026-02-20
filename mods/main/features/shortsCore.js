@@ -309,6 +309,43 @@ export function isShortItem(item, { debugEnabled = false, logShorts = false, cur
   return false;
 }
 
+function getShortDetectionReason(item, page) {
+  if (!item) return '';
+  if (item.tileRenderer?.contentType === 'TILE_CONTENT_TYPE_SHORT') return 'tile-content-type-short';
+
+  const url = item.videoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || item.gridVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || item.compactVideoRenderer?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+    || '';
+
+  if (item.videoRenderer?.navigationEndpoint?.reelWatchEndpoint) return 'video-reel-watch-endpoint';
+  if (item.tileRenderer?.onSelectCommand?.reelWatchEndpoint) return 'tile-reel-watch-endpoint';
+  if (url.includes('/shorts/')) return 'shorts-url';
+
+  const hasShortsBadge = (overlays = []) => overlays.some((overlay) =>
+    overlay?.thumbnailOverlayTimeStatusRenderer?.style === 'SHORTS'
+    || overlay?.thumbnailOverlayTimeStatusRenderer?.text?.simpleText === 'SHORTS'
+  );
+  if (hasShortsBadge(item.videoRenderer?.thumbnailOverlays)) return 'video-shorts-badge';
+  if (hasShortsBadge(item.gridVideoRenderer?.thumbnailOverlays)) return 'grid-shorts-badge';
+  if (hasShortsBadge(item.compactVideoRenderer?.thumbnailOverlays)) return 'compact-shorts-badge';
+
+  const durationSeconds = getRendererDurationSeconds(item.videoRenderer)
+    ?? getRendererDurationSeconds(item.gridVideoRenderer)
+    ?? getRendererDurationSeconds(item.compactVideoRenderer)
+    ?? getRendererDurationSeconds(item.playlistVideoRenderer)
+    ?? getRendererDurationSeconds(item.richItemRenderer?.content?.videoRenderer);
+  if (durationSeconds != null && durationSeconds <= 180) return `duration<=180(${durationSeconds}s)`;
+
+  if (item.richItemRenderer?.content?.reelItemRenderer) return 'rich-reel-item-renderer';
+  if (item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]) {
+    const thumb = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0];
+    if (thumb.height > thumb.width) return 'portrait-thumbnail';
+  }
+
+  return `shorts-heuristic-${page || 'other'}`;
+}
+
 
 
 export function filterShelvesShorts(shelves, { page = 'other', shortsEnabled, onRemoveShelf } = {}) {
@@ -491,7 +528,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
     if (shouldApplyShortsFilter && isShortItem(item, { currentPage: page })) {
       shortsRemoved += 1;
       if (DEBUG_ENABLED) {
-        console.log('[REMOVE_SHORT] path=', path || 'unknown', '| page=', page, '| videoId=', videoId);
+        console.log('[REMOVE_SHORT] path=', path || 'unknown', '| page=', page, '| videoId=', videoId, '| reason=', getShortDetectionReason(item, page));
       }
       continue;
     }
@@ -546,10 +583,22 @@ export function directFilterArray(arr, page = 'other', path = '') {
         || null;
       if (fallbackHelper) {
         const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
+        const fallbackType = fallbackHelper?.continuationItemRenderer
+          ? 'continuationItemRenderer'
+          : isLikelyPlaylistHelperItem(fallbackHelper, getVideoId, getVideoTitle)
+            ? 'playlistHelperItem'
+            : 'nonProgressFallback';
         window._lastHelperVideos = [fallbackHelper];
         window._playlistScrollHelpers.clear();
         window._playlistScrollHelpers.add(fallbackId);
+        if (DEBUG_ENABLED) {
+          console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| keptFallback=', fallbackType, '| videoId=', fallbackId, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+        }
         return [fallbackHelper];
+      }
+
+      if (DEBUG_ENABLED) {
+        console.log('[PLAYLIST_EMPTY_BATCH] path=', path || 'unknown', '| noFallbackFound=true', '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
       }
     }
 
