@@ -251,11 +251,8 @@ function processPlaylistSingleColumnBrowse(parsedResponse, pageForFiltering) {
 
 
 function processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering) {
-  if (pageForFiltering !== 'subscriptions' && pageForFiltering !== 'subscription') return false;
+  if (pageForFiltering !== 'subscriptions' && pageForFiltering !== 'subscription' && pageForFiltering !== 'channel' && pageForFiltering !== 'channels') return false;
   if (!parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) return false;
-  if (parsedResponse.__tizentubeProcessedSubs) return true;
-
-  parsedResponse.__tizentubeProcessedSubs = true;
   const sections = parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections || [];
 
   sections.forEach((section, sectionIdx) => {
@@ -379,9 +376,9 @@ registerJsonParseHook((parsedResponse) => {
     );
   }
 
-  const handledSubscriptionsSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
+  const handledTargetedSecondaryNav = processSubscriptionsSecondaryNav(parsedResponse, pageForFiltering);
 
-  if (!handledSubscriptionsSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+  if (!handledTargetedSecondaryNav && parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     processSecondaryNav(parsedResponse.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, pageForFiltering);
   }
 
