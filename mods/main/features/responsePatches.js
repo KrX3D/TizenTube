@@ -378,6 +378,13 @@ registerJsonParseHook((parsedResponse) => {
   applyPreferredVideoCodec(parsedResponse, configRead('videoPreferredCodec'));
   applyBrowseAdFiltering(parsedResponse, adBlockEnabled);
 
+  // Set last-batch flag early so playlist array filtering in this same payload can
+  // drop helpers on the final batch instead of waiting for a later response.
+  if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
+    const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
+    window._isLastPlaylistBatch = !hasContinuation;
+  }
+
 
   if (parsedResponse?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
@@ -476,9 +483,21 @@ registerJsonParseHook((parsedResponse) => {
 
   forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
 
+  if (pageForFiltering === 'watch' && parsedResponse?.contents?.singleColumnWatchNextResults) {
+    scanAndFilterAllArrays(
+      parsedResponse.contents.singleColumnWatchNextResults,
+      pageForFiltering,
+      'watch.final.singleColumnWatchNextResults'
+    );
+    const watchPivotContents = parsedResponse.contents.singleColumnWatchNextResults?.pivot?.sectionListRenderer?.contents;
+    if (Array.isArray(watchPivotContents)) {
+      processShelves(watchPivotContents, { ...buildShelfProcessingOptions(pageForFiltering), shouldAddPreviews: false });
+      forceCompactWatchNextShelves(parsedResponse, pageForFiltering);
+    }
+  }
+
   if (parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents) {
     const hasContinuation = !!parsedResponse.continuationContents.playlistVideoListContinuation.continuations;
-    window._isLastPlaylistBatch = !hasContinuation;
 
     if (!hasContinuation && isInCollectionMode()) {
       setTimeout(() => {
