@@ -358,6 +358,32 @@ function forceCompactWatchNextShelves(parsedResponse, pageForFiltering) {
   }
 }
 
+function removePlaylistHelperNodesFromDom() {
+  if (typeof document === 'undefined') return;
+  const nodes = document.querySelectorAll(
+    'ytlr-continuation-item-renderer, [class*="continuation"], [class*="load-more"], [class*="loadmore"]'
+  );
+  nodes.forEach((node) => node.remove());
+}
+
+function removeWatchedNodesFromDomByTitle() {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  const removedTitles = (window._ttRemovedWatchedTitles || []).map((t) => String(t).trim().toLowerCase()).filter((t) => t.length >= 6);
+  if (!removedTitles.length) return;
+
+  const nodes = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id], ytlr-item-section-renderer ytlr-grid-video-renderer');
+  nodes.forEach((node) => {
+    const text = (node.textContent || '').toLowerCase();
+    if (!text) return;
+    for (const title of removedTitles) {
+      if (text.includes(title)) {
+        node.remove();
+        break;
+      }
+    }
+  });
+}
+
 function stripPlaylistHelpersDeep(node) {
   if (!node || typeof node !== 'object') return;
 
@@ -462,15 +488,6 @@ registerJsonParseHook((parsedResponse) => {
   const isFinalPlaylistPayload = (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')
     && !!parsedResponse?.continuationContents?.playlistVideoListContinuation?.contents
     && !parsedResponse?.continuationContents?.playlistVideoListContinuation?.continuations;
-
-  if (DEBUG_ENABLED) {
-    const marker = `${pageForFiltering}|${currentPage}`;
-    if (window._lastFilterPageMarker !== marker) {
-      console.log('[FILTER_PAGE] current=', currentPage, '| effective=', effectivePage, '| inferred=', pageForFiltering);
-      window._lastFilterPageMarker = marker;
-    }
-  }
-
 
   if (DEBUG_ENABLED) {
     const marker = `${pageForFiltering}|${currentPage}`;
@@ -624,11 +641,19 @@ registerJsonParseHook((parsedResponse) => {
     if (!hasContinuation && (pageForFiltering === 'playlist' || pageForFiltering === 'playlists')) {
       stripPlaylistHelpersDeep(parsedResponse.continuationContents.playlistVideoListContinuation.contents);
       stripPlaylistHelpersDeep(parsedResponse);
+      setTimeout(removePlaylistHelperNodesFromDom, 0);
+      setTimeout(removePlaylistHelperNodesFromDom, 500);
     }
   }
 
   if (isFinalPlaylistPayload) {
     stripPlaylistHelpersDeep(parsedResponse);
+    setTimeout(removePlaylistHelperNodesFromDom, 0);
+  }
+
+  if (pageForFiltering === 'watch') {
+    setTimeout(removeWatchedNodesFromDomByTitle, 0);
+    setTimeout(removeWatchedNodesFromDomByTitle, 400);
   }
 
   if (parsedResponse?.onResponseReceivedActions) {

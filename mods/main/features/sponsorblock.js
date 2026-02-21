@@ -227,9 +227,9 @@ class SponsorBlockHandler {
         if (m.removedNodes) {
           for (const node of m.removedNodes) {
             if (node === this.segmentsoverlay) {
-              //if (configRead('enableDebugConsole')) {
-                //console.info('bringing back segments overlay');
-              //}
+              if (configRead('enableDebugConsole')) {
+                console.info('bringing back segments overlay');
+              }
               this.slider.appendChild(this.segmentsoverlay);
             }
           }

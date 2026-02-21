@@ -16,6 +16,15 @@ let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 let LOG_SHORTS = getGlobalLogShorts(configRead);
 let filterCallCounter = 0;
 
+function rememberRemovedWatchedTitle(title) {
+  if (typeof window === 'undefined' || !title) return;
+  window._ttRemovedWatchedTitles = window._ttRemovedWatchedTitles || [];
+  window._ttRemovedWatchedTitles.push(String(title));
+  if (window._ttRemovedWatchedTitles.length > 300) {
+    window._ttRemovedWatchedTitles = window._ttRemovedWatchedTitles.slice(-200);
+  }
+}
+
 
 function getShortsEnabled(configReadFn) {
   return !!configReadFn?.('enableShorts');
@@ -569,6 +578,7 @@ export function directFilterArray(arr, page = 'other', path = '') {
         const percentWatched = Number(progressBar.percentDurationWatched || 0);
         if (percentWatched >= watchedThreshold) {
           watchedRemoved += 1;
+          rememberRemovedWatchedTitle(videoTitle);
           if (DEBUG_ENABLED) {
             console.log('[REMOVE_WATCHED] via=directFilterArray.watchCheck', '| path=', getPathLabel(path), '| title=', videoTitle, '| watched=', percentWatched);
           }
