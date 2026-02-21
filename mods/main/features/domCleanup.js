@@ -2,9 +2,18 @@ import { detectCurrentPage } from '../pageDetection.js';
 
 function removePlaylistHelpersFromDOM() {
   const nodes = document.querySelectorAll(
-    'ytlr-continuation-item-renderer, [class*="continuation"], [class*="load-more"], [class*="loadmore"]'
+    'ytlr-continuation-item-renderer, [class*="continuation"], [class*="load-more"], [class*="loadmore"], [aria-label*="more" i], [aria-label*="continuation" i]'
   );
-  nodes.forEach((node) => node.remove());
+
+  nodes.forEach((node) => {
+    const text = String(node.textContent || '').toLowerCase();
+    const html = String(node.innerHTML || '').toLowerCase();
+    const looksLikeHelper = /scroll|weiter|more|continuation|fortsetzen|load more|mehr anzeigen|laden/.test(text)
+      || /continuation|loadmore/.test(html);
+    if (looksLikeHelper || node.tagName.toLowerCase() === 'ytlr-continuation-item-renderer') {
+      node.remove();
+    }
+  });
 }
 
 function removeWatchedByRemovedTitleState() {
@@ -23,6 +32,20 @@ function removeWatchedByRemovedTitleState() {
         break;
       }
     }
+  });
+}
+
+
+function removeWatchedCardsByProgressBar() {
+  const progressNodes = document.querySelectorAll('[style*="--ytlr-watch-progress"], [class*="resume" i], [class*="progress" i]');
+  progressNodes.forEach((progress) => {
+    const card = progress.closest('ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]');
+    if (!card) return;
+
+    const style = String(progress.getAttribute('style') || '').toLowerCase();
+    const aria = String(progress.getAttribute('aria-label') || '').toLowerCase();
+    const isWatched = /100%|watched|gesehen/.test(style) || /watched|gesehen/.test(aria);
+    if (isWatched) card.remove();
   });
 }
 
@@ -50,9 +73,12 @@ export function runDomCleanupPass() {
 
   if (page === 'watch') {
     removeWatchedByRemovedTitleState();
+    removeWatchedCardsByProgressBar();
   }
 
   if (page === 'subscriptions' || page === 'subscription' || page === 'channel' || page === 'channels') {
+    removeWatchedByRemovedTitleState();
+    removeWatchedCardsByProgressBar();
     removeEmptySubscriptionPlaceholders();
   }
 }

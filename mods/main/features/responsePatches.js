@@ -757,6 +757,22 @@ registerJsonParseHook((parsedResponse) => {
     }
   }
 
+
+  // Final defensive pass after continuation command rewrites, to catch payload variants
+  // that re-introduce watched/shorts/helper entries late in the response object.
+  if (configRead('enableHideWatchedVideos') && (pageForFiltering === 'watch' || pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription')) {
+    const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+    hardPruneWatchedDeep(parsedResponse, watchedThreshold);
+  }
+
+  if (!configRead('enableShorts') && (pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription')) {
+    stripShortsShelvesDeep(parsedResponse);
+  }
+
+  if (pageForFiltering === 'playlist' || pageForFiltering === 'playlists') {
+    stripPlaylistHelpersDeep(parsedResponse);
+  }
+
   const criticalPages = ['subscriptions', 'subscription', 'library', 'history', 'playlist', 'playlists', 'channel', 'channels', 'watch'];
   const skipUniversalFilter = !!window._skipUniversalFilter;
   if (criticalPages.includes(pageForFiltering) && !parsedResponse.__universalFilterApplied && !skipUniversalFilter) {
