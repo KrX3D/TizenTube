@@ -29,18 +29,41 @@ export function trackRemovedPlaylistHelpers(helperIds) {
   }
 }
 
-export function isLikelyPlaylistHelperItem(item, getVideoId, getVideoTitle) {
+export function isLikelyPlaylistHelperItem(item, getVideoId = null, getVideoTitle = null) {
   if (!item || typeof item !== 'object') return false;
   if (item.continuationItemRenderer) return true;
   if (item?.tileRenderer?.onSelectCommand?.continuationCommand) return true;
   if (item?.tileRenderer?.onSelectCommand?.continuationEndpoint) return true;
   if (item?.continuationEndpoint || item?.continuationCommand) return true;
 
-  const videoId = getVideoId(item);
+  const safeGetVideoId = typeof getVideoId === 'function'
+    ? getVideoId
+    : (entry) => entry?.tileRenderer?.contentId
+      || entry?.videoRenderer?.videoId
+      || entry?.playlistVideoRenderer?.videoId
+      || entry?.gridVideoRenderer?.videoId
+      || entry?.compactVideoRenderer?.videoId
+      || entry?.richItemRenderer?.content?.videoRenderer?.videoId
+      || null;
+
+  const safeGetVideoTitle = typeof getVideoTitle === 'function'
+    ? getVideoTitle
+    : (entry) => entry?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
+      || entry?.videoRenderer?.title?.runs?.[0]?.text
+      || entry?.playlistVideoRenderer?.title?.runs?.[0]?.text
+      || entry?.gridVideoRenderer?.title?.runs?.[0]?.text
+      || entry?.compactVideoRenderer?.title?.simpleText
+      || entry?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text
+      || '';
+
+  const videoId = safeGetVideoId(item);
   if (videoId) return false;
 
-  const textParts = getVideoTitle(item).toLowerCase();
-  return /scroll|weiter|weiteres|mehr|more|helper|continuation|fortsetzen|laden/.test(textParts);
+  const textParts = String(safeGetVideoTitle(item) || '').toLowerCase();
+  if (/scroll|weiter|weiteres|mehr|more|helper|continuation|fortsetzen|laden|load/.test(textParts)) return true;
+
+  const serialized = JSON.stringify(item).toLowerCase();
+  return /continuation|loadmore|next batch|nextbatch/.test(serialized);
 }
 
 export function getVideoKey(item, getVideoId) {

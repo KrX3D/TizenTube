@@ -3,7 +3,9 @@ import { hqify } from './features/hqify.js';
 import { addLongPress } from './features/longPress.js';
 import { addPreviews } from './features/previews.js';
 import { hideWatchedVideos, shouldHideWatchedForPage } from './features/hideWatchedVideos.js';
-import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems } from './features/shortsCore.js';
+import { removeShortsShelvesByTitle, collectVideoIdsFromShelf, getVideoTitle, filterShortItems, rememberShortsFromShelf } from './features/shortsCore.js';
+import { isLikelyPlaylistHelperItem } from './features/playlistHelpers.js';
+import { hideShorts } from './features/hideShorts.js';
 import { detectCurrentPage } from './pageDetection.js';
 
 function getShelfItemsRef(shelf) {
@@ -43,6 +45,22 @@ function applyItemEnhancements(items, { deArrowEnabled, deArrowThumbnailsEnabled
   }
 }
 
+function isLikelyVisualPlaceholder(item) {
+  if (!item || typeof item !== 'object') return true;
+
+  if (item.continuationItemRenderer) return true;
+
+  if (item.richItemRenderer && !item.richItemRenderer.content) return true;
+
+  if (item.tileRenderer && !item.tileRenderer.contentId) {
+    const hasTitle = !!item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText;
+    const hasPlayableCommand = !!item?.tileRenderer?.onSelectCommand;
+    if (!hasTitle && !hasPlayableCommand) return true;
+  }
+
+  return false;
+}
+
 export function processShelves(shelves, options = {}) {
   if (!Array.isArray(shelves) || shelves.length === 0) return;
 
@@ -62,6 +80,11 @@ export function processShelves(shelves, options = {}) {
   } = options;
 
   const shouldHideWatched = shouldHideWatchedForPage(hideWatchedPages, page);
+
+  const horizontalShelves = shelves.filter((shelf) => shelf?.shelfRenderer?.content?.horizontalListRenderer?.items);
+  hideShorts(horizontalShelves, shortsEnabled, (removedShelf) => {
+    rememberShortsFromShelf(removedShelf, collectVideoIdsFromShelf, getVideoTitle);
+  }, page);
 
   removeShortsShelvesByTitle(shelves, {
     page,
@@ -109,12 +132,23 @@ export function processShelves(shelves, options = {}) {
     if (shouldHideWatched) {
       const watchedFiltered = hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
       if (watchedFiltered.length === 0 && originalItems.length > 0) {
-        // Playlist pages need at least one tile for continuation; other pages can remove empty shelves.
-        const keepShelfForContinuation = page === 'playlist' || page === 'playlists';
-        items = keepShelfForContinuation ? originalItems : [];
+        const isPlaylistPage = page === 'playlist' || page === 'playlists';
+        const isLastPlaylistBatch = isPlaylistPage && typeof window !== 'undefined' && window._isLastPlaylistBatch === true;
+        if (isPlaylistPage) {
+          // Keep helper/continuation entries only for non-final batches.
+          items = isLastPlaylistBatch ? [] : originalItems.filter((item) => isLikelyPlaylistHelperItem(item));
+        } else {
+          items = [];
+        }
       } else {
         items = watchedFiltered;
       }
+    }
+
+    const isPlaylistPage = page === 'playlist' || page === 'playlists';
+    if (!isPlaylistPage) {
+      items = items.filter((item) => !isLikelyPlaylistHelperItem(item));
+      items = items.filter((item) => !isLikelyVisualPlaceholder(item));
     }
 
     ref.parent[ref.key] = items;
