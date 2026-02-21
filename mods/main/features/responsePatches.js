@@ -45,7 +45,7 @@ function buildShelfProcessingOptions(pageOverride) {
     previewsEnabled: configRead('enablePreviews'),
     hideWatchedPages: configRead('hideWatchedVideosPages'),
     hideWatchedThreshold: configRead('hideWatchedVideosThreshold'),
-    shortsEnabled: configRead('enableShorts'),
+    shortsEnabled: getShortsEnabled(configRead),
     page: pageOverride || detectCurrentPage(),
     debugEnabled: DEBUG_ENABLED,
     logShorts: getGlobalLogShorts(configRead)
@@ -126,7 +126,7 @@ if (typeof window !== 'undefined') {
 }
 
 function pruneShortsSecondaryNavItems(sectionRenderer, currentPage) {
-  if (!Array.isArray(sectionRenderer?.items) || configRead('enableShorts')) return;
+  if (!Array.isArray(sectionRenderer?.items) || getShortsEnabled(configRead)) return;
 
   sectionRenderer.items = sectionRenderer.items.filter((item) => {
     const content = item?.tvSecondaryNavItemRenderer?.content;
