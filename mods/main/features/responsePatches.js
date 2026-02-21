@@ -16,6 +16,8 @@ import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 import { findProgressBar } from './hideWatchedVideos.js';
 
+// At the top of the registerJsonParseHook callback, after reading config:
+window._ttWatchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
 
 let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
@@ -489,7 +491,7 @@ function stripShortsShelvesDeep(node) {
       const title = getShelfTitle(item);
       const normalizedTitle = String(title || '').trim().toLowerCase();
       const hasShelfShape = !!(item?.shelfRenderer || item?.richShelfRenderer || item?.richSectionRenderer || item?.reelShelfRenderer || item?.gridRenderer);
-      if (hasShelfShape && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short')) {
+      if (hasShelfShape && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short' || isShortsShelfObject(item, normalizedTitle) )) {
         node.splice(i, 1);
         continue;
       }
@@ -682,12 +684,16 @@ registerJsonParseHook((parsedResponse) => {
 
   if (isFinalPlaylistPayload) {
     stripPlaylistHelpersDeep(parsedResponse);
-    setTimeout(removePlaylistHelperNodesFromDom, 0);
+    setTimeout(removeHelperVideoNodesFromDom, 0);
+    setTimeout(removeHelperVideoNodesFromDom, 600);
+    setTimeout(removeHelperVideoNodesFromDom, 1500);
   }
 
   if (pageForFiltering === 'watch') {
     setTimeout(removeWatchedNodesFromDomByTitle, 0);
     setTimeout(removeWatchedNodesFromDomByTitle, 400);
+    setTimeout(removeWatchedNodesFromDomByTitle, 1200);  // ← ADD: virtual list renders late
+    setTimeout(removeWatchedNodesFromDomByTitle, 2500);  // ← ADD: catch scroll-triggered renders
   }
 
   if (parsedResponse?.onResponseReceivedActions) {
@@ -785,3 +791,28 @@ registerJsonParseHook((parsedResponse) => {
 
   return parsedResponse;
 });
+
+function removeHelperVideoNodesFromDom() {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+
+  // Remove continuation-style nodes (existing behaviour)
+  removePlaylistHelperNodesFromDom();
+
+  // Remove regular video tiles whose IDs we tracked as helpers
+  const removedIds = window._playlistRemovedHelpers;
+  if (!removedIds || removedIds.size === 0) return;
+
+  const candidates = document.querySelectorAll(
+    'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer'
+  );
+  candidates.forEach((node) => {
+    const id =
+      node.getAttribute('data-video-id') ||
+      node.getAttribute('video-id') ||
+      node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
+    if (id && removedIds.has(id)) {
+      node.style.display = 'none';   // hide instead of remove to avoid black gap
+      node.setAttribute('data-tt-helper-hidden', '1');
+    }
+  });
+}

@@ -150,8 +150,7 @@ export function isShortsShelfObject(shelf, title = '') {
   const shelfType = shelf?.shelfRenderer?.tvhtml5ShelfRendererType || '';
   if (String(shelfType).toUpperCase().includes('SHORTS')) return true;
 
-  const reelShelfType = shelf?.reelShelfRenderer?.trackingParams;
-  if (reelShelfType && shelf?.reelShelfRenderer?.items) return true;
+  if (shelf?.reelShelfRenderer && Array.isArray(shelf.reelShelfRenderer.items) && shelf.reelShelfRenderer.items.length > 0) return true;
 
   const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items
     || shelf?.shelfRenderer?.content?.gridRenderer?.items
@@ -441,11 +440,12 @@ export function getShelfTitle(shelf) {
     shelf?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.title,
     shelf?.richShelfRenderer?.title,
+    shelf?.reelShelfRenderer?.title,
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
     shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
     shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
     shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
-  ];
+];
 
   for (const rawTitle of titlePaths) {
     const text = titleText(rawTitle);
