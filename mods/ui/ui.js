@@ -8,6 +8,7 @@ import modernUI from './settings.js';
 import resolveCommand, { patchResolveCommand } from '../resolveCommand.js';
 import { pipToFullscreen } from '../main/features/pictureInPicture.js';
 import getCommandExecutor from './customCommandExecution.js';
+import { startDomCleanupLoop } from '../main/features/domCleanup.js';
 
 // It just works, okay?
 const interval = setInterval(() => {
@@ -15,6 +16,7 @@ const interval = setInterval(() => {
   if (videoElement) {
     execute_once_dom_loaded();
     patchResolveCommand();
+    startDomCleanupLoop();
     clearInterval(interval);
   }
 }, 250);
