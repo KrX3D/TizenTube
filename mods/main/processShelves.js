@@ -133,9 +133,10 @@ export function processShelves(shelves, options = {}) {
       const watchedFiltered = hideWatchedVideos(items, hideWatchedPages, hideWatchedThreshold, page);
       if (watchedFiltered.length === 0 && originalItems.length > 0) {
         const isPlaylistPage = page === 'playlist' || page === 'playlists';
+        const isLastPlaylistBatch = isPlaylistPage && typeof window !== 'undefined' && window._isLastPlaylistBatch === true;
         if (isPlaylistPage) {
-          // Keep only helper/continuation entries so watched videos stay hidden on playlists.
-          items = originalItems.filter((item) => isLikelyPlaylistHelperItem(item));
+          // Keep helper/continuation entries only for non-final batches.
+          items = isLastPlaylistBatch ? [] : originalItems.filter((item) => isLikelyPlaylistHelperItem(item));
         } else {
           items = [];
         }

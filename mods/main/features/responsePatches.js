@@ -480,6 +480,29 @@ function hardPruneWatchedDeep(node, watchedThreshold) {
   }
 }
 
+function stripShortsShelvesDeep(node) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const item = node[i];
+      const title = getShelfTitle(item);
+      const normalizedTitle = String(title || '').trim().toLowerCase();
+      const hasShelfShape = !!(item?.shelfRenderer || item?.richShelfRenderer || item?.richSectionRenderer || item?.reelShelfRenderer || item?.gridRenderer);
+      if (hasShelfShape && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short')) {
+        node.splice(i, 1);
+        continue;
+      }
+      stripShortsShelvesDeep(item);
+    }
+    return;
+  }
+
+  for (const key of Object.keys(node)) {
+    stripShortsShelvesDeep(node[key]);
+  }
+}
+
 registerJsonParseHook((parsedResponse) => {
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
@@ -624,6 +647,17 @@ registerJsonParseHook((parsedResponse) => {
 
       const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
       hardPruneWatchedDeep(parsedResponse.contents.singleColumnWatchNextResults, watchedThreshold);
+    }
+  }
+
+  if (pageForFiltering === 'channel' || pageForFiltering === 'channels' || pageForFiltering === 'subscriptions' || pageForFiltering === 'subscription') {
+    if (!configRead('enableShorts')) {
+      stripShortsShelvesDeep(parsedResponse);
+    }
+
+    if (configRead('enableHideWatchedVideos')) {
+      const watchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+      hardPruneWatchedDeep(parsedResponse, watchedThreshold);
     }
   }
 

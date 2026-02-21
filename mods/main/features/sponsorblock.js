@@ -2,6 +2,12 @@ import sha256 from '../../tiny-sha256.js';
 import { configRead } from '../../config.js';
 import { showToast, timelyAction, ButtonRenderer } from '../../ui/ytUI.js';
 
+const sbLog = (...args) => {
+  if (configRead('enableDebugConsole')) {
+    console.info(...args);
+  }
+};
+
 // Copied from https://github.com/ajayyy/SponsorBlock/blob/da1a535de784540ee10166a75a3eb8537073838c/src/config.ts#L113-L134
 const barTypes = {
   sponsor: {
@@ -95,12 +101,12 @@ class SponsorBlockHandler {
 
     const result = results.find((v) => v.videoID === this.videoID);
     if (configRead('enableDebugConsole')) {
-      console.info(this.videoID, 'Got it:', result);
+      sbLog(this.videoID, 'Got it:', result);
     }
 
     if (!result || !result.segments || !result.segments.length) {
       if (configRead('enableDebugConsole')) {
-        console.info(this.videoID, 'No segments found.');
+        sbLog(this.videoID, 'No segments found.');
       }
       return;
     }
@@ -159,12 +165,12 @@ class SponsorBlockHandler {
 
     this.video = document.querySelector('video');
     if (!this.video) {
-      console.info(this.videoID, 'No video yet...');
+      sbLog(this.videoID, 'No video yet...');
       this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
       return;
     }
 
-    console.info(this.videoID, 'Video found, binding...');
+    sbLog(this.videoID, 'Video found, binding...');
 
     this.video.addEventListener('play', this.scheduleSkipHandler);
     this.video.addEventListener('pause', this.scheduleSkipHandler);
@@ -174,12 +180,12 @@ class SponsorBlockHandler {
 
   buildOverlay() {
     if (this.segmentsoverlay) {
-      console.info('Overlay already built');
+      sbLog('Overlay already built');
       return;
     }
 
     if (!this.video || !this.video.duration) {
-      console.info('No video duration yet');
+      sbLog('No video duration yet');
       return;
     }
 
@@ -218,7 +224,7 @@ class SponsorBlockHandler {
       elm.style.setProperty('width', `${segment.category === 'poi_highlight' ? 1 : widthPercent}%`, 'important');
       elm.style.setProperty('left', `${leftPercent}%`, 'important');
       elm.style.setProperty('position', 'absolute', 'important');
-      console.info('Generated element', elm, 'from', segment);
+      sbLog('Generated element', elm, 'from', segment);
       this.segmentsoverlay.appendChild(elm);
     });
 
@@ -228,7 +234,7 @@ class SponsorBlockHandler {
           for (const node of m.removedNodes) {
             if (node === this.segmentsoverlay) {
               if (configRead('enableDebugConsole')) {
-                console.info('bringing back segments overlay');
+                sbLog('bringing back segments overlay');
               }
               this.slider.appendChild(this.segmentsoverlay);
             }
@@ -262,12 +268,12 @@ class SponsorBlockHandler {
     this.nextSkipTimeout = null;
 
     if (!this.active) {
-      console.info(this.videoID, 'No longer active, ignoring...');
+      sbLog(this.videoID, 'No longer active, ignoring...');
       return;
     }
 
     if (this.video.paused) {
-      console.info(this.videoID, 'Currently paused, ignoring...');
+      sbLog(this.videoID, 'Currently paused, ignoring...');
       return;
     }
 
@@ -283,14 +289,14 @@ class SponsorBlockHandler {
 
     if (!nextSegments.length) {
       if (configRead('enableDebugConsole')) {
-        console.info(this.videoID, 'No more segments');
+        sbLog(this.videoID, 'No more segments');
       }
       return;
     }
 
     const [segment] = nextSegments;
     const [start, end] = segment.segment;
-    console.info(
+    sbLog(
       this.videoID,
       'Scheduling skip of',
       segment,
@@ -300,11 +306,11 @@ class SponsorBlockHandler {
 
     this.nextSkipTimeout = setTimeout(() => {
       if (this.video.paused) {
-        console.info(this.videoID, 'Currently paused, ignoring...');
+        sbLog(this.videoID, 'Currently paused, ignoring...');
         return;
       }
       if (!this.skippableCategories.includes(segment.category)) {
-        console.info(
+        sbLog(
           this.videoID,
           'Segment',
           segment.category,
@@ -314,7 +320,7 @@ class SponsorBlockHandler {
       }
 
       const skipName = barTypes[segment.category]?.name || segment.category;
-      console.info(this.videoID, 'Skipping', segment);
+      sbLog(this.videoID, 'Skipping', segment);
       if (!this.manualSkippableCategories.includes(segment.category)) {
         const wasSkippedBefore = this.skippedCategories.get(segment.UUID);
         if (wasSkippedBefore) {
@@ -349,7 +355,7 @@ class SponsorBlockHandler {
   }
 
   destroy() {
-    console.info(this.videoID, 'Destroying');
+    sbLog(this.videoID, 'Destroying');
 
     this.active = false;
 
@@ -412,7 +418,7 @@ window.addEventListener(
       (!window.sponsorblock || window.sponsorblock.videoID != videoID);
 
     if (configRead('enableDebugConsole')) {
-      console.info(
+      sbLog(
         'hashchange',
         videoID || '(no-watch-video)',
         window.sponsorblock,
