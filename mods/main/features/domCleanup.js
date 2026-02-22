@@ -18,18 +18,18 @@ function removePlaylistHelpersFromDOM() {
 function removeWatchedByRemovedTitleState() {
   const removedTitles = (window._ttRemovedWatchedTitles || [])
     .map((t) => String(t).trim().toLowerCase())
-    .filter((t) => t.length >= 6);
+    .filter((t) => t.length >= 12);  // increased from 6 to avoid false positives
   if (!removedTitles.length) return;
 
   const cards = document.querySelectorAll(
-    'ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id], ytlr-item-section-renderer ytlr-grid-video-renderer'
+    'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-item-section-renderer ytlr-grid-video-renderer'
   );
   cards.forEach((node) => {
     const text = (node.textContent || '').toLowerCase();
-    if (!text) return;
+    if (!text || text.length < 12) return;
     for (const title of removedTitles) {
       if (text.includes(title)) {
-        node.style.display = 'none';
+        node.remove();
         break;
       }
     }
@@ -41,12 +41,13 @@ function removeWatchedCardsByVideoId() {
   if (!removedIds || removedIds.size === 0) return;
 
   document.querySelectorAll(
-    '[data-video-id], ytlr-grid-video-renderer, ytlr-rich-item-renderer'
+    'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer'
   ).forEach((node) => {
     const id = node.getAttribute('data-video-id')
+      || node.getAttribute('video-id')
       || node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
     if (id && removedIds.has(id)) {
-      node.style.display = 'none';
+      node.remove();
     }
   });
 }
@@ -57,11 +58,11 @@ function removeWatchedCardsByProgressBar() {
     : 10;
 
   const progressNodes = document.querySelectorAll(
-    '[style*="--ytlr-watch-progress"], [class*="resume" i], [class*="progress" i]'
+    '[style*="--ytlr-watch-progress"], [class*="resume" i]'
   );
   progressNodes.forEach((progress) => {
     const card = progress.closest(
-      'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]'
+      'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer'
     );
     if (!card) return;
 
@@ -76,9 +77,7 @@ function removeWatchedCardsByProgressBar() {
       /100%|watched|gesehen/.test(style) ||
       /watched|gesehen/.test(aria);
 
-    if (isWatched) {
-      card.style.display = 'none';
-    }
+    if (isWatched) card.remove();
   });
 }
 
@@ -136,13 +135,19 @@ function startPlaylistHelperObserver() {
     if (!removedIds || removedIds.size === 0) return;
 
     document.querySelectorAll(
-      '[data-video-id]:not([data-tt-helper-hidden]), ytlr-grid-video-renderer:not([data-tt-helper-hidden])'
+      'ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id]'
     ).forEach((node) => {
+      if (node.getAttribute('data-tt-helper-hidden')) return;
       const id = node.getAttribute('data-video-id')
+        || node.getAttribute('video-id')
         || node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
       if (id && removedIds.has(id)) {
-        node.style.display = 'none';
         node.setAttribute('data-tt-helper-hidden', '1');
+        // Use visibility:hidden to preserve layout slot (prevents black gap)
+        // while still being invisible. Remove after a tick.
+        node.style.visibility = 'hidden';
+        node.style.pointerEvents = 'none';
+        setTimeout(() => { try { node.remove(); } catch(_) {} }, 800);
       }
     });
   });

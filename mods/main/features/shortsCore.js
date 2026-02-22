@@ -692,10 +692,14 @@ export function directFilterArray(arr, page = 'other', path = '') {
     : out;
 }
 
-export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
+export function scanAndFilterAllArrays(obj, page = 'other', path = 'root', _depth = 0, _seen = null) {
+  if (_depth > 40) return obj;
   if (!obj || typeof obj !== 'object') return obj;
 
-  // If this is an array with video items, filter it
+  if (!_seen) _seen = new WeakSet();
+  if (_seen.has(obj)) return obj;
+  _seen.add(obj);
+
   if (Array.isArray(obj)) {
     if (obj.length === 0) return obj;
 
@@ -721,7 +725,7 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
     for (let i = 0; i < obj.length; i++) {
       const entry = obj[i];
       if (entry && typeof entry === 'object') {
-        const filtered = scanAndFilterAllArrays(entry, page, `${path}[${i}]`);
+        const filtered = scanAndFilterAllArrays(entry, page, `${path}[${i}]`, _depth + 1, _seen);
         if (Array.isArray(filtered)) obj[i] = filtered;
       }
     }
@@ -732,7 +736,7 @@ export function scanAndFilterAllArrays(obj, page = 'other', path = 'root') {
   for (const key of Object.keys(obj)) {
     const value = obj[key];
     if (value && typeof value === 'object') {
-      const filtered = scanAndFilterAllArrays(value, page, `${path}.${key}`);
+      const filtered = scanAndFilterAllArrays(value, page, `${path}.${key}`, _depth + 1, _seen);
       if (Array.isArray(filtered)) obj[key] = filtered;
     }
   }
