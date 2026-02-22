@@ -24,6 +24,7 @@ import '@formatjs/intl-displaynames/locale-data/en-001.js';
 
 import "./domrect-polyfill";
 import "./main/features/responsePatches.js";
+import "./main/features/domCleanup.js";
 import "./main/features/sponsorblock.js";
 import "./ui/ui.js";
 import "./ui/speedUI.js";

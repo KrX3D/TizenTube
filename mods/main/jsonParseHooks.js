@@ -26,7 +26,11 @@ export function registerJsonParseHook(hook) {
     let parsed = originalJsonParse.apply(this, arguments);
 
     for (const parseHook of parseHooks) {
-      parsed = parseHook(parsed) ?? parsed;
+      try {
+        parsed = parseHook(parsed) ?? parsed;
+      } catch (e) {
+        console.error('[JSON_PARSE_HOOK] Hook crashed:', e?.message, e?.stack);
+      }
     }
 
     return parsed;

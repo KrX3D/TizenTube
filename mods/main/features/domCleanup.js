@@ -273,3 +273,12 @@ export function startDomCleanupLoop() {
   startPlaylistHelperObserver();
   startWatchPageWatchedObserver();
 }
+
+// Auto-start when this module is imported
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startDomCleanupLoop, { once: true });
+  } else {
+    startDomCleanupLoop();
+  }
+}
