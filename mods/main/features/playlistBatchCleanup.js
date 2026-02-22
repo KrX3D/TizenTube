@@ -54,9 +54,18 @@ export function rememberCurrentHelperVideos(helperVideos, getVideoId, trackRemov
 export function setPlaylistFallbackHelper(fallbackHelper, getVideoId) {
   if (!fallbackHelper || typeof window === 'undefined') return null;
   const fallbackId = getVideoId(fallbackHelper) || 'continuation-helper';
+
   window._lastHelperVideos = [fallbackHelper];
+  window._playlistScrollHelpers = window._playlistScrollHelpers || new Set();
   window._playlistScrollHelpers.clear();
   window._playlistScrollHelpers.add(fallbackId);
+
+  // Add to _playlistRemovedHelpers so the MutationObserver can find and hide it
+  if (fallbackId && fallbackId !== 'continuation-helper') {
+    window._playlistRemovedHelpers = window._playlistRemovedHelpers || new Set();
+    window._playlistRemovedHelpers.add(fallbackId);
+  }
+
   return fallbackId;
 }
 
