@@ -635,9 +635,25 @@ export function directFilterArray(arr, page = 'other', path = '') {
             : (nonProgressFallback === fallbackHelper ? 'nonProgressFallback' : 'watched-last-resort');
         setPlaylistFallbackHelper(fallbackHelper, getVideoId);
         if (DEBUG_ENABLED) {
-          console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
+          console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| triggering scroll instead of rendering helper');
         }
-        return [fallbackHelper];
+        // Don't render the helper — trigger continuation load via scroll dispatch instead
+        setTimeout(() => {
+          const scrollTargets = [
+            document.querySelector('yt-virtual-list'),
+            document.querySelector('ytlr-playlist-video-list-renderer'),
+            document.scrollingElement,
+            document.body,
+          ].filter(Boolean);
+          for (const el of scrollTargets) {
+            try {
+              el.scrollTop = (el.scrollTop || 0) + (el.scrollHeight || 99999);
+              el.dispatchEvent(new Event('scroll', { bubbles: true }));
+            } catch (_) {}
+          }
+          try { window.scrollTo(0, document.body.scrollHeight); } catch (_) {}
+        }, 80);
+        return [];
       }
 
       if (DEBUG_ENABLED) {

@@ -383,8 +383,11 @@ function removeWatchedNodesFromDomByTitle() {
   });
 }
 
-function stripPlaylistHelpersDeep(node) {
+function stripPlaylistHelpersDeep(node, _seen = null) {
   if (!node || typeof node !== 'object') return;
+  if (!_seen) _seen = new WeakSet();
+  if (_seen.has(node)) return;
+  _seen.add(node);
 
   if (Array.isArray(node)) {
     for (let i = node.length - 1; i >= 0; i--) {
@@ -394,18 +397,12 @@ function stripPlaylistHelpersDeep(node) {
         || !!item?.continuationCommand
         || !!item?.tileRenderer?.onSelectCommand?.continuationCommand
         || !!item?.tileRenderer?.onSelectCommand?.continuationEndpoint;
-      if (isContinuationLike) {
-        node.splice(i, 1);
-        continue;
-      }
-      stripPlaylistHelpersDeep(item);
+      if (isContinuationLike) { node.splice(i, 1); continue; }
+      stripPlaylistHelpersDeep(item, _seen);
     }
     return;
   }
-
-  for (const key of Object.keys(node)) {
-    stripPlaylistHelpersDeep(node[key]);
-  }
+  for (const key of Object.keys(node)) stripPlaylistHelpersDeep(node[key], _seen);
 }
 
 function forceCompactSectionShelves(contents, pageForFiltering, basePath) {
@@ -453,8 +450,11 @@ function isVideoLikeNode(item) {
   );
 }
 
-function hardPruneWatchedDeep(node, watchedThreshold) {
+function hardPruneWatchedDeep(node, watchedThreshold, _seen = null) {
   if (!node || typeof node !== 'object') return;
+  if (!_seen) _seen = new WeakSet();
+  if (_seen.has(node)) return;
+  _seen.add(node);
 
   if (Array.isArray(node)) {
     for (let i = node.length - 1; i >= 0; i--) {
@@ -464,7 +464,6 @@ function hardPruneWatchedDeep(node, watchedThreshold) {
         if (progressBar) {
           const watched = Number(progressBar.percentDurationWatched || 0);
           if (watched >= watchedThreshold) {
-            // Track ID for DOM cleanup (virtual list re-renders from cache)
             const videoId = item?.tileRenderer?.contentId
               || item?.videoRenderer?.videoId
               || item?.gridVideoRenderer?.videoId
@@ -474,13 +473,12 @@ function hardPruneWatchedDeep(node, watchedThreshold) {
               window._ttRemovedWatchedVideoIds = window._ttRemovedWatchedVideoIds || new Set();
               window._ttRemovedWatchedVideoIds.add(videoId);
             }
-            // Also track title (for text-based DOM cleanup fallback)
             const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
               || item?.videoRenderer?.title?.runs?.[0]?.text
               || item?.gridVideoRenderer?.title?.runs?.[0]?.text
               || item?.compactVideoRenderer?.title?.simpleText
               || item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text;
-            if (title && title.length >= 6) {
+            if (title && String(title).length >= 12) {
               window._ttRemovedWatchedTitles = window._ttRemovedWatchedTitles || [];
               window._ttRemovedWatchedTitles.push(String(title));
             }
@@ -489,18 +487,20 @@ function hardPruneWatchedDeep(node, watchedThreshold) {
           }
         }
       }
-      hardPruneWatchedDeep(item, watchedThreshold);
+      hardPruneWatchedDeep(item, watchedThreshold, _seen);
     }
     return;
   }
 
   for (const key of Object.keys(node)) {
-    hardPruneWatchedDeep(node[key], watchedThreshold);
+    hardPruneWatchedDeep(node[key], watchedThreshold, _seen);
   }
 }
-
-function stripShortsShelvesDeep(node) {
+function stripShortsShelvesDeep(node, _seen = null) {
   if (!node || typeof node !== 'object') return;
+  if (!_seen) _seen = new WeakSet();
+  if (_seen.has(node)) return;
+  _seen.add(node);
 
   if (Array.isArray(node)) {
     for (let i = node.length - 1; i >= 0; i--) {
@@ -508,18 +508,15 @@ function stripShortsShelvesDeep(node) {
       const title = getShelfTitle(item);
       const normalizedTitle = String(title || '').trim().toLowerCase();
       const hasShelfShape = !!(item?.shelfRenderer || item?.richShelfRenderer || item?.richSectionRenderer || item?.reelShelfRenderer || item?.gridRenderer);
-      if (hasShelfShape && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short' || isShortsShelfObject(item, normalizedTitle) )) {
+      if (hasShelfShape && (normalizedTitle === 'shorts' || normalizedTitle === '#shorts' || normalizedTitle === 'short' || isShortsShelfObject(item, normalizedTitle))) {
         node.splice(i, 1);
         continue;
       }
-      stripShortsShelvesDeep(item);
+      stripShortsShelvesDeep(item, _seen);
     }
     return;
   }
-
-  for (const key of Object.keys(node)) {
-    stripShortsShelvesDeep(node[key]);
-  }
+  for (const key of Object.keys(node)) stripShortsShelvesDeep(node[key], _seen);
 }
 
 registerJsonParseHook((parsedResponse) => {
