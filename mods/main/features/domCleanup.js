@@ -4,7 +4,6 @@ function removePlaylistHelpersFromDOM() {
   const nodes = document.querySelectorAll(
     'ytlr-continuation-item-renderer, [class*="continuation"], [class*="load-more"], [class*="loadmore"], [aria-label*="more" i], [aria-label*="continuation" i]'
   );
-
   nodes.forEach((node) => {
     const text = String(node.textContent || '').toLowerCase();
     const html = String(node.innerHTML || '').toLowerCase();
@@ -22,21 +21,37 @@ function removeWatchedByRemovedTitleState() {
     .filter((t) => t.length >= 6);
   if (!removedTitles.length) return;
 
-  const cards = document.querySelectorAll('ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id], ytlr-item-section-renderer ytlr-grid-video-renderer');
+  const cards = document.querySelectorAll(
+    'ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id], ytlr-item-section-renderer ytlr-grid-video-renderer'
+  );
   cards.forEach((node) => {
     const text = (node.textContent || '').toLowerCase();
     if (!text) return;
     for (const title of removedTitles) {
       if (text.includes(title)) {
-        node.remove();
+        node.style.display = 'none';
         break;
       }
     }
   });
 }
 
+function removeWatchedCardsByVideoId() {
+  const removedIds = window._ttRemovedWatchedVideoIds;
+  if (!removedIds || removedIds.size === 0) return;
+
+  document.querySelectorAll(
+    '[data-video-id], ytlr-grid-video-renderer, ytlr-rich-item-renderer'
+  ).forEach((node) => {
+    const id = node.getAttribute('data-video-id')
+      || node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
+    if (id && removedIds.has(id)) {
+      node.style.display = 'none';
+    }
+  });
+}
+
 function removeWatchedCardsByProgressBar() {
-  // Read threshold from window var set during JSON filtering
   const threshold = typeof window._ttWatchedThreshold === 'number'
     ? window._ttWatchedThreshold
     : 10;
@@ -51,9 +66,8 @@ function removeWatchedCardsByProgressBar() {
     if (!card) return;
 
     const style = String(progress.getAttribute('style') || '').toLowerCase();
-    const aria  = String(progress.getAttribute('aria-label') || '').toLowerCase();
+    const aria = String(progress.getAttribute('aria-label') || '').toLowerCase();
 
-    // Check CSS variable (value is 0.0–1.0 float)
     const cssMatch = style.match(/--ytlr-watch-progress:\s*([\d.]+)/);
     const cssPercent = cssMatch ? parseFloat(cssMatch[1]) * 100 : 0;
 
@@ -62,7 +76,9 @@ function removeWatchedCardsByProgressBar() {
       /100%|watched|gesehen/.test(style) ||
       /watched|gesehen/.test(aria);
 
-    if (isWatched) card.remove();
+    if (isWatched) {
+      card.style.display = 'none';
+    }
   });
 }
 
@@ -73,7 +89,6 @@ function removeEmptySubscriptionPlaceholders() {
     const hasThumb = !!node.querySelector('img, [style*="background-image"], [class*="thumbnail"], [class*="poster"]');
     const hasLink = !!node.querySelector('a[href*="watch"], [data-video-id], [video-id]');
     const isSkeleton = !!node.querySelector('[class*="skeleton"], [class*="placeholder"], [class*="shimmer"]');
-
     if (!hasLink && (!text || isSkeleton) && !hasThumb) {
       node.remove();
     }
@@ -90,21 +105,25 @@ export function runDomCleanupPass() {
 
   if (page === 'watch') {
     removeWatchedByRemovedTitleState();
+    removeWatchedCardsByVideoId();
     removeWatchedCardsByProgressBar();
   }
 
-  // ← ADD: channel pages need the same treatment
   if (page === 'channel' || page === 'channels') {
     removeWatchedByRemovedTitleState();
+    removeWatchedCardsByVideoId();
     removeWatchedCardsByProgressBar();
   }
 
   if (page === 'subscriptions' || page === 'subscription' || page === 'channel' || page === 'channels') {
     removeWatchedByRemovedTitleState();
+    removeWatchedCardsByVideoId();
     removeWatchedCardsByProgressBar();
     removeEmptySubscriptionPlaceholders();
   }
 }
+
+// --- Playlist helper observer ---
 
 let _playlistHelperObserver = null;
 
@@ -119,9 +138,8 @@ function startPlaylistHelperObserver() {
     document.querySelectorAll(
       '[data-video-id]:not([data-tt-helper-hidden]), ytlr-grid-video-renderer:not([data-tt-helper-hidden])'
     ).forEach((node) => {
-      const id =
-        node.getAttribute('data-video-id') ||
-        node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
+      const id = node.getAttribute('data-video-id')
+        || node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
       if (id && removedIds.has(id)) {
         node.style.display = 'none';
         node.setAttribute('data-tt-helper-hidden', '1');
@@ -133,25 +151,7 @@ function startPlaylistHelperObserver() {
   _playlistHelperObserver.observe(target, { childList: true, subtree: true });
 }
 
-export function startDomCleanupLoop() {
-  if (typeof window === 'undefined') return;
-  if (window._ttDomCleanupInterval) return;
-
-  const run = () => runDomCleanupPass();
-  run();
-  window._ttDomCleanupInterval = setInterval(run, 400);
-  window.addEventListener('hashchange', () => {
-    run();
-    // Reset observer when page changes so it re-attaches to correct container
-    if (_playlistHelperObserver) {
-      _playlistHelperObserver.disconnect();
-      _playlistHelperObserver = null;
-    }
-    if (detectCurrentPage() === 'playlist') startPlaylistHelperObserver();
-  });
-  startPlaylistHelperObserver();
-  startWatchPageWatchedObserver();
-}
+// --- Watch page watched-video observer ---
 
 let _watchWatchedObserver = null;
 
@@ -161,39 +161,115 @@ function checkAndRemoveIfWatched(node) {
     ? window._ttWatchedThreshold
     : 10;
 
-  const progress = node.querySelector
-    ? node.querySelector('[style*="--ytlr-watch-progress"], [class*="resume" i]')
-    : null;
-  if (!progress) return;
-
-  const style = progress.getAttribute('style') || '';
-  const cssMatch = style.match(/--ytlr-watch-progress:\s*([\d.]+)/);
-  const percent = cssMatch ? parseFloat(cssMatch[1]) * 100 : 0;
-  const isWatched = percent >= threshold || /100%|watched/.test(style.toLowerCase());
-
-  if (isWatched) {
-    const card = node.closest(
-      'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]'
-    ) || node;
-    card.style.display = 'none';
+  // Method 1: match by tracked video ID (most reliable, set by hardPruneWatchedDeep)
+  const id = node.getAttribute('data-video-id')
+    || node.querySelector?.('[data-video-id]')?.getAttribute('data-video-id');
+  if (id && window._ttRemovedWatchedVideoIds?.has(id)) {
+    node.style.display = 'none';
+    return;
   }
+
+  // Method 2: match by title text (set by directFilterArray and hardPruneWatchedDeep)
+  const removedTitles = (window._ttRemovedWatchedTitles || [])
+    .map((t) => String(t).trim().toLowerCase())
+    .filter((t) => t.length >= 6);
+  if (removedTitles.length > 0) {
+    const text = (node.textContent || '').toLowerCase();
+    if (text) {
+      for (const title of removedTitles) {
+        if (text.includes(title)) {
+          node.style.display = 'none';
+          return;
+        }
+      }
+    }
+  }
+
+  // Method 3: check for CSS progress variable (may not be present yet on first insert)
+  const progress = node.querySelector?.('[style*="--ytlr-watch-progress"], [class*="resume" i]');
+  if (progress) {
+    const style = progress.getAttribute('style') || '';
+    const cssMatch = style.match(/--ytlr-watch-progress:\s*([\d.]+)/);
+    const percent = cssMatch ? parseFloat(cssMatch[1]) * 100 : 0;
+    const isWatched = percent >= threshold || /100%|watched/.test(style.toLowerCase());
+    if (isWatched) {
+      const card = node.closest(
+        'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]'
+      ) || node;
+      card.style.display = 'none';
+      return;
+    }
+  }
+
+  // Method 4: schedule a delayed re-check for when CSS variables are applied asynchronously
+  setTimeout(() => {
+    if (node.style.display === 'none') return; // already hidden
+    const p = node.querySelector?.('[style*="--ytlr-watch-progress"]');
+    if (!p) return;
+    const style = p.getAttribute('style') || '';
+    const cssMatch = style.match(/--ytlr-watch-progress:\s*([\d.]+)/);
+    const percent = cssMatch ? parseFloat(cssMatch[1]) * 100 : 0;
+    if (percent >= threshold) {
+      const card = node.closest(
+        'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]'
+      ) || node;
+      card.style.display = 'none';
+    }
+  }, 300);
 }
 
 function startWatchPageWatchedObserver() {
   if (_watchWatchedObserver) return;
   _watchWatchedObserver = new MutationObserver((mutations) => {
-    if (detectCurrentPage() !== 'watch') return;
+    const page = detectCurrentPage();
+    // Run on watch, channel, and subscriptions pages
+    if (page !== 'watch' && page !== 'channel' && page !== 'channels'
+        && page !== 'subscriptions' && page !== 'subscription') return;
+
     for (const mutation of mutations) {
       for (const added of mutation.addedNodes) {
         if (added.nodeType !== 1) continue;
-        checkAndRemoveIfWatched(added);
+
+        // Check the node itself if it's a video card
+        const tagName = added.tagName?.toLowerCase() || '';
+        if (tagName === 'ytlr-grid-video-renderer'
+            || tagName === 'ytlr-rich-item-renderer'
+            || tagName === 'ytlr-compact-video-renderer'
+            || added.hasAttribute?.('data-video-id')) {
+          checkAndRemoveIfWatched(added);
+        }
+
+        // Check descendants
         if (added.querySelectorAll) {
           added.querySelectorAll(
-            'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer'
+            'ytlr-grid-video-renderer, ytlr-rich-item-renderer, ytlr-compact-video-renderer, [data-video-id]'
           ).forEach(checkAndRemoveIfWatched);
         }
       }
     }
   });
   _watchWatchedObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+export function startDomCleanupLoop() {
+  if (typeof window === 'undefined') return;
+  if (window._ttDomCleanupInterval) return;
+
+  const run = () => runDomCleanupPass();
+  run();
+  window._ttDomCleanupInterval = setInterval(run, 400);
+
+  window.addEventListener('hashchange', () => {
+    run();
+    if (_playlistHelperObserver) {
+      _playlistHelperObserver.disconnect();
+      _playlistHelperObserver = null;
+    }
+    if (detectCurrentPage() === 'playlist' || detectCurrentPage() === 'playlists') {
+      startPlaylistHelperObserver();
+    }
+  });
+
+  startPlaylistHelperObserver();
+  startWatchPageWatchedObserver();
 }

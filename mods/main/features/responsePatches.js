@@ -10,14 +10,11 @@ import { applyEndscreen } from './endscreen.js';
 import { applyYouThereRenderer } from './youThereRenderer.js';
 import { applyQueueShelf } from './queueShelf.js';
 import { detectCurrentPage } from '../pageDetection.js';
-import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle, isShortsShelfObject } from './shortsCore.js';
+import { directFilterArray, scanAndFilterAllArrays, getShelfTitle, isShortsShelfTitle, isShortsShelfObject, getShortsEnabled } from './shortsCore.js';
 import { startPlaylistAutoLoad } from './playlistEnhancements.js';
 import { isInCollectionMode, finishCollectionAndFilter } from './playlistHelpers.js';
 import { getGlobalDebugEnabled, getGlobalLogShorts } from './visualConsole.js';
 import { findProgressBar } from './hideWatchedVideos.js';
-
-// At the top of the registerJsonParseHook callback, after reading config:
-window._ttWatchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
 
 let DEBUG_ENABLED = getGlobalDebugEnabled(configRead);
 window.adblock = window.adblock || {};
@@ -467,6 +464,26 @@ function hardPruneWatchedDeep(node, watchedThreshold) {
         if (progressBar) {
           const watched = Number(progressBar.percentDurationWatched || 0);
           if (watched >= watchedThreshold) {
+            // Track ID for DOM cleanup (virtual list re-renders from cache)
+            const videoId = item?.tileRenderer?.contentId
+              || item?.videoRenderer?.videoId
+              || item?.gridVideoRenderer?.videoId
+              || item?.compactVideoRenderer?.videoId
+              || item?.richItemRenderer?.content?.videoRenderer?.videoId;
+            if (videoId) {
+              window._ttRemovedWatchedVideoIds = window._ttRemovedWatchedVideoIds || new Set();
+              window._ttRemovedWatchedVideoIds.add(videoId);
+            }
+            // Also track title (for text-based DOM cleanup fallback)
+            const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
+              || item?.videoRenderer?.title?.runs?.[0]?.text
+              || item?.gridVideoRenderer?.title?.runs?.[0]?.text
+              || item?.compactVideoRenderer?.title?.simpleText
+              || item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text;
+            if (title && title.length >= 6) {
+              window._ttRemovedWatchedTitles = window._ttRemovedWatchedTitles || [];
+              window._ttRemovedWatchedTitles.push(String(title));
+            }
             node.splice(i, 1);
             continue;
           }
@@ -506,6 +523,9 @@ function stripShortsShelvesDeep(node) {
 }
 
 registerJsonParseHook((parsedResponse) => {
+  // Always refresh so config changes take effect
+  window._ttWatchedThreshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+  
   const currentPage = detectCurrentPage();
   const effectivePage = resolveEffectivePage(currentPage);
   const pageForFiltering = inferFilteringPage(parsedResponse, effectivePage);

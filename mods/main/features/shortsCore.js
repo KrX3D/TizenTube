@@ -26,7 +26,7 @@ function rememberRemovedWatchedTitle(title) {
 }
 
 
-function getShortsEnabled(configReadFn) {
+export function getShortsEnabled(configReadFn) {
   return !!configReadFn?.('enableShorts');
 }
 
@@ -142,7 +142,6 @@ export function isKnownShortFromShelfMemory(item, getVideoId, getVideoTitle) {
   return !!title && !!window._shortsTitlesFromShelves?.has(title);
 }
 
-
 export function isShortsShelfObject(shelf, title = '') {
   if (!shelf || typeof shelf !== 'object') return false;
   if (isShortsShelfTitle(title)) return true;
@@ -150,7 +149,15 @@ export function isShortsShelfObject(shelf, title = '') {
   const shelfType = shelf?.shelfRenderer?.tvhtml5ShelfRendererType || '';
   if (String(shelfType).toUpperCase().includes('SHORTS')) return true;
 
-  if (shelf?.reelShelfRenderer && Array.isArray(shelf.reelShelfRenderer.items) && shelf.reelShelfRenderer.items.length > 0) return true;
+  // reelShelfRenderer — check multiple possible item array paths
+  if (shelf?.reelShelfRenderer) {
+    const reelItems = shelf.reelShelfRenderer.items
+      || shelf.reelShelfRenderer.contents
+      || [];
+    if (Array.isArray(reelItems) && reelItems.length > 0) return true;
+    // Even with no items, the renderer type itself is a Shorts shelf
+    return true;
+  }
 
   const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items
     || shelf?.shelfRenderer?.content?.gridRenderer?.items
