@@ -122,40 +122,6 @@ export function runDomCleanupPass() {
   }
 }
 
-// --- Playlist helper observer ---
-
-let _playlistHelperObserver = null;
-
-function startPlaylistHelperObserver() {
-  if (_playlistHelperObserver) return;
-  _playlistHelperObserver = new MutationObserver(() => {
-    const page = detectCurrentPage();
-    if (page !== 'playlist' && page !== 'playlists') return;
-    const removedIds = window._playlistRemovedHelpers;
-    if (!removedIds || removedIds.size === 0) return;
-
-    document.querySelectorAll(
-      'ytlr-grid-video-renderer, ytlr-rich-item-renderer, [data-video-id]'
-    ).forEach((node) => {
-      if (node.getAttribute('data-tt-helper-hidden')) return;
-      const id = node.getAttribute('data-video-id')
-        || node.getAttribute('video-id')
-        || node.querySelector('[data-video-id]')?.getAttribute('data-video-id');
-      if (id && removedIds.has(id)) {
-        node.setAttribute('data-tt-helper-hidden', '1');
-        // Use visibility:hidden to preserve layout slot (prevents black gap)
-        // while still being invisible. Remove after a tick.
-        node.style.visibility = 'hidden';
-        node.style.pointerEvents = 'none';
-        setTimeout(() => { try { node.remove(); } catch(_) {} }, 800);
-      }
-    });
-  });
-
-  const target = document.querySelector('yt-virtual-list') || document.body;
-  _playlistHelperObserver.observe(target, { childList: true, subtree: true });
-}
-
 // --- Watch page watched-video observer ---
 
 let _watchWatchedObserver = null;
@@ -266,16 +232,13 @@ export function startDomCleanupLoop() {
 
   window.addEventListener('hashchange', () => {
     run();
-    if (_playlistHelperObserver) {
-      _playlistHelperObserver.disconnect();
-      _playlistHelperObserver = null;
-    }
-    if (detectCurrentPage() === 'playlist' || detectCurrentPage() === 'playlists') {
-      startPlaylistHelperObserver();
+    // Clean up helper-hide CSS rules when navigating away from playlist
+    const page = detectCurrentPage();
+    if (page !== 'playlist' && page !== 'playlists') {
+      document.querySelectorAll('style[id^="tt-helper-hide-"]').forEach(s => s.remove());
     }
   });
 
-  startPlaylistHelperObserver();
   startWatchPageWatchedObserver();
 }
 

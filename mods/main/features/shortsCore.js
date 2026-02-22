@@ -635,25 +635,19 @@ export function directFilterArray(arr, page = 'other', path = '') {
             : (nonProgressFallback === fallbackHelper ? 'nonProgressFallback' : 'watched-last-resort');
         setPlaylistFallbackHelper(fallbackHelper, getVideoId);
         if (DEBUG_ENABLED) {
-          console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| triggering scroll instead of rendering helper');
+          console.log('[PLAYLIST_EMPTY_BATCH] path=', getPathLabel(path), '| keptFallback=', fallbackType, '| title=', fallbackTitle, '| originalBatch=', arr.length, '| removedWatched=', watchedRemoved, '| removedShorts=', shortsRemoved);
         }
-        // Don't render the helper — trigger continuation load via scroll dispatch instead
-        setTimeout(() => {
-          const scrollTargets = [
-            document.querySelector('yt-virtual-list'),
-            document.querySelector('ytlr-playlist-video-list-renderer'),
-            document.scrollingElement,
-            document.body,
-          ].filter(Boolean);
-          for (const el of scrollTargets) {
-            try {
-              el.scrollTop = (el.scrollTop || 0) + (el.scrollHeight || 99999);
-              el.dispatchEvent(new Event('scroll', { bubbles: true }));
-            } catch (_) {}
+        // Inject persistent CSS rule so the helper is invisible even when virtual list re-renders it
+        if (fallbackId && fallbackId !== 'continuation-helper' && typeof document !== 'undefined') {
+          const styleId = `tt-helper-hide-${fallbackId}`;
+          if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `[data-video-id="${fallbackId}"] { display: none !important; } ytlr-grid-video-renderer[video-id="${fallbackId}"] { display: none !important; }`;
+            document.head.appendChild(style);
           }
-          try { window.scrollTo(0, document.body.scrollHeight); } catch (_) {}
-        }, 80);
-        return [];
+        }
+        return [fallbackHelper];
       }
 
       if (DEBUG_ENABLED) {
