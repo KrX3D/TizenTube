@@ -186,9 +186,22 @@ JSON.parse = function () {
     PatchSettings(r);
   }
 
+  // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
     const page = getCurrentPage();
+    
+    // Scan and filter ALL arrays
     scanAndFilterAllArrays(r.contents.singleColumnBrowseResultsRenderer, page);
+  }
+
+  // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
+  const currentPage = getCurrentPage();
+
+  if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
+    r.__universalFilterApplied = true;
+
+    // Scan the ENTIRE response object and filter ALL video arrays
+    scanAndFilterAllArrays(r, currentPage);
   }
 
   // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
@@ -322,12 +335,6 @@ JSON.parse = function () {
     }
   }
 
-  const currentPage = getCurrentPage();
-  if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
-    r.__universalFilterApplied = true;
-    scanAndFilterAllArrays(r, currentPage);
-  }
-
   return r;
 };
 
@@ -338,7 +345,6 @@ for (const key in window._yttv) {
     window._yttv[key].JSON.parse = JSON.parse;
   }
 }
-
 
 function processShelves(shelves, shouldAddPreviews = true) {
   hideShorts(shelves, configRead('enableShorts'));
