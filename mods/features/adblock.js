@@ -63,38 +63,33 @@ function getShelfTitle(shelf) {
   );
 }
 
-function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
-  if (shortsEnabled || !Array.isArray(shelves)) return;
+export function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
+  if (shortsEnabled) return;
 
-  for (let i = shelves.length - 1; i >= 0; i--) {
-    const shelf = shelves[i];
+  for (const shelf of shelves) {
     if (!shelf) continue;
 
-    const isShortShelf = getShelfTitle(shelf).toLowerCase().includes('short') ||
-      shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
-
-    if (isShortShelf) {
+    const title = getShelfTitle(shelf).toLowerCase();
+    if (title.includes('short')) {
       onRemoveShelf?.(shelf);
-      shelves.splice(i, 1);
+      shelshelfves.splice(shelf.indexOf(shelf), 1);
       continue;
     }
 
-    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-    if (Array.isArray(items)) {
-      shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
-        (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS' && !isShortItem(item)
-      );
+    if (!shelf.shelfRenderer?.content?.horizontalListRenderer?.items) continue;
+
+    if (shelf.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+      onRemoveShelf?.(shelf);
+      shelf.splice(shelf.indexOf(shelf), 1);
+      continue;
     }
 
-    const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
-    if (Array.isArray(richItems)) {
-      shelf.richShelfRenderer.content.richGridRenderer.contents = richItems.filter(
-        (item) => !isShortItem(item)
+    shelf.shelfRenderer.content.horizontalListRenderer.items =
+      shelf.shelfRenderer.content.horizontalListRenderer.items.filter(
+        (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
       );
-    }
   }
 }
-
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
