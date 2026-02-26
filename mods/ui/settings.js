@@ -434,7 +434,7 @@ export default function modernUI(update, parameters) {
                                 title: 'Watched Videos Threshold',
                                 subtitle: 'Set the percentage threshold for hiding watched videos'
                             },
-                            options: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
+                            options: [0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
                                 return {
                                     name: `${percent}%`,
                                     key: 'hideWatchedVideosThreshold',
@@ -469,12 +469,35 @@ export default function modernUI(update, parameters) {
                                     value: 'subscriptions'
                                 },
                                 {
+                                    name: 'Channel Pages',
+                                    value: 'channel'
+                                },
+                                {
                                     name: 'Library',
                                     value: 'library'
                                 },
                                 {
+                                    name: 'Library → Playlists Overview',
+                                    icon: 'PLAYLIST_PLAY',
+                                    value: 'playlists'
+                                },
+                                {
+                                    name: 'Library → Individual Playlists (WL, LL, etc)',
+                                    icon: 'PLAYLIST_PLAY',
+                                    value: 'playlist'
+                                },
+                                {
+                                    name: 'Library → History',
+                                    icon: 'HISTORY',
+                                    value: 'history'
+                                },
+                                {
                                     name: 'More',
                                     value: 'more'
+                                },
+                                {
+                                    name: 'Watch',
+                                    value: 'watch'
                                 }
                             ]
                         }
