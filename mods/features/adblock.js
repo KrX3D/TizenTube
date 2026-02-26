@@ -468,64 +468,39 @@ function hideVideo(items) {
   return directFilterArray(items, currentPage, 'processShelves');
 }
 
-function isShortItem(item) {
+function isShortItem(item, { currentPage = '' } = {}) {
   if (!item) return false;
 
-  if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
-    return true;
-  }
+  if (item.tileRenderer) {
+    let lengthText = null;
+    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
+    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+      const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
+      if (timeOverlay) {
+        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+      }
+    }
 
-  const renderer = item.tileRenderer ||
-    item.videoRenderer ||
-    item.playlistVideoRenderer ||
-    item.gridVideoRenderer ||
-    item.compactVideoRenderer ||
-    item.richItemRenderer?.content?.videoRenderer ||
-    item.richItemRenderer?.content?.playlistVideoRenderer;
+    if (!lengthText) {
+      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+        (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+      )?.lineItemRenderer?.text?.simpleText;
+    }
 
-  if (!renderer) return false;
-
-  if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return true;
-
-  const thumbnailOverlays = renderer.thumbnailOverlays ||
-    renderer.header?.tileHeaderRenderer?.thumbnailOverlays ||
-    renderer.thumbnail?.thumbnailOverlays;
-
-  if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-    const shortsOverlay = thumbnailOverlays.find((overlay) => {
-      const style = overlay?.thumbnailOverlayTimeStatusRenderer?.style;
-      return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
-    });
-    if (shortsOverlay) return true;
-  }
-
-  let lengthText = null;
-  if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-    const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
-    if (timeOverlay) {
-      lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+    if (lengthText) {
+      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
+      if (durationMatch) {
+        const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
+        // Shorts can be nowt till 3min
+        if (totalSeconds <= 180) {
+          return true;
+        }
+      }
     }
   }
 
-  if (!lengthText) {
-    lengthText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text;
-  }
-
-  if (!lengthText) {
-    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-    )?.lineItemRenderer?.text?.simpleText;
-  }
-
-  if (!lengthText) return false;
-
-  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
-  if (!durationMatch) return false;
-
-  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
-  return totalSeconds <= 180;
+  return false;
 }
-
 
 function getVideoId(item) {
   return item?.tileRenderer?.contentId ||
@@ -561,7 +536,7 @@ function directFilterArray(arr, page, context = '') {
   const filtered = arr.filter(item => {
     if (!item) return true;
 
-    if (!shortsEnabled && isShortItem(item)) {
+    if (!shortsEnabled && isShortItem(item, { currentPage: page || getCurrentPage() })) {
       return false;
     }
 
