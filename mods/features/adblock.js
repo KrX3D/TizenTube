@@ -68,6 +68,29 @@ function getShelfTitle(shelf) {
   );
 }
 
+function getItemTitle(item) {
+  return item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
+    item?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.videoRenderer?.title?.simpleText ||
+    item?.playlistVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.playlistVideoRenderer?.title?.simpleText ||
+    item?.gridVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.gridVideoRenderer?.title?.simpleText ||
+    item?.compactVideoRenderer?.title?.runs?.[0]?.text ||
+    item?.compactVideoRenderer?.title?.simpleText ||
+    item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
+    item?.richItemRenderer?.content?.videoRenderer?.title?.simpleText ||
+    'unknown';
+}
+
+function parseDurationToSeconds(lengthText) {
+  const parts = String(lengthText).trim().split(':').map((p) => Number(p));
+  if (parts.some((p) => Number.isNaN(p))) return null;
+  if (parts.length === 2) return (parts[0] * 60) + parts[1];
+  if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  return null;
+}
+
 function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
   if (shortsEnabled || !Array.isArray(shelves)) return;
 
@@ -95,24 +118,20 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     if (!Array.isArray(items)) continue;
 
     const before = items.length;
+    const removedTitles = [];
     shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter((item) => {
       const removeByType = item.tileRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS';
-      const removeByDetectedShort = isShortItem(item, { currentPage: getCurrentPage() });
+      const shortInfo = getShortInfo(item, { currentPage: getCurrentPage() });
+      const removeByDetectedShort = shortInfo.isShort;
       if (removeByType || removeByDetectedShort) {
-        debugFilterLog('hideShorts remove item', {
-          page: getCurrentPage(),
-          shelfTitle,
-          removeByType,
-          removeByDetectedShort,
-          videoId: getVideoId(item)
-        });
+        if (removedTitles.length < 6) removedTitles.push(getItemTitle(item));
         return false;
       }
       return true;
     });
     const after = shelf.shelfRenderer.content.horizontalListRenderer.items.length;
     if (before !== after) {
-      debugFilterLog('hideShorts shelf summary', { page: getCurrentPage(), shelfTitle, before, after, removed: before - after });
+      debugFilterLog('hideShorts shelf summary', { page: getCurrentPage(), shelfTitle, before, after, removed: before - after, sampleTitles: removedTitles });
     }
   }
 }
@@ -500,8 +519,9 @@ function hideVideo(items) {
   return directFilterArray(items, currentPage, 'processShelves');
 }
 
-function isShortItem(item, { currentPage = '' } = {}) {
-  if (!item) return false;
+function getShortInfo(item, { currentPage = '' } = {}) {
+  const title = getItemTitle(item);
+  if (!item) return { isShort: false, reason: 'no_item', title: 'unknown' };
 
   const renderer = item.tileRenderer ||
     item.videoRenderer ||
@@ -512,15 +532,13 @@ function isShortItem(item, { currentPage = '' } = {}) {
 
   if (!renderer) {
     if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
-      debugFilterLog('isShortItem reel renderer', { currentPage, videoId: getVideoId(item) });
-      return true;
+      return { isShort: true, reason: 'reel', title };
     }
-    return false;
+    return { isShort: false, reason: 'no_renderer', title };
   }
 
   if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
-    debugFilterLog('isShortItem by type', { currentPage, videoId: getVideoId(item) });
-    return true;
+    return { isShort: true, reason: 'renderer_type', title };
   }
 
   let lengthText = null;
@@ -531,8 +549,7 @@ function isShortItem(item, { currentPage = '' } = {}) {
       return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
     });
     if (shortsStyleOverlay) {
-      debugFilterLog('isShortItem by overlay style', { currentPage, videoId: getVideoId(item) });
-      return true;
+      return { isShort: true, reason: 'overlay_style', title };
     }
 
     const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
@@ -552,23 +569,20 @@ function isShortItem(item, { currentPage = '' } = {}) {
   }
 
   if (!lengthText) {
-    debugFilterLog('isShortItem no length', { currentPage, videoId: getVideoId(item), renderer: Object.keys(renderer).slice(0, 6) });
-    return false;
+    return { isShort: false, reason: 'no_length', title };
   }
 
-  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
-  if (!durationMatch) {
-    debugFilterLog('isShortItem length format miss', { currentPage, videoId: getVideoId(item), lengthText });
-    return false;
+  const totalSeconds = parseDurationToSeconds(lengthText);
+  if (totalSeconds === null) {
+    return { isShort: false, reason: 'length_format_miss', title, lengthText };
   }
-
-  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
   const isShort = totalSeconds <= 180;
-  if (isShort) {
-    debugFilterLog('isShortItem by duration', { currentPage, videoId: getVideoId(item), lengthText, totalSeconds });
-  }
+  return { isShort, reason: isShort ? 'duration' : 'long_duration', title, lengthText, totalSeconds };
+}
 
-  return isShort;
+function isShortItem(item, { currentPage = '' } = {}) {
+  const info = getShortInfo(item, { currentPage });
+  return info.isShort;
 }
 
 function getVideoId(item) {
@@ -607,11 +621,15 @@ function directFilterArray(arr, page, context = '') {
 
   let removedShorts = 0;
   let removedWatched = 0;
+  const removedShortTitles = [];
   const filtered = arr.filter(item => {
     if (!item) return true;
 
-    if (!shortsEnabled && isShortItem(item, { currentPage: page || getCurrentPage() })) {
+    const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
+
+    if (!shortsEnabled && shortInfo.isShort) {
       removedShorts++;
+      if (removedShortTitles.length < 8) removedShortTitles.push(shortInfo.title);
       return false;
     }
 
@@ -631,7 +649,7 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
 
-  if (page === 'subscriptions' || page === 'channel') {
+  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0)) {
     debugFilterLog('directFilterArray', {
       page,
       context,
@@ -639,6 +657,7 @@ function directFilterArray(arr, page, context = '') {
       output: filtered.length,
       removedShorts,
       removedWatched,
+      sampleRemovedShortTitles: removedShortTitles,
       shouldHideWatched,
       threshold,
       shortsEnabled
@@ -684,9 +703,6 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasVideoItems) {
-      if (page === 'subscriptions' || page === 'channel') {
-        debugFilterLog('scan video array', { page, path, size: obj.length });
-      }
       return directFilterArray(obj, page, path);
     }
     
@@ -856,9 +872,5 @@ function getCurrentPage() {
     detectedPage = 'home';
   }
   
-  if (detectedPage === 'subscriptions' || detectedPage === 'channel') {
-    debugFilterLog('page detect', { detectedPage, browseParam, hash: cleanHash, path, search });
-  }
-
   return detectedPage;
 }
