@@ -54,7 +54,7 @@ const defaultConfig = {
   enableSigninReminder: false,
   enableDebugConsole: false,
   debugConsolePosition: 'bottom-right',
-  debugConsoleHeight: 500
+  debugConsoleHeight: 1054
 };
 
 let localConfig;

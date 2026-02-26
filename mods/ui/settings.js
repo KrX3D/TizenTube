@@ -302,7 +302,7 @@ export default function modernUI(update, parameters) {
                             name: 'Console Height',
                             value: null,
                             menuId: 'tt-debug-console-height',
-                            options: [300, 400, 500, 600, 700, 800].map((height) => {
+                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
                                 return {
                                     name: `${height}px`,
                                     key: 'debugConsoleHeight',

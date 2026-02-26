@@ -614,9 +614,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     const hasVideoItems = obj.some(item => 
       item?.tileRenderer || 
       item?.videoRenderer || 
+      item?.playlistVideoRenderer ||
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.videoRenderer
+      item?.richItemRenderer?.content?.videoRenderer ||
+      item?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.reelItemRenderer
     );
     
     if (hasVideoItems) {

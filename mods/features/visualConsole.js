@@ -1,8 +1,15 @@
 import { configRead, configWrite } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 
-const APP_VERSION = 'dev';
 const APP_VERSION_LABEL = 'TizenTube';
+
+function getAppVersion() {
+  try {
+    return window.h5vcc?.tizentube?.GetVersion?.() || 'unknown';
+  } catch (_) {
+    return 'unknown';
+  }
+}
 
 function initVisualConsole() {
   const positions = {
@@ -28,7 +35,7 @@ function initVisualConsole() {
 
   consoleDiv.style.cssText = `
     position: fixed;
-    width: 900px;
+    width: 1054px;
     background: rgba(0, 0, 0, 0.95);
     color: #0f0;
     font-family: monospace;
@@ -109,7 +116,8 @@ function initVisualConsole() {
   syncVisible();
 
   console.log('[Console] ========================================');
-  console.log(`[Console] Visual Console ${APP_VERSION_LABEL}`);
+  const appVersion = getAppVersion();
+  console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${appVersion}`);
   console.log('[Console] Use TizenTube settings to configure position/height');
   console.log('[Console] ========================================');
 
@@ -120,7 +128,7 @@ function initVisualConsole() {
       popup: {
         overlayToastRenderer: {
           title: { simpleText: 'TizenTube started' },
-          subtitle: { simpleText: 'Version ' + APP_VERSION }
+          subtitle: { simpleText: 'Version ' + appVersion }
         }
       }
     }
