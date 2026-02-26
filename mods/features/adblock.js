@@ -7,6 +7,7 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 const PLAYLIST_PAGES = new Set(['playlist', 'playlists']);
 const BROWSE_PAGE_RULES = [
   { type: 'includes', value: 'fesubscription', page: 'subscriptions' },
+  { type: 'includes', value: 'fesubscriptions', page: 'subscriptions' },
   { type: 'exact', value: 'felibrary', page: 'library' },
   { type: 'exact', value: 'fehistory', page: 'history' },
   { type: 'exact', value: 'femy_youtube', page: 'playlist' },
@@ -79,12 +80,19 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       continue;
     }
 
-    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-    if (!Array.isArray(items)) continue;
+    const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (Array.isArray(horizontalItems)) {
+      shelf.shelfRenderer.content.horizontalListRenderer.items = horizontalItems.filter(
+        (item) => !isShortItem(item)
+      );
+    }
 
-    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
-      (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
-    );
+    const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
+    if (Array.isArray(richItems)) {
+      shelf.richShelfRenderer.content.richGridRenderer.contents = richItems.filter(
+        (item) => !isShortItem(item)
+      );
+    }
   }
 }
 
@@ -468,34 +476,64 @@ function hideVideo(items) {
 function isShortItem(item) {
   if (!item) return false;
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
-    }
-
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
-
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
-        if (totalSeconds <= 180) {
-          return true;
-        }
-      }
-    }
+  if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
+    return true;
   }
 
-  return false;
+  const renderer =
+    item.tileRenderer ||
+    item.videoRenderer ||
+    item.playlistVideoRenderer ||
+    item.gridVideoRenderer ||
+    item.compactVideoRenderer ||
+    item.richItemRenderer?.content?.videoRenderer ||
+    null;
+
+  if (!renderer) return false;
+
+  if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
+    return true;
+  }
+
+  const overlays =
+    renderer.thumbnailOverlays ||
+    renderer.header?.tileHeaderRenderer?.thumbnailOverlays ||
+    renderer.thumbnail?.thumbnailOverlays ||
+    [];
+
+  if (Array.isArray(overlays)) {
+    const styleOverlay = overlays.find((overlay) => {
+      const style = overlay?.thumbnailOverlayTimeStatusRenderer?.style;
+      return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
+    });
+    if (styleOverlay) return true;
+  }
+
+  let lengthText = null;
+  const timeOverlay = Array.isArray(overlays)
+    ? overlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer)
+    : null;
+  if (timeOverlay) {
+    lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+  }
+
+  if (!lengthText) {
+    lengthText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text || null;
+  }
+
+  if (!lengthText) {
+    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+  }
+
+  if (!lengthText) return false;
+
+  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
+  if (!durationMatch) return false;
+
+  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
+  return totalSeconds <= 180;
 }
 
 function getVideoId(item) {
