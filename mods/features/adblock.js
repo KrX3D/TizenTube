@@ -63,31 +63,28 @@ function getShelfTitle(shelf) {
   );
 }
 
-export function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
-  if (shortsEnabled) return;
+function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
+  if (shortsEnabled || !Array.isArray(shelves)) return;
 
-  for (const shelf of shelves) {
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelf = shelves[i];
     if (!shelf) continue;
 
-    const title = getShelfTitle(shelf).toLowerCase();
-    if (title.includes('short')) {
+    const isShortShelf = getShelfTitle(shelf).toLowerCase().includes('short') ||
+      shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
+
+    if (isShortShelf) {
       onRemoveShelf?.(shelf);
-      shelshelfves.splice(shelf.indexOf(shelf), 1);
+      shelves.splice(i, 1);
       continue;
     }
 
-    if (!shelf.shelfRenderer?.content?.horizontalListRenderer?.items) continue;
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!Array.isArray(items)) continue;
 
-    if (shelf.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-      onRemoveShelf?.(shelf);
-      shelf.splice(shelf.indexOf(shelf), 1);
-      continue;
-    }
-
-    shelf.shelfRenderer.content.horizontalListRenderer.items =
-      shelf.shelfRenderer.content.horizontalListRenderer.items.filter(
-        (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
-      );
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+      (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
+    );
   }
 }
 
