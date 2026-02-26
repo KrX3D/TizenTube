@@ -7,7 +7,6 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 const PLAYLIST_PAGES = new Set(['playlist', 'playlists']);
 const BROWSE_PAGE_RULES = [
   { type: 'includes', value: 'fesubscription', page: 'subscriptions' },
-  { type: 'includes', value: 'fesubscriptions', page: 'subscriptions' },
   { type: 'exact', value: 'felibrary', page: 'library' },
   { type: 'exact', value: 'fehistory', page: 'history' },
   { type: 'exact', value: 'femy_youtube', page: 'playlist' },
@@ -80,10 +79,10 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       continue;
     }
 
-    const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-    if (Array.isArray(horizontalItems)) {
-      shelf.shelfRenderer.content.horizontalListRenderer.items = horizontalItems.filter(
-        (item) => !isShortItem(item)
+    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (Array.isArray(items)) {
+      shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
+        (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS' && !isShortItem(item)
       );
     }
 
@@ -95,6 +94,7 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     }
   }
 }
+
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -480,61 +480,36 @@ function isShortItem(item) {
     return true;
   }
 
-  const renderer =
-    item.tileRenderer ||
-    item.videoRenderer ||
-    item.playlistVideoRenderer ||
-    item.gridVideoRenderer ||
-    item.compactVideoRenderer ||
-    item.richItemRenderer?.content?.videoRenderer ||
-    null;
+  if (item.tileRenderer) {
+    let lengthText = null;
+    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
+    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+      const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
+      if (timeOverlay) {
+        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
+      }
+    }
 
-  if (!renderer) return false;
+    if (!lengthText) {
+      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+        (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+      )?.lineItemRenderer?.text?.simpleText;
+    }
 
-  if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
-    return true;
+    if (lengthText) {
+      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
+      if (durationMatch) {
+        const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
+        if (totalSeconds <= 180) {
+          return true;
+        }
+      }
+    }
   }
 
-  const overlays =
-    renderer.thumbnailOverlays ||
-    renderer.header?.tileHeaderRenderer?.thumbnailOverlays ||
-    renderer.thumbnail?.thumbnailOverlays ||
-    [];
-
-  if (Array.isArray(overlays)) {
-    const styleOverlay = overlays.find((overlay) => {
-      const style = overlay?.thumbnailOverlayTimeStatusRenderer?.style;
-      return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
-    });
-    if (styleOverlay) return true;
-  }
-
-  let lengthText = null;
-  const timeOverlay = Array.isArray(overlays)
-    ? overlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer)
-    : null;
-  if (timeOverlay) {
-    lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-  }
-
-  if (!lengthText) {
-    lengthText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text || null;
-  }
-
-  if (!lengthText) {
-    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-    )?.lineItemRenderer?.text?.simpleText;
-  }
-
-  if (!lengthText) return false;
-
-  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
-  if (!durationMatch) return false;
-
-  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
-  return totalSeconds <= 180;
+  return false;
 }
+
 
 function getVideoId(item) {
   return item?.tileRenderer?.contentId ||
@@ -608,9 +583,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     const hasVideoItems = obj.some(item =>
       item?.tileRenderer ||
       item?.videoRenderer ||
+      item?.playlistVideoRenderer ||
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.videoRenderer
+      item?.richItemRenderer?.content?.videoRenderer ||
+      item?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.reelItemRenderer
     );
 
     if (hasVideoItems) {
