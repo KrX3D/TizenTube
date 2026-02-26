@@ -170,6 +170,12 @@ function execute_once_dom_loaded() {
       if (evt.type === 'keydown') {
         modernUI();
       }
+    } else if (evt.keyCode == 405 || evt.keyCode == 170) {
+      if (evt.type === 'keydown' && typeof window.toggleDebugConsole === 'function') {
+        evt.preventDefault();
+        evt.stopPropagation();
+        window.toggleDebugConsole();
+      }
     } else if (evt.keyCode == 39) {
       // Right key, for PiP
       if (evt.type === 'keydown') {
