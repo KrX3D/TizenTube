@@ -129,7 +129,8 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       if (before !== filtered.length) {
         debugFilterLog('hideShorts shelf summary', { page: getCurrentPage(), shelfTitle, before, after: filtered.length, removed: before - filtered.length, sampleTitles: removedTitles });
       }
-      return filtered;
+      items.splice(0, items.length, ...filtered);
+      return items;
     };
 
     const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
@@ -712,7 +713,8 @@ function directFilterArray(arr, page, context = '') {
     window._lastHelperVideos = [lastVideo];
     window._playlistScrollHelpers.clear();
     window._playlistScrollHelpers.add(lastVideoId);
-    return [lastVideo];
+    arr.splice(0, arr.length, lastVideo);
+    return arr;
   }
 
   // ⭐ Clean up after filtering if last batch
@@ -721,7 +723,8 @@ function directFilterArray(arr, page, context = '') {
     window._playlistScrollHelpers.clear();
   }
 
-  return filtered;
+  arr.splice(0, arr.length, ...filtered);
+  return arr;
 }
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
