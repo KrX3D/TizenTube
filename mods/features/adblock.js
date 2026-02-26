@@ -22,6 +22,11 @@ const BROWSE_PAGE_RULES = [
   { type: 'prefix', value: 'uc', page: 'channel', minLength: 11 }
 ];
 
+function debugFilterLog(...args) {
+  if (!configRead('enableDebugConsole')) return;
+  console.log('[TT_FILTER]', ...args);
+}
+
 function isPlaylistPage(page) {
   return PLAYLIST_PAGES.has(page);
 }
@@ -539,10 +544,13 @@ function directFilterArray(arr, page, context = '') {
     window._isLastPlaylistBatch = false;
   }
 
+  let removedShorts = 0;
+  let removedWatched = 0;
   const filtered = arr.filter(item => {
     if (!item) return true;
 
     if (!shortsEnabled && isShortItem(item, { currentPage: page || getCurrentPage() })) {
+      removedShorts++;
       return false;
     }
 
@@ -555,11 +563,26 @@ function directFilterArray(arr, page, context = '') {
       
       // Hide if watched above threshold
       if (percentWatched >= threshold) {
+        removedWatched++;
         return false;
       }
     }
     return true;
   });
+
+  if (page === 'subscriptions' || page === 'channel') {
+    debugFilterLog('directFilterArray', {
+      page,
+      context,
+      input: arr.length,
+      output: filtered.length,
+      removedShorts,
+      removedWatched,
+      shouldHideWatched,
+      threshold,
+      shortsEnabled
+    });
+  }
 
 
   // PLAYLIST SAFEGUARD: keep one helper tile so TV can request next batch.
@@ -597,6 +620,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasVideoItems) {
+      if (page === 'subscriptions' || page === 'channel') {
+        debugFilterLog('scan video array', { page, path, size: obj.length });
+      }
       return directFilterArray(obj, page, path);
     }
     
@@ -744,7 +770,10 @@ function getCurrentPage() {
   }
   
   // PRIORITY 2: Check traditional patterns
-  if (detectedPage === 'other' && (cleanHash.includes('/playlist') || combined.includes('list='))) {
+  if (detectedPage === 'other' && (cleanHash.includes('/subscriptions') || combined.includes('subscription'))) {
+    detectedPage = 'subscriptions';
+  }
+  else if (detectedPage === 'other' && (cleanHash.includes('/playlist') || combined.includes('list='))) {
     detectedPage = 'playlist';
   }
   else if (detectedPage === 'other' && (cleanHash.includes('/results') || cleanHash.includes('/search'))) {
@@ -752,9 +781,6 @@ function getCurrentPage() {
   }
   else if (detectedPage === 'other' && cleanHash.includes('/watch')) {
     detectedPage = 'watch';
-  }
-  else if (detectedPage === 'other' && (cleanHash.includes('/subscriptions') || combined.includes('subscription'))) {
-    detectedPage = 'subscriptions';
   }
   else if (detectedPage === 'other' && (cleanHash.includes('/@') || cleanHash.includes('/channel/') || combined.includes('/channel/'))) {
     detectedPage = 'channel';
@@ -766,5 +792,9 @@ function getCurrentPage() {
     detectedPage = 'home';
   }
   
+  if (detectedPage === 'subscriptions' || detectedPage === 'channel') {
+    debugFilterLog('page detect', { detectedPage, browseParam, hash: cleanHash, path, search });
+  }
+
   return detectedPage;
 }

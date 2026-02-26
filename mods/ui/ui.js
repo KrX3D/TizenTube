@@ -57,25 +57,23 @@ function execute_once_dom_loaded() {
   uiContainer.setAttribute('tabindex', 0);
   uiContainer.addEventListener(
     'focus',
-    () => console.info('uiContainer focused!'),
+    () => { },
     true
   );
   uiContainer.addEventListener(
     'blur',
-    () => console.info('uiContainer blured!'),
+    () => { },
     true
   );
 
   uiContainer.addEventListener(
     'keydown',
     (evt) => {
-      console.info('uiContainer key event:', evt.type, evt.keyCode, evt);
       if (evt.keyCode !== 404 && evt.keyCode !== 172) {
         if (evt.keyCode in ARROW_KEY_CODE) {
           navigate(ARROW_KEY_CODE[evt.keyCode]);
         } else if (evt.keyCode === 13 || evt.keyCode === 32) {
           // "OK" button
-          console.log('OK button pressed');
           const focusedElement = document.querySelector(':focus');
           if (focusedElement.type === 'checkbox') {
             focusedElement.checked = !focusedElement.checked;
@@ -129,13 +127,6 @@ function execute_once_dom_loaded() {
 
   var eventHandler = (evt) => {
     // We handle key events ourselves.
-    console.info(
-      'Key event:',
-      evt.type,
-      evt.keyCode,
-      evt.keyCode,
-      evt.defaultPrevented
-    );
     if (configRead('enableScreenDimming')) {
       if (keyTimeout) {
         clearTimeout(keyTimeout);
@@ -149,17 +140,14 @@ function execute_once_dom_loaded() {
       }, configRead('dimmingTimeout') * 1000);
     }
     if (evt.keyCode == 403) {
-      console.info('Taking over!');
       evt.preventDefault();
       evt.stopPropagation();
       if (evt.type === 'keydown') {
         try {
           if (uiContainer.style.display === 'none') {
-            console.info('Showing and focusing!');
             uiContainer.style.display = 'block';
             uiContainer.focus();
           } else {
-            console.info('Hiding!');
             uiContainer.style.display = 'none';
             uiContainer.blur();
           }
@@ -193,8 +181,6 @@ function execute_once_dom_loaded() {
   // 403, 404, 405, 406
   // ---, 172, 170, 191
   document.addEventListener('keydown', eventHandler, true);
-  document.addEventListener('keypress', eventHandler, true);
-  document.addEventListener('keyup', eventHandler, true);
   if (configRead('showWelcomeToast')) {
     setTimeout(() => {
       showToast('Welcome to TizenTube', 'Go to settings and click on TizenTube Settings for settings, press [RED] to open TizenTube Theme Settings.');
