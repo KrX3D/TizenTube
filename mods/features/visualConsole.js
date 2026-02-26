@@ -1,15 +1,9 @@
 import { configRead, configWrite } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
+import rootPkg from '../../package.json';
 
 const APP_VERSION_LABEL = 'TizenTube';
-
-function getAppVersion() {
-  try {
-    return window.h5vcc?.tizentube?.GetVersion?.() || 'unknown';
-  } catch (_) {
-    return 'unknown';
-  }
-}
+const APP_VERSION = rootPkg.version;
 
 function initVisualConsole() {
   const positions = {
@@ -116,8 +110,7 @@ function initVisualConsole() {
   syncVisible();
 
   console.log('[Console] ========================================');
-  const appVersion = getAppVersion();
-  console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${appVersion}`);
+  console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${APP_VERSION}`);
   console.log('[Console] Use TizenTube settings to configure position/height');
   console.log('[Console] ========================================');
 
@@ -128,7 +121,7 @@ function initVisualConsole() {
       popup: {
         overlayToastRenderer: {
           title: { simpleText: 'TizenTube started' },
-          subtitle: { simpleText: 'Version ' + appVersion }
+          subtitle: { simpleText: 'Version ' + APP_VERSION }
         }
       }
     }

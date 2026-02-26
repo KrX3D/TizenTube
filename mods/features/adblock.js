@@ -75,10 +75,17 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const shelf = shelves[i];
     if (!shelf) continue;
 
-    const isShortShelf = getShelfTitle(shelf).toLowerCase().includes('short') ||
+    const shelfTitle = getShelfTitle(shelf);
+
+    const isShortShelf = shelfTitle.toLowerCase().includes('short') ||
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
 
     if (isShortShelf) {
+      debugFilterLog('hideShorts remove shelf', {
+        page: getCurrentPage(),
+        title: shelfTitle,
+        type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
+      });
       onRemoveShelf?.(shelf);
       shelves.splice(i, 1);
       continue;
@@ -87,9 +94,26 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
     if (!Array.isArray(items)) continue;
 
-    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter(
-      (item) => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
-    );
+    const before = items.length;
+    shelf.shelfRenderer.content.horizontalListRenderer.items = items.filter((item) => {
+      const removeByType = item.tileRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS';
+      const removeByDetectedShort = isShortItem(item, { currentPage: getCurrentPage() });
+      if (removeByType || removeByDetectedShort) {
+        debugFilterLog('hideShorts remove item', {
+          page: getCurrentPage(),
+          shelfTitle,
+          removeByType,
+          removeByDetectedShort,
+          videoId: getVideoId(item)
+        });
+        return false;
+      }
+      return true;
+    });
+    const after = shelf.shelfRenderer.content.horizontalListRenderer.items.length;
+    if (before !== after) {
+      debugFilterLog('hideShorts shelf summary', { page: getCurrentPage(), shelfTitle, before, after, removed: before - after });
+    }
   }
 }
 
@@ -479,35 +503,72 @@ function hideVideo(items) {
 function isShortItem(item, { currentPage = '' } = {}) {
   if (!item) return false;
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
+  const renderer = item.tileRenderer ||
+    item.videoRenderer ||
+    item.playlistVideoRenderer ||
+    item.gridVideoRenderer ||
+    item.compactVideoRenderer ||
+    item.richItemRenderer?.content?.videoRenderer;
+
+  if (!renderer) {
+    if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
+      debugFilterLog('isShortItem reel renderer', { currentPage, videoId: getVideoId(item) });
+      return true;
+    }
+    return false;
+  }
+
+  if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
+    debugFilterLog('isShortItem by type', { currentPage, videoId: getVideoId(item) });
+    return true;
+  }
+
+  let lengthText = null;
+  const thumbnailOverlays = renderer.header?.tileHeaderRenderer?.thumbnailOverlays || renderer.thumbnailOverlays;
+  if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+    const shortsStyleOverlay = thumbnailOverlays.find((overlay) => {
+      const style = overlay?.thumbnailOverlayTimeStatusRenderer?.style;
+      return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
+    });
+    if (shortsStyleOverlay) {
+      debugFilterLog('isShortItem by overlay style', { currentPage, videoId: getVideoId(item) });
+      return true;
     }
 
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
-
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
-        // Shorts can be nowt till 3min
-        if (totalSeconds <= 180) {
-          return true;
-        }
-      }
+    const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
+    if (timeOverlay) {
+      lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
     }
   }
 
-  return false;
+  if (!lengthText) {
+    lengthText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text;
+  }
+
+  if (!lengthText) {
+    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+  }
+
+  if (!lengthText) {
+    debugFilterLog('isShortItem no length', { currentPage, videoId: getVideoId(item), renderer: Object.keys(renderer).slice(0, 6) });
+    return false;
+  }
+
+  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
+  if (!durationMatch) {
+    debugFilterLog('isShortItem length format miss', { currentPage, videoId: getVideoId(item), lengthText });
+    return false;
+  }
+
+  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
+  const isShort = totalSeconds <= 180;
+  if (isShort) {
+    debugFilterLog('isShortItem by duration', { currentPage, videoId: getVideoId(item), lengthText, totalSeconds });
+  }
+
+  return isShort;
 }
 
 function getVideoId(item) {
