@@ -480,34 +480,55 @@ function isShortItem(item) {
     return true;
   }
 
-  if (item.tileRenderer) {
-    let lengthText = null;
-    const thumbnailOverlays = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays;
-    if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
-      const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
-      if (timeOverlay) {
-        lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
-      }
-    }
+  const renderer = item.tileRenderer ||
+    item.videoRenderer ||
+    item.playlistVideoRenderer ||
+    item.gridVideoRenderer ||
+    item.compactVideoRenderer ||
+    item.richItemRenderer?.content?.videoRenderer ||
+    item.richItemRenderer?.content?.playlistVideoRenderer;
 
-    if (!lengthText) {
-      lengthText = item.tileRenderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-        (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-      )?.lineItemRenderer?.text?.simpleText;
-    }
+  if (!renderer) return false;
 
-    if (lengthText) {
-      const durationMatch = lengthText.match(/^(\d+):(\d+)$/);
-      if (durationMatch) {
-        const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
-        if (totalSeconds <= 180) {
-          return true;
-        }
-      }
+  if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return true;
+
+  const thumbnailOverlays = renderer.thumbnailOverlays ||
+    renderer.header?.tileHeaderRenderer?.thumbnailOverlays ||
+    renderer.thumbnail?.thumbnailOverlays;
+
+  if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+    const shortsOverlay = thumbnailOverlays.find((overlay) => {
+      const style = overlay?.thumbnailOverlayTimeStatusRenderer?.style;
+      return style === 'SHORTS' || style === 'SHORTS_TIME_STATUS_STYLE';
+    });
+    if (shortsOverlay) return true;
+  }
+
+  let lengthText = null;
+  if (thumbnailOverlays && Array.isArray(thumbnailOverlays)) {
+    const timeOverlay = thumbnailOverlays.find((overlay) => overlay.thumbnailOverlayTimeStatusRenderer);
+    if (timeOverlay) {
+      lengthText = timeOverlay.thumbnailOverlayTimeStatusRenderer.text?.simpleText;
     }
   }
 
-  return false;
+  if (!lengthText) {
+    lengthText = renderer.lengthText?.simpleText || renderer.lengthText?.runs?.[0]?.text;
+  }
+
+  if (!lengthText) {
+    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
+      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+    )?.lineItemRenderer?.text?.simpleText;
+  }
+
+  if (!lengthText) return false;
+
+  const durationMatch = String(lengthText).trim().match(/^(\d+):(\d+)$/);
+  if (!durationMatch) return false;
+
+  const totalSeconds = (parseInt(durationMatch[1], 10) * 60) + parseInt(durationMatch[2], 10);
+  return totalSeconds <= 180;
 }
 
 
@@ -587,6 +608,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
       item?.richItemRenderer?.content?.videoRenderer ||
+      item?.playlistPanelVideoRenderer ||
+      item?.richItemRenderer?.content?.playlistVideoRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer
     );
@@ -728,7 +751,10 @@ function getCurrentPage() {
   else if (detectedPage === 'other' && cleanHash.includes('/watch')) {
     detectedPage = 'watch';
   }
-  else if (detectedPage === 'other' && (cleanHash.includes('/@') || cleanHash.includes('/channel/'))) {
+  else if (detectedPage === 'other' && (cleanHash.includes('/subscriptions') || combined.includes('subscription'))) {
+    detectedPage = 'subscriptions';
+  }
+  else if (detectedPage === 'other' && (cleanHash.includes('/@') || cleanHash.includes('/channel/') || combined.includes('/channel/'))) {
     detectedPage = 'channel';
   }
   else if (detectedPage === 'other' && cleanHash.includes('/browse') && !browseParam) {
