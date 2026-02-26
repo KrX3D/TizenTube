@@ -347,7 +347,6 @@ for (const key in window._yttv) {
   }
 }
 
-
 function processShelves(shelves, shouldAddPreviews = true) {
   hideShorts(shelves, configRead('enableShorts'));
   for (const shelve of shelves) {
