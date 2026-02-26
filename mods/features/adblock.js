@@ -517,6 +517,7 @@ function directFilterArray(arr, page, context = '') {
   const shouldHideWatched = shouldHideWatchedForPage(page);
   const playlistPage = isPlaylistPage(page);
 
+  // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
   }
@@ -524,9 +525,11 @@ function directFilterArray(arr, page, context = '') {
     window._lastHelperVideos = [];
   }
 
+  // ⭐ NEW: Check if this is the LAST batch (using flag from response level)
   let isLastBatch = false;
   if (playlistPage && window._isLastPlaylistBatch === true) {
     isLastBatch = true;
+    // Clear the flag
     window._isLastPlaylistBatch = false;
   }
 
@@ -537,9 +540,14 @@ function directFilterArray(arr, page, context = '') {
       return false;
     }
 
+    // ⭐ Removed watched on channels, subscriptions and watch page
     if (shouldHideWatched) {
       const progressBar = findProgressBar(item);
+      
+      // Calculate progress percentage
       const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+      
+      // Hide if watched above threshold
       if (percentWatched >= threshold) {
         return false;
       }
@@ -547,7 +555,10 @@ function directFilterArray(arr, page, context = '') {
     return true;
   });
 
+
+  // PLAYLIST SAFEGUARD: keep one helper tile so TV can request next batch.
   if (playlistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
+    
     const lastVideo = [...arr].reverse().find((item) => !!getVideoId(item)) || arr[arr.length - 1];
     const lastVideoId = getVideoId(lastVideo) || 'unknown';
     window._lastHelperVideos = [lastVideo];
@@ -556,6 +567,7 @@ function directFilterArray(arr, page, context = '') {
     return [lastVideo];
   }
 
+  // ⭐ Clean up after filtering if last batch
   if (isLastBatch && playlistPage) {
     window._lastHelperVideos = [];
     window._playlistScrollHelpers.clear();
@@ -566,41 +578,40 @@ function directFilterArray(arr, page, context = '') {
 
 function scanAndFilterAllArrays(obj, page, path = 'root') {
   if (!obj || typeof obj !== 'object') return;
-
+  
+  // If this is an array with video items, filter it
   if (Array.isArray(obj) && obj.length > 0) {
-    const hasVideoItems = obj.some(item =>
-      item?.tileRenderer ||
-      item?.videoRenderer ||
-      item?.playlistVideoRenderer ||
+    // Check if it looks like a video items array
+    const hasVideoItems = obj.some(item => 
+      item?.tileRenderer || 
+      item?.videoRenderer || 
       item?.gridVideoRenderer ||
       item?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.videoRenderer ||
-      item?.playlistPanelVideoRenderer ||
-      item?.richItemRenderer?.content?.playlistVideoRenderer ||
-      item?.reelItemRenderer ||
-      item?.richItemRenderer?.content?.reelItemRenderer
+      item?.richItemRenderer?.content?.videoRenderer
     );
-
+    
     if (hasVideoItems) {
       return directFilterArray(obj, page, path);
     }
-
+    
+    // Check if this is a shelves array - remove empty shelves after filtering
     const hasShelves = obj.some(item =>
       item?.shelfRenderer ||
       item?.richShelfRenderer ||
       item?.gridRenderer
     );
-
+    
     if (hasShelves) {
       hideShorts(obj, configRead('enableShorts'));
 
+      // Filter shelves recursively
       for (let i = obj.length - 1; i >= 0; i--) {
         const shelf = obj[i];
         if (!shelf) {
           obj.splice(i, 1);
           continue;
         }
-        scanAndFilterAllArrays(shelf, page, `${path}[${i}]`);
+        scanAndFilterAllArrays(shelf, page, path + '[' + i + ']');
 
         const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
         const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
@@ -614,21 +625,24 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
           obj.splice(i, 1);
         }
       }
-      return;
+      return; // Don't return the array, we modified it in place
     }
   }
 
+  // Recursively scan object properties
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
       const value = obj[key];
-
+      
       if (Array.isArray(value)) {
-        const filtered = scanAndFilterAllArrays(value, page, `${path}.${key}`);
+        // Filter this array
+        const filtered = scanAndFilterAllArrays(value, page, path + '.' + key);
         if (filtered) {
           obj[key] = filtered;
         }
       } else if (value && typeof value === 'object') {
-        scanAndFilterAllArrays(value, page, `${path}.${key}`);
+        // Recurse into objects
+        scanAndFilterAllArrays(value, page, path + '.' + key);
       }
     }
   }
@@ -636,33 +650,44 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
 
 function findProgressBar(item) {
   if (!item) return null;
-
+  
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
-
+    
+    // Comprehensive overlay paths
     const overlayPaths = [
+      // Standard paths (Tizen 6.5)
       renderer.thumbnailOverlays,
       renderer.header?.tileHeaderRenderer?.thumbnailOverlays,
       renderer.thumbnail?.thumbnailOverlays,
+      
+      // Alternative paths (Tizen 5.0)
       renderer.thumbnailOverlayRenderer,
       renderer.overlay,
       renderer.overlays
     ];
-
+    
     for (const overlays of overlayPaths) {
       if (!overlays) continue;
+      
+      // Handle array
       if (Array.isArray(overlays)) {
-        const progressOverlay = overlays.find(o => o?.thumbnailOverlayResumePlaybackRenderer);
+        const progressOverlay = overlays.find(o => 
+          o?.thumbnailOverlayResumePlaybackRenderer
+        );
         if (progressOverlay) {
           return progressOverlay.thumbnailOverlayResumePlaybackRenderer;
         }
-      } else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
+      } 
+      // Handle direct object
+      else if (overlays.thumbnailOverlayResumePlaybackRenderer) {
         return overlays.thumbnailOverlayResumePlaybackRenderer;
       }
     }
     return null;
   };
-
+  
+  // Check all renderer types
   const rendererTypes = [
     item.tileRenderer,
     item.playlistVideoRenderer,
@@ -672,12 +697,12 @@ function findProgressBar(item) {
     item.richItemRenderer?.content?.videoRenderer,
     item.richItemRenderer?.content?.reelItemRenderer
   ];
-
+  
   for (const renderer of rendererTypes) {
     const result = checkRenderer(renderer);
     if (result) return result;
   }
-
+  
   return null;
 }
 
@@ -686,29 +711,33 @@ function getCurrentPage() {
   const path = location.pathname || '';
   const search = location.search || '';
   const href = location.href || '';
-
+  
   const cleanHash = hash.split('?additionalDataUrl')[0];
-
+  
+  // Extract browse parameters
   let browseParam = '';
   const cMatch = hash.match(/[?&]c=([^&]+)/i);
   if (cMatch) {
     browseParam = cMatch[1].toLowerCase();
   }
-
+  
   const browseIdMatch = hash.match(/\/browse\/([^?&#]+)/i);
   if (browseIdMatch) {
     const browseId = browseIdMatch[1].toLowerCase();
     if (!browseParam) browseParam = browseId;
   }
-
+  
   const combined = (cleanHash + ' ' + path + ' ' + search + ' ' + href + ' ' + browseParam).toLowerCase();
+  
   let detectedPage = 'other';
-
+  
+  // PRIORITY 1: Check browse parameters (Tizen TV uses these!)
   const mappedBrowsePage = resolveBrowseParamPage(browseParam);
   if (mappedBrowsePage) {
     detectedPage = mappedBrowsePage;
   }
-
+  
+  // PRIORITY 2: Check traditional patterns
   if (detectedPage === 'other' && (cleanHash.includes('/playlist') || combined.includes('list='))) {
     detectedPage = 'playlist';
   }
@@ -730,6 +759,6 @@ function getCurrentPage() {
   else if (detectedPage === 'other' && (cleanHash === '' || cleanHash === '/')) {
     detectedPage = 'home';
   }
-
+  
   return detectedPage;
 }
