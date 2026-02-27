@@ -704,6 +704,19 @@ function directFilterArray(arr, page, context = '') {
   const channelPage = isChannelPage(page);
   const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
 
+  if (page === 'channel' || page === 'subscriptions') {
+    debugFilterLog('directFilterArray start', {
+      page,
+      context,
+      input: arr.length,
+      shortsEnabled,
+      shouldHideWatched,
+      threshold,
+      channelPage,
+      shouldFilterShortsByDuration
+    });
+  }
+
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
@@ -757,6 +770,9 @@ function directFilterArray(arr, page, context = '') {
       }
 
       // ⭐ Removed watched on channels, subscriptions and watch page
+      if (!shouldHideWatched && (page === 'channel' || page === 'subscriptions')) {
+        if (watchedNoProgressTitles.length < 3) watchedNoProgressTitles.push(getItemTitle(item));
+      }
       if (shouldHideWatched) {
         watchedChecked++;
         const progressBar = findProgressBar(item);
@@ -782,7 +798,7 @@ function directFilterArray(arr, page, context = '') {
     }
   });
 
-  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0 || watchedChecked > 0 || (page === 'channel' && shouldHideWatched))) {
+  if (page === 'subscriptions' || page === 'channel') {
     debugFilterLog('directFilterArray', {
       page,
       context,
@@ -795,6 +811,7 @@ function directFilterArray(arr, page, context = '') {
       watchedChecked,
       watchedWithProgress,
       sampleWatchedNoProgressTitles: watchedNoProgressTitles,
+      watchedSkipped: !shouldHideWatched,
       shouldHideWatched,
       threshold,
       shortsEnabled,
@@ -846,6 +863,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasVideoItems) {
+      if (page === 'channel' || page === 'subscriptions') {
+        debugFilterLog('scanAndFilterAllArrays video-array', { page, path, length: obj.length });
+      }
       return directFilterArray(obj, page, path);
     }
     
@@ -857,6 +877,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     );
     
     if (hasShelves) {
+      if (page === 'channel' || page === 'subscriptions') {
+        debugFilterLog('scanAndFilterAllArrays shelves', { page, path, shelfCount: obj.length });
+      }
       hideShorts(obj, configRead('enableShorts'));
 
       // Filter shelves recursively
@@ -877,6 +900,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
           (Array.isArray(richItems) && richItems.length > 0);
 
         if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer)) {
+          if (page === 'channel' || page === 'subscriptions') {
+            debugFilterLog('scanAndFilterAllArrays remove-empty-shelf', { page, path: path + '[' + i + ']', shelfTitle: getShelfTitle(shelf) });
+          }
           obj.splice(i, 1);
         }
       }
