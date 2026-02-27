@@ -227,8 +227,14 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     }
 
     const currentPage = getCurrentPage();
+    if (!window._ttRemovedShortShelfTitlesByPage) window._ttRemovedShortShelfTitlesByPage = {};
+    if (!window._ttRemovedShortShelfTitlesByPage[currentPage]) window._ttRemovedShortShelfTitlesByPage[currentPage] = new Set();
+    const removedShortShelfTitles = window._ttRemovedShortShelfTitlesByPage[currentPage];
+
     const reelItemCount = Array.isArray(previewItems) ? previewItems.slice(0, 20).filter((item) => !!(item?.reelItemRenderer || item?.richItemRenderer?.content?.reelItemRenderer)).length : 0;
-    const isShortShelf = isShortsShelfTitle(shelfTitle) ||
+    const rememberedShortShelf = !!normalizedShelfTitle && removedShortShelfTitles.has(normalizedShelfTitle);
+    const isShortShelf = rememberedShortShelf ||
+      isShortsShelfTitle(shelfTitle) ||
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
       (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8))) ||
       (Array.isArray(previewItems) && previewItems.length > 0 && reelItemCount >= Math.max(1, Math.floor(previewItems.length * 0.6))) ||
@@ -242,17 +248,20 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
         previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
         shortLikeCount,
         reelItemCount,
+        rememberedShortShelf,
         isShortShelf,
         type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
       });
     }
 
     if (isShortShelf) {
+      if (normalizedShelfTitle) removedShortShelfTitles.add(normalizedShelfTitle);
       debugFilterLog('hideShorts remove shelf', {
         page: currentPage,
         title: shelfTitle,
         normalizedShelfTitle,
         shortLikeCount,
+        rememberedShortShelf,
         type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
       });
       onRemoveShelf?.(shelf);
@@ -410,11 +419,23 @@ JSON.parse = function () {
   // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
   const currentPage = getCurrentPage();
 
-  if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
+  const universalEnabled = shouldRunUniversalFilter(currentPage);
+  if (!universalEnabled && (currentPage === 'channel' || currentPage === 'subscriptions')) {
+    debugFilterLogOnce('universalFilter skipped', `${currentPage}|shortsEnabled=${configRead('enableShorts')}|hideWatched=${configRead('enableHideWatchedVideos')}`);
+  }
+
+  if (universalEnabled && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
+    if (currentPage === 'channel' || currentPage === 'subscriptions') {
+      debugFilterLog('universalFilter start', { currentPage, rootKeys: Object.keys(r || {}).slice(0, 12) });
+    }
 
     // Scan the ENTIRE response object and filter ALL video arrays
     scanAndFilterAllArrays(r, currentPage);
+
+    if (currentPage === 'channel' || currentPage === 'subscriptions') {
+      debugFilterLog('universalFilter done', { currentPage });
+    }
   }
 
   // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
