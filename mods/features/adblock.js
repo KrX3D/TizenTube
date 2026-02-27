@@ -27,6 +27,14 @@ function debugFilterLog(...args) {
   console.log('[TT_FILTER]', ...args);
 }
 
+function debugFilterLogOnce(key, payload) {
+  if (!configRead('enableDebugConsole')) return;
+  if (!window._ttDebugOnce) window._ttDebugOnce = new Map();
+  if (window._ttDebugOnce.get(key) === payload) return;
+  window._ttDebugOnce.set(key, payload);
+  console.log('[TT_FILTER]', key, payload);
+}
+
 function isPlaylistPage(page) {
   return PLAYLIST_PAGES.has(page);
 }
@@ -376,7 +384,8 @@ JSON.parse = function () {
   // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
   const currentPage = getCurrentPage();
   if (currentPage === 'subscriptions' || currentPage === 'channel') {
-    debugFilterLog('JSON.parse page detection', { currentPage, hash: location.hash, path: location.pathname, search: location.search });
+    const pageSig = `${currentPage}|${location.hash}|${location.pathname}|${location.search}`;
+    debugFilterLogOnce('JSON.parse page detection', pageSig);
   }
 
   if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
@@ -798,6 +807,8 @@ function directFilterArray(arr, page, context = '') {
 
   let removedShorts = 0;
   let removedWatched = 0;
+  let watchedNoProgress = 0;
+  let watchedBelowThreshold = 0;
   if (!window._ttRemovedItemKeysByPage) window._ttRemovedItemKeysByPage = {};
   if (!window._ttRemovedItemKeysByPage[page]) window._ttRemovedItemKeysByPage[page] = new Set();
   const removedKeys = window._ttRemovedItemKeysByPage[page];
@@ -835,16 +846,21 @@ function directFilterArray(arr, page, context = '') {
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
 
         const watchedShouldRemove = percentWatched >= threshold;
+        if (!progressBar) watchedNoProgress++;
+        else if (!watchedShouldRemove) watchedBelowThreshold++;
+
         if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 20) {
           const watchSample = {
             title: getItemTitle(item),
             percentWatched,
             threshold,
             hasProgress: !!progressBar,
-            remove: watchedShouldRemove
+            remove: watchedShouldRemove,
+            reason: !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
           };
           watchedDecisionSamples.push(watchSample);
-          debugFilterLog('watched check', { page, context, ...watchSample });
+          // log only non-removal reasons to reduce noise and explain why items stay visible
+          if (!watchedShouldRemove) debugFilterLog('watched keep', { page, context, ...watchSample });
         }
 
         // Hide if watched above threshold
@@ -867,7 +883,25 @@ function directFilterArray(arr, page, context = '') {
     const suspicious = watchedDecisionSamples
       .filter((entry) => entry.remove && remainingTitles.has(entry.title))
       .slice(0, 6);
-    debugFilterLog('directFilterArray result', { page, context, input: arr.length, output: filtered.length, removedShorts, removedWatched, suspiciousStillPresentTitles: suspicious });
+    debugFilterLog('directFilterArray result', {
+      page,
+      context,
+      input: arr.length,
+      output: filtered.length,
+      removedShorts,
+      removedWatched,
+      watchedNoProgress,
+      watchedBelowThreshold,
+      suspiciousStillPresentTitles: suspicious
+    });
+  } else if ((page === 'subscriptions' || page === 'channel') && shouldHideWatched) {
+    debugFilterLog('directFilterArray watched-none-removed', {
+      page,
+      context,
+      input: arr.length,
+      watchedNoProgress,
+      watchedBelowThreshold
+    });
   }
 
 
