@@ -823,6 +823,9 @@ function directFilterArray(arr, page, context = '') {
   if (!window._ttRemovedVideoIdsByPage) window._ttRemovedVideoIdsByPage = {};
   if (!window._ttRemovedVideoIdsByPage[page]) window._ttRemovedVideoIdsByPage[page] = new Set();
   const removedVideoIds = window._ttRemovedVideoIdsByPage[page];
+  if (!window._ttRemovedTitlesByPage) window._ttRemovedTitlesByPage = {};
+  if (!window._ttRemovedTitlesByPage[page]) window._ttRemovedTitlesByPage[page] = new Set();
+  const removedTitles = window._ttRemovedTitlesByPage[page];
   const watchedDecisionSamples = [];
   const filtered = arr.filter(item => {
     try {
@@ -834,6 +837,10 @@ function directFilterArray(arr, page, context = '') {
         return false;
       }
       if (videoId && removedVideoIds.has(videoId)) {
+        return false;
+      }
+      const normalizedTitle = getItemTitle(item).trim().toLowerCase();
+      if (normalizedTitle && removedTitles.has(normalizedTitle)) {
         return false;
       }
 
@@ -875,6 +882,7 @@ function directFilterArray(arr, page, context = '') {
           removedWatched++;
           removedKeys.add(key);
           if (videoId) removedVideoIds.add(videoId);
+          if (normalizedTitle) removedTitles.add(normalizedTitle);
           return false;
         }
       }
@@ -961,15 +969,6 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       return directFilterArray(obj, page, path);
     }
     
-    if (!hasVideoItems && (page === 'channel' || page === 'subscriptions')) {
-      const first = obj[0];
-      const firstKeys = first && typeof first === 'object' ? Object.keys(first).slice(0, 8) : [];
-      if (firstKeys.length > 0) {
-        const nonVideoSig = `${page}|${path}|${firstKeys.join(',')}`;
-        debugFilterLogOnce('scanAndFilterAllArrays non-video-array', nonVideoSig);
-      }
-    }
-
     // Check if this is a shelves array - remove empty shelves after filtering
     const hasShelves = obj.some(item =>
       item?.shelfRenderer ||
