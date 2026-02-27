@@ -40,10 +40,57 @@ function isPlaylistPage(page) {
 }
 
 function shouldHideWatchedForPage(page) {
-  if (!configRead('enableHideWatchedVideos')) return false;
+  const normalizedPage = String(page || '').toLowerCase();
+  const enabled = !!configRead('enableHideWatchedVideos');
+  if (!enabled) {
+    if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+      debugFilterLog('shouldHideWatchedForPage', { page: normalizedPage, result: false, reason: 'feature_disabled' });
+    }
+    return false;
+  }
+
   const pages = configRead('hideWatchedVideosPages') || [];
-  if (!Array.isArray(pages) || pages.length === 0) return true;
-  return pages.includes(page);
+  if (!Array.isArray(pages) || pages.length === 0) {
+    if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+      debugFilterLog('shouldHideWatchedForPage', { page: normalizedPage, result: true, reason: 'pages_empty_defaults_true' });
+    }
+    return true;
+  }
+
+  const normalizedPages = pages.map((entry) => String(entry || '').toLowerCase());
+
+  let result = false;
+  let reason = 'not_in_pages';
+  if (normalizedPages.includes(normalizedPage)) {
+    result = true;
+    reason = 'direct_page_match';
+  } else if (normalizedPage === 'channel' && normalizedPages.includes('channels')) {
+    result = true;
+    reason = 'channels_alias_match';
+  } else if (normalizedPage === 'channels' && normalizedPages.includes('channel')) {
+    result = true;
+    reason = 'channel_alias_match';
+  } else if (normalizedPage === 'subscriptions' && normalizedPages.includes('subscription')) {
+    result = true;
+    reason = 'subscription_alias_match';
+  } else if (normalizedPage === 'subscription' && normalizedPages.includes('subscriptions')) {
+    result = true;
+    reason = 'subscriptions_alias_match';
+  } else if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+    result = true;
+    reason = 'legacy_channel_subscriptions_default';
+  }
+
+  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+    debugFilterLog('shouldHideWatchedForPage', {
+      page: normalizedPage,
+      result,
+      reason,
+      configuredPages: normalizedPages
+    });
+  }
+
+  return result;
 }
 
 function shouldRunUniversalFilter(page) {
@@ -130,7 +177,7 @@ function normalizeShelfTitle(title) {
 function isShortsShelfTitle(title) {
   const t = normalizeShelfTitle(title);
   if (!t) return false;
-  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\b/.test(t) || /\bshorts$/.test(t);
+  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\b/.test(t) || /\bshorts$/.test(t) || t.includes('short');
 }
 
 function getItemTitle(item) {
