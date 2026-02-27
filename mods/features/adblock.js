@@ -74,6 +74,8 @@ function textFromNode(node) {
   if (!node) return '';
   if (typeof node === 'string') return node.trim();
   if (typeof node.simpleText === 'string') return node.simpleText.trim();
+  const accessibilityLabel = node?.accessibility?.accessibilityData?.label || node?.accessibilityData?.label;
+  if (typeof accessibilityLabel === 'string' && accessibilityLabel.trim()) return accessibilityLabel.trim();
   if (Array.isArray(node.runs)) {
     const joined = node.runs.map((r) => r?.text || '').join('').trim();
     if (joined) return joined;
@@ -116,7 +118,13 @@ function getShelfTitle(shelf) {
     textFromNode(base?.title),
     textFromNode(base?.header?.title),
     textFromNode(base?.headerRenderer?.title),
-    textFromNode(base?.headerRenderer?.shelfHeaderRenderer?.title)
+    textFromNode(base?.headerRenderer?.shelfHeaderRenderer?.title),
+    textFromNode(base?.shelfRenderer?.title?.accessibility),
+    textFromNode(base?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.accessibility),
+    textFromNode(base?.richShelfRenderer?.title?.accessibility),
+    textFromNode(base?.headerRenderer?.accessibility),
+    textFromNode(base?.label),
+    textFromNode(base?.labelText)
   ];
 
   for (const raw of candidates) {
@@ -859,8 +867,7 @@ function directFilterArray(arr, page, context = '') {
             reason: !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
           };
           watchedDecisionSamples.push(watchSample);
-          // log only non-removal reasons to reduce noise and explain why items stay visible
-          if (!watchedShouldRemove) debugFilterLog('watched keep', { page, context, ...watchSample });
+          debugFilterLog('watched check', { page, context, ...watchSample });
         }
 
         // Hide if watched above threshold
@@ -958,7 +965,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       const first = obj[0];
       const firstKeys = first && typeof first === 'object' ? Object.keys(first).slice(0, 8) : [];
       if (firstKeys.length > 0) {
-        debugFilterLog('scanAndFilterAllArrays non-video-array', { page, path, length: obj.length, firstKeys });
+        const nonVideoSig = `${page}|${path}|${firstKeys.join(',')}`;
+        debugFilterLogOnce('scanAndFilterAllArrays non-video-array', nonVideoSig);
       }
     }
 
