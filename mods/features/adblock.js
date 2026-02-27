@@ -57,19 +57,36 @@ function resolveBrowseParamPage(browseParam) {
 }
 
 function getShelfTitle(shelf) {
-  return (
-    shelf?.shelfRenderer?.title?.runs?.[0]?.text ||
-    shelf?.shelfRenderer?.title?.simpleText ||
-    shelf?.richShelfRenderer?.title?.runs?.[0]?.text ||
-    shelf?.richShelfRenderer?.title?.simpleText ||
-    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.runs?.[0]?.text ||
-    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.simpleText ||
-    ''
-  );
+  const candidates = [
+    shelf?.shelfRenderer?.title?.runs?.[0]?.text,
+    shelf?.shelfRenderer?.title?.simpleText,
+    shelf?.richShelfRenderer?.title?.runs?.[0]?.text,
+    shelf?.richShelfRenderer?.title?.simpleText,
+    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.runs?.[0]?.text,
+    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.simpleText,
+    shelf?.tvSecondaryNavItemRenderer?.title?.runs?.[0]?.text,
+    shelf?.tvSecondaryNavItemRenderer?.title?.simpleText,
+    shelf?.title?.runs?.[0]?.text,
+    shelf?.title?.simpleText
+  ];
+
+  for (const raw of candidates) {
+    const title = String(raw || '').trim();
+    if (!title || title === ':') continue;
+    return title;
+  }
+
+  return '';
 }
 
 function normalizeShelfTitle(title) {
   return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function isShortsShelfTitle(title) {
+  const t = normalizeShelfTitle(title);
+  if (!t) return false;
+  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\b/.test(t) || /\bshorts$/.test(t);
 }
 
 function getItemTitle(item) {
@@ -114,7 +131,7 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       shortLikeCount = previewItems.slice(0, 12).filter((item) => getShortInfo(item, { currentPage: getCurrentPage() }).isShort).length;
     }
 
-    const isShortShelf = normalizedShelfTitle.includes('short') ||
+    const isShortShelf = isShortsShelfTitle(shelfTitle) ||
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
       (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8)));
 
@@ -730,7 +747,7 @@ function directFilterArray(arr, page, context = '') {
     }
   });
 
-  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0)) {
+  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0 || (page === 'channel' && shouldHideWatched))) {
     debugFilterLog('directFilterArray', {
       page,
       context,
