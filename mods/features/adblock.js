@@ -157,9 +157,22 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
       (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8)));
 
+    const currentPage = getCurrentPage();
+    if (currentPage === 'channel' || currentPage === 'subscriptions') {
+      debugFilterLog('hideShorts shelf decision', {
+        page: currentPage,
+        title: shelfTitle,
+        normalizedShelfTitle,
+        previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
+        shortLikeCount,
+        isShortShelf,
+        type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
+      });
+    }
+
     if (isShortShelf) {
       debugFilterLog('hideShorts remove shelf', {
-        page: getCurrentPage(),
+        page: currentPage,
         title: shelfTitle,
         normalizedShelfTitle,
         shortLikeCount,
@@ -746,6 +759,7 @@ function directFilterArray(arr, page, context = '') {
   let watchedChecked = 0;
   let watchedWithProgress = 0;
   const watchedNoProgressTitles = [];
+  const watchedDecisionSamples = [];
   const filtered = arr.filter(item => {
     try {
       if (!item) return true;
@@ -783,7 +797,17 @@ function directFilterArray(arr, page, context = '') {
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
 
         // Hide if watched above threshold
-        if (percentWatched >= threshold) {
+        const watchedShouldRemove = percentWatched >= threshold;
+        if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 10) {
+          watchedDecisionSamples.push({
+            title: getItemTitle(item),
+            percentWatched,
+            threshold,
+            hasProgress: !!progressBar,
+            remove: watchedShouldRemove
+          });
+        }
+        if (watchedShouldRemove) {
           removedWatched++;
           removedKeys.add(key);
           if (videoId) removedVideoIds.add(videoId);
@@ -811,6 +835,7 @@ function directFilterArray(arr, page, context = '') {
       watchedChecked,
       watchedWithProgress,
       sampleWatchedNoProgressTitles: watchedNoProgressTitles,
+      sampleWatchedDecision: watchedDecisionSamples,
       watchedSkipped: !shouldHideWatched,
       shouldHideWatched,
       threshold,
