@@ -95,8 +95,13 @@ function shouldHideWatchedForPage(page) {
 
 function shouldRunUniversalFilter(page) {
   const shortsEnabled = configRead('enableShorts');
-  if (!shortsEnabled) return true;
+  if (!shortsEnabled) return shouldFilterShortsForPage(page);
   return shouldHideWatchedForPage(page);
+}
+
+function shouldFilterShortsForPage(page) {
+  const normalizedPage = String(page || '').toLowerCase();
+  return normalizedPage !== 'library' && normalizedPage !== 'playlist' && normalizedPage !== 'playlists';
 }
 
 function resolveResponsePage(response, fallbackPage) {
@@ -440,6 +445,9 @@ JSON.parse = function () {
   if (!universalEnabled && (currentPage === 'channel' || currentPage === 'subscriptions')) {
     debugFilterLogOnce('universalFilter skipped', `${currentPage}|shortsEnabled=${configRead('enableShorts')}|hideWatched=${configRead('enableHideWatchedVideos')}`);
   }
+  if (!universalEnabled && !configRead('enableShorts') && !shouldFilterShortsForPage(currentPage)) {
+    debugFilterLogOnce('universalFilter shorts-page-excluded', currentPage);
+  }
 
   if (universalEnabled && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
@@ -718,8 +726,11 @@ function hqify(items) {
     if (!item.tileRenderer) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand.watchEndpoint.videoId;
-      const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
+      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
+      if (!videoID) continue;
+      const baseThumbUrl = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
+      if (!baseThumbUrl) continue;
+      const queryArgs = baseThumbUrl.split('?')[1];
       item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
         {
           url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
@@ -867,7 +878,7 @@ function directFilterArray(arr, page, context = '') {
     });
   }
   const channelPage = isChannelPage(page);
-  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
+  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage && shouldFilterShortsForPage(page);
 
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
