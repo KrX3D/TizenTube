@@ -35,7 +35,20 @@ function shouldHideWatchedForPage(page) {
   if (!configRead('enableHideWatchedVideos')) return false;
   const pages = configRead('hideWatchedVideosPages') || [];
   if (!Array.isArray(pages) || pages.length === 0) return true;
-  return pages.includes(page);
+
+  const normalizedPage = String(page || '').toLowerCase();
+  const normalizedPages = pages.map((entry) => String(entry || '').toLowerCase());
+  if (normalizedPages.includes(normalizedPage)) return true;
+
+  if (normalizedPage === 'channel' && normalizedPages.includes('channels')) return true;
+  if (normalizedPage === 'channels' && normalizedPages.includes('channel')) return true;
+  if (normalizedPage === 'subscriptions' && normalizedPages.includes('subscription')) return true;
+  if (normalizedPage === 'subscription' && normalizedPages.includes('subscriptions')) return true;
+
+  // Keep channel/subscriptions watched filtering active for legacy configs.
+  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') return true;
+
+  return false;
 }
 
 function shouldRunUniversalFilter(page) {
@@ -918,6 +931,33 @@ function findProgressBar(item) {
   for (const renderer of rendererTypes) {
     const result = checkRenderer(renderer);
     if (result) return result;
+  }
+
+  // Fallback: recursively search for any object carrying percentDurationWatched.
+  const stack = [item];
+  const seen = new Set();
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+
+    if (typeof node.percentDurationWatched === 'number') {
+      return node;
+    }
+
+    const parsedPercent = Number(node.percentDurationWatched);
+    if (Number.isFinite(parsedPercent) && parsedPercent >= 0) {
+      return { percentDurationWatched: parsedPercent };
+    }
+
+    if (Array.isArray(node)) {
+      for (const entry of node) stack.push(entry);
+      continue;
+    }
+
+    for (const key of Object.keys(node)) {
+      stack.push(node[key]);
+    }
   }
   
   return null;
