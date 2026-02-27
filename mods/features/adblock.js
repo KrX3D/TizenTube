@@ -57,6 +57,11 @@ function shouldRunUniversalFilter(page) {
   return shouldHideWatchedForPage(page);
 }
 
+function isChannelPage(page) {
+  const normalized = String(page || '').toLowerCase();
+  return normalized === 'channel' || normalized === 'channels';
+}
+
 function resolveBrowseParamPage(browseParam) {
   if (!browseParam) return null;
 
@@ -79,6 +84,10 @@ function getShelfTitle(shelf) {
     shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.simpleText,
     shelf?.tvSecondaryNavItemRenderer?.title?.runs?.[0]?.text,
     shelf?.tvSecondaryNavItemRenderer?.title?.simpleText,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.runs?.[0]?.text,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.simpleText,
+    shelf?.richShelfRenderer?.titleText?.runs?.[0]?.text,
+    shelf?.richShelfRenderer?.titleText?.simpleText,
     shelf?.title?.runs?.[0]?.text,
     shelf?.title?.simpleText
   ];
@@ -692,6 +701,8 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   const shouldHideWatched = shouldHideWatchedForPage(page);
   const playlistPage = isPlaylistPage(page);
+  const channelPage = isChannelPage(page);
+  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
 
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -737,7 +748,7 @@ function directFilterArray(arr, page, context = '') {
 
       const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
 
-      if (!shortsEnabled && shortInfo.isShort) {
+      if (shouldFilterShortsByDuration && shortInfo.isShort) {
         removedShorts++;
         removedKeys.add(key);
         if (videoId) removedVideoIds.add(videoId);
@@ -771,7 +782,7 @@ function directFilterArray(arr, page, context = '') {
     }
   });
 
-  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0 || (page === 'channel' && shouldHideWatched))) {
+  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0 || watchedChecked > 0 || (page === 'channel' && shouldHideWatched))) {
     debugFilterLog('directFilterArray', {
       page,
       context,
@@ -786,7 +797,9 @@ function directFilterArray(arr, page, context = '') {
       sampleWatchedNoProgressTitles: watchedNoProgressTitles,
       shouldHideWatched,
       threshold,
-      shortsEnabled
+      shortsEnabled,
+      channelPage,
+      shouldFilterShortsByDuration
     });
   }
 
