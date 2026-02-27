@@ -712,9 +712,13 @@ function directFilterArray(arr, page, context = '') {
   let removedShorts = 0;
   let removedWatched = 0;
   const removedShortTitles = [];
+  const removedWatchedTitles = [];
   if (!window._ttRemovedItemKeysByPage) window._ttRemovedItemKeysByPage = {};
   if (!window._ttRemovedItemKeysByPage[page]) window._ttRemovedItemKeysByPage[page] = new Set();
   const removedKeys = window._ttRemovedItemKeysByPage[page];
+  if (!window._ttRemovedVideoIdsByPage) window._ttRemovedVideoIdsByPage = {};
+  if (!window._ttRemovedVideoIdsByPage[page]) window._ttRemovedVideoIdsByPage[page] = new Set();
+  const removedVideoIds = window._ttRemovedVideoIdsByPage[page];
   let watchedChecked = 0;
   let watchedWithProgress = 0;
   const watchedNoProgressTitles = [];
@@ -723,7 +727,11 @@ function directFilterArray(arr, page, context = '') {
       if (!item) return true;
 
       const key = getItemKey(item);
+      const videoId = getVideoId(item);
       if (removedKeys.has(key)) {
+        return false;
+      }
+      if (videoId && removedVideoIds.has(videoId)) {
         return false;
       }
 
@@ -732,6 +740,7 @@ function directFilterArray(arr, page, context = '') {
       if (!shortsEnabled && shortInfo.isShort) {
         removedShorts++;
         removedKeys.add(key);
+        if (videoId) removedVideoIds.add(videoId);
         if (removedShortTitles.length < 8) removedShortTitles.push(shortInfo.title);
         return false;
       }
@@ -750,6 +759,8 @@ function directFilterArray(arr, page, context = '') {
         if (percentWatched >= threshold) {
           removedWatched++;
           removedKeys.add(key);
+          if (videoId) removedVideoIds.add(videoId);
+          if (removedWatchedTitles.length < 8) removedWatchedTitles.push(getItemTitle(item));
           return false;
         }
       }
@@ -769,6 +780,7 @@ function directFilterArray(arr, page, context = '') {
       removedShorts,
       removedWatched,
       sampleRemovedShortTitles: removedShortTitles,
+      sampleRemovedWatchedTitles: removedWatchedTitles,
       watchedChecked,
       watchedWithProgress,
       sampleWatchedNoProgressTitles: watchedNoProgressTitles,
