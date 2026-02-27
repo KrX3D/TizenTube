@@ -107,60 +107,30 @@ function resolveBrowseParamPage(browseParam) {
 }
 
 function getShelfTitle(shelf) {
-  const base = resolveNestedShelfContainer(shelf);
-  const candidates = [
-    textFromNode(base?.shelfRenderer?.title),
-    textFromNode(base?.richShelfRenderer?.title),
-    textFromNode(base?.richSectionRenderer?.content?.richShelfRenderer?.title),
-    textFromNode(base?.tvSecondaryNavItemRenderer?.title),
-    textFromNode(base?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title),
-    textFromNode(base?.richShelfRenderer?.titleText),
-    textFromNode(base?.title),
-    textFromNode(base?.header?.title),
-    textFromNode(base?.headerRenderer?.title),
-    textFromNode(base?.headerRenderer?.shelfHeaderRenderer?.title),
-    textFromNode(base?.shelfRenderer?.title?.accessibility),
-    textFromNode(base?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.accessibility),
-    textFromNode(base?.richShelfRenderer?.title?.accessibility),
-    textFromNode(base?.headerRenderer?.accessibility),
-    textFromNode(base?.label),
-    textFromNode(base?.labelText)
-  ];
+  const titleText = (title) => {
+    if (!title) return '';
+    if (title.simpleText) return title.simpleText;
+    if (Array.isArray(title.runs)) return title.runs.map((run) => run.text).join('');
+    return '';
+  };
 
-  for (const raw of candidates) {
-    const title = normalizeTitleCandidate(raw);
-    if (title) return title;
-  }
+  const titlePaths = [
+    shelf?.shelfRenderer?.title,
+    shelf?.shelfRenderer?.shelfHeaderRenderer?.title,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title,
+    shelf?.title,
+    shelf?.headerRenderer?.shelfHeaderRenderer?.title,
+    shelf?.richShelfRenderer?.title,
+    shelf?.reelShelfRenderer?.title,
+    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title,
+    shelf?.gridRenderer?.header?.gridHeaderRenderer?.title,
+    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
+    shelf?.headerRenderer?.shelfHeaderRenderer?.avatarLockup?.avatarLockupRenderer?.title,
+];
 
-  // Fallback: shallow scan for first meaningful title-like string.
-  const stack = [base];
-  const seen = new Set();
-  let depth = 0;
-  while (stack.length && depth < 120) {
-    depth++;
-    const node = stack.pop();
-    if (!node || typeof node !== 'object' || seen.has(node)) continue;
-    seen.add(node);
-
-    if (node.title) {
-      const t = normalizeTitleCandidate(textFromNode(node.title));
-      if (t) return t;
-    }
-    if (node.titleText) {
-      const t = normalizeTitleCandidate(textFromNode(node.titleText));
-      if (t) return t;
-    }
-
-    if (Array.isArray(node)) {
-      for (const item of node) stack.push(item);
-      continue;
-    }
-
-    for (const key of Object.keys(node)) {
-      if (key === 'items' || key === 'contents' || key === 'content' || key === 'header' || key === 'headerRenderer' || key === 'shelfRenderer' || key === 'richShelfRenderer' || key === 'richSectionRenderer' || key === 'title' || key === 'titleText') {
-        stack.push(node[key]);
-      }
-    }
+  for (const rawTitle of titlePaths) {
+    const text = titleText(rawTitle);
+    if (text) return text;
   }
 
   return '';
@@ -924,16 +894,7 @@ function directFilterArray(arr, page, context = '') {
       watchedBelowThreshold,
       suspiciousStillPresentTitles: suspicious
     });
-  } else if ((page === 'subscriptions' || page === 'channel') && shouldHideWatched) {
-    debugFilterLog('directFilterArray watched-none-removed', {
-      page,
-      context,
-      input: arr.length,
-      watchedNoProgress,
-      watchedBelowThreshold
-    });
   }
-
 
   // PLAYLIST SAFEGUARD: keep one helper tile so TV can request next batch.
   if (playlistPage && filtered.length === 0 && arr.length > 0 && !isLastBatch) {
