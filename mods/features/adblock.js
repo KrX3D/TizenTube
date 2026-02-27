@@ -62,6 +62,28 @@ function isChannelPage(page) {
   return normalized === 'channel' || normalized === 'channels';
 }
 
+function textFromNode(node) {
+  if (!node) return '';
+  if (typeof node === 'string') return node.trim();
+  if (typeof node.simpleText === 'string') return node.simpleText.trim();
+  if (Array.isArray(node.runs)) {
+    const joined = node.runs.map((r) => r?.text || '').join('').trim();
+    if (joined) return joined;
+  }
+  return '';
+}
+
+function normalizeTitleCandidate(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^[:\-–—|]+$/.test(text)) return '';
+  return text;
+}
+
+function resolveNestedShelfContainer(shelf) {
+  return shelf?.richSectionRenderer?.content || shelf?.itemSectionRenderer?.contents?.[0] || shelf;
+}
+
 function resolveBrowseParamPage(browseParam) {
   if (!browseParam) return null;
 
@@ -75,27 +97,54 @@ function resolveBrowseParamPage(browseParam) {
 }
 
 function getShelfTitle(shelf) {
+  const base = resolveNestedShelfContainer(shelf);
   const candidates = [
-    shelf?.shelfRenderer?.title?.runs?.[0]?.text,
-    shelf?.shelfRenderer?.title?.simpleText,
-    shelf?.richShelfRenderer?.title?.runs?.[0]?.text,
-    shelf?.richShelfRenderer?.title?.simpleText,
-    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.runs?.[0]?.text,
-    shelf?.richSectionRenderer?.content?.richShelfRenderer?.title?.simpleText,
-    shelf?.tvSecondaryNavItemRenderer?.title?.runs?.[0]?.text,
-    shelf?.tvSecondaryNavItemRenderer?.title?.simpleText,
-    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.runs?.[0]?.text,
-    shelf?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title?.simpleText,
-    shelf?.richShelfRenderer?.titleText?.runs?.[0]?.text,
-    shelf?.richShelfRenderer?.titleText?.simpleText,
-    shelf?.title?.runs?.[0]?.text,
-    shelf?.title?.simpleText
+    textFromNode(base?.shelfRenderer?.title),
+    textFromNode(base?.richShelfRenderer?.title),
+    textFromNode(base?.richSectionRenderer?.content?.richShelfRenderer?.title),
+    textFromNode(base?.tvSecondaryNavItemRenderer?.title),
+    textFromNode(base?.shelfRenderer?.headerRenderer?.shelfHeaderRenderer?.title),
+    textFromNode(base?.richShelfRenderer?.titleText),
+    textFromNode(base?.title),
+    textFromNode(base?.header?.title),
+    textFromNode(base?.headerRenderer?.title),
+    textFromNode(base?.headerRenderer?.shelfHeaderRenderer?.title)
   ];
 
   for (const raw of candidates) {
-    const title = String(raw || '').trim();
-    if (!title || title === ':') continue;
-    return title;
+    const title = normalizeTitleCandidate(raw);
+    if (title) return title;
+  }
+
+  // Fallback: shallow scan for first meaningful title-like string.
+  const stack = [base];
+  const seen = new Set();
+  let depth = 0;
+  while (stack.length && depth < 120) {
+    depth++;
+    const node = stack.pop();
+    if (!node || typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+
+    if (node.title) {
+      const t = normalizeTitleCandidate(textFromNode(node.title));
+      if (t) return t;
+    }
+    if (node.titleText) {
+      const t = normalizeTitleCandidate(textFromNode(node.titleText));
+      if (t) return t;
+    }
+
+    if (Array.isArray(node)) {
+      for (const item of node) stack.push(item);
+      continue;
+    }
+
+    for (const key of Object.keys(node)) {
+      if (key === 'items' || key === 'contents' || key === 'content' || key === 'header' || key === 'headerRenderer' || key === 'shelfRenderer' || key === 'richShelfRenderer' || key === 'richSectionRenderer' || key === 'title' || key === 'titleText') {
+        stack.push(node[key]);
+      }
+    }
   }
 
   return '';
@@ -123,6 +172,8 @@ function getItemTitle(item) {
     item?.compactVideoRenderer?.title?.simpleText ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.simpleText ||
+    textFromNode(item?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title) ||
+    textFromNode(item?.lockupViewModel?.title) ||
     'unknown';
 }
 
@@ -324,6 +375,9 @@ JSON.parse = function () {
 
   // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
   const currentPage = getCurrentPage();
+  if (currentPage === 'subscriptions' || currentPage === 'channel') {
+    debugFilterLog('JSON.parse page detection', { currentPage, hash: location.hash, path: location.pathname, search: location.search });
+  }
 
   if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
@@ -698,6 +752,8 @@ function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.lockupViewModel?.contentId ||
+    item?.lockupViewModel?.videoId ||
     null;
 }
 
@@ -714,21 +770,15 @@ function directFilterArray(arr, page, context = '') {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
   const shouldHideWatched = shouldHideWatchedForPage(page);
   const playlistPage = isPlaylistPage(page);
-  const channelPage = isChannelPage(page);
-  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
-
-  if (page === 'channel' || page === 'subscriptions') {
-    debugFilterLog('directFilterArray start', {
+  if ((page === 'subscriptions' || page === 'channel') && !shouldHideWatched) {
+    debugFilterLog('watched disabled for page', {
       page,
       context,
-      input: arr.length,
-      shortsEnabled,
-      shouldHideWatched,
-      threshold,
-      channelPage,
-      shouldFilterShortsByDuration
+      configuredPages: configRead('hideWatchedVideosPages') || []
     });
   }
+  const channelPage = isChannelPage(page);
+  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
 
   // ⭐ Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
@@ -748,17 +798,12 @@ function directFilterArray(arr, page, context = '') {
 
   let removedShorts = 0;
   let removedWatched = 0;
-  const removedShortTitles = [];
-  const removedWatchedTitles = [];
   if (!window._ttRemovedItemKeysByPage) window._ttRemovedItemKeysByPage = {};
   if (!window._ttRemovedItemKeysByPage[page]) window._ttRemovedItemKeysByPage[page] = new Set();
   const removedKeys = window._ttRemovedItemKeysByPage[page];
   if (!window._ttRemovedVideoIdsByPage) window._ttRemovedVideoIdsByPage = {};
   if (!window._ttRemovedVideoIdsByPage[page]) window._ttRemovedVideoIdsByPage[page] = new Set();
   const removedVideoIds = window._ttRemovedVideoIdsByPage[page];
-  let watchedChecked = 0;
-  let watchedWithProgress = 0;
-  const watchedNoProgressTitles = [];
   const watchedDecisionSamples = [];
   const filtered = arr.filter(item => {
     try {
@@ -779,39 +824,34 @@ function directFilterArray(arr, page, context = '') {
         removedShorts++;
         removedKeys.add(key);
         if (videoId) removedVideoIds.add(videoId);
-        if (removedShortTitles.length < 8) removedShortTitles.push(shortInfo.title);
         return false;
       }
 
       // ⭐ Removed watched on channels, subscriptions and watch page
-      if (!shouldHideWatched && (page === 'channel' || page === 'subscriptions')) {
-        if (watchedNoProgressTitles.length < 3) watchedNoProgressTitles.push(getItemTitle(item));
-      }
       if (shouldHideWatched) {
-        watchedChecked++;
         const progressBar = findProgressBar(item);
-        if (progressBar) watchedWithProgress++;
-        else if (watchedNoProgressTitles.length < 6) watchedNoProgressTitles.push(getItemTitle(item));
 
         // Calculate progress percentage
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
 
-        // Hide if watched above threshold
         const watchedShouldRemove = percentWatched >= threshold;
-        if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 10) {
-          watchedDecisionSamples.push({
+        if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 20) {
+          const watchSample = {
             title: getItemTitle(item),
             percentWatched,
             threshold,
             hasProgress: !!progressBar,
             remove: watchedShouldRemove
-          });
+          };
+          watchedDecisionSamples.push(watchSample);
+          debugFilterLog('watched check', { page, context, ...watchSample });
         }
+
+        // Hide if watched above threshold
         if (watchedShouldRemove) {
           removedWatched++;
           removedKeys.add(key);
           if (videoId) removedVideoIds.add(videoId);
-          if (removedWatchedTitles.length < 8) removedWatchedTitles.push(getItemTitle(item));
           return false;
         }
       }
@@ -822,27 +862,12 @@ function directFilterArray(arr, page, context = '') {
     }
   });
 
-  if (page === 'subscriptions' || page === 'channel') {
-    debugFilterLog('directFilterArray', {
-      page,
-      context,
-      input: arr.length,
-      output: filtered.length,
-      removedShorts,
-      removedWatched,
-      sampleRemovedShortTitles: removedShortTitles,
-      sampleRemovedWatchedTitles: removedWatchedTitles,
-      watchedChecked,
-      watchedWithProgress,
-      sampleWatchedNoProgressTitles: watchedNoProgressTitles,
-      sampleWatchedDecision: watchedDecisionSamples,
-      watchedSkipped: !shouldHideWatched,
-      shouldHideWatched,
-      threshold,
-      shortsEnabled,
-      channelPage,
-      shouldFilterShortsByDuration
-    });
+  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0)) {
+    const remainingTitles = new Set(filtered.map((i) => getItemTitle(i)).filter(Boolean));
+    const suspicious = watchedDecisionSamples
+      .filter((entry) => entry.remove && remainingTitles.has(entry.title))
+      .slice(0, 6);
+    debugFilterLog('directFilterArray result', { page, context, input: arr.length, output: filtered.length, removedShorts, removedWatched, suspiciousStillPresentTitles: suspicious });
   }
 
 
@@ -884,7 +909,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.richItemRenderer?.content?.videoRenderer ||
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
       item?.reelItemRenderer ||
-      item?.richItemRenderer?.content?.reelItemRenderer
+      item?.richItemRenderer?.content?.reelItemRenderer ||
+      item?.lockupViewModel
     );
     
     if (hasVideoItems) {
@@ -894,6 +920,14 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       return directFilterArray(obj, page, path);
     }
     
+    if (!hasVideoItems && (page === 'channel' || page === 'subscriptions')) {
+      const first = obj[0];
+      const firstKeys = first && typeof first === 'object' ? Object.keys(first).slice(0, 8) : [];
+      if (firstKeys.length > 0) {
+        debugFilterLog('scanAndFilterAllArrays non-video-array', { page, path, length: obj.length, firstKeys });
+      }
+    }
+
     // Check if this is a shelves array - remove empty shelves after filtering
     const hasShelves = obj.some(item =>
       item?.shelfRenderer ||
@@ -926,7 +960,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
 
         if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer)) {
           if (page === 'channel' || page === 'subscriptions') {
-            debugFilterLog('scanAndFilterAllArrays remove-empty-shelf', { page, path: path + '[' + i + ']', shelfTitle: getShelfTitle(shelf) });
+            const shelfTitle = getShelfTitle(shelf);
+            debugFilterLog('scanAndFilterAllArrays remove-empty-shelf', { page, path: path + '[' + i + ']', shelfTitle, normalizedShelfTitle: normalizeShelfTitle(shelfTitle), titleResolved: !!shelfTitle });
           }
           obj.splice(i, 1);
         }
