@@ -51,7 +51,10 @@ const defaultConfig = {
   enableUpdater: true,
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
-  enableSigninReminder: false
+  enableSigninReminder: false,
+  enableDebugConsole: false,
+  debugConsolePosition: 'bottom-right',
+  debugConsoleHeight: 1054
 };
 
 let localConfig;
