@@ -212,19 +212,24 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const normalizedShelfTitle = normalizeShelfTitle(shelfTitle);
 
     const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    const verticalItems = shelf?.shelfRenderer?.content?.verticalListRenderer?.items;
     const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
     const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
-    const previewItems = horizontalItems || gridItems || richItems || [];
+    const expandedItems = shelf?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items;
+    const previewItems = horizontalItems || verticalItems || gridItems || richItems || expandedItems || [];
     let shortLikeCount = 0;
     if (Array.isArray(previewItems) && previewItems.length > 0) {
       shortLikeCount = previewItems.slice(0, 12).filter((item) => getShortInfo(item, { currentPage: getCurrentPage() }).isShort).length;
     }
 
+    const currentPage = getCurrentPage();
+    const reelItemCount = Array.isArray(previewItems) ? previewItems.slice(0, 20).filter((item) => !!(item?.reelItemRenderer || item?.richItemRenderer?.content?.reelItemRenderer)).length : 0;
     const isShortShelf = isShortsShelfTitle(shelfTitle) ||
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
-      (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8)));
+      (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8))) ||
+      (Array.isArray(previewItems) && previewItems.length > 0 && reelItemCount >= Math.max(1, Math.floor(previewItems.length * 0.6))) ||
+      ((currentPage === 'channel' || currentPage === 'subscriptions') && !normalizedShelfTitle && Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.6)));
 
-    const currentPage = getCurrentPage();
     if (currentPage === 'channel' || currentPage === 'subscriptions') {
       debugFilterLog('hideShorts shelf decision', {
         page: currentPage,
@@ -232,6 +237,7 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
         normalizedShelfTitle,
         previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
         shortLikeCount,
+        reelItemCount,
         isShortShelf,
         type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
       });
@@ -273,12 +279,20 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       shelf.shelfRenderer.content.horizontalListRenderer.items = filterList(horizontalItems);
     }
 
+    if (Array.isArray(verticalItems)) {
+      shelf.shelfRenderer.content.verticalListRenderer.items = filterList(verticalItems);
+    }
+
     if (Array.isArray(gridItems)) {
       shelf.shelfRenderer.content.gridRenderer.items = filterList(gridItems);
     }
 
     if (Array.isArray(richItems)) {
       shelf.richShelfRenderer.content.richGridRenderer.contents = filterList(richItems);
+    }
+
+    if (Array.isArray(expandedItems)) {
+      shelf.shelfRenderer.content.expandedShelfContentsRenderer.items = filterList(expandedItems);
     }
   }
 }
@@ -705,7 +719,8 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.gridVideoRenderer ||
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
-    item.richItemRenderer?.content?.playlistVideoRenderer;
+    item.richItemRenderer?.content?.playlistVideoRenderer ||
+    item.lockupViewModel;
 
   if (!renderer) {
     if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) {
@@ -964,7 +979,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     
     if (hasVideoItems) {
       if (page === 'channel' || page === 'subscriptions') {
-        debugFilterLog('scanAndFilterAllArrays video-array', { page, path, length: obj.length });
+        debugFilterLog('scanAndFilterAllArrays video-array', { page, path, length: obj.length, sampleTitles: obj.slice(0, 4).map((item) => getItemTitle(item)) });
       }
       return directFilterArray(obj, page, path);
     }
