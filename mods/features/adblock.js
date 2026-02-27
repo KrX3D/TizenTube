@@ -649,6 +649,12 @@ function getVideoId(item) {
     null;
 }
 
+function getItemKey(item) {
+  const id = getVideoId(item);
+  const title = getItemTitle(item);
+  return `${id || 'noid'}|${title || 'notitle'}`;
+}
+
 function directFilterArray(arr, page, context = '') {
   if (!Array.isArray(arr) || arr.length === 0) return arr;
 
@@ -676,37 +682,52 @@ function directFilterArray(arr, page, context = '') {
   let removedShorts = 0;
   let removedWatched = 0;
   const removedShortTitles = [];
+  if (!window._ttRemovedItemKeysByPage) window._ttRemovedItemKeysByPage = {};
+  if (!window._ttRemovedItemKeysByPage[page]) window._ttRemovedItemKeysByPage[page] = new Set();
+  const removedKeys = window._ttRemovedItemKeysByPage[page];
   let watchedChecked = 0;
   let watchedWithProgress = 0;
   const watchedNoProgressTitles = [];
   const filtered = arr.filter(item => {
-    if (!item) return true;
+    try {
+      if (!item) return true;
 
-    const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
-
-    if (!shortsEnabled && shortInfo.isShort) {
-      removedShorts++;
-      if (removedShortTitles.length < 8) removedShortTitles.push(shortInfo.title);
-      return false;
-    }
-
-    // ⭐ Removed watched on channels, subscriptions and watch page
-    if (shouldHideWatched) {
-      watchedChecked++;
-      const progressBar = findProgressBar(item);
-      if (progressBar) watchedWithProgress++;
-      else if (watchedNoProgressTitles.length < 6) watchedNoProgressTitles.push(getItemTitle(item));
-      
-      // Calculate progress percentage
-      const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
-      
-      // Hide if watched above threshold
-      if (percentWatched >= threshold) {
-        removedWatched++;
+      const key = getItemKey(item);
+      if (removedKeys.has(key)) {
         return false;
       }
+
+      const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
+
+      if (!shortsEnabled && shortInfo.isShort) {
+        removedShorts++;
+        removedKeys.add(key);
+        if (removedShortTitles.length < 8) removedShortTitles.push(shortInfo.title);
+        return false;
+      }
+
+      // ⭐ Removed watched on channels, subscriptions and watch page
+      if (shouldHideWatched) {
+        watchedChecked++;
+        const progressBar = findProgressBar(item);
+        if (progressBar) watchedWithProgress++;
+        else if (watchedNoProgressTitles.length < 6) watchedNoProgressTitles.push(getItemTitle(item));
+
+        // Calculate progress percentage
+        const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
+
+        // Hide if watched above threshold
+        if (percentWatched >= threshold) {
+          removedWatched++;
+          removedKeys.add(key);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      debugFilterLog('directFilterArray item error', { page, context, error: String(err) });
+      return true;
     }
-    return true;
   });
 
   if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0)) {
