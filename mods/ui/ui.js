@@ -175,7 +175,7 @@ function execute_once_dom_loaded() {
       }
     };
     return true;
-  }
+  };
 
   // Red, Green, Yellow, Blue
   // 403, 404, 405, 406

@@ -1,6 +1,6 @@
 import { configRead } from '../config.js';
-import Chapters from '../ui/chapters.js';
-import resolveCommand from '../resolveCommand.js';
+//import Chapters from '../ui/chapters.js';
+//import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
@@ -115,17 +115,6 @@ function textFromNode(node) {
     if (joined) return joined;
   }
   return '';
-}
-
-function normalizeTitleCandidate(value) {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  if (/^[:\-–—|]+$/.test(text)) return '';
-  return text;
-}
-
-function resolveNestedShelfContainer(shelf) {
-  return shelf?.richSectionRenderer?.content || shelf?.itemSectionRenderer?.contents?.[0] || shelf;
 }
 
 function resolveBrowseParamPage(browseParam) {
