@@ -68,6 +68,10 @@ function getShelfTitle(shelf) {
   );
 }
 
+function normalizeShelfTitle(title) {
+  return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function getItemTitle(item) {
   return item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText ||
     item?.videoRenderer?.title?.runs?.[0]?.text ||
@@ -99,14 +103,27 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     if (!shelf) continue;
 
     const shelfTitle = getShelfTitle(shelf);
+    const normalizedShelfTitle = normalizeShelfTitle(shelfTitle);
 
-    const isShortShelf = shelfTitle.toLowerCase().includes('short') ||
-      shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS';
+    const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
+    const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
+    const previewItems = horizontalItems || gridItems || richItems || [];
+    let shortLikeCount = 0;
+    if (Array.isArray(previewItems) && previewItems.length > 0) {
+      shortLikeCount = previewItems.slice(0, 12).filter((item) => getShortInfo(item, { currentPage: getCurrentPage() }).isShort).length;
+    }
+
+    const isShortShelf = normalizedShelfTitle.includes('short') ||
+      shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
+      (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8)));
 
     if (isShortShelf) {
       debugFilterLog('hideShorts remove shelf', {
         page: getCurrentPage(),
         title: shelfTitle,
+        normalizedShelfTitle,
+        shortLikeCount,
         type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
       });
       onRemoveShelf?.(shelf);
@@ -133,17 +150,14 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       return items;
     };
 
-    const items = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-    if (Array.isArray(items)) {
-      shelf.shelfRenderer.content.horizontalListRenderer.items = filterList(items);
+    if (Array.isArray(horizontalItems)) {
+      shelf.shelfRenderer.content.horizontalListRenderer.items = filterList(horizontalItems);
     }
 
-    const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
     if (Array.isArray(gridItems)) {
       shelf.shelfRenderer.content.gridRenderer.items = filterList(gridItems);
     }
 
-    const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
     if (Array.isArray(richItems)) {
       shelf.richShelfRenderer.content.richGridRenderer.contents = filterList(richItems);
     }
@@ -662,6 +676,9 @@ function directFilterArray(arr, page, context = '') {
   let removedShorts = 0;
   let removedWatched = 0;
   const removedShortTitles = [];
+  let watchedChecked = 0;
+  let watchedWithProgress = 0;
+  const watchedNoProgressTitles = [];
   const filtered = arr.filter(item => {
     if (!item) return true;
 
@@ -675,7 +692,10 @@ function directFilterArray(arr, page, context = '') {
 
     // ⭐ Removed watched on channels, subscriptions and watch page
     if (shouldHideWatched) {
+      watchedChecked++;
       const progressBar = findProgressBar(item);
+      if (progressBar) watchedWithProgress++;
+      else if (watchedNoProgressTitles.length < 6) watchedNoProgressTitles.push(getItemTitle(item));
       
       // Calculate progress percentage
       const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
@@ -698,6 +718,9 @@ function directFilterArray(arr, page, context = '') {
       removedShorts,
       removedWatched,
       sampleRemovedShortTitles: removedShortTitles,
+      watchedChecked,
+      watchedWithProgress,
+      sampleWatchedNoProgressTitles: watchedNoProgressTitles,
       shouldHideWatched,
       threshold,
       shortsEnabled
