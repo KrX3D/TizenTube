@@ -578,23 +578,38 @@ for (const key in window._yttv) {
 function processShelves(shelves, shouldAddPreviews = true) {
   hideShorts(shelves, configRead('enableShorts'));
   for (const shelve of shelves) {
+    // Unwrap richSectionRenderer so channel/subscription shelves are handled
+    const base = shelve?.richSectionRenderer?.content || shelve;
+
     const lists = [
       {
-        items: shelve?.shelfRenderer?.content?.horizontalListRenderer?.items,
+        items: base?.shelfRenderer?.content?.horizontalListRenderer?.items,
         apply: (filtered) => {
-          shelve.shelfRenderer.content.horizontalListRenderer.items = filtered;
+          base.shelfRenderer.content.horizontalListRenderer.items = filtered;
         }
       },
       {
-        items: shelve?.shelfRenderer?.content?.gridRenderer?.items,
+        items: base?.shelfRenderer?.content?.verticalListRenderer?.items,
         apply: (filtered) => {
-          shelve.shelfRenderer.content.gridRenderer.items = filtered;
+          base.shelfRenderer.content.verticalListRenderer.items = filtered;
         }
       },
       {
-        items: shelve?.richShelfRenderer?.content?.richGridRenderer?.contents,
+        items: base?.shelfRenderer?.content?.gridRenderer?.items,
         apply: (filtered) => {
-          shelve.richShelfRenderer.content.richGridRenderer.contents = filtered;
+          base.shelfRenderer.content.gridRenderer.items = filtered;
+        }
+      },
+      {
+        items: base?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items,
+        apply: (filtered) => {
+          base.shelfRenderer.content.expandedShelfContentsRenderer.items = filtered;
+        }
+      },
+      {
+        items: base?.richShelfRenderer?.content?.richGridRenderer?.contents,
+        apply: (filtered) => {
+          base.richShelfRenderer.content.richGridRenderer.contents = filtered;
         }
       }
     ];
@@ -611,7 +626,6 @@ function processShelves(shelves, shouldAddPreviews = true) {
       }
       list.apply(hideVideo(items));
     }
-    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(items);
   }
 }
 
