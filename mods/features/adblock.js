@@ -43,20 +43,7 @@ function shouldHideWatchedForPage(page) {
   if (!configRead('enableHideWatchedVideos')) return false;
   const pages = configRead('hideWatchedVideosPages') || [];
   if (!Array.isArray(pages) || pages.length === 0) return true;
-
-  const normalizedPage = String(page || '').toLowerCase();
-  const normalizedPages = pages.map((entry) => String(entry || '').toLowerCase());
-  if (normalizedPages.includes(normalizedPage)) return true;
-
-  if (normalizedPage === 'channel' && normalizedPages.includes('channels')) return true;
-  if (normalizedPage === 'channels' && normalizedPages.includes('channel')) return true;
-  if (normalizedPage === 'subscriptions' && normalizedPages.includes('subscription')) return true;
-  if (normalizedPage === 'subscription' && normalizedPages.includes('subscriptions')) return true;
-
-  // Keep channel/subscriptions watched filtering active for legacy configs.
-  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') return true;
-
-  return false;
+  return pages.includes(page);
 }
 
 function shouldRunUniversalFilter(page) {
@@ -375,10 +362,6 @@ JSON.parse = function () {
 
   // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
   const currentPage = getCurrentPage();
-  if (currentPage === 'subscriptions' || currentPage === 'channel') {
-    const pageSig = `${currentPage}|${location.hash}|${location.pathname}|${location.search}`;
-    debugFilterLogOnce('JSON.parse page detection', pageSig);
-  }
 
   if (shouldRunUniversalFilter(currentPage) && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
