@@ -174,6 +174,17 @@ function normalizeShelfTitle(title) {
   return String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function getShelfLists(shelf) {
+  const base = shelf?.richSectionRenderer?.content || shelf;
+  return {
+    horizontalItems: base?.shelfRenderer?.content?.horizontalListRenderer?.items,
+    verticalItems: base?.shelfRenderer?.content?.verticalListRenderer?.items,
+    gridItems: base?.shelfRenderer?.content?.gridRenderer?.items,
+    richItems: base?.richShelfRenderer?.content?.richGridRenderer?.contents,
+    expandedItems: base?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items
+  };
+}
+
 function isShortsShelfTitle(title) {
   const t = normalizeShelfTitle(title);
   if (!t) return false;
@@ -215,11 +226,7 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const shelfTitle = getShelfTitle(shelf);
     const normalizedShelfTitle = normalizeShelfTitle(shelfTitle);
 
-    const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-    const verticalItems = shelf?.shelfRenderer?.content?.verticalListRenderer?.items;
-    const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
-    const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
-    const expandedItems = shelf?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items;
+    const { horizontalItems, verticalItems, gridItems, richItems, expandedItems } = getShelfLists(shelf);
     const previewItems = horizontalItems || verticalItems || gridItems || richItems || expandedItems || [];
     let shortLikeCount = 0;
     if (Array.isArray(previewItems) && previewItems.length > 0) {
@@ -240,21 +247,20 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       (Array.isArray(previewItems) && previewItems.length > 0 && reelItemCount >= Math.max(1, Math.floor(previewItems.length * 0.6))) ||
       ((currentPage === 'channel' || currentPage === 'subscriptions') && !normalizedShelfTitle && Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.6)));
 
-    if (currentPage === 'channel' || currentPage === 'subscriptions') {
-      debugFilterLog('hideShorts shelf decision', {
-        page: currentPage,
-        title: shelfTitle,
-        normalizedShelfTitle,
-        previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
-        shortLikeCount,
-        reelItemCount,
-        rememberedShortShelf,
-        isShortShelf,
-        type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
-      });
-    }
-
     if (isShortShelf) {
+      if (currentPage === 'channel' || currentPage === 'subscriptions') {
+        debugFilterLog('hideShorts shelf decision', {
+          page: currentPage,
+          title: shelfTitle,
+          normalizedShelfTitle,
+          previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
+          shortLikeCount,
+          reelItemCount,
+          rememberedShortShelf,
+          isShortShelf,
+          type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
+        });
+      }
       if (normalizedShelfTitle) removedShortShelfTitles.add(normalizedShelfTitle);
       debugFilterLog('hideShorts remove shelf', {
         page: currentPage,
@@ -289,23 +295,23 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     };
 
     if (Array.isArray(horizontalItems)) {
-      shelf.shelfRenderer.content.horizontalListRenderer.items = filterList(horizontalItems);
+      (shelf?.richSectionRenderer?.content || shelf).shelfRenderer.content.horizontalListRenderer.items = filterList(horizontalItems);
     }
 
     if (Array.isArray(verticalItems)) {
-      shelf.shelfRenderer.content.verticalListRenderer.items = filterList(verticalItems);
+      (shelf?.richSectionRenderer?.content || shelf).shelfRenderer.content.verticalListRenderer.items = filterList(verticalItems);
     }
 
     if (Array.isArray(gridItems)) {
-      shelf.shelfRenderer.content.gridRenderer.items = filterList(gridItems);
+      (shelf?.richSectionRenderer?.content || shelf).shelfRenderer.content.gridRenderer.items = filterList(gridItems);
     }
 
     if (Array.isArray(richItems)) {
-      shelf.richShelfRenderer.content.richGridRenderer.contents = filterList(richItems);
+      (shelf?.richSectionRenderer?.content || shelf).richShelfRenderer.content.richGridRenderer.contents = filterList(richItems);
     }
 
     if (Array.isArray(expandedItems)) {
-      shelf.shelfRenderer.content.expandedShelfContentsRenderer.items = filterList(expandedItems);
+      (shelf?.richSectionRenderer?.content || shelf).shelfRenderer.content.expandedShelfContentsRenderer.items = filterList(expandedItems);
     }
   }
 }
@@ -1000,7 +1006,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
     const hasShelves = obj.some(item =>
       item?.shelfRenderer ||
       item?.richShelfRenderer ||
-      item?.gridRenderer
+      item?.gridRenderer ||
+      item?.richSectionRenderer?.content?.shelfRenderer ||
+      item?.richSectionRenderer?.content?.richShelfRenderer
     );
     
     if (hasShelves) {
@@ -1018,15 +1026,15 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
         }
         scanAndFilterAllArrays(shelf, page, path + '[' + i + ']');
 
-        const horizontalItems = shelf?.shelfRenderer?.content?.horizontalListRenderer?.items;
-        const gridItems = shelf?.shelfRenderer?.content?.gridRenderer?.items;
-        const richItems = shelf?.richShelfRenderer?.content?.richGridRenderer?.contents;
+        const { horizontalItems, verticalItems, gridItems, richItems, expandedItems } = getShelfLists(shelf);
         const hasItems =
           (Array.isArray(horizontalItems) && horizontalItems.length > 0) ||
+          (Array.isArray(verticalItems) && verticalItems.length > 0) ||
           (Array.isArray(gridItems) && gridItems.length > 0) ||
-          (Array.isArray(richItems) && richItems.length > 0);
+          (Array.isArray(richItems) && richItems.length > 0) ||
+          (Array.isArray(expandedItems) && expandedItems.length > 0);
 
-        if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer)) {
+        if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer || shelf?.richSectionRenderer)) {
           if (page === 'channel' || page === 'subscriptions') {
             const shelfTitle = getShelfTitle(shelf);
             debugFilterLog('scanAndFilterAllArrays remove-empty-shelf', { page, path: path + '[' + i + ']', shelfTitle, normalizedShelfTitle: normalizeShelfTitle(shelfTitle), titleResolved: !!shelfTitle });
