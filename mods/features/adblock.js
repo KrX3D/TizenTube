@@ -581,6 +581,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       }
       list.apply(hideVideo(items));
     }
+    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(items);
   }
 }
 
