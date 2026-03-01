@@ -748,6 +748,7 @@ function deArrowify(items) {
 function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
+    if (isPlaylistTileOrCollectionItem(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
       const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
@@ -768,31 +769,50 @@ function hqify(items) {
 
 function addLongPress(items) {
   for (const item of items) {
-    if (!item.tileRenderer) continue;
-    if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
-    if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
-        clickTrackingParams: null,
-        playlistEditEndpoint: {
-          customAction: {
-            action: 'ADD_TO_QUEUE',
-            parameters: item
+    try {
+      if (!item.tileRenderer) continue;
+      if (isPlaylistTileOrCollectionItem(item)) continue;
+      if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
+
+      const menuItems = item.tileRenderer?.onLongPressCommand?.showMenuCommand?.menu?.menuRenderer?.items;
+      if (Array.isArray(menuItems)) {
+        menuItems.push(MenuServiceItemRenderer('Add to Queue', {
+          clickTrackingParams: null,
+          playlistEditEndpoint: {
+            customAction: {
+              action: 'ADD_TO_QUEUE',
+              parameters: item
+            }
           }
-        }
-      }));
-      continue;
+        }));
+        continue;
+      }
+
+      if (!configRead('enableLongPress')) continue;
+
+      const watchEndpoint = item.tileRenderer?.onSelectCommand?.watchEndpoint;
+      const videoId = watchEndpoint?.videoId || item.tileRenderer?.contentId;
+      const thumbnails = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails;
+      const title = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText;
+      const subtitleNode = item.tileRenderer?.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.[0]?.lineItemRenderer?.text;
+      const subtitle = subtitleNode?.runs?.[0]?.text || subtitleNode?.simpleText;
+
+      if (!videoId || !Array.isArray(thumbnails) || thumbnails.length === 0 || !title || !subtitle || !watchEndpoint) {
+        continue;
+      }
+
+      const data = longPressData({
+        videoId,
+        thumbnails,
+        title,
+        subtitle,
+        watchEndpointData: watchEndpoint,
+        item
+      });
+      item.tileRenderer.onLongPressCommand = data;
+    } catch (err) {
+      debugFilterLog('addLongPress item error', { error: String(err) });
     }
-    if (!configRead('enableLongPress')) continue;
-    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
-    const data = longPressData({
-      videoId: item.tileRenderer.contentId,
-      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
-      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
-      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
-      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
-      item
-    });
-    item.tileRenderer.onLongPressCommand = data;
   }
 }
 
