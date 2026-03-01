@@ -214,6 +214,8 @@ function getItemTitle(item) {
     item?.compactVideoRenderer?.title?.simpleText ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.simpleText ||
+    textFromNode(item?.richItemRenderer?.content?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title) ||
+    textFromNode(item?.richItemRenderer?.content?.lockupViewModel?.title) ||
     textFromNode(item?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title) ||
     textFromNode(item?.lockupViewModel?.title) ||
     'unknown';
@@ -751,7 +753,7 @@ function hqify(items) {
     if (isPlaylistTileOrCollectionItem(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
+      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
       if (!videoID) continue;
       const baseThumbUrl = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
       if (!baseThumbUrl) continue;
@@ -832,6 +834,7 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
     item.richItemRenderer?.content?.playlistVideoRenderer ||
+    item.richItemRenderer?.content?.lockupViewModel ||
     item.lockupViewModel;
 
   if (!renderer) {
@@ -900,6 +903,8 @@ function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.contentId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.videoId ||
     item?.lockupViewModel?.contentId ||
     item?.lockupViewModel?.videoId ||
     null;
@@ -1081,6 +1086,7 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.lockupViewModel ||
       item?.lockupViewModel
     );
     
@@ -1204,7 +1210,9 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.richItemRenderer?.content?.reelItemRenderer
+    item.richItemRenderer?.content?.reelItemRenderer,
+    item.lockupViewModel,
+    item.richItemRenderer?.content?.lockupViewModel
   ];
   
   for (const renderer of rendererTypes) {
