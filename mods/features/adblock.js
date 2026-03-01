@@ -113,8 +113,15 @@ function resolveResponsePage(response, fallbackPage) {
     return 'watch';
   }
 
-  if (response?.continuationContents?.gridContinuation || response?.continuationContents?.sectionListContinuation) {
-    return fallbackPage;
+  if (response?.continuationContents) {
+    const lastStablePage = window._ttLastStablePage;
+    if ((fallbackPage === 'home' || fallbackPage === 'other') && lastStablePage && lastStablePage !== 'watch') {
+      return lastStablePage;
+    }
+
+    if (response?.continuationContents?.gridContinuation || response?.continuationContents?.sectionListContinuation) {
+      return fallbackPage;
+    }
   }
 
   return fallbackPage;
@@ -226,6 +233,55 @@ function parseDurationToSeconds(lengthText) {
   if (parts.some((p) => Number.isNaN(p))) return null;
   if (parts.length === 2) return (parts[0] * 60) + parts[1];
   if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+  return null;
+}
+
+function extractDurationText(node) {
+  if (!node) return null;
+
+  const durationPattern = /(?:^|\s)(\d{1,2}:\d{2}(?::\d{2})?)(?:\s|$)/;
+  const stack = [node];
+  const seen = new Set();
+  let scans = 0;
+
+  while (stack.length && scans < 120) {
+    const current = stack.pop();
+    scans++;
+    if (!current) continue;
+
+    if (typeof current === 'string') {
+      const m = current.match(durationPattern);
+      if (m?.[1]) return m[1];
+      continue;
+    }
+
+    if (typeof current !== 'object' || seen.has(current)) continue;
+    seen.add(current);
+
+    if (typeof current.simpleText === 'string') {
+      const m = current.simpleText.match(durationPattern);
+      if (m?.[1]) return m[1];
+    }
+
+    if (Array.isArray(current.runs)) {
+      for (const run of current.runs) {
+        if (typeof run?.text === 'string') {
+          const m = run.text.match(durationPattern);
+          if (m?.[1]) return m[1];
+        }
+      }
+    }
+
+    if (Array.isArray(current)) {
+      for (const entry of current) stack.push(entry);
+      continue;
+    }
+
+    for (const key of Object.keys(current)) {
+      stack.push(current[key]);
+    }
+  }
+
   return null;
 }
 
@@ -877,6 +933,10 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
       (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
     )?.lineItemRenderer?.text?.simpleText;
+  }
+
+  if (!lengthText) {
+    lengthText = extractDurationText(renderer) || extractDurationText(item);
   }
 
   if (!lengthText) {
