@@ -101,7 +101,7 @@ function shouldRunUniversalFilter(page) {
 
 function shouldFilterShortsForPage(page) {
   const normalizedPage = String(page || '').toLowerCase();
-  return normalizedPage !== 'library' && normalizedPage !== 'playlist' && normalizedPage !== 'playlists';
+  return normalizedPage !== 'library';
 }
 
 function resolveResponsePage(response, fallbackPage) {
@@ -109,7 +109,7 @@ function resolveResponsePage(response, fallbackPage) {
     return 'watch';
   }
 
-  if (response?.continuationContents?.watchNextContinuation || response?.continuationContents?.watchNextFeedContinuation) {
+  if (response?.continuationContents?.watchNextContinuation) {
     return 'watch';
   }
 
@@ -605,6 +605,26 @@ for (const key in window._yttv) {
   }
 }
 
+function isPlaylistTileOrCollectionItem(item) {
+  if (!item) return false;
+
+  if (item.playlistRenderer || item.lockupViewModel?.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
+    return true;
+  }
+
+  const tile = item.tileRenderer;
+  if (!tile) return false;
+
+  if (tile.contentType && String(tile.contentType).includes('PLAYLIST')) return true;
+
+  const endpoint = tile.onSelectCommand;
+  if (endpoint?.browseEndpoint || endpoint?.watchPlaylistEndpoint || endpoint?.showEngagementPanelEndpoint) {
+    return true;
+  }
+
+  return false;
+}
+
 function processShelves(shelves, shouldAddPreviews = true, page = getCurrentPage(), context = 'processShelves') {
   if (!Array.isArray(shelves)) return;
   hideShorts(shelves, configRead('enableShorts'));
@@ -668,22 +688,26 @@ function processShelves(shelves, shouldAddPreviews = true, page = getCurrentPage
 function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
   for (const item of items) {
-    if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
-      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
-      item.tileRenderer.onFocusCommand = {
-        startInlinePlaybackCommand: {
-          blockAdoption: true,
-          caption: false,
-          delayMs: 3000,
-          durationMs: 40000,
-          muted: false,
-          restartPlaybackBeforeSeconds: 10,
-          resumeVideo: true,
-          playbackEndpoint: watchEndpoint
-        }
-      };
-    }
+    if (!item.tileRenderer) continue;
+    if (isPlaylistTileOrCollectionItem(item)) continue;
+
+    const watchEndpoint = item.tileRenderer.onSelectCommand;
+    const videoId = watchEndpoint?.watchEndpoint?.videoId || watchEndpoint?.watchEndpointData?.videoId;
+    if (!videoId) continue;
+    if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
+
+    item.tileRenderer.onFocusCommand = {
+      startInlinePlaybackCommand: {
+        blockAdoption: true,
+        caption: false,
+        delayMs: 3000,
+        durationMs: 40000,
+        muted: false,
+        restartPlaybackBeforeSeconds: 10,
+        resumeVideo: true,
+        playbackEndpoint: watchEndpoint
+      }
+    };
   }
 }
 
@@ -799,6 +823,10 @@ function getShortInfo(item, { currentPage = '' } = {}) {
 
   if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
     return { isShort: true, reason: 'renderer_type', title };
+  }
+
+  if (isPlaylistTileOrCollectionItem(item)) {
+    return { isShort: false, reason: 'playlist_tile', title };
   }
 
   let lengthText = null;
