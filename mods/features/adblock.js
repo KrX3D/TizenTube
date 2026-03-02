@@ -676,7 +676,12 @@ function isPlaylistTileOrCollectionItem(item) {
   if (tile.contentType && String(tile.contentType).includes('PLAYLIST')) return true;
 
   const endpoint = tile.onSelectCommand;
-  if (endpoint?.browseEndpoint || endpoint?.watchPlaylistEndpoint || endpoint?.showEngagementPanelEndpoint) {
+  if (endpoint?.watchPlaylistEndpoint) {
+    return true;
+  }
+
+  const browseId = String(endpoint?.browseEndpoint?.browseId || '').toLowerCase();
+  if (browseId.startsWith('vl') || browseId.includes('playlist')) {
     return true;
   }
 
@@ -1056,8 +1061,9 @@ function directFilterArray(arr, page, context = '') {
         // Calculate progress percentage
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
 
-        const watchedShouldRemove = percentWatched >= threshold;
-        if (!progressBar) watchedNoProgress++;
+        const watchedBadge = !progressBar && hasWatchedIndicator(item);
+        const watchedShouldRemove = percentWatched >= threshold || watchedBadge;
+        if (!progressBar && !watchedBadge) watchedNoProgress++;
         else if (!watchedShouldRemove) watchedBelowThreshold++;
 
         if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 20) {
@@ -1067,7 +1073,7 @@ function directFilterArray(arr, page, context = '') {
             threshold,
             hasProgress: !!progressBar,
             remove: watchedShouldRemove,
-            reason: !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
+            reason: watchedBadge ? 'watched_badge' : !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
           };
           watchedDecisionSamples.push(watchSample);
           debugFilterLog('watched check', { page, context, ...watchSample });
@@ -1221,6 +1227,54 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       }
     }
   }
+}
+
+function hasWatchedIndicator(item) {
+  if (!item || typeof item !== 'object') return false;
+
+  const stack = [item];
+  const seen = new Set();
+  let scans = 0;
+
+  while (stack.length && scans < 160) {
+    const node = stack.pop();
+    scans++;
+    if (!node) continue;
+
+    if (typeof node === 'string') {
+      const normalized = node.toLowerCase();
+      if (normalized.includes('watched') || normalized.includes('already watched')) return true;
+      continue;
+    }
+
+    if (typeof node !== 'object' || seen.has(node)) continue;
+    seen.add(node);
+
+    if (typeof node.simpleText === 'string') {
+      const normalized = node.simpleText.toLowerCase();
+      if (normalized.includes('watched') || normalized.includes('already watched')) return true;
+    }
+
+    if (Array.isArray(node.runs)) {
+      for (const run of node.runs) {
+        if (typeof run?.text === 'string') {
+          const normalized = run.text.toLowerCase();
+          if (normalized.includes('watched') || normalized.includes('already watched')) return true;
+        }
+      }
+    }
+
+    if (Array.isArray(node)) {
+      for (const entry of node) stack.push(entry);
+      continue;
+    }
+
+    for (const key of Object.keys(node)) {
+      stack.push(node[key]);
+    }
+  }
+
+  return false;
 }
 
 function findProgressBar(item) {
