@@ -1325,7 +1325,7 @@ function getCurrentPage() {
     browseParam = cMatch[1].toLowerCase();
   }
   
-  const browseIdMatch = hash.match(/\\/browse\\/([^?&#]+)/i);
+  const browseIdMatch = hash.match(/\/browse\/([^?&#]+)/i);
   if (browseIdMatch) {
     const browseId = browseIdMatch[1].toLowerCase();
     if (!browseParam) browseParam = browseId;
