@@ -101,7 +101,7 @@ function shouldRunUniversalFilter(page) {
 
 function shouldFilterShortsForPage(page) {
   const normalizedPage = String(page || '').toLowerCase();
-  return normalizedPage !== 'library';
+  return normalizedPage !== 'library' && normalizedPage !== 'playlist' && normalizedPage !== 'playlists';
 }
 
 function resolveResponsePage(response, fallbackPage) {
@@ -113,15 +113,8 @@ function resolveResponsePage(response, fallbackPage) {
     return 'watch';
   }
 
-  if (response?.continuationContents) {
-    const lastStablePage = window._ttLastStablePage;
-    if ((fallbackPage === 'home' || fallbackPage === 'other') && lastStablePage && lastStablePage !== 'watch') {
-      return lastStablePage;
-    }
-
-    if (response?.continuationContents?.gridContinuation || response?.continuationContents?.sectionListContinuation) {
-      return fallbackPage;
-    }
+  if (response?.continuationContents?.gridContinuation || response?.continuationContents?.sectionListContinuation) {
+    return fallbackPage;
   }
 
   return fallbackPage;
@@ -206,7 +199,7 @@ function getShelfLists(shelf) {
 function isShortsShelfTitle(title) {
   const t = normalizeShelfTitle(title);
   if (!t) return false;
-  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\b/.test(t) || /\bshorts$/.test(t);
+  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\\b/.test(t) || /\\bshorts$/.test(t);
 }
 
 function getItemTitle(item) {
@@ -221,8 +214,6 @@ function getItemTitle(item) {
     item?.compactVideoRenderer?.title?.simpleText ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text ||
     item?.richItemRenderer?.content?.videoRenderer?.title?.simpleText ||
-    textFromNode(item?.richItemRenderer?.content?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title) ||
-    textFromNode(item?.richItemRenderer?.content?.lockupViewModel?.title) ||
     textFromNode(item?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title) ||
     textFromNode(item?.lockupViewModel?.title) ||
     'unknown';
@@ -233,55 +224,6 @@ function parseDurationToSeconds(lengthText) {
   if (parts.some((p) => Number.isNaN(p))) return null;
   if (parts.length === 2) return (parts[0] * 60) + parts[1];
   if (parts.length === 3) return (parts[0] * 3600) + (parts[1] * 60) + parts[2];
-  return null;
-}
-
-function extractDurationText(node) {
-  if (!node) return null;
-
-  const durationPattern = /(\d{1,2}:\d{2}(?::\d{2})?)/;
-  const stack = [node];
-  const seen = new Set();
-  let scans = 0;
-
-  while (stack.length && scans < 120) {
-    const current = stack.pop();
-    scans++;
-    if (!current) continue;
-
-    if (typeof current === 'string') {
-      const m = current.match(durationPattern);
-      if (m?.[1]) return m[1];
-      continue;
-    }
-
-    if (typeof current !== 'object' || seen.has(current)) continue;
-    seen.add(current);
-
-    if (typeof current.simpleText === 'string') {
-      const m = current.simpleText.match(durationPattern);
-      if (m?.[1]) return m[1];
-    }
-
-    if (Array.isArray(current.runs)) {
-      for (const run of current.runs) {
-        if (typeof run?.text === 'string') {
-          const m = run.text.match(durationPattern);
-          if (m?.[1]) return m[1];
-        }
-      }
-    }
-
-    if (Array.isArray(current)) {
-      for (const entry of current) stack.push(entry);
-      continue;
-    }
-
-    for (const key of Object.keys(current)) {
-      stack.push(current[key]);
-    }
-  }
-
   return null;
 }
 
@@ -492,6 +434,70 @@ JSON.parse = function () {
   // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
   const currentPage = resolveResponsePage(r, getCurrentPage());
 
+  // ENTITY MUTATION CACHE - YouTube TV stores watch progress in frameworkUpdates,
+  // NOT in the tile's thumbnailOverlays on subscription/channel pages.
+  // We cache it here by videoId so findProgressBar can look it up.
+  if (r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
+    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+    let mutationProgressCount = 0;
+    for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
+      try {
+        // YouTube TV uses several payload shapes - check all known paths
+        const payload = mutation?.payload;
+        if (!payload) continue;
+
+        // Path 1: videoData.userProgressData (most common)
+        const vd = payload.videoData;
+        if (vd?.videoId) {
+          const pct = vd?.userProgressData?.percentDurationWatched;
+          if (typeof pct === 'number' && pct > 0) {
+            window._ttVideoProgressCache[vd.videoId] = pct;
+            mutationProgressCount++;
+          }
+        }
+
+        // Path 2: macroMarkersListEntity (chapter markers - has videoId but no progress, skip)
+
+        // Path 3: videoWithContextData / subscriptionsVideoData / feedVideoData
+        for (const key of ['videoWithContextData', 'subscriptionsVideoData', 'feedVideoData']) {
+          const d = payload[key];
+          if (d?.videoId) {
+            const pct = d?.progressData?.percentDurationWatched
+              || d?.userProgressData?.percentDurationWatched;
+            if (typeof pct === 'number' && pct > 0) {
+              window._ttVideoProgressCache[d.videoId] = pct;
+              mutationProgressCount++;
+            }
+          }
+        }
+      } catch (e) { /* ignore per-mutation errors */ }
+    }
+
+    // Debug: log mutations to understand the data shape (once per unique mutation set)
+    if (configRead('enableDebugConsole')) {
+      const sampleMutations = r.frameworkUpdates.entityBatchUpdate.mutations.slice(0, 3);
+      debugFilterLogOnce('entityMutations sample', JSON.stringify(sampleMutations.map(m => ({
+        key: m?.entityKey,
+        payloadKeys: Object.keys(m?.payload || {}),
+        videoId: m?.payload?.videoData?.videoId
+          || m?.payload?.subscriptionsVideoData?.videoId
+          || m?.payload?.feedVideoData?.videoId,
+        progressPaths: {
+          userProgress: m?.payload?.videoData?.userProgressData?.percentDurationWatched,
+          progressData: m?.payload?.subscriptionsVideoData?.progressData?.percentDurationWatched,
+        },
+      }))));
+      if (mutationProgressCount > 0 || currentPage === 'subscriptions' || currentPage === 'channel') {
+        debugFilterLog('entityMutations processed', {
+          page: currentPage,
+          total: r.frameworkUpdates.entityBatchUpdate.mutations.length,
+          foundProgress: mutationProgressCount,
+          cacheSize: Object.keys(window._ttVideoProgressCache).length,
+        });
+      }
+    }
+  }
+
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
     // Scan and filter ALL arrays
     scanAndFilterAllArrays(r.contents.singleColumnBrowseResultsRenderer, currentPage);
@@ -663,31 +669,6 @@ for (const key in window._yttv) {
   }
 }
 
-function isPlaylistTileOrCollectionItem(item) {
-  if (!item) return false;
-
-  if (item.playlistRenderer || item.lockupViewModel?.contentType === 'LOCKUP_CONTENT_TYPE_PLAYLIST') {
-    return true;
-  }
-
-  const tile = item.tileRenderer;
-  if (!tile) return false;
-
-  if (tile.contentType && String(tile.contentType).includes('PLAYLIST')) return true;
-
-  const endpoint = tile.onSelectCommand;
-  if (endpoint?.watchPlaylistEndpoint) {
-    return true;
-  }
-
-  const browseId = String(endpoint?.browseEndpoint?.browseId || '').toLowerCase();
-  if (browseId.startsWith('vl') || browseId.includes('playlist')) {
-    return true;
-  }
-
-  return false;
-}
-
 function processShelves(shelves, shouldAddPreviews = true, page = getCurrentPage(), context = 'processShelves') {
   if (!Array.isArray(shelves)) return;
   hideShorts(shelves, configRead('enableShorts'));
@@ -751,26 +732,25 @@ function processShelves(shelves, shouldAddPreviews = true, page = getCurrentPage
 function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
   for (const item of items) {
-    if (!item.tileRenderer) continue;
-    if (isPlaylistTileOrCollectionItem(item)) continue;
-
-    const watchEndpoint = item.tileRenderer.onSelectCommand;
-    const videoId = watchEndpoint?.watchEndpoint?.videoId || watchEndpoint?.watchEndpointData?.videoId;
-    if (!videoId) continue;
-    if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
-
-    item.tileRenderer.onFocusCommand = {
-      startInlinePlaybackCommand: {
-        blockAdoption: true,
-        caption: false,
-        delayMs: 3000,
-        durationMs: 40000,
-        muted: false,
-        restartPlaybackBeforeSeconds: 10,
-        resumeVideo: true,
-        playbackEndpoint: watchEndpoint
-      }
-    };
+    if (item.tileRenderer) {
+      const onSelectCommand = item.tileRenderer.onSelectCommand;
+      // Skip playlist/channel tiles - they use browseEndpoint, not watchEndpoint.
+      // Adding a playback command to them breaks thumbnail display.
+      if (!onSelectCommand || !onSelectCommand.watchEndpoint) continue;
+      if (item.tileRenderer?.onFocusCommand?.startInlinePlaybackCommand) continue;
+      item.tileRenderer.onFocusCommand = {
+        startInlinePlaybackCommand: {
+          blockAdoption: true,
+          caption: false,
+          delayMs: 3000,
+          durationMs: 40000,
+          muted: false,
+          restartPlaybackBeforeSeconds: 10,
+          resumeVideo: true,
+          playbackEndpoint: onSelectCommand
+        }
+      };
+    }
   }
 }
 
@@ -811,10 +791,9 @@ function deArrowify(items) {
 function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
-    if (isPlaylistTileOrCollectionItem(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
+      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
       if (!videoID) continue;
       const baseThumbUrl = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
       if (!baseThumbUrl) continue;
@@ -832,50 +811,31 @@ function hqify(items) {
 
 function addLongPress(items) {
   for (const item of items) {
-    try {
-      if (!item.tileRenderer) continue;
-      if (isPlaylistTileOrCollectionItem(item)) continue;
-      if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
-
-      const menuItems = item.tileRenderer?.onLongPressCommand?.showMenuCommand?.menu?.menuRenderer?.items;
-      if (Array.isArray(menuItems)) {
-        menuItems.push(MenuServiceItemRenderer('Add to Queue', {
-          clickTrackingParams: null,
-          playlistEditEndpoint: {
-            customAction: {
-              action: 'ADD_TO_QUEUE',
-              parameters: item
-            }
+    if (!item.tileRenderer) continue;
+    if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
+    if (item.tileRenderer.onLongPressCommand) {
+      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
+        clickTrackingParams: null,
+        playlistEditEndpoint: {
+          customAction: {
+            action: 'ADD_TO_QUEUE',
+            parameters: item
           }
-        }));
-        continue;
-      }
-
-      if (!configRead('enableLongPress')) continue;
-
-      const watchEndpoint = item.tileRenderer?.onSelectCommand?.watchEndpoint;
-      const videoId = watchEndpoint?.videoId || item.tileRenderer?.contentId;
-      const thumbnails = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails;
-      const title = item.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText;
-      const subtitleNode = item.tileRenderer?.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.[0]?.lineItemRenderer?.text;
-      const subtitle = subtitleNode?.runs?.[0]?.text || subtitleNode?.simpleText;
-
-      if (!videoId || !Array.isArray(thumbnails) || thumbnails.length === 0 || !title || !subtitle || !watchEndpoint) {
-        continue;
-      }
-
-      const data = longPressData({
-        videoId,
-        thumbnails,
-        title,
-        subtitle,
-        watchEndpointData: watchEndpoint,
-        item
-      });
-      item.tileRenderer.onLongPressCommand = data;
-    } catch (err) {
-      debugFilterLog('addLongPress item error', { error: String(err) });
+        }
+      }));
+      continue;
     }
+    if (!configRead('enableLongPress')) continue;
+    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+    const data = longPressData({
+      videoId: item.tileRenderer.contentId,
+      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
+      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
+      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
+      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
+      item
+    });
+    item.tileRenderer.onLongPressCommand = data;
   }
 }
 
@@ -887,6 +847,20 @@ function getShortInfo(item, { currentPage = '' } = {}) {
   const title = getItemTitle(item);
   if (!item) return { isShort: false, reason: 'no_item', title: 'unknown' };
 
+  // Early exit for playlist/channel tiles - they are not videos.
+  // Without this, \"X videos\" text gets parsed as a duration and playlists
+  // may be misclassified as shorts, or the playlist tile gets filtered out incorrectly.
+  if (item.tileRenderer) {
+    const contentType = item.tileRenderer.contentType;
+    if (contentType && (contentType.includes('PLAYLIST') || contentType.includes('CHANNEL'))) {
+      return { isShort: false, reason: 'non_video_tile', title };
+    }
+    const onSelectCommand = item.tileRenderer.onSelectCommand;
+    if (onSelectCommand && onSelectCommand.browseEndpoint && !onSelectCommand.watchEndpoint) {
+      return { isShort: false, reason: 'browse_endpoint_tile', title };
+    }
+  }
+
   const renderer = item.tileRenderer ||
     item.videoRenderer ||
     item.playlistVideoRenderer ||
@@ -895,10 +869,6 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
     item.richItemRenderer?.content?.playlistVideoRenderer ||
-    item.richItemRenderer?.content?.compactVideoRenderer ||
-    item.richItemRenderer?.content?.gridVideoRenderer ||
-    item.richItemRenderer?.content?.videoWithContextRenderer ||
-    item.richItemRenderer?.content?.lockupViewModel ||
     item.lockupViewModel;
 
   if (!renderer) {
@@ -910,10 +880,6 @@ function getShortInfo(item, { currentPage = '' } = {}) {
 
   if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') {
     return { isShort: true, reason: 'renderer_type', title };
-  }
-
-  if (isPlaylistTileOrCollectionItem(item)) {
-    return { isShort: false, reason: 'playlist_tile', title };
   }
 
   let lengthText = null;
@@ -938,13 +904,20 @@ function getShortInfo(item, { currentPage = '' } = {}) {
   }
 
   if (!lengthText) {
-    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-    )?.lineItemRenderer?.text?.simpleText;
-  }
-
-  if (!lengthText) {
-    lengthText = extractDurationText(renderer) || extractDurationText(item);
+    // Check ALL metadata lines (not just line[0]) because subscription tiles put duration in different positions.
+    // Line[0] is often the channel name, duration badge may be in line[1] or line[2].
+    const lines = renderer.metadata?.tileMetadataRenderer?.lines;
+    if (Array.isArray(lines)) {
+      for (const line of lines) {
+        const found = line?.lineRenderer?.items?.find(
+          (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+        )?.lineItemRenderer?.text?.simpleText;
+        if (found && parseDurationToSeconds(found) !== null) {
+          lengthText = found;
+          break;
+        }
+      }
+    }
   }
 
   if (!lengthText) {
@@ -971,11 +944,6 @@ function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.compactVideoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.gridVideoRenderer?.videoId ||
-    item?.richItemRenderer?.content?.videoWithContextRenderer?.videoId ||
-    item?.richItemRenderer?.content?.lockupViewModel?.contentId ||
-    item?.richItemRenderer?.content?.lockupViewModel?.videoId ||
     item?.lockupViewModel?.contentId ||
     item?.lockupViewModel?.videoId ||
     null;
@@ -1004,7 +972,14 @@ function directFilterArray(arr, page, context = '') {
   const channelPage = isChannelPage(page);
   const shouldFilterShortsByDuration = !shortsEnabled && !channelPage && shouldFilterShortsForPage(page);
 
-  // ⭐ Initialize scroll helpers tracker
+  // Log filtering flags once per unique call context so we can debug why shorts aren't being filtered
+  if (page === 'subscriptions' || page === 'channel') {
+    debugFilterLogOnce(`directFilter flags ${page}|${context}`,
+      `shortsEnabled=${shortsEnabled}|shouldFilterShortsByDuration=${shouldFilterShortsByDuration}|shouldHideWatched=${shouldHideWatched}|threshold=${threshold}|cacheSize=${Object.keys(window._ttVideoProgressCache || {}).length}`
+    );
+  }
+
+  // \u2b50 Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
   }
@@ -1053,6 +1028,15 @@ function directFilterArray(arr, page, context = '') {
 
       const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
 
+      // Debug: log what getShortInfo found (first 6 items per unique page+context)
+      if ((page === 'subscriptions' || page === 'channel') && watchedDecisionSamples.length === 0) {
+        // Use watchedDecisionSamples.length as a proxy for item index since it's only incremented in the watched block
+        // Actually, log the first item's shortInfo unconditionally as a diagnostic
+        debugFilterLogOnce(`shortInfo first item ${page}|${context}`,
+          JSON.stringify({ title: shortInfo.title, isShort: shortInfo.isShort, reason: shortInfo.reason, lengthText: shortInfo.lengthText, totalSeconds: shortInfo.totalSeconds, shouldFilterShortsByDuration })
+        );
+      }
+
       if (shouldFilterShortsByDuration && shortInfo.isShort) {
         removedShorts++;
         removedKeys.add(key);
@@ -1067,9 +1051,8 @@ function directFilterArray(arr, page, context = '') {
         // Calculate progress percentage
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
 
-        const watchedBadge = !progressBar && hasWatchedIndicator(item);
-        const watchedShouldRemove = percentWatched >= threshold || watchedBadge;
-        if (!progressBar && !watchedBadge) watchedNoProgress++;
+        const watchedShouldRemove = percentWatched >= threshold;
+        if (!progressBar) watchedNoProgress++;
         else if (!watchedShouldRemove) watchedBelowThreshold++;
 
         if ((page === 'channel' || page === 'subscriptions') && watchedDecisionSamples.length < 20) {
@@ -1079,7 +1062,7 @@ function directFilterArray(arr, page, context = '') {
             threshold,
             hasProgress: !!progressBar,
             remove: watchedShouldRemove,
-            reason: watchedBadge ? 'watched_badge' : !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
+            reason: !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
           };
           watchedDecisionSamples.push(watchSample);
           debugFilterLog('watched check', { page, context, ...watchSample });
@@ -1156,12 +1139,8 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.compactVideoRenderer ||
       item?.richItemRenderer?.content?.videoRenderer ||
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
-      item?.richItemRenderer?.content?.compactVideoRenderer ||
-      item?.richItemRenderer?.content?.gridVideoRenderer ||
-      item?.richItemRenderer?.content?.videoWithContextRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer ||
-      item?.richItemRenderer?.content?.lockupViewModel ||
       item?.lockupViewModel
     );
     
@@ -1238,65 +1217,17 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
   }
 }
 
-function hasWatchedIndicator(item) {
-  if (!item || typeof item !== 'object') return false;
-
-  const stack = [item];
-  const seen = new Set();
-  let scans = 0;
-
-  while (stack.length && scans < 160) {
-    const node = stack.pop();
-    scans++;
-    if (!node) continue;
-
-    if (typeof node === 'string') {
-      const normalized = node.toLowerCase();
-      if (normalized.includes('watched') || normalized.includes('already watched')) return true;
-      continue;
-    }
-
-    if (typeof node !== 'object' || seen.has(node)) continue;
-    seen.add(node);
-
-    if (typeof node.simpleText === 'string') {
-      const normalized = node.simpleText.toLowerCase();
-      if (normalized.includes('watched') || normalized.includes('already watched')) return true;
-    }
-
-    if (Array.isArray(node.runs)) {
-      for (const run of node.runs) {
-        if (typeof run?.text === 'string') {
-          const normalized = run.text.toLowerCase();
-          if (normalized.includes('watched') || normalized.includes('already watched')) return true;
-        }
-      }
-    }
-
-    if (Array.isArray(node)) {
-      for (const entry of node) stack.push(entry);
-      continue;
-    }
-
-    for (const key of Object.keys(node)) {
-      const lowerKey = key.toLowerCase();
-      const value = node[key];
-      if ((lowerKey.includes('watched') || lowerKey.includes('resume')) && (value === true || value === 'WATCHED' || value === 'watched')) {
-        return true;
-      }
-      if (lowerKey.includes('thumbnailoverlayresumeplaybackrenderer') && value) {
-        return true;
-      }
-      stack.push(value);
-    }
-  }
-
-  return false;
-}
-
 function findProgressBar(item) {
   if (!item) return null;
-  
+
+  // PRIMARY: Check entity mutation cache first.
+  // YouTube TV's subscription/channel feed stores watch progress in frameworkUpdates.entityBatchUpdate.mutations,
+  // NOT embedded in the tile's thumbnailOverlays. The cache is built in JSON.parse above.
+  const cachedVideoId = getVideoId(item);
+  if (cachedVideoId && window._ttVideoProgressCache && window._ttVideoProgressCache[cachedVideoId] !== undefined) {
+    return { percentDurationWatched: window._ttVideoProgressCache[cachedVideoId] };
+  }
+
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
     
@@ -1341,12 +1272,7 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.richItemRenderer?.content?.compactVideoRenderer,
-    item.richItemRenderer?.content?.gridVideoRenderer,
-    item.richItemRenderer?.content?.videoWithContextRenderer,
-    item.richItemRenderer?.content?.reelItemRenderer,
-    item.lockupViewModel,
-    item.richItemRenderer?.content?.lockupViewModel
+    item.richItemRenderer?.content?.reelItemRenderer
   ];
   
   for (const renderer of rendererTypes) {
@@ -1399,7 +1325,7 @@ function getCurrentPage() {
     browseParam = cMatch[1].toLowerCase();
   }
   
-  const browseIdMatch = hash.match(/\/browse\/([^?&#]+)/i);
+  const browseIdMatch = hash.match(/\\/browse\\/([^?&#]+)/i);
   if (browseIdMatch) {
     const browseId = browseIdMatch[1].toLowerCase();
     if (!browseParam) browseParam = browseId;
