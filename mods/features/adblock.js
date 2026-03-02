@@ -239,7 +239,7 @@ function parseDurationToSeconds(lengthText) {
 function extractDurationText(node) {
   if (!node) return null;
 
-  const durationPattern = /(?:^|\s)(\d{1,2}:\d{2}(?::\d{2})?)(?:\s|$)/;
+  const durationPattern = /(\d{1,2}:\d{2}(?::\d{2})?)/;
   const stack = [node];
   const seen = new Set();
   let scans = 0;
@@ -895,6 +895,9 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
     item.richItemRenderer?.content?.playlistVideoRenderer ||
+    item.richItemRenderer?.content?.compactVideoRenderer ||
+    item.richItemRenderer?.content?.gridVideoRenderer ||
+    item.richItemRenderer?.content?.videoWithContextRenderer ||
     item.richItemRenderer?.content?.lockupViewModel ||
     item.lockupViewModel;
 
@@ -968,6 +971,9 @@ function getVideoId(item) {
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.gridVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoWithContextRenderer?.videoId ||
     item?.richItemRenderer?.content?.lockupViewModel?.contentId ||
     item?.richItemRenderer?.content?.lockupViewModel?.videoId ||
     item?.lockupViewModel?.contentId ||
@@ -1150,6 +1156,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.compactVideoRenderer ||
       item?.richItemRenderer?.content?.videoRenderer ||
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
+      item?.richItemRenderer?.content?.compactVideoRenderer ||
+      item?.richItemRenderer?.content?.gridVideoRenderer ||
+      item?.richItemRenderer?.content?.videoWithContextRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer ||
       item?.richItemRenderer?.content?.lockupViewModel ||
@@ -1270,7 +1279,15 @@ function hasWatchedIndicator(item) {
     }
 
     for (const key of Object.keys(node)) {
-      stack.push(node[key]);
+      const lowerKey = key.toLowerCase();
+      const value = node[key];
+      if ((lowerKey.includes('watched') || lowerKey.includes('resume')) && (value === true || value === 'WATCHED' || value === 'watched')) {
+        return true;
+      }
+      if (lowerKey.includes('thumbnailoverlayresumeplaybackrenderer') && value) {
+        return true;
+      }
+      stack.push(value);
     }
   }
 
@@ -1324,6 +1341,9 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
+    item.richItemRenderer?.content?.compactVideoRenderer,
+    item.richItemRenderer?.content?.gridVideoRenderer,
+    item.richItemRenderer?.content?.videoWithContextRenderer,
     item.richItemRenderer?.content?.reelItemRenderer,
     item.lockupViewModel,
     item.richItemRenderer?.content?.lockupViewModel
