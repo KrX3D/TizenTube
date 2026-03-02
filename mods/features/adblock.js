@@ -138,6 +138,19 @@ function textFromNode(node) {
   return '';
 }
 
+function isNonVideoTile(item) {
+  const tile = item?.tileRenderer;
+  if (!tile) return false;
+
+  const contentType = String(tile.contentType || '');
+  if (contentType.includes('PLAYLIST') || contentType.includes('CHANNEL')) return true;
+
+  const onSelectCommand = tile.onSelectCommand;
+  if (onSelectCommand?.browseEndpoint && !onSelectCommand?.watchEndpoint) return true;
+
+  return false;
+}
+
 function resolveBrowseParamPage(browseParam) {
   if (!browseParam) return null;
 
@@ -791,9 +804,10 @@ function deArrowify(items) {
 function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
+    if (isNonVideoTile(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
+      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
       if (!videoID) continue;
       const baseThumbUrl = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
       if (!baseThumbUrl) continue;
@@ -812,6 +826,7 @@ function hqify(items) {
 function addLongPress(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
+    if (isNonVideoTile(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (item.tileRenderer.onLongPressCommand) {
       item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
@@ -827,8 +842,10 @@ function addLongPress(items) {
     }
     if (!configRead('enableLongPress')) continue;
     const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+    const videoId = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
+    if (!videoId) continue;
     const data = longPressData({
-      videoId: item.tileRenderer.contentId,
+      videoId,
       thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
       title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
       subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
@@ -850,15 +867,8 @@ function getShortInfo(item, { currentPage = '' } = {}) {
   // Early exit for playlist/channel tiles - they are not videos.
   // Without this, \"X videos\" text gets parsed as a duration and playlists
   // may be misclassified as shorts, or the playlist tile gets filtered out incorrectly.
-  if (item.tileRenderer) {
-    const contentType = item.tileRenderer.contentType;
-    if (contentType && (contentType.includes('PLAYLIST') || contentType.includes('CHANNEL'))) {
-      return { isShort: false, reason: 'non_video_tile', title };
-    }
-    const onSelectCommand = item.tileRenderer.onSelectCommand;
-    if (onSelectCommand && onSelectCommand.browseEndpoint && !onSelectCommand.watchEndpoint) {
-      return { isShort: false, reason: 'browse_endpoint_tile', title };
-    }
+  if (isNonVideoTile(item)) {
+    return { isShort: false, reason: 'non_video_tile', title };
   }
 
   const renderer = item.tileRenderer ||
@@ -869,6 +879,10 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
     item.richItemRenderer?.content?.playlistVideoRenderer ||
+    item.richItemRenderer?.content?.compactVideoRenderer ||
+    item.richItemRenderer?.content?.gridVideoRenderer ||
+    item.richItemRenderer?.content?.videoWithContextRenderer ||
+    item.richItemRenderer?.content?.lockupViewModel ||
     item.lockupViewModel;
 
   if (!renderer) {
@@ -938,12 +952,18 @@ function isShortItem(item, { currentPage = '' } = {}) {
 }
 
 function getVideoId(item) {
-  return item?.tileRenderer?.contentId ||
+  return item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
+    item?.tileRenderer?.contentId ||
     item?.videoRenderer?.videoId ||
     item?.playlistVideoRenderer?.videoId ||
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.gridVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoWithContextRenderer?.videoId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.contentId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.videoId ||
     item?.lockupViewModel?.contentId ||
     item?.lockupViewModel?.videoId ||
     null;
@@ -1139,8 +1159,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.compactVideoRenderer ||
       item?.richItemRenderer?.content?.videoRenderer ||
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
+      item?.richItemRenderer?.content?.compactVideoRenderer ||
+      item?.richItemRenderer?.content?.gridVideoRenderer ||
+      item?.richItemRenderer?.content?.videoWithContextRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.lockupViewModel ||
       item?.lockupViewModel
     );
     
@@ -1272,7 +1296,12 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.richItemRenderer?.content?.reelItemRenderer
+    item.richItemRenderer?.content?.compactVideoRenderer,
+    item.richItemRenderer?.content?.gridVideoRenderer,
+    item.richItemRenderer?.content?.videoWithContextRenderer,
+    item.richItemRenderer?.content?.reelItemRenderer,
+    item.lockupViewModel,
+    item.richItemRenderer?.content?.lockupViewModel
   ];
   
   for (const renderer of rendererTypes) {
