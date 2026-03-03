@@ -33,7 +33,7 @@ Tampermonkey runs the userscripts, while a User-Agent switcher extension makes C
 
 Tampermonkey scripts are stored in:
 
-- `scripts/tampermonkey/tizentube-loader.user.js` (loads `dist/userScript.js`)
+- `scripts/tampermonkey/tizentube-loader.user.js` (loads latest `dist/userScript.js` with cache-busting query)
 - `scripts/tampermonkey/tizentube-log-button.user.js` (adds floating **TT Logs** button that calls `window.downloadTizenTubeLogs()`)
 
 ## Full setup steps
@@ -77,6 +77,7 @@ If you do not see it:
 
 ## Notes
 
+- If Tampermonkey seems stale in Incognito, open script dashboard and use **Utilities → Check for userscript updates**, then hard-refresh YouTube TV.
 - If `/tv` redirects back to desktop YouTube, re-check User-Agent override and extension scope.
 - Keep both scripts enabled: loader + log-button.
 - The log button is external (Tampermonkey UI helper), not an in-app visual-console button.
