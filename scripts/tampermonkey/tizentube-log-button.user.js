@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         TizenTube Log Download Button
 // @namespace    https://github.com/KrX3D/TizenTube
-// @version      0.1
+// @version      0.3
 // @description  Inject a floating button to trigger window.downloadTizenTubeLogs()
 // @match        https://www.youtube.com/*
 // @match        https://youtube.com/*
 // @run-at       document-idle
 // @grant        none
+// @updateURL    https://raw.githubusercontent.com/KrX3D/TizenTube/main/scripts/tampermonkey/tizentube-log-button.user.js
+// @downloadURL  https://raw.githubusercontent.com/KrX3D/TizenTube/main/scripts/tampermonkey/tizentube-log-button.user.js
 // ==/UserScript==
 
 (function () {

@@ -77,6 +77,7 @@ If you do not see it:
 
 ## Notes
 
+- In Tampermonkey, you can force-refresh `@require` files via **TizenTube Loader → Externals → Requires → Update**.
 - If Tampermonkey seems stale in Incognito, open script dashboard and use **Utilities → Check for userscript updates**, then hard-refresh YouTube TV.
 - Tampermonkey only refreshes `@require` when it checks script updates; bumping loader `@version` and running update check forces newest bundle.
 - If `/tv` redirects back to desktop YouTube, re-check User-Agent override and extension scope.
