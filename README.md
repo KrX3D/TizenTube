@@ -22,3 +22,12 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 - [DeArrow](https://dearrow.ajay.app/) Support
 - Customizable Themes (Custom Coloring)
 - More to come, if you [request](https://github.com/reisxd/TizenTube/issues/new) it!
+
+
+# Tampermonkey local debugging helpers
+
+If you test TizenTube on desktop with Tampermonkey, there is now a dedicated helper script that adds a floating **TT Logs** button and triggers `window.downloadTizenTubeLogs()` for one-click log export:
+
+- `scripts/tampermonkey/tizentube-log-button.user.js`
+
+This helper is separate from the in-app visual console UI (no built-in console buttons are required).
