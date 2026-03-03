@@ -132,6 +132,7 @@ function initVisualConsole() {
   console.log('[Console] Use TizenTube settings to configure position/height');
   console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${APP_VERSION}`);
   console.log(`[Console] User-Agent: ${navigator.userAgent}`);
+  console.log('[Console] User-Agent (raw):', navigator.userAgent);
   console.log('[Console] ========================================');
 
   const versionToastCmd = {

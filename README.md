@@ -48,8 +48,8 @@ Tampermonkey scripts are stored in:
 
    `Mozilla/5.0 (SMART-TV; Linux; Tizen 6.5) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/3.0 TV Safari/537.36`
 
-5. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-loader.user.js`.
-6. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-log-button.user.js`.
+5. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-loader.user.js` (configured for `youtube.com/tv*` only).
+6. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-log-button.user.js` (configured for `youtube.com/tv*` only).
 7. In Tampermonkey script settings, set **Sandbox mode = ALL** for these scripts.
 8. Open `https://www.youtube.com/tv` and sign in if needed.
 9. Verify TizenTube loaded:
@@ -77,6 +77,7 @@ If you do not see it:
 
 ## Notes
 
+- These helper scripts are intentionally limited to `/tv` URLs so they do not affect normal desktop YouTube pages.
 - In Tampermonkey, you can force-refresh `@require` files via **TizenTube Loader → Externals → Requires → Update**.
 - If Tampermonkey seems stale in Incognito, open script dashboard and use **Utilities → Check for userscript updates**, then hard-refresh YouTube TV.
 - Tampermonkey only refreshes `@require` when it checks script updates; bumping loader `@version` and running update check forces newest bundle.
