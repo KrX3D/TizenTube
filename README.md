@@ -56,6 +56,16 @@ Tampermonkey scripts are stored in:
    - Open DevTools Console and run `typeof window.toggleDebugConsole` (should return `"function"`).
 10. Click **TT Logs** (bottom-right corner of the page, floating above the YouTube TV UI) to download logs without typing console commands.
 
+
+### Keyboard shortcuts for Windows testing (no TV remote)
+
+When testing in Chrome on desktop, TizenTube maps TV color-button actions to normal keys:
+
+- **GREEN** (open TizenTube settings): `G`, `F2`, or `2`
+- **RED** (open theme settings): `R`, `F1`, or `1`
+- **YELLOW** (toggle debug console): `Y`, `F3`, or `3`
+- **BLUE**: `B`, `F4`, or `4`
+
 ### Where should I see the button?
 
 After both userscripts are enabled and `/tv` has loaded, the **TT Logs** button appears in the **bottom-right corner** as a small black/green floating button.
