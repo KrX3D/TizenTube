@@ -311,6 +311,11 @@ export default function modernUI(update, parameters) {
                             value: 'enableDebugConsole'
                         },
                         {
+                            name: 'Enable Background Debug Logging',
+                            icon: 'ARTICLE',
+                            value: 'enableDebugLogging'
+                        },
+                        {
                             name: 'Console Position',
                             value: null,
                             menuId: 'tt-debug-console-position',
