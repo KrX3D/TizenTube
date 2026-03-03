@@ -35,6 +35,36 @@ function debugFilterLogOnce(key, payload) {
   console.log('[TT_FILTER]', key, payload);
 }
 
+function appendFileOnlyLog(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+
+  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
+  const stamp = new Date().toISOString();
+
+  let message = '';
+  if (typeof payload === 'string') {
+    message = payload;
+  } else {
+    try {
+      message = JSON.stringify(payload);
+    } catch (err) {
+      message = String(payload);
+    }
+  }
+
+  window.__ttFileOnlyLogs.push(`[${stamp}] [TT_FILTER_FILE] ${label} ${message}`);
+  if (window.__ttFileOnlyLogs.length > 3000) window.__ttFileOnlyLogs.shift();
+}
+
+function appendFileOnlyLogOnce(key, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  if (!window._ttFileDebugOnce) window._ttFileDebugOnce = new Map();
+  const serialized = typeof payload === 'string' ? payload : (() => { try { return JSON.stringify(payload); } catch (_) { return String(payload); } })();
+  if (window._ttFileDebugOnce.get(key) === serialized) return;
+  window._ttFileDebugOnce.set(key, serialized);
+  appendFileOnlyLog(key, serialized);
+}
+
 function isPlaylistPage(page) {
   return PLAYLIST_PAGES.has(page);
 }
@@ -76,12 +106,18 @@ function shouldHideWatchedForPage(page) {
   } else if (normalizedPage === 'subscription' && normalizedPages.includes('subscriptions')) {
     result = true;
     reason = 'subscriptions_alias_match';
-  } else if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+  } else if (normalizedPage === 'playlist' && normalizedPages.includes('playlists')) {
     result = true;
-    reason = 'legacy_channel_subscriptions_default';
+    reason = 'playlists_alias_match';
+  } else if (normalizedPage === 'playlists' && normalizedPages.includes('playlist')) {
+    result = true;
+    reason = 'playlist_alias_match';
+  } else if (normalizedPage === 'channel' || normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') {
+    result = true;
+    reason = 'legacy_channel_subscriptions_playlist_default';
   }
 
-  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') {
     debugFilterLog('shouldHideWatchedForPage', {
       page: normalizedPage,
       result,
@@ -95,8 +131,29 @@ function shouldHideWatchedForPage(page) {
 
 function shouldRunUniversalFilter(page) {
   const shortsEnabled = configRead('enableShorts');
-  if (!shortsEnabled) return true;
+  if (!shortsEnabled) return shouldFilterShortsForPage(page);
   return shouldHideWatchedForPage(page);
+}
+
+function shouldFilterShortsForPage(page) {
+  const normalizedPage = String(page || '').toLowerCase();
+  return normalizedPage !== 'library' && normalizedPage !== 'playlist' && normalizedPage !== 'playlists';
+}
+
+function resolveResponsePage(response, fallbackPage) {
+  if (response?.contents?.singleColumnWatchNextResults || response?.contents?.singleColumnWatchNextResults?.pivot) {
+    return 'watch';
+  }
+
+  if (response?.continuationContents?.watchNextContinuation) {
+    return 'watch';
+  }
+
+  if (response?.continuationContents?.gridContinuation || response?.continuationContents?.sectionListContinuation) {
+    return fallbackPage;
+  }
+
+  return fallbackPage;
 }
 
 function isChannelPage(page) {
@@ -115,6 +172,19 @@ function textFromNode(node) {
     if (joined) return joined;
   }
   return '';
+}
+
+function isNonVideoTile(item) {
+  const tile = item?.tileRenderer;
+  if (!tile) return false;
+
+  const contentType = String(tile.contentType || '');
+  if (contentType.includes('PLAYLIST') || contentType.includes('CHANNEL')) return true;
+
+  const onSelectCommand = tile.onSelectCommand;
+  if (onSelectCommand?.browseEndpoint && !onSelectCommand?.watchEndpoint) return true;
+
+  return false;
 }
 
 function resolveBrowseParamPage(browseParam) {
@@ -170,14 +240,15 @@ function getShelfLists(shelf) {
     verticalItems: base?.shelfRenderer?.content?.verticalListRenderer?.items,
     gridItems: base?.shelfRenderer?.content?.gridRenderer?.items,
     richItems: base?.richShelfRenderer?.content?.richGridRenderer?.contents,
-    expandedItems: base?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items
+    expandedItems: base?.shelfRenderer?.content?.expandedShelfContentsRenderer?.items,
+    reelItems: base?.reelShelfRenderer?.items
   };
 }
 
 function isShortsShelfTitle(title) {
   const t = normalizeShelfTitle(title);
   if (!t) return false;
-  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\b/.test(t) || /\bshorts$/.test(t) || t.includes('short');
+  return t === 'shorts' || t === 'short' || t === 'shorts videos' || /^shorts\\b/.test(t) || /\\bshorts$/.test(t);
 }
 
 function getItemTitle(item) {
@@ -212,11 +283,12 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const shelf = shelves[i];
     if (!shelf) continue;
 
+    const base = shelf?.richSectionRenderer?.content || shelf;
     const shelfTitle = getShelfTitle(shelf);
     const normalizedShelfTitle = normalizeShelfTitle(shelfTitle);
 
-    const { horizontalItems, verticalItems, gridItems, richItems, expandedItems } = getShelfLists(shelf);
-    const previewItems = horizontalItems || verticalItems || gridItems || richItems || expandedItems || [];
+    const { horizontalItems, verticalItems, gridItems, richItems, expandedItems, reelItems } = getShelfLists(shelf);
+    const previewItems = horizontalItems || verticalItems || gridItems || richItems || expandedItems || reelItems || [];
     let shortLikeCount = 0;
     if (Array.isArray(previewItems) && previewItems.length > 0) {
       shortLikeCount = previewItems.slice(0, 12).filter((item) => getShortInfo(item, { currentPage: getCurrentPage() }).isShort).length;
@@ -232,12 +304,23 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
     const isShortShelf = rememberedShortShelf ||
       isShortsShelfTitle(shelfTitle) ||
       shelf?.shelfRenderer?.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
+      !!base?.reelShelfRenderer ||
       (Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.8))) ||
       (Array.isArray(previewItems) && previewItems.length > 0 && reelItemCount >= Math.max(1, Math.floor(previewItems.length * 0.6))) ||
       ((currentPage === 'channel' || currentPage === 'subscriptions') && !normalizedShelfTitle && Array.isArray(previewItems) && previewItems.length > 0 && shortLikeCount >= Math.max(1, Math.floor(previewItems.length * 0.6)));
 
     if (isShortShelf) {
       if (currentPage === 'channel' || currentPage === 'subscriptions') {
+        appendFileOnlyLog('hideShorts.shelf.decision', {
+          page: currentPage,
+          title: shelfTitle,
+          normalizedShelfTitle,
+          previewCount: Array.isArray(previewItems) ? previewItems.length : 0,
+          shortLikeCount,
+          reelItemCount,
+          rememberedShortShelf,
+          isShortShelf
+        });
         debugFilterLog('hideShorts shelf decision', {
           page: currentPage,
           title: shelfTitle,
@@ -247,17 +330,24 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
           reelItemCount,
           rememberedShortShelf,
           isShortShelf,
-          type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
+          type: base?.shelfRenderer?.tvhtml5ShelfRendererType || base?.richShelfRenderer?.tvhtml5ShelfRendererType || base?.reelShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
         });
       }
       if (normalizedShelfTitle) removedShortShelfTitles.add(normalizedShelfTitle);
+      appendFileOnlyLog('hideShorts.shelf.remove', {
+        page: currentPage,
+        title: shelfTitle,
+        normalizedShelfTitle,
+        shortLikeCount,
+        rememberedShortShelf
+      });
       debugFilterLog('hideShorts remove shelf', {
         page: currentPage,
         title: shelfTitle,
         normalizedShelfTitle,
         shortLikeCount,
         rememberedShortShelf,
-        type: shelf?.shelfRenderer?.tvhtml5ShelfRendererType || shelf?.richShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
+        type: base?.shelfRenderer?.tvhtml5ShelfRendererType || base?.richShelfRenderer?.tvhtml5ShelfRendererType || base?.reelShelfRenderer?.tvhtml5ShelfRendererType || 'unknown'
       });
       onRemoveShelf?.(shelf);
       shelves.splice(i, 1);
@@ -269,7 +359,7 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
       const before = items.length;
       const removedTitles = [];
       const filtered = items.filter((item) => {
-        const shortInfo = getShortInfo(item, { currentPage: getCurrentPage() });
+        const shortInfo = getShortInfo(item, { currentPage });
         if (shortInfo.isShort) {
           if (removedTitles.length < 6) removedTitles.push(getItemTitle(item));
           return false;
@@ -277,7 +367,8 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
         return true;
       });
       if (before !== filtered.length) {
-        debugFilterLog('hideShorts shelf summary', { page: getCurrentPage(), shelfTitle, before, after: filtered.length, removed: before - filtered.length, sampleTitles: removedTitles });
+        appendFileOnlyLog('hideShorts.shelf.summary', { page: currentPage, shelfTitle, before, after: filtered.length, removed: before - filtered.length, sampleTitles: removedTitles });
+        debugFilterLog('hideShorts shelf summary', { page: currentPage, shelfTitle, before, after: filtered.length, removed: before - filtered.length, sampleTitles: removedTitles });
       }
       items.splice(0, items.length, ...filtered);
       return items;
@@ -301,6 +392,10 @@ function hideShorts(shelves, shortsEnabled, onRemoveShelf) {
 
     if (Array.isArray(expandedItems)) {
       (shelf?.richSectionRenderer?.content || shelf).shelfRenderer.content.expandedShelfContentsRenderer.items = filterList(expandedItems);
+    }
+
+    if (Array.isArray(reelItems)) {
+      (shelf?.richSectionRenderer?.content || shelf).reelShelfRenderer.items = filterList(reelItems);
     }
   }
 }
@@ -404,24 +499,108 @@ JSON.parse = function () {
   }
 
   // Handle singleColumnBrowseResultsRenderer (alternative playlist format)
+  const currentPage = resolveResponsePage(r, getCurrentPage());
+
+  appendFileOnlyLog('json.parse.page', {
+    currentPage,
+    hash: location.hash || '',
+    path: location.pathname || '',
+    search: location.search || '',
+    rootKeys: Object.keys(r || {}).slice(0, 30)
+  });
+
+  // Full response JSON (file-only logs; may be large by design for debugging)
+  appendFileOnlyLog('json.parse.full', r);
+
+  // ENTITY MUTATION CACHE - YouTube TV stores watch progress in frameworkUpdates,
+  // NOT in the tile's thumbnailOverlays on subscription/channel pages.
+  // We cache it here by videoId so findProgressBar can look it up.
+  if (r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
+    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+    let mutationProgressCount = 0;
+    for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
+      try {
+        // YouTube TV uses several payload shapes - check all known paths
+        const payload = mutation?.payload;
+        if (!payload) continue;
+
+        // Path 1: videoData.userProgressData (most common)
+        const vd = payload.videoData;
+        if (vd?.videoId) {
+          const pct = vd?.userProgressData?.percentDurationWatched;
+          if (typeof pct === 'number' && pct > 0) {
+            window._ttVideoProgressCache[vd.videoId] = pct;
+            mutationProgressCount++;
+          }
+        }
+
+        // Path 2: macroMarkersListEntity (chapter markers - has videoId but no progress, skip)
+
+        // Path 3: videoWithContextData / subscriptionsVideoData / feedVideoData
+        for (const key of ['videoWithContextData', 'subscriptionsVideoData', 'feedVideoData']) {
+          const d = payload[key];
+          if (d?.videoId) {
+            const pct = d?.progressData?.percentDurationWatched
+              || d?.userProgressData?.percentDurationWatched;
+            if (typeof pct === 'number' && pct > 0) {
+              window._ttVideoProgressCache[d.videoId] = pct;
+              mutationProgressCount++;
+            }
+          }
+        }
+      } catch (e) { /* ignore per-mutation errors */ }
+    }
+
+    // Debug: log mutations to understand the data shape (once per unique mutation set)
+    if (configRead('enableDebugConsole')) {
+      const sampleMutations = r.frameworkUpdates.entityBatchUpdate.mutations.slice(0, 3);
+      debugFilterLogOnce('entityMutations sample', JSON.stringify(sampleMutations.map(m => ({
+        key: m?.entityKey,
+        payloadKeys: Object.keys(m?.payload || {}),
+        videoId: m?.payload?.videoData?.videoId
+          || m?.payload?.subscriptionsVideoData?.videoId
+          || m?.payload?.feedVideoData?.videoId,
+        progressPaths: {
+          userProgress: m?.payload?.videoData?.userProgressData?.percentDurationWatched,
+          progressData: m?.payload?.subscriptionsVideoData?.progressData?.percentDurationWatched,
+        },
+      }))));
+      if (mutationProgressCount > 0 || currentPage === 'subscriptions' || currentPage === 'channel') {
+        appendFileOnlyLog('entityMutations.processed', {
+          page: currentPage,
+          total: r.frameworkUpdates.entityBatchUpdate.mutations.length,
+          foundProgress: mutationProgressCount,
+          cacheSize: Object.keys(window._ttVideoProgressCache).length
+        });
+        debugFilterLog('entityMutations processed', {
+          page: currentPage,
+          total: r.frameworkUpdates.entityBatchUpdate.mutations.length,
+          foundProgress: mutationProgressCount,
+          cacheSize: Object.keys(window._ttVideoProgressCache).length,
+        });
+      }
+    }
+  }
+
   if (r?.contents?.singleColumnBrowseResultsRenderer?.tabs) {
-    const page = getCurrentPage();
-    
     // Scan and filter ALL arrays
-    scanAndFilterAllArrays(r.contents.singleColumnBrowseResultsRenderer, page);
+    scanAndFilterAllArrays(r.contents.singleColumnBrowseResultsRenderer, currentPage);
   }
 
   // UNIVERSAL FALLBACK - use configured watched-pages (and shorts when disabled)
-  const currentPage = getCurrentPage();
 
   const universalEnabled = shouldRunUniversalFilter(currentPage);
   if (!universalEnabled && (currentPage === 'channel' || currentPage === 'subscriptions')) {
     debugFilterLogOnce('universalFilter skipped', `${currentPage}|shortsEnabled=${configRead('enableShorts')}|hideWatched=${configRead('enableHideWatchedVideos')}`);
   }
+  if (!universalEnabled && !configRead('enableShorts') && !shouldFilterShortsForPage(currentPage)) {
+    debugFilterLogOnce('universalFilter shorts-page-excluded', currentPage);
+  }
 
   if (universalEnabled && !r.__universalFilterApplied) {
     r.__universalFilterApplied = true;
     if (currentPage === 'channel' || currentPage === 'subscriptions') {
+      appendFileOnlyLog('universalFilter.start', { currentPage, rootKeys: Object.keys(r || {}).slice(0, 30) });
       debugFilterLog('universalFilter start', { currentPage, rootKeys: Object.keys(r || {}).slice(0, 12) });
     }
 
@@ -429,6 +608,7 @@ JSON.parse = function () {
     scanAndFilterAllArrays(r, currentPage);
 
     if (currentPage === 'channel' || currentPage === 'subscriptions') {
+      appendFileOnlyLog('universalFilter.done', { currentPage });
       debugFilterLog('universalFilter done', { currentPage });
     }
   }
@@ -436,24 +616,24 @@ JSON.parse = function () {
   // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
-    processShelves(r.contents.sectionListRenderer.contents);
+    processShelves(r.contents.sectionListRenderer.contents, true, currentPage, 'sectionListRenderer');
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(r.continuationContents.sectionListContinuation.contents);
+    processShelves(r.continuationContents.sectionListContinuation.contents, true, currentPage, 'sectionListContinuation');
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     deArrowify(r.continuationContents.horizontalListContinuation.items);
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
-    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
+    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items, currentPage, 'horizontalListContinuation');
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, currentPage, 'tvSecondaryNav');
       }
     }
   }
@@ -465,7 +645,7 @@ JSON.parse = function () {
           (elm) => !elm.alertWithActionsRenderer
         );
     }
-    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false);
+    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, currentPage, 'watchNextPivot');
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
@@ -575,13 +755,16 @@ for (const key in window._yttv) {
   }
 }
 
-function processShelves(shelves, shouldAddPreviews = true) {
+function processShelves(shelves, shouldAddPreviews = true, page = getCurrentPage(), context = 'processShelves') {
+  if (!Array.isArray(shelves)) return;
   hideShorts(shelves, configRead('enableShorts'));
-  for (const shelve of shelves) {
-    // Unwrap richSectionRenderer so channel/subscription shelves are handled
-    const base = shelve?.richSectionRenderer?.content || shelve;
+  for (let shelfIndex = 0; shelfIndex < shelves.length; shelfIndex++) {
+    const shelve = shelves[shelfIndex];
+    try {
+      // Unwrap richSectionRenderer so channel/subscription shelves are handled
+      const base = shelve?.richSectionRenderer?.content || shelve;
 
-    const lists = [
+      const lists = [
       {
         items: base?.shelfRenderer?.content?.horizontalListRenderer?.items,
         apply: (filtered) => {
@@ -612,19 +795,22 @@ function processShelves(shelves, shouldAddPreviews = true) {
           base.richShelfRenderer.content.richGridRenderer.contents = filtered;
         }
       }
-    ];
+      ];
 
-    for (const list of lists) {
-      const items = list.items;
-      if (!Array.isArray(items)) continue;
+      for (const list of lists) {
+        const items = list.items;
+        if (!Array.isArray(items)) continue;
 
-      deArrowify(items);
-      hqify(items);
-      addLongPress(items);
-      if (shouldAddPreviews) {
-        addPreviews(items);
+        deArrowify(items);
+        hqify(items);
+        addLongPress(items);
+        if (shouldAddPreviews) {
+          addPreviews(items);
+        }
+        list.apply(hideVideo(items, page, `${context}[${shelfIndex}]`));
       }
-      list.apply(hideVideo(items));
+    } catch (err) {
+      debugFilterLog('processShelves shelf error', { page, context, shelfIndex, error: String(err) });
     }
   }
 }
@@ -633,8 +819,11 @@ function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
   for (const item of items) {
     if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
-      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
+      const onSelectCommand = item.tileRenderer.onSelectCommand;
+      // Skip playlist/channel tiles - they use browseEndpoint, not watchEndpoint.
+      // Adding a playback command to them breaks thumbnail display.
+      if (!onSelectCommand || !onSelectCommand.watchEndpoint) continue;
+      if (item.tileRenderer?.onFocusCommand?.startInlinePlaybackCommand) continue;
       item.tileRenderer.onFocusCommand = {
         startInlinePlaybackCommand: {
           blockAdoption: true,
@@ -644,7 +833,7 @@ function addPreviews(items) {
           muted: false,
           restartPlaybackBeforeSeconds: 10,
           resumeVideo: true,
-          playbackEndpoint: watchEndpoint
+          playbackEndpoint: onSelectCommand
         }
       };
     }
@@ -688,10 +877,14 @@ function deArrowify(items) {
 function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
+    if (isNonVideoTile(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand.watchEndpoint.videoId;
-      const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
+      const videoID = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
+      if (!videoID) continue;
+      const baseThumbUrl = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
+      if (!baseThumbUrl) continue;
+      const queryArgs = baseThumbUrl.split('?')[1];
       item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
         {
           url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
@@ -706,6 +899,7 @@ function hqify(items) {
 function addLongPress(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
+    if (isNonVideoTile(item)) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (item.tileRenderer.onLongPressCommand) {
       item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
@@ -721,8 +915,10 @@ function addLongPress(items) {
     }
     if (!configRead('enableLongPress')) continue;
     const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+    const videoId = item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || item?.tileRenderer?.contentId;
+    if (!videoId) continue;
     const data = longPressData({
-      videoId: item.tileRenderer.contentId,
+      videoId,
       thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
       title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
       subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
@@ -733,14 +929,20 @@ function addLongPress(items) {
   }
 }
 
-function hideVideo(items) {
-  const currentPage = getCurrentPage();
-  return directFilterArray(items, currentPage, 'processShelves');
+function hideVideo(items, page = getCurrentPage(), context = 'processShelves') {
+  return directFilterArray(items, page, context);
 }
 
 function getShortInfo(item, { currentPage = '' } = {}) {
   const title = getItemTitle(item);
   if (!item) return { isShort: false, reason: 'no_item', title: 'unknown' };
+
+  // Early exit for playlist/channel tiles - they are not videos.
+  // Without this, \"X videos\" text gets parsed as a duration and playlists
+  // may be misclassified as shorts, or the playlist tile gets filtered out incorrectly.
+  if (isNonVideoTile(item)) {
+    return { isShort: false, reason: 'non_video_tile', title };
+  }
 
   const renderer = item.tileRenderer ||
     item.videoRenderer ||
@@ -750,6 +952,10 @@ function getShortInfo(item, { currentPage = '' } = {}) {
     item.compactVideoRenderer ||
     item.richItemRenderer?.content?.videoRenderer ||
     item.richItemRenderer?.content?.playlistVideoRenderer ||
+    item.richItemRenderer?.content?.compactVideoRenderer ||
+    item.richItemRenderer?.content?.gridVideoRenderer ||
+    item.richItemRenderer?.content?.videoWithContextRenderer ||
+    item.richItemRenderer?.content?.lockupViewModel ||
     item.lockupViewModel;
 
   if (!renderer) {
@@ -785,9 +991,20 @@ function getShortInfo(item, { currentPage = '' } = {}) {
   }
 
   if (!lengthText) {
-    lengthText = renderer.metadata?.tileMetadataRenderer?.lines?.[0]?.lineRenderer?.items?.find(
-      (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
-    )?.lineItemRenderer?.text?.simpleText;
+    // Check ALL metadata lines (not just line[0]) because subscription tiles put duration in different positions.
+    // Line[0] is often the channel name, duration badge may be in line[1] or line[2].
+    const lines = renderer.metadata?.tileMetadataRenderer?.lines;
+    if (Array.isArray(lines)) {
+      for (const line of lines) {
+        const found = line?.lineRenderer?.items?.find(
+          (lineItem) => lineItem.lineItemRenderer?.badge || lineItem.lineItemRenderer?.text?.simpleText
+        )?.lineItemRenderer?.text?.simpleText;
+        if (found && parseDurationToSeconds(found) !== null) {
+          lengthText = found;
+          break;
+        }
+      }
+    }
   }
 
   if (!lengthText) {
@@ -808,12 +1025,18 @@ function isShortItem(item, { currentPage = '' } = {}) {
 }
 
 function getVideoId(item) {
-  return item?.tileRenderer?.contentId ||
+  return item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
+    item?.tileRenderer?.contentId ||
     item?.videoRenderer?.videoId ||
     item?.playlistVideoRenderer?.videoId ||
     item?.gridVideoRenderer?.videoId ||
     item?.compactVideoRenderer?.videoId ||
     item?.richItemRenderer?.content?.videoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.compactVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.gridVideoRenderer?.videoId ||
+    item?.richItemRenderer?.content?.videoWithContextRenderer?.videoId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.contentId ||
+    item?.richItemRenderer?.content?.lockupViewModel?.videoId ||
     item?.lockupViewModel?.contentId ||
     item?.lockupViewModel?.videoId ||
     null;
@@ -840,9 +1063,28 @@ function directFilterArray(arr, page, context = '') {
     });
   }
   const channelPage = isChannelPage(page);
-  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage;
+  const shouldFilterShortsByDuration = !shortsEnabled && !channelPage && shouldFilterShortsForPage(page);
 
-  // ⭐ Initialize scroll helpers tracker
+  // Log filtering flags once per unique call context so we can debug why shorts aren't being filtered
+  if (page === 'subscriptions' || page === 'channel') {
+    const pageSnapshot = {
+      page,
+      context,
+      hash: location.hash || '',
+      pathname: location.pathname || '',
+      search: location.search || '',
+      detectedPage: getCurrentPage(),
+      shortsEnabled,
+      shouldFilterShortsByDuration,
+      shouldHideWatched,
+      threshold,
+      hideWatchedVideosPages: configRead('hideWatchedVideosPages') || [],
+      cacheSize: Object.keys(window._ttVideoProgressCache || {}).length
+    };
+    debugFilterLogOnce(`directFilter flags ${page}|${context}`, JSON.stringify(pageSnapshot));
+  }
+
+  // \u2b50 Initialize scroll helpers tracker
   if (!window._playlistScrollHelpers) {
     window._playlistScrollHelpers = new Set();
   }
@@ -872,6 +1114,8 @@ function directFilterArray(arr, page, context = '') {
   if (!window._ttRemovedTitlesByPage[page]) window._ttRemovedTitlesByPage[page] = new Set();
   const removedTitles = window._ttRemovedTitlesByPage[page];
   const watchedDecisionSamples = [];
+  const keepDecisionSamples = [];
+  const shortCandidateSamples = [];
   const filtered = arr.filter(item => {
     try {
       if (!item) return true;
@@ -891,6 +1135,15 @@ function directFilterArray(arr, page, context = '') {
 
       const shortInfo = getShortInfo(item, { currentPage: page || getCurrentPage() });
 
+      // Debug: log what getShortInfo found (first 6 items per unique page+context)
+      if ((page === 'subscriptions' || page === 'channel') && watchedDecisionSamples.length === 0) {
+        // Use watchedDecisionSamples.length as a proxy for item index since it's only incremented in the watched block
+        // Actually, log the first item's shortInfo unconditionally as a diagnostic
+        debugFilterLogOnce(`shortInfo first item ${page}|${context}`,
+          JSON.stringify({ title: shortInfo.title, isShort: shortInfo.isShort, reason: shortInfo.reason, lengthText: shortInfo.lengthText, totalSeconds: shortInfo.totalSeconds, shouldFilterShortsByDuration })
+        );
+      }
+
       if (shouldFilterShortsByDuration && shortInfo.isShort) {
         removedShorts++;
         removedKeys.add(key);
@@ -901,6 +1154,7 @@ function directFilterArray(arr, page, context = '') {
       // ⭐ Removed watched on channels, subscriptions and watch page
       if (shouldHideWatched) {
         const progressBar = findProgressBar(item);
+        const progressSource = progressBar?.__source || 'none';
 
         // Calculate progress percentage
         const percentWatched = progressBar ? Number(progressBar.percentDurationWatched || 0) : 0;
@@ -915,10 +1169,12 @@ function directFilterArray(arr, page, context = '') {
             percentWatched,
             threshold,
             hasProgress: !!progressBar,
+            progressSource,
             remove: watchedShouldRemove,
             reason: !progressBar ? 'no_progress' : watchedShouldRemove ? 'remove' : 'below_threshold'
           };
           watchedDecisionSamples.push(watchSample);
+          appendFileOnlyLog('watched.check', { page, context, ...watchSample });
           debugFilterLog('watched check', { page, context, ...watchSample });
         }
 
@@ -931,6 +1187,28 @@ function directFilterArray(arr, page, context = '') {
           return false;
         }
       }
+
+      if ((page === 'subscriptions' || page === 'channel') && keepDecisionSamples.length < 20) {
+        keepDecisionSamples.push({
+          title: getItemTitle(item),
+          shortReason: shortInfo.reason,
+          lengthText: shortInfo.lengthText,
+          totalSeconds: shortInfo.totalSeconds,
+          hasProgress: !!findProgressBar(item),
+          percentWatched: Number(findProgressBar(item)?.percentDurationWatched || 0)
+        });
+      }
+
+      if ((page === 'subscriptions' || page === 'channel') && shortCandidateSamples.length < 12 && shortInfo.totalSeconds && shortInfo.totalSeconds <= 240) {
+        shortCandidateSamples.push({
+          title: getItemTitle(item),
+          totalSeconds: shortInfo.totalSeconds,
+          shortReason: shortInfo.reason,
+          shouldFilterShortsByDuration,
+          channelPage
+        });
+      }
+
       return true;
     } catch (err) {
       debugFilterLog('directFilterArray item error', { page, context, error: String(err) });
@@ -938,11 +1216,24 @@ function directFilterArray(arr, page, context = '') {
     }
   });
 
-  if ((page === 'subscriptions' || page === 'channel') && (removedShorts > 0 || removedWatched > 0)) {
+  if (page === 'subscriptions' || page === 'channel') {
     const remainingTitles = new Set(filtered.map((i) => getItemTitle(i)).filter(Boolean));
     const suspicious = watchedDecisionSamples
       .filter((entry) => entry.remove && remainingTitles.has(entry.title))
       .slice(0, 6);
+    appendFileOnlyLog('directFilterArray.result', {
+      page,
+      context,
+      input: arr.length,
+      output: filtered.length,
+      removedShorts,
+      removedWatched,
+      watchedNoProgress,
+      watchedBelowThreshold,
+      keptSamples: keepDecisionSamples.slice(0, 20),
+      shortCandidates: shortCandidateSamples.slice(0, 20),
+      suspiciousStillPresentTitles: suspicious
+    });
     debugFilterLog('directFilterArray result', {
       page,
       context,
@@ -952,6 +1243,8 @@ function directFilterArray(arr, page, context = '') {
       removedWatched,
       watchedNoProgress,
       watchedBelowThreshold,
+      keptSamples: keepDecisionSamples.slice(0, 8),
+      shortCandidates: shortCandidateSamples.slice(0, 8),
       suspiciousStillPresentTitles: suspicious
     });
   }
@@ -993,8 +1286,12 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.compactVideoRenderer ||
       item?.richItemRenderer?.content?.videoRenderer ||
       item?.richItemRenderer?.content?.playlistVideoRenderer ||
+      item?.richItemRenderer?.content?.compactVideoRenderer ||
+      item?.richItemRenderer?.content?.gridVideoRenderer ||
+      item?.richItemRenderer?.content?.videoWithContextRenderer ||
       item?.reelItemRenderer ||
       item?.richItemRenderer?.content?.reelItemRenderer ||
+      item?.richItemRenderer?.content?.lockupViewModel ||
       item?.lockupViewModel
     );
     
@@ -1011,7 +1308,9 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
       item?.richShelfRenderer ||
       item?.gridRenderer ||
       item?.richSectionRenderer?.content?.shelfRenderer ||
-      item?.richSectionRenderer?.content?.richShelfRenderer
+      item?.richSectionRenderer?.content?.richShelfRenderer ||
+      item?.reelShelfRenderer ||
+      item?.richSectionRenderer?.content?.reelShelfRenderer
     );
     
     if (hasShelves) {
@@ -1029,15 +1328,16 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
         }
         scanAndFilterAllArrays(shelf, page, path + '[' + i + ']');
 
-        const { horizontalItems, verticalItems, gridItems, richItems, expandedItems } = getShelfLists(shelf);
+        const { horizontalItems, verticalItems, gridItems, richItems, expandedItems, reelItems } = getShelfLists(shelf);
         const hasItems =
           (Array.isArray(horizontalItems) && horizontalItems.length > 0) ||
           (Array.isArray(verticalItems) && verticalItems.length > 0) ||
           (Array.isArray(gridItems) && gridItems.length > 0) ||
           (Array.isArray(richItems) && richItems.length > 0) ||
-          (Array.isArray(expandedItems) && expandedItems.length > 0);
+          (Array.isArray(expandedItems) && expandedItems.length > 0) ||
+          (Array.isArray(reelItems) && reelItems.length > 0);
 
-        if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer || shelf?.richSectionRenderer)) {
+        if (!hasItems && (shelf?.shelfRenderer || shelf?.richShelfRenderer || shelf?.gridRenderer || shelf?.reelShelfRenderer || shelf?.richSectionRenderer)) {
           if (page === 'channel' || page === 'subscriptions') {
             const shelfTitle = getShelfTitle(shelf);
             debugFilterLog('scanAndFilterAllArrays remove-empty-shelf', { page, path: path + '[' + i + ']', shelfTitle, normalizedShelfTitle: normalizeShelfTitle(shelfTitle), titleResolved: !!shelfTitle });
@@ -1070,7 +1370,15 @@ function scanAndFilterAllArrays(obj, page, path = 'root') {
 
 function findProgressBar(item) {
   if (!item) return null;
-  
+
+  // PRIMARY: Check entity mutation cache first.
+  // YouTube TV's subscription/channel feed stores watch progress in frameworkUpdates.entityBatchUpdate.mutations,
+  // NOT embedded in the tile's thumbnailOverlays. The cache is built in JSON.parse above.
+  const cachedVideoId = getVideoId(item);
+  if (cachedVideoId && window._ttVideoProgressCache && window._ttVideoProgressCache[cachedVideoId] !== undefined) {
+    return { percentDurationWatched: window._ttVideoProgressCache[cachedVideoId], __source: 'entity_cache' };
+  }
+
   const checkRenderer = (renderer) => {
     if (!renderer) return null;
     
@@ -1115,7 +1423,12 @@ function findProgressBar(item) {
     item.gridVideoRenderer,
     item.videoRenderer,
     item.richItemRenderer?.content?.videoRenderer,
-    item.richItemRenderer?.content?.reelItemRenderer
+    item.richItemRenderer?.content?.compactVideoRenderer,
+    item.richItemRenderer?.content?.gridVideoRenderer,
+    item.richItemRenderer?.content?.videoWithContextRenderer,
+    item.richItemRenderer?.content?.reelItemRenderer,
+    item.lockupViewModel,
+    item.richItemRenderer?.content?.lockupViewModel
   ];
   
   for (const renderer of rendererTypes) {
@@ -1132,12 +1445,12 @@ function findProgressBar(item) {
     seen.add(node);
 
     if (typeof node.percentDurationWatched === 'number') {
-      return node;
+      return { ...node, __source: 'recursive_node' };
     }
 
     const parsedPercent = Number(node.percentDurationWatched);
     if (Number.isFinite(parsedPercent) && parsedPercent >= 0) {
-      return { percentDurationWatched: parsedPercent };
+      return { percentDurationWatched: parsedPercent, __source: 'recursive_parsed' };
     }
 
     if (Array.isArray(node)) {
@@ -1207,5 +1520,59 @@ function getCurrentPage() {
     detectedPage = 'home';
   }
   
+  const isStablePage = detectedPage !== 'other';
+  if (isStablePage) {
+    window._ttLastStablePage = detectedPage;
+    if (detectedPage === 'subscriptions' || detectedPage === 'channel') {
+      appendFileOnlyLogOnce(`page-detect ${detectedPage}`, {
+        hash,
+        path,
+        search,
+        browseParam,
+        detectedPage,
+        cleanHash
+      });
+      debugFilterLogOnce(
+        `page-detect ${detectedPage}`,
+        JSON.stringify({
+          hash,
+          path,
+          search,
+          browseParam,
+          detectedPage,
+          cleanHash
+        })
+      );
+    }
+    return detectedPage;
+  }
+
+  if (window._ttLastStablePage) {
+    if (window._ttLastStablePage === 'subscriptions' || window._ttLastStablePage === 'channel') {
+      appendFileOnlyLogOnce(`page-fallback ${window._ttLastStablePage}`, {
+        hash,
+        path,
+        search,
+        browseParam,
+        detectedPage,
+        fallbackTo: window._ttLastStablePage,
+        cleanHash
+      });
+      debugFilterLogOnce(
+        `page-fallback ${window._ttLastStablePage}`,
+        JSON.stringify({
+          hash,
+          path,
+          search,
+          browseParam,
+          detectedPage,
+          fallbackTo: window._ttLastStablePage,
+          cleanHash
+        })
+      );
+    }
+    return window._ttLastStablePage;
+  }
+
   return detectedPage;
 }
