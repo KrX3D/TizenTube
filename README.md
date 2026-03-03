@@ -48,6 +48,14 @@ Tampermonkey scripts are stored in:
 
    `Mozilla/5.0 (SMART-TV; Linux; Tizen 6.5) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/3.0 TV Safari/537.36`
 
+
+   Real TV User-Agent examples captured from your devices:
+
+   - Tizen 5.0 TV:
+     `Mozilla/5.0 (SMART-TV; LINUX; Tizen 5.0) AppleWebKit/537.36 (KHTML, like Gecko) Version/5.0 TV Safari/537.36`
+   - Tizen 6.5 TV:
+     `Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.5) AppleWebKit/537.36 (KHTML, like Gecko) 108.0.5359.1/6.5 TV Safari/537.36 UWE/0.2.27108`
+
 5. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-loader.user.js` (configured for `youtube.com/tv*` only).
 6. In Tampermonkey, create/import `scripts/tampermonkey/tizentube-log-button.user.js` (configured for `youtube.com/tv*` only).
 7. In Tampermonkey script settings, set **Sandbox mode = ALL** for these scripts.
