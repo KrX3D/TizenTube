@@ -27,6 +27,8 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 
 Use this when you want to test TizenTube locally in Chrome instead of on-device.
 
+Tampermonkey runs the userscripts, while a User-Agent switcher extension makes Chrome present itself as a TV browser so `https://www.youtube.com/tv` stays on the TV UI.
+
 ## Scripts in this repository
 
 Tampermonkey scripts are stored in:
@@ -52,7 +54,16 @@ Tampermonkey scripts are stored in:
 8. Open `https://www.youtube.com/tv` and sign in if needed.
 9. Verify TizenTube loaded:
    - Open DevTools Console and run `typeof window.toggleDebugConsole` (should return `"function"`).
-10. Click **TT Logs** (bottom-right) to download logs without typing console commands.
+10. Click **TT Logs** (bottom-right corner of the page, floating above the YouTube TV UI) to download logs without typing console commands.
+
+### Where should I see the button?
+
+After both userscripts are enabled and `/tv` has loaded, the **TT Logs** button appears in the **bottom-right corner** as a small black/green floating button.
+
+If you do not see it:
+- confirm `tizentube-log-button.user.js` is enabled in Tampermonkey,
+- refresh the page once,
+- and verify Tampermonkey script sandbox is set to **ALL**.
 
 ## Notes
 
