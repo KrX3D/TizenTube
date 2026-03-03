@@ -76,12 +76,18 @@ function shouldHideWatchedForPage(page) {
   } else if (normalizedPage === 'subscription' && normalizedPages.includes('subscriptions')) {
     result = true;
     reason = 'subscriptions_alias_match';
-  } else if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+  } else if (normalizedPage === 'playlist' && normalizedPages.includes('playlists')) {
     result = true;
-    reason = 'legacy_channel_subscriptions_default';
+    reason = 'playlists_alias_match';
+  } else if (normalizedPage === 'playlists' && normalizedPages.includes('playlist')) {
+    result = true;
+    reason = 'playlist_alias_match';
+  } else if (normalizedPage === 'channel' || normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') {
+    result = true;
+    reason = 'legacy_channel_subscriptions_playlist_default';
   }
 
-  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions') {
+  if (normalizedPage === 'channel' || normalizedPage === 'subscriptions' || normalizedPage === 'playlist' || normalizedPage === 'playlists') {
     debugFilterLog('shouldHideWatchedForPage', {
       page: normalizedPage,
       result,
