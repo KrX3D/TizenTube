@@ -55,6 +55,21 @@ function initVisualConsole() {
   mount();
   document.addEventListener('DOMContentLoaded', mount);
 
+  const controlsDiv = document.createElement('div');
+  controlsDiv.style.cssText = 'position:absolute;top:8px;right:10px;display:flex;gap:8px;z-index:1;';
+
+  const downloadBtn = document.createElement('button');
+  downloadBtn.textContent = 'Download Logs';
+  downloadBtn.style.cssText = 'background:#1a1a1a;color:#0f0;border:1px solid #0f0;padding:4px 8px;cursor:pointer;font-size:12px;';
+
+  const clearBtn = document.createElement('button');
+  clearBtn.textContent = 'Clear';
+  clearBtn.style.cssText = 'background:#1a1a1a;color:#0f0;border:1px solid #0f0;padding:4px 8px;cursor:pointer;font-size:12px;';
+
+  controlsDiv.appendChild(downloadBtn);
+  controlsDiv.appendChild(clearBtn);
+  consoleDiv.appendChild(controlsDiv);
+
   let logs = [];
   const original = {
     log: console.log,
@@ -75,13 +90,17 @@ function initVisualConsole() {
     if (enabled) {
       applyPosition();
       applyHeight();
-      consoleDiv.innerHTML = logs.join('');
+      consoleDiv.innerHTML = '';
+      consoleDiv.appendChild(controlsDiv);
+      const logsContainer = document.createElement('div');
+      logsContainer.innerHTML = logs.join('');
+      consoleDiv.appendChild(logsContainer);
       consoleDiv.scrollTop = 0;
     }
   };
 
   const addLog = (type, args) => {
-    if (!configRead('enableDebugConsole')) return;
+    if (!configRead('enableDebugConsole') && !configRead('enableDebugLogging')) return;
     const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
     const msg = args.map((a) => {
       if (typeof a === 'string') return a;
@@ -90,7 +109,11 @@ function initVisualConsole() {
     logs.unshift(`<div style="color:${color};margin-bottom:4px;white-space:pre-wrap;word-wrap:break-word;">[${new Date().toLocaleTimeString()}] ${esc(msg)}</div>`);
     if (logs.length > 600) logs.pop();
     if (consoleDiv.style.display !== 'none') {
-      consoleDiv.innerHTML = logs.join('');
+      consoleDiv.innerHTML = '';
+      consoleDiv.appendChild(controlsDiv);
+      const logsContainer = document.createElement('div');
+      logsContainer.innerHTML = logs.join('');
+      consoleDiv.appendChild(logsContainer);
       consoleDiv.scrollTop = 0;
     }
   };
@@ -100,6 +123,31 @@ function initVisualConsole() {
   console.warn = (...args) => { original.warn.apply(console, args); addLog('warn', args); };
   console.error = (...args) => { original.error.apply(console, args); addLog('error', args); };
   console.debug = (...args) => { original.debug.apply(console, args); addLog('debug', args); };
+
+  const downloadLogs = () => {
+    try {
+      const plainTextLogs = logs
+        .map((entry) => entry.replace(/<div[^>]*>/g, '').replace(/<\/div>/g, ''))
+        .join('\n');
+      const blob = new Blob([plainTextLogs], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `tizentube-logs-${Date.now()}.txt`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      original.error('Failed to download logs', err);
+    }
+  };
+
+  downloadBtn.addEventListener('click', downloadLogs);
+  clearBtn.addEventListener('click', () => {
+    logs = [];
+    syncVisible();
+  });
+
+  window.downloadTizenTubeLogs = downloadLogs;
 
   window.toggleDebugConsole = function () {
     configWrite('enableDebugConsole', !configRead('enableDebugConsole'));
