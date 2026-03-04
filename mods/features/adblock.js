@@ -109,7 +109,7 @@ function pruneLibraryTabsInResponse(node) {
 
 function isLibraryPageNow() {
   const hash = location.hash || '';
-  return hash.includes('c=FElibrary') || hash.includes('FEhistory') || hash.includes('/library');
+  return hash.includes('c=FElibrary') || hash.includes('/library');
 }
 
 const origParse = JSON.parse;
@@ -231,15 +231,13 @@ JSON.parse = function () {
 
       for (const tab of tabs) {
         const contents = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
-        if (contents) processShelves(contents);
+        if (Array.isArray(contents)) processShelves(contents);
       }
     }
+  }
 
-    if (isLibraryPage) {
-      r.continuationContents.horizontalListContinuation.items =
-        filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items);
-      pruneLibraryTabsInResponse(r.continuationContents);
-    }
+  if (isLibraryPageNow()) {
+    pruneLibraryTabsInResponse(r);
   }
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
@@ -500,8 +498,11 @@ function hideVideo(items) {
     const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
     if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) return false;
 
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays
+      ?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)
+      ?.thumbnailOverlayResumePlaybackRenderer;
     if (!progressBar) return true;
+
     const pages = configRead('hideWatchedVideosPages');
     if (!pages.includes(pageName)) return true;
 
