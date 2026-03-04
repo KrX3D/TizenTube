@@ -27,69 +27,6 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
-function filterHiddenLibraryTabs(items, context = '') {
-  if (!Array.isArray(items)) return items;
-  const before = items.length;
-  const filtered = items.filter((item) => {
-    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
-    return !isHiddenLibraryBrowseId(contentId);
-  });
-
-  return filtered;
-}
-
-const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
-  fehistory: ['history'],
-  femy_youtube: ['watch later'],
-  feplaylist_aggregation: ['playlists'],
-  femusic_last_played: ['music'],
-  festorefront: ['movies', 'shows', 'tv'],
-  fecollection_podcasts: ['podcasts'],
-  femy_videos: ['my videos', 'your videos']
-};
-
-function collectTextDeep(node, out = [], depth = 0) {
-  if (!node || depth > 6) return out;
-  if (typeof node === 'string') {
-    out.push(node);
-    return out;
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) collectTextDeep(child, out, depth + 1);
-    return out;
-  }
-  if (typeof node !== 'object') return out;
-
-  if (typeof node.simpleText === 'string') out.push(node.simpleText);
-  if (Array.isArray(node.runs)) {
-    for (const run of node.runs) {
-      if (typeof run?.text === 'string') out.push(run.text);
-    }
-  }
-
-  for (const key of Object.keys(node)) {
-    if (key === 'runs' || key === 'simpleText') continue;
-    collectTextDeep(node[key], out, depth + 1);
-  }
-
-  return out;
-}
-
-function isHiddenLibraryTabByTitle(tab) {
-  const configured = getConfiguredHiddenLibraryTabIds();
-  if (!configured.size) return false;
-
-  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
-  if (!title) return false;
-
-  for (const hiddenId of configured) {
-    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
-    if (titleTokens.some((token) => title.includes(token))) return true;
-  }
-
-  return false;
-}
-
 const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
   fehistory: ['history'],
   femy_youtube: ['watch later'],
