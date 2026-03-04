@@ -27,13 +27,15 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
-function isHiddenLibraryBrowseId(value) {
-  const id = String(value || '').toLowerCase();
-  if (!id) return false;
-  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
-    if (id === hiddenId || id.includes(hiddenId)) return true;
-  }
-  return false;
+function filterHiddenLibraryTabs(items, context = '') {
+  if (!Array.isArray(items)) return items;
+  const before = items.length;
+  const filtered = items.filter((item) => {
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    return !isHiddenLibraryBrowseId(contentId);
+  });
+
+  return filtered;
 }
 
 const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
@@ -89,61 +91,35 @@ function isHiddenLibraryTabByTitle(tab) {
 }
 
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
-  if (!node || depth > 14) return out;
-
+  if (!node || depth > 8) return out;
   if (Array.isArray(node)) {
     for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
     return out;
   }
   if (typeof node !== 'object') return out;
 
-  const directCandidates = [
-    node?.navigationEndpoint?.browseEndpoint?.browseId,
-    node?.browseEndpoint?.browseId,
-    node?.endpoint?.browseEndpoint?.browseId,
-    node?.onSelectCommand?.browseEndpoint?.browseId,
-    node?.browseId,
-    node?.tabIdentifier,
-    node?.tabRenderer?.tabIdentifier,
-    node?.targetId,
-    node?.url,
-    node?.canonicalBaseUrl,
-    node?.webCommandMetadata?.url
-  ];
-
-  for (const candidate of directCandidates) {
-    if (typeof candidate !== 'string' || !candidate) continue;
-    out.add(candidate);
-
-    const feMatches = candidate.match(/fe[a-z0-9_]+/gi) || [];
-    for (const match of feMatches) out.add(match);
-
-    const vlMatches = candidate.match(/vl[a-z0-9_]+/gi) || [];
-    for (const match of vlMatches) out.add(match);
-  }
+  const browseId = node?.browseEndpoint?.browseId;
+  if (typeof browseId === 'string' && browseId) out.add(browseId);
 
   for (const key of Object.keys(node)) {
     extractBrowseIdsDeep(node[key], out, depth + 1);
   }
-
   return out;
 }
 
-function filterLibraryNavTabs(sections) {
+function filterLibraryNavTabs(sections, detectedPage) {
+  if (detectedPage !== 'library') return;
   if (!Array.isArray(sections)) return;
   for (const section of sections) {
     const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
     if (!Array.isArray(tabs)) continue;
-
+    const before = tabs.length;
     for (let i = tabs.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
-      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
-      const hideByTitle = isHiddenLibraryTabByTitle(tabs[i]);
-      if (hideByBrowseId || hideByTitle) {
+      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
         tabs.splice(i, 1);
       }
     }
-  }
 }
 
 function filterHiddenLibraryTabs(items) {
@@ -155,29 +131,29 @@ function filterHiddenLibraryTabs(items) {
   });
 }
 
-function pruneLibraryTabsInResponse(node) {
+function pruneLibraryTabsInResponse(node, path = 'root') {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
+    const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
-      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
-      const hideByTitle = isHiddenLibraryTabByTitle(node[i]);
-      if (hideByBrowseId || hideByTitle) {
+      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
         node.splice(i, 1);
-      } else {
-        pruneLibraryTabsInResponse(node[i]);
       }
+    }
+    for (let i = 0; i < node.length; i++) {
+      pruneLibraryTabsInResponse(node[i], `${path}[${i}]`);
     }
     return;
   }
 
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items, `${path}.horizontalListRenderer.items`);
   }
 
   for (const key of Object.keys(node)) {
-    pruneLibraryTabsInResponse(node[key]);
+    pruneLibraryTabsInResponse(node[key], `${path}.${key}`);
   }
 }
 
