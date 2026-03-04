@@ -54,7 +54,7 @@ const defaultConfig = {
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
-  hiddenLibraryTabIds: []
+  hiddenLibraryTabIds: [ ]
 };
 
 let localConfig;
