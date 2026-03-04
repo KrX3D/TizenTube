@@ -51,6 +51,35 @@ function isHiddenLibraryBrowseId(value) {
   for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
     if (id === hiddenId || id.includes(hiddenId)) return true;
   }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
   return false;
 }
 
@@ -142,7 +171,6 @@ function filterLibraryNavTabs(sections, detectedPage) {
         tabs.splice(i, 1);
       }
     }
-  }
 }
 
 function filterHiddenLibraryTabs(items) {
@@ -203,6 +231,26 @@ function isLibraryResponse(response) {
       if (param?.key === 'browse_id') {
         const browseId = String(param?.value || '').toLowerCase();
         if (LIBRARY_PAGE_BROWSE_IDS.has(browseId)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
       }
     }
   }
