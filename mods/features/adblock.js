@@ -37,7 +37,7 @@ function isHiddenLibraryBrowseId(value) {
 }
 
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
-  if (!node || depth > 8) return out;
+  if (!node || depth > 14) return out;
 
   if (Array.isArray(node)) {
     for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
@@ -45,13 +45,30 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   }
   if (typeof node !== 'object') return out;
 
-  const browseId =
-    node?.navigationEndpoint?.browseEndpoint?.browseId ||
-    node?.browseEndpoint?.browseId ||
-    node?.endpoint?.browseEndpoint?.browseId ||
-    node?.onSelectCommand?.browseEndpoint?.browseId;
+  const directCandidates = [
+    node?.navigationEndpoint?.browseEndpoint?.browseId,
+    node?.browseEndpoint?.browseId,
+    node?.endpoint?.browseEndpoint?.browseId,
+    node?.onSelectCommand?.browseEndpoint?.browseId,
+    node?.browseId,
+    node?.tabIdentifier,
+    node?.tabRenderer?.tabIdentifier,
+    node?.targetId,
+    node?.url,
+    node?.canonicalBaseUrl,
+    node?.webCommandMetadata?.url
+  ];
 
-  if (browseId) out.add(String(browseId));
+  for (const candidate of directCandidates) {
+    if (typeof candidate !== 'string' || !candidate) continue;
+    out.add(candidate);
+
+    const feMatches = candidate.match(/fe[a-z0-9_]+/gi) || [];
+    for (const match of feMatches) out.add(match);
+
+    const vlMatches = candidate.match(/vl[a-z0-9_]+/gi) || [];
+    for (const match of vlMatches) out.add(match);
+  }
 
   for (const key of Object.keys(node)) {
     extractBrowseIdsDeep(node[key], out, depth + 1);
@@ -110,6 +127,26 @@ function pruneLibraryTabsInResponse(node) {
 function isLibraryPageNow() {
   const hash = location.hash || '';
   return hash.includes('c=FElibrary') || hash.includes('/library');
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const origParse = JSON.parse;
@@ -218,8 +255,10 @@ JSON.parse = function () {
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
 
+  const isLibraryContext = isLibraryPageNow() || isLibraryResponse(r);
+
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = isLibraryPageNow();
+    const isLibraryPage = isLibraryContext;
 
     if (isLibraryPage) {
       filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
@@ -236,7 +275,7 @@ JSON.parse = function () {
     }
   }
 
-  if (isLibraryPageNow()) {
+  if (isLibraryContext) {
     pruneLibraryTabsInResponse(r);
   }
 
