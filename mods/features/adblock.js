@@ -27,12 +27,66 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
-function isHiddenLibraryBrowseId(value) {
-  const id = String(value || '').toLowerCase();
-  if (!id) return false;
-  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
-    if (id === hiddenId || id.includes(hiddenId)) return true;
+function filterHiddenLibraryTabs(items, context = '') {
+  if (!Array.isArray(items)) return items;
+  const before = items.length;
+  const filtered = items.filter((item) => {
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    return !isHiddenLibraryBrowseId(contentId);
+  });
+
+  return filtered;
+}
+
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
   }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
   return false;
 }
 
@@ -110,7 +164,8 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   return out;
 }
 
-function filterLibraryNavTabs(sections) {
+function filterLibraryNavTabs(sections, detectedPage) {
+  if (detectedPage !== 'library') return;
   if (!Array.isArray(sections)) return;
   for (const section of sections) {
     const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
@@ -123,7 +178,6 @@ function filterLibraryNavTabs(sections) {
         tabs.splice(i, 1);
       }
     }
-  }
 }
 
 function filterHiddenLibraryTabs(items) {
@@ -135,29 +189,31 @@ function filterHiddenLibraryTabs(items) {
   });
 }
 
-function pruneLibraryTabsInResponse(node) {
+function pruneLibraryTabsInResponse(node, path = 'root') {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
+    const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
       const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
       const hideByTitle = isHiddenLibraryTabByTitle(node[i]);
       if (hideByBrowseId || hideByTitle) {
         node.splice(i, 1);
-      } else {
-        pruneLibraryTabsInResponse(node[i]);
       }
+    }
+    for (let i = 0; i < node.length; i++) {
+      pruneLibraryTabsInResponse(node[i], `${path}[${i}]`);
     }
     return;
   }
 
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items, `${path}.horizontalListRenderer.items`);
   }
 
   for (const key of Object.keys(node)) {
-    pruneLibraryTabsInResponse(node[key]);
+    pruneLibraryTabsInResponse(node[key], `${path}.${key}`);
   }
 }
 
@@ -299,6 +355,8 @@ JSON.parse = function () {
     addLongPress(r.continuationContents.horizontalListContinuation.items);
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
+
+  const isLibraryContext = isLibraryPageNow() || isLibraryResponse(r);
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     if (detectedPage === 'library') {
