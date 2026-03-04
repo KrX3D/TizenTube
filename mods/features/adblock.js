@@ -161,7 +161,9 @@ function pruneLibraryTabsInResponse(node) {
   if (Array.isArray(node)) {
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(node[i]);
+      if (hideByBrowseId || hideByTitle) {
         node.splice(i, 1);
       } else {
         pruneLibraryTabsInResponse(node[i]);
