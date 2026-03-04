@@ -107,6 +107,11 @@ function pruneLibraryTabsInResponse(node) {
   }
 }
 
+function isLibraryPageNow() {
+  const hash = location.hash || '';
+  return hash.includes('c=FElibrary') || hash.includes('FEhistory') || hash.includes('/library');
+}
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -214,7 +219,7 @@ JSON.parse = function () {
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = window.location.pathname === '/feed/library';
+    const isLibraryPage = isLibraryPageNow();
 
     if (isLibraryPage) {
       filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
@@ -231,7 +236,9 @@ JSON.parse = function () {
     }
 
     if (isLibraryPage) {
-      pruneLibraryTabsInResponse(r);
+      r.continuationContents.horizontalListContinuation.items =
+        filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items);
+      pruneLibraryTabsInResponse(r.continuationContents);
     }
   }
 
@@ -481,11 +488,21 @@ function addLongPress(items) {
 function hideVideo(items) {
   return items.filter(item => {
     if (!item.tileRenderer) return true;
+
+    const hash = location.hash.substring(1);
+    const pageName =
+      hash === '/' ? 'home'
+      : hash.startsWith('/search') ? 'search'
+      : (hash.includes('?') && hash.includes('c=')
+          ? (hash.split('?')[1].split('&').find(p => p.startsWith('c=')) || 'c=').split('=')[1].replace('FE', '').replace('topics_', '')
+          : '');
+
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) return false;
+
     const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
     if (!progressBar) return true;
     const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
     if (!pages.includes(pageName)) return true;
 
     const percentWatched = (progressBar.percentDurationWatched || 0);
