@@ -27,89 +27,159 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
-function isHiddenLibraryBrowseId(value) {
-  const id = String(value || '').toLowerCase();
-  if (!id) return false;
-  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
-    if (id === hiddenId || id.includes(hiddenId)) return true;
+function filterHiddenLibraryTabs(items, context = '') {
+  if (!Array.isArray(items)) return items;
+  const before = items.length;
+  const filtered = items.filter((item) => {
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    return !isHiddenLibraryBrowseId(contentId);
+  });
+
+  return filtered;
+}
+
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
   }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
   return false;
 }
 
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   if (!node || depth > 8) return out;
-
   if (Array.isArray(node)) {
     for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
     return out;
   }
   if (typeof node !== 'object') return out;
 
-  const browseId =
-    node?.navigationEndpoint?.browseEndpoint?.browseId ||
-    node?.browseEndpoint?.browseId ||
-    node?.endpoint?.browseEndpoint?.browseId ||
-    node?.onSelectCommand?.browseEndpoint?.browseId;
-
-  if (browseId) out.add(String(browseId));
+  const browseId = node?.browseEndpoint?.browseId;
+  if (typeof browseId === 'string' && browseId) out.add(browseId);
 
   for (const key of Object.keys(node)) {
     extractBrowseIdsDeep(node[key], out, depth + 1);
   }
-
   return out;
 }
 
-function filterLibraryNavTabs(sections) {
+function filterLibraryNavTabs(sections, detectedPage) {
+  if (detectedPage !== 'library') return;
   if (!Array.isArray(sections)) return;
   for (const section of sections) {
     const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
     if (!Array.isArray(tabs)) continue;
-
+    const before = tabs.length;
     for (let i = tabs.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
       if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
         tabs.splice(i, 1);
       }
     }
-  }
 }
 
 function filterHiddenLibraryTabs(items) {
   if (!Array.isArray(items)) return items;
   return items.filter((item) => {
     const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
-    return !browseIds.some((id) => isHiddenLibraryBrowseId(id));
+    if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) return false;
+    return !isHiddenLibraryTabByTitle(item);
   });
 }
 
-function pruneLibraryTabsInResponse(node) {
+function pruneLibraryTabsInResponse(node, path = 'root') {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
+    const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
       if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
         node.splice(i, 1);
-      } else {
-        pruneLibraryTabsInResponse(node[i]);
       }
+    }
+    for (let i = 0; i < node.length; i++) {
+      pruneLibraryTabsInResponse(node[i], `${path}[${i}]`);
     }
     return;
   }
 
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items, `${path}.horizontalListRenderer.items`);
   }
 
   for (const key of Object.keys(node)) {
-    pruneLibraryTabsInResponse(node[key]);
+    pruneLibraryTabsInResponse(node[key], `${path}.${key}`);
   }
 }
 
 function isLibraryPageNow() {
   const hash = location.hash || '';
   return hash.includes('c=FElibrary') || hash.includes('/library');
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 const origParse = JSON.parse;
@@ -218,8 +288,10 @@ JSON.parse = function () {
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
 
+  const isLibraryContext = isLibraryPageNow() || isLibraryResponse(r);
+
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = isLibraryPageNow();
+    const isLibraryPage = isLibraryContext;
 
     if (isLibraryPage) {
       filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
@@ -236,7 +308,7 @@ JSON.parse = function () {
     }
   }
 
-  if (isLibraryPageNow()) {
+  if (isLibraryContext) {
     pruneLibraryTabsInResponse(r);
   }
 
@@ -509,4 +581,6 @@ function hideVideo(items) {
     const percentWatched = (progressBar.percentDurationWatched || 0);
     return percentWatched <= configRead('hideWatchedVideosThreshold');
   });
+}
+
 }
