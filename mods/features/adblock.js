@@ -36,6 +36,58 @@ function isHiddenLibraryBrowseId(value) {
   return false;
 }
 
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
+  return false;
+}
+
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   if (!node || depth > 14) return out;
 
@@ -85,7 +137,9 @@ function filterLibraryNavTabs(sections) {
 
     for (let i = tabs.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(tabs[i]);
+      if (hideByBrowseId || hideByTitle) {
         tabs.splice(i, 1);
       }
     }
@@ -96,7 +150,8 @@ function filterHiddenLibraryTabs(items) {
   if (!Array.isArray(items)) return items;
   return items.filter((item) => {
     const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
-    return !browseIds.some((id) => isHiddenLibraryBrowseId(id));
+    if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) return false;
+    return !isHiddenLibraryTabByTitle(item);
   });
 }
 
