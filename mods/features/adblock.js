@@ -27,12 +27,215 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
+const LIBRARY_PAGE_BROWSE_IDS = new Set([
+  'felibrary',
+  'femy_youtube',
+  'fehistory',
+  'feplaylist_aggregation',
+  'femusic_last_played',
+  'festorefront',
+  'fecollection_podcasts',
+  'femy_videos'
+]);
+
+function logLibraryDebug(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  try {
+    console.info(`[LibraryTabs] ${label}`, payload);
+  } catch (_) { }
+}
+
 function isHiddenLibraryBrowseId(value) {
   const id = String(value || '').toLowerCase();
   if (!id) return false;
   for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
     if (id === hiddenId || id.includes(hiddenId)) return true;
   }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
+  return false;
+}
+
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
+  return false;
+}
+
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
+  return false;
+}
+
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
   return false;
 }
 
@@ -165,7 +368,90 @@ function pruneLibraryTabsInResponse(node, path = 'root') {
 
 function isLibraryPageNow() {
   const hash = location.hash || '';
-  return hash.includes('c=FElibrary') || hash.includes('/library');
+  if (hash.includes('/library')) return true;
+  const cParam = (hash.match(/[?&]c=([^&]+)/i)?.[1] || '').toLowerCase();
+  return LIBRARY_PAGE_BROWSE_IDS.has(cParam);
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if ([...LIBRARY_PAGE_BROWSE_IDS].some((id) => targetId.includes(id))) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id') {
+        const browseId = String(param?.value || '').toLowerCase();
+        if (LIBRARY_PAGE_BROWSE_IDS.has(browseId)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 function isLibraryResponse(response) {
