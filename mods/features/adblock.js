@@ -115,7 +115,6 @@ function filterLibraryNavTabs(sections, detectedPage) {
         tabs.splice(i, 1);
       }
     }
-  }
 }
 
 function filterHiddenLibraryTabs(items) {
