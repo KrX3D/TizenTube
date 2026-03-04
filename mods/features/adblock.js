@@ -90,6 +90,58 @@ function isHiddenLibraryTabByTitle(tab) {
   return false;
 }
 
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
+
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') {
+    out.push(node);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+
+  return false;
+}
+
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   if (!node || depth > 8) return out;
   if (Array.isArray(node)) {
@@ -98,7 +150,12 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   }
   if (typeof node !== 'object') return out;
 
-  const browseId = node?.browseEndpoint?.browseId;
+  const browseId =
+    node?.navigationEndpoint?.browseEndpoint?.browseId ||
+    node?.browseEndpoint?.browseId ||
+    node?.endpoint?.browseEndpoint?.browseId ||
+    node?.onSelectCommand?.browseEndpoint?.browseId;
+
   if (typeof browseId === 'string' && browseId) out.add(browseId);
 
   for (const key of Object.keys(node)) {
@@ -113,10 +170,11 @@ function filterLibraryNavTabs(sections, detectedPage) {
   for (const section of sections) {
     const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
     if (!Array.isArray(tabs)) continue;
-    const before = tabs.length;
     for (let i = tabs.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(tabs[i]);
+      if (hideByBrowseId || hideByTitle) {
         tabs.splice(i, 1);
       }
     }
@@ -138,7 +196,9 @@ function pruneLibraryTabsInResponse(node, path = 'root') {
     const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(node[i]);
+      if (hideByBrowseId || hideByTitle) {
         node.splice(i, 1);
       }
     }
@@ -187,6 +247,7 @@ JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
+  const detectedPage = (isLibraryPageNow() || isLibraryResponse(r)) ? 'library' : '';
 
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
@@ -248,6 +309,13 @@ JSON.parse = function () {
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
   }
 
+  // Library tab pruning: must run unconditionally whenever we're on the library page,
+  // because the library page sends its nav tabs via tvSecondaryNavRenderer (not tvSurfaceContentRenderer),
+  // so gating this inside the tvSurfaceContentRenderer block meant it never fired on library.
+  if (detectedPage === 'library') {
+    pruneLibraryTabsInResponse(r);
+  }
+
   if (r.endscreen && configRead('enableHideEndScreenCards')) {
     r.endscreen = null;
   }
@@ -291,9 +359,7 @@ JSON.parse = function () {
   const isLibraryContext = isLibraryPageNow() || isLibraryResponse(r);
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = isLibraryContext;
-
-    if (isLibraryPage) {
+    if (detectedPage === 'library') {
       filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
     }
 
@@ -308,9 +374,6 @@ JSON.parse = function () {
     }
   }
 
-  if (isLibraryContext) {
-    pruneLibraryTabsInResponse(r);
-  }
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     if (!signinReminderEnabled) {
@@ -583,4 +646,3 @@ function hideVideo(items) {
   });
 }
 
-}
