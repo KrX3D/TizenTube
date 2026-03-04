@@ -53,7 +53,8 @@ const defaultConfig = {
   enableUpdater: true,
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
-  enableSigninReminder: false
+  enableSigninReminder: false,
+  hiddenLibraryTabIds: []
 };
 
 let localConfig;

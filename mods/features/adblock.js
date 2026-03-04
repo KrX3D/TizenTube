@@ -13,6 +13,100 @@ import { PatchSettings } from '../ui/customYTSettings.js';
  *
  * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
+
+const HIDDEN_LIBRARY_TAB_IDS = new Set([
+  'femusic_last_played',
+  'festorefront',
+  'fecollection_podcasts',
+  'femy_videos'
+]);
+
+function getConfiguredHiddenLibraryTabIds() {
+  const configured = configRead('hiddenLibraryTabIds');
+  if (!Array.isArray(configured) || configured.length === 0) return HIDDEN_LIBRARY_TAB_IDS;
+  return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
+}
+
+function isHiddenLibraryBrowseId(value) {
+  const id = String(value || '').toLowerCase();
+  if (!id) return false;
+  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
+    if (id === hiddenId || id.includes(hiddenId)) return true;
+  }
+  return false;
+}
+
+function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
+  if (!node || depth > 8) return out;
+
+  if (Array.isArray(node)) {
+    for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  const browseId =
+    node?.navigationEndpoint?.browseEndpoint?.browseId ||
+    node?.browseEndpoint?.browseId ||
+    node?.endpoint?.browseEndpoint?.browseId ||
+    node?.onSelectCommand?.browseEndpoint?.browseId;
+
+  if (browseId) out.add(String(browseId));
+
+  for (const key of Object.keys(node)) {
+    extractBrowseIdsDeep(node[key], out, depth + 1);
+  }
+
+  return out;
+}
+
+function filterLibraryNavTabs(sections) {
+  if (!Array.isArray(sections)) return;
+  for (const section of sections) {
+    const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
+    if (!Array.isArray(tabs)) continue;
+
+    for (let i = tabs.length - 1; i >= 0; i--) {
+      const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
+      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+        tabs.splice(i, 1);
+      }
+    }
+  }
+}
+
+function filterHiddenLibraryTabs(items) {
+  if (!Array.isArray(items)) return items;
+  return items.filter((item) => {
+    const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
+    return !browseIds.some((id) => isHiddenLibraryBrowseId(id));
+  });
+}
+
+function pruneLibraryTabsInResponse(node) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (let i = node.length - 1; i >= 0; i--) {
+      const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
+      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
+        node.splice(i, 1);
+      } else {
+        pruneLibraryTabsInResponse(node[i]);
+      }
+    }
+    return;
+  }
+
+  if (Array.isArray(node?.horizontalListRenderer?.items)) {
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+  }
+
+  for (const key of Object.keys(node)) {
+    pruneLibraryTabsInResponse(node[key]);
+  }
+}
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -120,10 +214,24 @@ JSON.parse = function () {
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+    const isLibraryPage = window.location.pathname === '/feed/library';
+
+    if (isLibraryPage) {
+      filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
+    }
+
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
-      for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+      const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
+      if (!Array.isArray(tabs)) continue;
+
+      for (const tab of tabs) {
+        const contents = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (contents) processShelves(contents);
       }
+    }
+
+    if (isLibraryPage) {
+      pruneLibraryTabsInResponse(r);
     }
   }
 
