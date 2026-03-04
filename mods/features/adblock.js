@@ -582,3 +582,5 @@ function hideVideo(items) {
     return percentWatched <= configRead('hideWatchedVideosThreshold');
   });
 }
+
+}
