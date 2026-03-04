@@ -112,6 +112,26 @@ function isLibraryPageNow() {
   return hash.includes('c=FElibrary') || hash.includes('/library');
 }
 
+function isLibraryResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.includes('felibrary')) return true;
+
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return false;
+
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id' && String(param?.value || '').toLowerCase().includes('felibrary')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -218,8 +238,10 @@ JSON.parse = function () {
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
   }
 
+  const isLibraryContext = isLibraryPageNow() || isLibraryResponse(r);
+
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = isLibraryPageNow();
+    const isLibraryPage = isLibraryContext;
 
     if (isLibraryPage) {
       filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
@@ -236,7 +258,7 @@ JSON.parse = function () {
     }
   }
 
-  if (isLibraryPageNow()) {
+  if (isLibraryContext) {
     pruneLibraryTabsInResponse(r);
   }
 
