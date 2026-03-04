@@ -45,8 +45,6 @@ function logLibraryDebug(label, payload) {
   } catch (_) { }
 }
 
-// Walks an object up to `maxDepth` levels and returns a plain summary of keys/types.
-// Truncates arrays to just their length + first element's keys.
 function summarizeStructure(node, depth = 0, maxDepth = 4) {
   if (node === null || node === undefined) return null;
   if (depth >= maxDepth) return typeof node === 'object' ? (Array.isArray(node) ? `Array(${node.length})` : '{...}') : node;
@@ -165,6 +163,33 @@ function filterLibraryNavTabs(sections, detectedPage) {
     }
     logLibraryDebug('filterLibraryNavTabs.result', { before, after: tabs.length });
   }
+}
+
+// Filter library tabs from a sectionListRenderer.contents array.
+// On this TV the library tabs come as shelves inside sectionListRenderer,
+// not inside tvSecondaryNavRenderer.
+function filterLibrarySectionListContents(contents, detectedPage) {
+  if (detectedPage !== 'library') return;
+  if (!Array.isArray(contents)) return;
+  logLibraryDebug('filterLibrarySectionListContents.called', { count: contents.length });
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const item = contents[i];
+    const browseIds = Array.from(extractBrowseIdsDeep(item)).map((id) => String(id).toLowerCase());
+    const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+    const hideByTitle = isHiddenLibraryTabByTitle(item);
+    // Also check shelfRenderer title text
+    const shelfTitle = collectTextDeep(item?.shelfRenderer?.title).join(' ').toLowerCase();
+    const hideByShelfTitle = [...getConfiguredHiddenLibraryTabIds()].some((hiddenId) => {
+      const tokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+      return tokens.some((token) => shelfTitle.includes(token));
+    });
+    logLibraryDebug('filterLibrarySectionListContents.item', { index: i, browseIds, shelfTitle, hideByBrowseId, hideByTitle, hideByShelfTitle });
+    if (hideByBrowseId || hideByTitle || hideByShelfTitle) {
+      logLibraryDebug('filterLibrarySectionListContents.removed', { index: i, browseIds, shelfTitle });
+      contents.splice(i, 1);
+    }
+  }
+  logLibraryDebug('filterLibrarySectionListContents.done', { remaining: contents.length });
 }
 
 function filterHiddenLibraryTabs(items, context = '') {
@@ -292,11 +317,15 @@ JSON.parse = function () {
   window.__ttLastDetectedPage = detectedPage || window.__ttLastDetectedPage;
 
   // -------------------------------------------------------------------------
-  // DIAGNOSTIC: log the full structure of any library response that has
-  // `contents` so we can see exactly where the nav tabs live.
+  // DIAGNOSTIC: drill into sectionListRenderer to find the real tab structure.
   // -------------------------------------------------------------------------
   if (detectedPage === 'library' && r && typeof r === 'object' && !Array.isArray(r) && r.contents) {
-    logLibraryDebug('DIAGNOSTIC.contents-structure', summarizeStructure(r.contents, 0, 5));
+    const slr = r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer;
+    if (slr) {
+      logLibraryDebug('DIAGNOSTIC.sectionListRenderer', summarizeStructure(slr, 0, 6));
+    } else {
+      logLibraryDebug('DIAGNOSTIC.contents-structure', summarizeStructure(r.contents, 0, 5));
+    }
   }
 
   if (detectedPage === 'library') {
@@ -369,6 +398,13 @@ JSON.parse = function () {
         }
       }
     }
+
+    // Filter hidden library tabs from the sectionListRenderer contents directly,
+    // since on this TV the tabs are shelves here, not in tvSecondaryNavRenderer.
+    filterLibrarySectionListContents(
+      r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
+      detectedPage
+    );
 
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
   }
