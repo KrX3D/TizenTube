@@ -45,6 +45,25 @@ function logLibraryDebug(label, payload) {
   } catch (_) { }
 }
 
+// Walks an object up to `maxDepth` levels and returns a plain summary of keys/types.
+// Truncates arrays to just their length + first element's keys.
+function summarizeStructure(node, depth = 0, maxDepth = 4) {
+  if (node === null || node === undefined) return null;
+  if (depth >= maxDepth) return typeof node === 'object' ? (Array.isArray(node) ? `Array(${node.length})` : '{...}') : node;
+  if (Array.isArray(node)) {
+    const firstKeys = node[0] && typeof node[0] === 'object' ? Object.keys(node[0]).slice(0, 10) : typeof node[0];
+    return { __array_length: node.length, __first_item_keys: firstKeys };
+  }
+  if (typeof node === 'object') {
+    const result = {};
+    for (const key of Object.keys(node).slice(0, 20)) {
+      result[key] = summarizeStructure(node[key], depth + 1, maxDepth);
+    }
+    return result;
+  }
+  return node;
+}
+
 function isHiddenLibraryBrowseId(value) {
   const id = String(value || '').toLowerCase();
   if (!id) return false;
@@ -54,7 +73,6 @@ function isHiddenLibraryBrowseId(value) {
   return false;
 }
 
-// FIX (from main): defined once only.
 const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
   fehistory: ['history'],
   femy_youtube: ['watch later'],
@@ -65,7 +83,6 @@ const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
   femy_videos: ['my videos', 'your videos']
 };
 
-// FIX (from main): defined once only.
 function collectTextDeep(node, out = [], depth = 0) {
   if (!node || depth > 6) return out;
   if (typeof node === 'string') {
@@ -91,7 +108,6 @@ function collectTextDeep(node, out = [], depth = 0) {
   return out;
 }
 
-// FIX (from main): defined once only.
 function isHiddenLibraryTabByTitle(tab) {
   const configured = getConfiguredHiddenLibraryTabIds();
   if (!configured.size) return false;
@@ -114,7 +130,6 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   }
   if (typeof node !== 'object') return out;
 
-  // FIX (from main): check all known endpoint paths YouTube TV uses for nav tabs.
   const browseId =
     node?.navigationEndpoint?.browseEndpoint?.browseId ||
     node?.browseEndpoint?.browseId ||
@@ -129,7 +144,6 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   return out;
 }
 
-// FIX: added missing closing `}` for the function body.
 function filterLibraryNavTabs(sections, detectedPage) {
   logLibraryDebug('filterLibraryNavTabs.called', { detectedPage, sectionCount: Array.isArray(sections) ? sections.length : 'not-array' });
   if (detectedPage !== 'library') return;
@@ -159,7 +173,6 @@ function filterHiddenLibraryTabs(items, context = '') {
   const filtered = items.filter((item) => {
     const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
     if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) return false;
-    // FIX (from main): also check tileRenderer.contentId used in horizontalListRenderer tiles.
     const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
     if (isHiddenLibraryBrowseId(contentId)) return false;
     return !isHiddenLibraryTabByTitle(item);
@@ -204,9 +217,6 @@ function pruneLibraryTabsInResponse(node, path = 'root') {
   }
 }
 
-// FIX (from main): deep-scan fallback that walks the whole response looking for
-// tileRenderer arrays and filters library tabs from any it finds — catches shapes
-// not covered by the specific paths above.
 function processTileArraysDeep(node, path = 'root', depth = 0) {
   if (!node || depth > 10) return;
 
@@ -239,8 +249,6 @@ function isLibraryPageNow() {
   return LIBRARY_PAGE_BROWSE_IDS.has(cParam);
 }
 
-// FIX (from main): detect library from the response payload itself — more reliable
-// than the hash alone since the response may arrive before the hash updates.
 function detectPageFromResponse(response) {
   const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
   if ([...LIBRARY_PAGE_BROWSE_IDS].some((id) => targetId.includes(id))) return 'library';
@@ -280,10 +288,16 @@ JSON.parse = function () {
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
 
-  // FIX (from main): detect page from the response first, fall back to hash.
-  // Store it so all helpers in this call agree on the current page.
   const detectedPage = detectPageFromResponse(r) || (isLibraryPageNow() ? 'library' : '');
   window.__ttLastDetectedPage = detectedPage || window.__ttLastDetectedPage;
+
+  // -------------------------------------------------------------------------
+  // DIAGNOSTIC: log the full structure of any library response that has
+  // `contents` so we can see exactly where the nav tabs live.
+  // -------------------------------------------------------------------------
+  if (detectedPage === 'library' && r && typeof r === 'object' && !Array.isArray(r) && r.contents) {
+    logLibraryDebug('DIAGNOSTIC.contents-structure', summarizeStructure(r.contents, 0, 5));
+  }
 
   if (detectedPage === 'library') {
     logLibraryDebug('json.parse.library-response', {
@@ -305,12 +319,10 @@ JSON.parse = function () {
     r.adPlacements = [];
   }
 
-  // Also set playerAds to false, just incase.
   if (r.playerAds && adBlockEnabled) {
     r.playerAds = false;
   }
 
-  // Also set adSlots to an empty array, emptying only the adPlacements won't work.
   if (r.adSlots && adBlockEnabled) {
     r.adSlots = [];
   }
@@ -361,9 +373,6 @@ JSON.parse = function () {
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
   }
 
-  // Library tab pruning: must run unconditionally whenever we're on the library page,
-  // because the library page sends its nav tabs via tvSecondaryNavRenderer (not tvSurfaceContentRenderer),
-  // so gating this inside the tvSurfaceContentRenderer block meant it never fired on library.
   if (detectedPage === 'library') {
     logLibraryDebug('json.parse.pruning', { path: 'response' });
     pruneLibraryTabsInResponse(r, 'response');
@@ -380,19 +389,15 @@ JSON.parse = function () {
     );
   }
 
-  // Remove shorts ads
   if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
     r.entries = r.entries?.filter(
       (elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd
     );
   }
 
-  // Patch settings
   if (r?.title?.runs) {
     PatchSettings(r);
   }
-
-  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents);
@@ -407,7 +412,6 @@ JSON.parse = function () {
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
-    // FIX (from main): also filter hidden library tabs in continuation items.
     if (detectedPage === 'library') {
       r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(
         r.continuationContents.horizontalListContinuation.items,
