@@ -54,7 +54,11 @@ const defaultConfig = {
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
-  hiddenLibraryTabIds: [ ]
+  hiddenLibraryTabIds: [ ],
+  enableDebugConsole: false,
+  enableDebugLogging: false,
+  debugConsolePosition: 'top-left',
+  debugConsoleHeight: 1054
 };
 
 let localConfig;
