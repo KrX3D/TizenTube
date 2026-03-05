@@ -1,4 +1,4 @@
-import { configRead, configWrite } from '../config.js';
+import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
 
@@ -76,7 +76,7 @@ function initVisualConsole() {
     border: 3px solid #0f0;
     display: none;
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-    pointer-events: auto;
+    pointer-events: none;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   `;
@@ -158,12 +158,19 @@ function initVisualConsole() {
 
   window.downloadTizenTubeLogs = downloadLogs;
 
-  window.toggleDebugConsole = function () {
+  const toggleDebugConsole = function () {
     configWrite('enableDebugConsole', !configRead('enableDebugConsole'));
     syncVisible();
   };
 
-  setInterval(syncVisible, 500);
+  window.toggleDebugConsole = toggleDebugConsole;
+
+  configChangeEmitter.addEventListener('configChange', (event) => {
+    if (event?.detail?.key === 'enableDebugConsole' || event?.detail?.key === 'debugConsolePosition' || event?.detail?.key === 'debugConsoleHeight') {
+      syncVisible();
+    }
+  });
+
   syncVisible();
 
   console.log('[Console] ========================================');
@@ -189,6 +196,12 @@ function initVisualConsole() {
   setTimeout(() => {
     try { resolveCommand(versionToastCmd); } catch (_) { }
   }, 1200);
+}
+
+if (typeof window.toggleDebugConsole !== 'function') {
+  window.toggleDebugConsole = function () {
+    configWrite('enableDebugConsole', !configRead('enableDebugConsole'));
+  };
 }
 
 const interval = setInterval(() => {
