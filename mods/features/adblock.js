@@ -293,31 +293,6 @@ function filterLibraryNavTabs(sections, detectedPage) {
   }
 }
 
-function isShortsShelf(shelve) {
-  const shelfRenderer = shelve?.shelfRenderer;
-  if (!shelfRenderer) return !!shelve?.reelShelfRenderer;
-
-  const titleText = [
-    String(shelfRenderer?.title?.simpleText || ''),
-    collectAllText(shelfRenderer?.header).join(' '),
-    collectAllText(shelfRenderer?.headerRenderer).join(' ')
-  ].join(' ').toLowerCase();
-
-  const browseIds = Array.from(extractBrowseIdsDeep(shelfRenderer)).map((id) => String(id).toLowerCase());
-  const hasShortsBrowseId = browseIds.some((id) => id.includes('short') || id.includes('reel'));
-
-  return (
-    shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS' ||
-    titleText.includes('short') ||
-    titleText.includes('kurz') ||
-    hasShortsBrowseId
-  );
-}
-
-function getShelfItems(shelve) {
-  return shelve?.shelfRenderer?.content?.horizontalListRenderer?.items || null;
-}
-
 function normalizeHorizontalListRenderer(horizontalListRenderer, context = '') {
   if (!horizontalListRenderer || !Array.isArray(horizontalListRenderer.items)) return;
   const count = horizontalListRenderer.items.length;
@@ -446,7 +421,6 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     const continuation = r.continuationContents.horizontalListContinuation;
-    normalizeHorizontalListRenderer(r.continuationContents.horizontalListContinuation, 'continuation.horizontal');
     if (detectedPage === 'library') {
       r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items, 'continuation.horizontalListContinuation.items');
       pruneLibraryTabsInResponse(r.continuationContents, 'response.continuationContents');
@@ -540,12 +514,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
     });
 
     if (!shelve.shelfRenderer) continue;
-
-    const shelfItems = getShelfItems(shelve);
-    if (!Array.isArray(shelfItems)) continue;
-
-    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelfItems, activePage);
-    normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}`);
     if (activePage === 'library') {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
       normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:library`);
@@ -606,7 +574,6 @@ function hideVideo(items, pageHint = null) {
     enableHideWatchedVideos: hideWatchedEnabled
   });
 
-  let removedShorts = 0;
   const result = items.filter(item => {
     try {
     const videoId = getItemVideoId(item);
