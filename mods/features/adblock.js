@@ -372,74 +372,6 @@ function normalizeHorizontalListRenderer(horizontalListRenderer, context = '') {
 }
 
 
-function filterContinuationItems(items, pageName, hasContinuation = false, label = 'continuation') {
-
-  const filteredItems = hideVideo(items, pageName);
-  if (pageName === 'playlist' && hasContinuation && filteredItems.length === 0 && Array.isArray(items) && items.length > 0) {
-    const reverseItems = [...items].reverse();
-    const fallbackItem =
-      reverseItems.find((item) => item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.length) ||
-      reverseItems.find((item) => item?.tileRenderer) ||
-      items[items.length - 1];
-
-    const fallbackType = fallbackItem && typeof fallbackItem === 'object'
-      ? Object.keys(fallbackItem).slice(0, 4)
-      : typeof fallbackItem;
-
-    appendFileOnlyLog(`${label}.keep-one.visible`, {
-      pageName,
-      originalCount: items.length,
-      fallbackType
-    });
-    if (fallbackItem && typeof fallbackItem === 'object') {
-      fallbackItem.__ttKeepOneForContinuation = true;
-      fallbackItem.__ttKeepOneForContinuationLabel = `${label}.visible`;
-      fallbackItem.__ttKeepOneForContinuationParseSeq = Number(window.__ttParseSeq || 0);
-      appendFileOnlyLog(`${label}.keep-one.visible.marked`, {
-        pageName,
-        parseSeq: fallbackItem.__ttKeepOneForContinuationParseSeq,
-        helperVideoId: getItemVideoId(fallbackItem)
-      });
-    }
-    return [fallbackItem];
-  }
-
-  if (pageName === 'playlist' && hasContinuation && filteredItems.length === 0) {
-    appendFileOnlyLog(`${label}.empty_batch.autoload`, { pageName, originalCount: Array.isArray(items) ? items.length : 0 });
-  }
-
-  if (hasContinuation && filteredItems.length === 0 && pageName !== 'playlist') {
-    appendFileOnlyLog(`${label}.no_keep_one`, { pageName, reason: 'disabled_for_page' });
-  }
-
-  return filteredItems;
-}
-
-function isLikelyShortItem(item) {
-  const tile = item?.tileRenderer;
-  if (!tile) return false;
-  if (tile?.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return true;
-
-  // Shorts tiles use reelWatchEndpoint instead of watchEndpoint — this is the most reliable signal.
-  if (tile?.onSelectCommand?.reelWatchEndpoint) return true;
-
-  const title = String(getItemTitle(item) || '').toLowerCase();
-  if (title.includes('#shorts')) return true;
-  
-  // Videos with 2+ hashtags are almost always repurposed Shorts
-  const hashtagMatches = title.match(/#[a-z0-9_]+/gi);
-  if (hashtagMatches && hashtagMatches.length >= 2) {
-    appendFileOnlyLog('shorts.hashtag.detected', { title, count: hashtagMatches.length });
-    return true;
-  }
-
-  const allText = collectAllText(tile);
-  const durationCandidate = allText.map(parseDurationToSeconds).find((v) => Number.isFinite(v));
-  if (Number.isFinite(durationCandidate) && durationCandidate > 0 && durationCandidate <= 180) return true;
-
-  return false;
-}
-
 function processResponsePayload(payload, detectedPage) {
   if (!payload || typeof payload !== 'object') return;
 
@@ -460,39 +392,6 @@ function processResponsePayload(payload, detectedPage) {
     processShelves(payload.continuationContents.sectionListContinuation.contents, true, detectedPage);
   }
 
-  if (payload?.continuationContents?.horizontalListContinuation?.items) {
-    const continuation = payload.continuationContents.horizontalListContinuation;
-    deArrowify(continuation.items);
-    hqify(continuation.items);
-    addLongPress(continuation.items);
-    continuation.items = filterContinuationItems(
-      continuation.items,
-      detectedPage,
-      !!continuation?.continuations,
-      'arrayPayload.horizontalListContinuation'
-    );
-    normalizeHorizontalListRenderer(continuation, 'arrayPayload.continuation.horizontal');
-  }
-
-  if (payload?.continuationContents?.gridContinuation?.items) {
-    const gc = payload.continuationContents.gridContinuation;
-    gc.items = filterContinuationItems(
-      gc.items,
-      detectedPage,
-      !!gc?.continuations,
-      'arrayPayload.gridContinuation'
-    );
-  }
-
-  if (payload?.continuationContents?.playlistVideoListContinuation?.contents) {
-    const plc = payload.continuationContents.playlistVideoListContinuation;
-    plc.contents = filterContinuationItems(
-      plc.contents,
-      detectedPage,
-      !!plc?.continuations,
-      'arrayPayload.playlist.continuation'
-    );
-  }
 
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     filterLibraryNavTabs(payload.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
@@ -542,83 +441,6 @@ JSON.parse = function () {
       processResponsePayload(r[i], detectedPage);
     }
     return r;
-  }
-
-  if (r.adPlacements && adBlockEnabled) {
-    r.adPlacements = [];
-  }
-
-  // Also set playerAds to false, just incase.
-  if (r.playerAds && adBlockEnabled) {
-    r.playerAds = false;
-  }
-
-  // Also set adSlots to an empty array, emptying only the adPlacements won't work.
-  if (r.adSlots && adBlockEnabled) {
-    r.adSlots = [];
-  }
-
-  // NEW: build watch-progress cache from entity mutations.
-  // Subscription/channel/playlist tiles often do not include resume overlays in tile JSON.
-  // YouTube frequently sends watch progress in frameworkUpdates mutations only.
-  if (r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
-    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
-    let directHits = 0;
-    let deepHits = 0;
-    for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
-      const key = String(mutation?.entityKey || '');
-      const payload = mutation?.payload || {};
-      appendFileOnlyLogOnce('mutation.shape.' + key.substring(0, 20), {
-        entityKey: key, type: mutation?.type,
-        payloadKeys: Object.keys(payload).slice(0, 10),
-        firstSubKeys: (() => { const v = payload[Object.keys(payload)[0]]; return v && typeof v === 'object' ? Object.keys(v).slice(0, 10) : []; })()
-      });
-
-      const pct =
-        payload?.videoAttributionModel?.watchProgressPercentage ??
-        payload?.videoData?.watchProgressPercentage ??
-        payload?.macroMarkersListEntity?.watchProgressPercentage ??
-        payload?.videoAnnotationsEntity?.watchProgressPercentage ?? null;
-      if (pct !== null) {
-        const videoId = key.includes('|') ? key.split('|')[0] : key;
-        window._ttVideoProgressCache[videoId] = { percentDurationWatched: Number(pct), source: 'entityMutation' };
-        directHits++;
-      }
-      const explicitId = payload?.videoAttributionModel?.externalVideoId ||
-        payload?.videoData?.videoId || payload?.videoAnnotationsEntity?.externalVideoId || null;
-      if (explicitId && pct !== null) {
-        window._ttVideoProgressCache[String(explicitId)] = { percentDurationWatched: Number(pct), source: 'entityMutationExplicit' };
-        directHits++;
-      }
-
-      const deepEntries = collectWatchProgressEntries(payload);
-      for (const entry of deepEntries) {
-        window._ttVideoProgressCache[entry.id] = { percentDurationWatched: Number(entry.percent), source: entry.source };
-        deepHits++;
-      }
-    }
-    appendFileOnlyLog('mutation.cache.result', {
-      count: r.frameworkUpdates.entityBatchUpdate.mutations.length,
-      directHits,
-      deepHits,
-      total: Object.keys(window._ttVideoProgressCache).length
-    });
-  }
-
-
-  if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
-    r.paidContentOverlay = null;
-  }
-
-  if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
-    const preferredCodec = configRead('videoPreferredCodec');
-    const hasPreferredCodec = r.streamingData.adaptiveFormats.find(format => format.mimeType.includes(preferredCodec));
-    if (hasPreferredCodec) {
-      r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(format => {
-        if (format.mimeType.startsWith('audio/')) return true;
-        return format.mimeType.includes(preferredCodec);
-      });
-    }
   }
 
   // Drop "masthead" ad from home screen
@@ -699,48 +521,11 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     const continuation = r.continuationContents.horizontalListContinuation;
-    deArrowify(r.continuationContents.horizontalListContinuation.items);
-    hqify(r.continuationContents.horizontalListContinuation.items);
-    addLongPress(r.continuationContents.horizontalListContinuation.items);
-    r.continuationContents.horizontalListContinuation.items = filterContinuationItems(
-      r.continuationContents.horizontalListContinuation.items,
-      detectedPage,
-      !!continuation?.continuations,
-      'horizontalListContinuation'
-    );
     normalizeHorizontalListRenderer(r.continuationContents.horizontalListContinuation, 'continuation.horizontal');
     if (detectedPage === 'library') {
       r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items, 'continuation.horizontalListContinuation.items');
       pruneLibraryTabsInResponse(r.continuationContents, 'response.continuationContents');
     }
-  }
-
-  if (r?.continuationContents?.gridContinuation?.items) {
-    const gridItems = r.continuationContents.gridContinuation.items;
-    r.continuationContents.gridContinuation.items = filterContinuationItems(
-      gridItems,
-      detectedPage,
-      !!r?.continuationContents?.gridContinuation?.continuations,
-      'gridContinuation'
-    );
-  }
-
-  // FIX (Bug 2): Handle playlist scroll-down continuations.
-  // These use TILE_STYLE_YTLR_VERTICAL_LIST tiles and come through a different continuation key.
-  if (r?.continuationContents?.playlistVideoListContinuation?.contents) {
-    const playlistItems = r.continuationContents.playlistVideoListContinuation.contents;
-    const hasContinuation = !!r?.continuationContents?.playlistVideoListContinuation?.continuations;
-    appendFileOnlyLog('playlist.continuation.detected', {
-      detectedPage,
-      itemCount: Array.isArray(playlistItems) ? playlistItems.length : 0,
-      hasContinuation
-    });
-    r.continuationContents.playlistVideoListContinuation.contents = filterContinuationItems(
-      playlistItems,
-      detectedPage,
-      hasContinuation,
-      'playlist.continuation'
-    );
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
@@ -965,12 +750,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
     const shelfItems = getShelfItems(shelve);
     if (!Array.isArray(shelfItems)) continue;
 
-    deArrowify(shelfItems);
-    hqify(shelfItems);
-    addLongPress(shelfItems);
-    if (shouldAddPreviews) {
-      addPreviews(shelfItems);
-    }
     shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelfItems, activePage);
     normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}`);
     if (activePage === 'library') {
@@ -996,24 +775,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         shelves.splice(i, 1);
         continue;
       }
-
-      const beforeShortsFilter = shelve.shelfRenderer.content.horizontalListRenderer.items.length;
-      shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => !isLikelyShortItem(item));
-      normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:shorts`);
-      appendFileOnlyLog('shorts.tiles.filter', {
-        page: activePage,
-        before: beforeShortsFilter,
-        after: shelve.shelfRenderer.content.horizontalListRenderer.items.length,
-        removed: beforeShortsFilter - shelve.shelfRenderer.content.horizontalListRenderer.items.length
-      });
-    }
-
-    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0) {
-      appendFileOnlyLog('shelf.empty.remove', {
-        page: activePage,
-        shelfTitle: shelve?.shelfRenderer?.title?.simpleText || collectAllText(shelve?.shelfRenderer?.header).join(' ').substring(0, 80)
-      });
-      shelves.splice(i, 1);
     }
   }
 }
@@ -1219,30 +980,8 @@ function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) 
     if (node.some((item) => item?.tileRenderer)) {
       const before = node.length;
       let filtered = hideVideo(node, pageName);
-      if (!configRead('enableShorts')) {
-        const beforeShorts = filtered.length;
-        filtered = filtered.filter(item => item?.__ttKeepOneForContinuation || !isLikelyShortItem(item));
-        if (beforeShorts !== filtered.length) {
-          appendFileOnlyLog('deep.tiles.shorts', {
-            pageName,
-            path,
-            before: beforeShorts,
-            after: filtered.length,
-            removed: beforeShorts - filtered.length
-          });
-        }
-      }
       if (pageName === 'library') {
         filtered = filterHiddenLibraryTabs(filtered, `deep:${path}`);
-      }
-      if (before !== filtered.length) {
-        appendFileOnlyLog('deep.tiles.filtered', {
-          pageName,
-          path,
-          before,
-          after: filtered.length,
-          removed: before - filtered.length
-        });
       }
       node.splice(0, node.length, ...filtered);
       return;
@@ -1370,36 +1109,10 @@ function hideVideo(items, pageHint = null) {
       return false;
     }
 
-    const shortLike = isLikelyShortItem(item);
-    if (!shortsEnabled && shortLike) {
-      removedShorts++;
-      appendFileOnlyLog('hideVideo.item', { pageName, title, hasProgress: !!progressBar, remove: true, reason: 'short_detected' });
-      return false;
-    }
-
-    if (!progressBar) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, videoId, hasProgress: false, progressSource, textWatched, remove: false, reason: 'no_progress' });
-      return true;
-    }
-
-    if (!hideWatchedEnabled || !pages.includes(pageName)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, hasProgress: true, percentWatched: Number(progressBar.percentDurationWatched || 0), remove: false, reason: hideWatchedEnabled ? 'page_not_enabled' : 'watched_feature_disabled' });
-      return true;
-    }
 
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const remove = percentWatched > threshold;
     if (remove) removedWatched++;
-
-    appendFileOnlyLog('hideVideo.item', {
-      pageName,
-      title,
-      hasProgress: true,
-      percentWatched,
-      threshold,
-      remove,
-      reason: remove ? 'remove' : 'below_threshold'
-    });
 
     return !remove;
     } catch (error) {
@@ -1413,13 +1126,6 @@ function hideVideo(items, pageHint = null) {
     }
   });
 
-  appendFileOnlyLog('hideVideo.done', {
-    pageName,
-    input: Array.isArray(items) ? items.length : 0,
-    output: result.length,
-    removedWatched,
-    removedShorts
-  });
 
   return result;
 }
