@@ -194,6 +194,14 @@ JSON.parse = function () {
     rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
   });
 
+  // Drop "masthead" ad from home screen
+  if (
+    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
+      ?.sectionListRenderer?.contents
+  ) {
+    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
+  }
+
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
   }
@@ -228,6 +236,20 @@ window.JSON.parse = JSON.parse;
 for (const key in window._yttv) {
   if (window._yttv[key] && window._yttv[key].JSON && window._yttv[key].JSON.parse) {
     window._yttv[key].JSON.parse = JSON.parse;
+  }
+}
+
+function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
+  if (!Array.isArray(shelves)) return;
+  const activePage = pageHint || getActivePage();
+
+  for (let i = shelves.length - 1; i >= 0; i--) {
+    const shelve = shelves[i];
+
+    if (!shelve.shelfRenderer) continue;
+    if (activePage === 'library') {
+      shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
+    }
   }
 }
 
