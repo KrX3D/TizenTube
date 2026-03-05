@@ -27,6 +27,78 @@ function getConfiguredHiddenLibraryTabIds() {
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
 }
 
+const LIBRARY_PAGE_BROWSE_IDS = new Set([
+  'felibrary',
+  'femy_youtube',
+  'fehistory',
+  'feplaylist_aggregation',
+  'femusic_last_played',
+  'festorefront',
+  'fecollection_podcasts',
+  'femy_videos'
+]);
+
+function logLibraryDebug(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  try {
+    console.info(`[LibraryTabs] ${label}`, payload);
+  } catch (_) { }
+}
+
+function getHiddenLibraryTitleTokens() {
+  const tokens = new Set();
+  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    for (const token of titleTokens) tokens.add(String(token).toLowerCase());
+    tokens.add(String(hiddenId).toLowerCase());
+  }
+  return tokens;
+}
+
+function hideLibraryTabsInDOM() {
+  if (!isLibraryPageNow()) return;
+
+  const hiddenTokens = getHiddenLibraryTitleTokens();
+  if (!hiddenTokens.size) return;
+
+  const candidates = document.querySelectorAll('button, [role="tab"], a, ytlr-tab-renderer, ytlr-guide-response-supported-renderer');
+  let hiddenCount = 0;
+
+  for (const el of candidates) {
+    const text = String(el.textContent || '').toLowerCase().trim();
+    const href = String(el.getAttribute?.('href') || '').toLowerCase();
+    const dataTarget = String(el.getAttribute?.('data-target-id') || '').toLowerCase();
+
+    const shouldHide = Array.from(hiddenTokens).some((token) =>
+      (text && text.includes(token)) ||
+      (href && href.includes(token)) ||
+      (dataTarget && dataTarget.includes(token))
+    );
+
+    if (!shouldHide) continue;
+
+    if (el.style.display !== 'none') {
+      el.style.display = 'none';
+      hiddenCount++;
+    }
+  }
+
+  if (hiddenCount > 0) {
+    logLibraryDebug('dom.hide.result', { hiddenCount, candidateCount: candidates.length });
+  }
+}
+
+function setupLibraryDomFallback() {
+  const run = () => {
+    try { hideLibraryTabsInDOM(); } catch (_) { }
+  };
+
+  window.addEventListener('hashchange', () => setTimeout(run, 120));
+  document.addEventListener('readystatechange', run);
+  setInterval(run, 1500);
+  setTimeout(run, 300);
+}
+
 function isHiddenLibraryBrowseId(value) {
   const id = String(value || '').toLowerCase();
   if (!id) return false;
@@ -36,81 +108,377 @@ function isHiddenLibraryBrowseId(value) {
   return false;
 }
 
-function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
-  if (!node || depth > 8) return out;
+const LIBRARY_TAB_TITLE_BY_BROWSE_ID = {
+  fehistory: ['history'],
+  femy_youtube: ['watch later'],
+  feplaylist_aggregation: ['playlists'],
+  femusic_last_played: ['music'],
+  festorefront: ['movies', 'shows', 'tv'],
+  fecollection_podcasts: ['podcasts'],
+  femy_videos: ['my videos', 'your videos']
+};
 
+function collectTextDeep(node, out = [], depth = 0) {
+  if (!node || depth > 6) return out;
+  if (typeof node === 'string') { out.push(node); return out; }
+  if (Array.isArray(node)) {
+    for (const child of node) collectTextDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+  if (typeof node.simpleText === 'string') out.push(node.simpleText);
+  if (Array.isArray(node.runs)) {
+    for (const run of node.runs) {
+      if (typeof run?.text === 'string') out.push(run.text);
+    }
+  }
+  for (const key of Object.keys(node)) {
+    if (key === 'runs' || key === 'simpleText') continue;
+    collectTextDeep(node[key], out, depth + 1);
+  }
+  return out;
+}
+
+function isHiddenLibraryTabByTitle(tab) {
+  const configured = getConfiguredHiddenLibraryTabIds();
+  if (!configured.size) return false;
+  const title = collectTextDeep(tab?.tabRenderer?.title).join(' ').toLowerCase().trim();
+  if (!title) return false;
+  for (const hiddenId of configured) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    if (titleTokens.some((token) => title.includes(token))) return true;
+  }
+  return false;
+}
+
+function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
+  if (!node || depth > 10) return out;
   if (Array.isArray(node)) {
     for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
     return out;
   }
   if (typeof node !== 'object') return out;
 
-  const browseId =
-    node?.navigationEndpoint?.browseEndpoint?.browseId ||
-    node?.browseEndpoint?.browseId ||
-    node?.endpoint?.browseEndpoint?.browseId ||
-    node?.onSelectCommand?.browseEndpoint?.browseId;
+  const directCandidates = [
+    node?.navigationEndpoint?.browseEndpoint?.browseId,
+    node?.browseEndpoint?.browseId,
+    node?.endpoint?.browseEndpoint?.browseId,
+    node?.onSelectCommand?.browseEndpoint?.browseId,
+    node?.browseId,
+    node?.tabIdentifier,
+    node?.tabRenderer?.tabIdentifier,
+    node?.targetId,
+    node?.url,
+    node?.canonicalBaseUrl,
+    node?.webCommandMetadata?.url,
+    node?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+  ];
 
-  if (browseId) out.add(String(browseId));
+  for (const candidate of directCandidates) {
+    if (typeof candidate !== 'string' || !candidate) continue;
+    out.add(candidate);
+
+    const feMatches = candidate.match(/fe[a-z0-9_]+/gi) || [];
+    for (const match of feMatches) out.add(match);
+
+    const vlMatches = candidate.match(/vl[a-z0-9_]+/gi) || [];
+    for (const match of vlMatches) out.add(match);
+  }
 
   for (const key of Object.keys(node)) {
     extractBrowseIdsDeep(node[key], out, depth + 1);
   }
-
   return out;
 }
 
-function filterLibraryNavTabs(sections) {
+// ---------------------------------------------------------------------------
+// Core library filtering logic — shared between JSON.parse and XHR patches
+// ---------------------------------------------------------------------------
+
+function filterLibraryNavTabs(sections, detectedPage) {
+  if (detectedPage !== 'library') return;
   if (!Array.isArray(sections)) return;
   for (const section of sections) {
     const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
     if (!Array.isArray(tabs)) continue;
-
+    const before = tabs.length;
     for (let i = tabs.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
-        tabs.splice(i, 1);
-      }
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(tabs[i]);
+      logLibraryDebug('filterLibraryNavTabs.tab', { index: i, browseIds, hideByBrowseId, hideByTitle });
+      if (hideByBrowseId || hideByTitle) tabs.splice(i, 1);
     }
+    logLibraryDebug('filterLibraryNavTabs.result', { before, after: tabs.length });
   }
 }
 
-function filterHiddenLibraryTabs(items) {
-  if (!Array.isArray(items)) return items;
-  return items.filter((item) => {
-    const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
-    return !browseIds.some((id) => isHiddenLibraryBrowseId(id));
-  });
+function filterLibrarySectionListContents(contents, detectedPage) {
+  if (detectedPage !== 'library') return;
+  if (!Array.isArray(contents)) return;
+  const before = contents.length;
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const item = contents[i];
+    const browseIds = Array.from(extractBrowseIdsDeep(item)).map((id) => String(id).toLowerCase());
+    const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+    const hideByTitle = isHiddenLibraryTabByTitle(item);
+    const shelfTitle = collectTextDeep(item?.shelfRenderer?.title).join(' ').toLowerCase();
+    const hideByShelfTitle = [...getConfiguredHiddenLibraryTabIds()].some((hiddenId) => {
+      const tokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+      return tokens.some((token) => shelfTitle.includes(token));
+    });
+    if (hideByBrowseId || hideByTitle || hideByShelfTitle) {
+      contents.splice(i, 1);
+    }
+  }
+  if (before !== contents.length) {
+    logLibraryDebug('filterLibrarySectionListContents.done', { before, after: contents.length });
+  }
 }
 
-function pruneLibraryTabsInResponse(node) {
-  if (!node || typeof node !== 'object') return;
+function filterHiddenLibraryTabs(items, context = '') {
+  if (!Array.isArray(items)) return items;
+  const before = items.length;
+  const filtered = items.filter((item) => {
+    const browseIds = Array.from(extractBrowseIdsDeep(item)).map((v) => String(v).toLowerCase());
+    if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) return false;
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    if (isHiddenLibraryBrowseId(contentId)) return false;
+    return !isHiddenLibraryTabByTitle(item);
+  });
+  if (before !== filtered.length) {
+    logLibraryDebug('filterHiddenLibraryTabs', { context, before, after: filtered.length });
+  }
+  return filtered;
+}
 
+function pruneLibraryTabsInResponse(node, path = 'root') {
+  if (!node || typeof node !== 'object') return;
   if (Array.isArray(node)) {
+    const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
-        node.splice(i, 1);
-      } else {
-        pruneLibraryTabsInResponse(node[i]);
-      }
+      const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
+      const hideByTitle = isHiddenLibraryTabByTitle(node[i]);
+      if (hideByBrowseId || hideByTitle) node.splice(i, 1);
+    }
+    if (before !== node.length) {
+      logLibraryDebug('pruneLibraryTabsInResponse.array', { path, before, after: node.length });
+    }
+    for (let i = 0; i < node.length; i++) {
+      pruneLibraryTabsInResponse(node[i], `${path}[${i}]`);
     }
     return;
   }
-
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(
+      node.horizontalListRenderer.items, `${path}.horizontalListRenderer.items`
+    );
   }
-
   for (const key of Object.keys(node)) {
-    pruneLibraryTabsInResponse(node[key]);
+    pruneLibraryTabsInResponse(node[key], `${path}.${key}`);
   }
 }
+
+function processTileArraysDeep(node, path = 'root', depth = 0) {
+  if (!node || depth > 10) return;
+  if (Array.isArray(node)) {
+    if (node.some((item) => item?.tileRenderer)) {
+      const before = node.length;
+      const filtered = filterHiddenLibraryTabs(node, `deep:${path}`);
+      if (before !== filtered.length) {
+        node.splice(0, node.length, ...filtered);
+        logLibraryDebug('processTileArraysDeep.filtered', { path, before, after: node.length });
+      }
+      return;
+    }
+    for (let i = 0; i < node.length; i++) processTileArraysDeep(node[i], `${path}[${i}]`, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+  for (const key of Object.keys(node)) processTileArraysDeep(node[key], `${path}.${key}`, depth + 1);
+}
+
+// ---------------------------------------------------------------------------
+// Apply all library filtering to a parsed response object
+// ---------------------------------------------------------------------------
+function applyLibraryFiltering(r, detectedPage) {
+  if (detectedPage !== 'library') return;
+
+  // tvSecondaryNavRenderer path (main branch TVs)
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
+    filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
+  }
+
+  // tvSurfaceContentRenderer → sectionListRenderer path (this TV)
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
+    filterLibrarySectionListContents(
+      r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
+      detectedPage
+    );
+  }
+
+  // continuation items
+  if (Array.isArray(r?.continuationContents?.horizontalListContinuation?.items)) {
+    r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(
+      r.continuationContents.horizontalListContinuation.items, 'continuation.horizontal'
+    );
+  }
+
+  // deep prune + tile scan
+  pruneLibraryTabsInResponse(r, 'response');
+  processTileArraysDeep(r, 'response');
+}
+
+// ---------------------------------------------------------------------------
+// XHR interception — patch at the network level so the framework NEVER sees
+// the unfiltered library response, even if it bypasses our JSON.parse patch.
+// ---------------------------------------------------------------------------
+function isBrowseLibraryUrl(url) {
+  if (!url) return false;
+  const s = String(url);
+  return s.includes('/youtubei/') && s.includes('browse') && (
+    s.includes('FElibrary') || s.includes('felibrary')
+  );
+}
+
+function isLibraryResponseData(data) {
+  if (!data) return false;
+  // Quick string check before parsing
+  return String(data).includes('FElibrary') || String(data).includes('felibrary');
+}
+
+function patchResponseText(text) {
+  if (!isLibraryResponseData(text)) return text;
+  try {
+    const parsed = JSON.parse(text);
+    applyLibraryFiltering(parsed, 'library');
+    const result = JSON.stringify(parsed);
+    logLibraryDebug('xhr.patch.done', { originalLen: text.length, newLen: result.length });
+    return result;
+  } catch (e) {
+    logLibraryDebug('xhr.patch.error', { message: String(e?.message || e) });
+    return text;
+  }
+}
+
+// Patch XHR
+(function patchXHR() {
+  const OrigXHR = window.XMLHttpRequest;
+  function PatchedXHR() {
+    const xhr = new OrigXHR(...arguments);
+    let _responseText = undefined;
+    let _response = undefined;
+    let patched = false;
+
+    function tryPatch() {
+      if (patched) return;
+      patched = true;
+      try {
+        const raw = OrigXHR.prototype.responseText
+          ? Object.getOwnPropertyDescriptor(OrigXHR.prototype, 'responseText')?.get?.call(xhr)
+          : xhr.responseText;
+        if (typeof raw === 'string' && raw.length > 0) {
+          _responseText = patchResponseText(raw);
+          _response = _responseText;
+        }
+      } catch (_) { }
+    }
+
+    xhr.addEventListener('readystatechange', function () {
+      if (xhr.readyState === 4) tryPatch();
+    });
+
+    xhr.addEventListener('load', function () {
+      tryPatch();
+    });
+
+    return new Proxy(xhr, {
+      get(target, prop) {
+        if (prop === 'responseText' && _responseText !== undefined) return _responseText;
+        if (prop === 'response' && _response !== undefined) return _response;
+        const val = target[prop];
+        return typeof val === 'function' ? val.bind(target) : val;
+      },
+      set(target, prop, value) {
+        target[prop] = value;
+        return true;
+      }
+    });
+  }
+  PatchedXHR.prototype = OrigXHR.prototype;
+  window.XMLHttpRequest = PatchedXHR;
+  logLibraryDebug('xhr.patch.installed', {});
+})();
+
+// Patch fetch
+(function patchFetch() {
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const response = await origFetch.apply(this, args);
+    try {
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+      // Clone and check if it's a browse/library response
+      const clone = response.clone();
+      const text = await clone.text();
+      if (!isLibraryResponseData(text)) return response;
+
+      const patched = patchResponseText(text);
+      logLibraryDebug('fetch.patch.applied', { url: String(url).substring(0, 80) });
+
+      // Return a new Response with the patched body
+      return new Response(patched, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      });
+    } catch (e) {
+      logLibraryDebug('fetch.patch.error', { message: String(e?.message || e) });
+      return response;
+    }
+  };
+  logLibraryDebug('fetch.patch.installed', {});
+})();
+
+setupLibraryDomFallback();
+
+// ---------------------------------------------------------------------------
+// Page detection
+// ---------------------------------------------------------------------------
 
 function isLibraryPageNow() {
   const hash = location.hash || '';
-  return hash.includes('c=FElibrary') || hash.includes('/library');
+  if (hash.includes('/library')) return true;
+  const cParam = (hash.match(/[?&]c=([^&]+)/i)?.[1] || '').toLowerCase();
+  return LIBRARY_PAGE_BROWSE_IDS.has(cParam);
 }
+
+function detectPageFromResponse(response) {
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if ([...LIBRARY_PAGE_BROWSE_IDS].some((id) => targetId.includes(id))) return 'library';
+  const serviceTracking = response?.responseContext?.serviceTrackingParams;
+  if (!Array.isArray(serviceTracking)) return null;
+  for (const entry of serviceTracking) {
+    const params = entry?.params;
+    if (!Array.isArray(params)) continue;
+    for (const param of params) {
+      if (param?.key === 'browse_id') {
+        const browseId = String(param?.value || '').toLowerCase();
+        if (LIBRARY_PAGE_BROWSE_IDS.has(browseId)) return 'library';
+      }
+    }
+  }
+  return null;
+}
+
+function processBrowseResponseArrayPayload(payload, detectedPage) {
+  if (!payload || typeof payload !== 'object') return;
+  if (detectedPage === 'library') applyLibraryFiltering(payload, detectedPage);
+}
+
+// ---------------------------------------------------------------------------
+// JSON.parse patch (kept as a second line of defence)
+// ---------------------------------------------------------------------------
 
 const origParse = JSON.parse;
 JSON.parse = function () {
@@ -118,16 +486,24 @@ JSON.parse = function () {
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
 
+  const detectedPage = detectPageFromResponse(r) || (isLibraryPageNow() ? 'library' : '');
+  window.__ttLastDetectedPage = detectedPage || window.__ttLastDetectedPage;
+
+  if (Array.isArray(r)) {
+    for (const payload of r) {
+      processBrowseResponseArrayPayload(payload, detectedPage);
+    }
+    return r;
+  }
+
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
   }
 
-  // Also set playerAds to false, just incase.
   if (r.playerAds && adBlockEnabled) {
     r.playerAds = false;
   }
 
-  // Also set adSlots to an empty array, emptying only the adPlacements won't work.
   if (r.adSlots && adBlockEnabled) {
     r.adSlots = [];
   }
@@ -175,7 +551,16 @@ JSON.parse = function () {
       }
     }
 
+    filterLibrarySectionListContents(
+      r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents,
+      detectedPage
+    );
+
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+  }
+
+  if (detectedPage === 'library') {
+    applyLibraryFiltering(r, detectedPage);
   }
 
   if (r.endscreen && configRead('enableHideEndScreenCards')) {
@@ -188,20 +573,15 @@ JSON.parse = function () {
     );
   }
 
-  // Remove shorts ads
   if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
     r.entries = r.entries?.filter(
       (elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd
     );
   }
 
-  // Patch settings
-
   if (r?.title?.runs) {
     PatchSettings(r);
   }
-
-  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents);
@@ -216,28 +596,27 @@ JSON.parse = function () {
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
     r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
+    if (detectedPage === 'library') {
+      r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(
+        r.continuationContents.horizontalListContinuation.items,
+        'continuationContents.horizontalListContinuation'
+      );
+    }
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    const isLibraryPage = isLibraryPageNow();
-
-    if (isLibraryPage) {
-      filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections);
+    if (detectedPage === 'library') {
+      filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
     }
 
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
       if (!Array.isArray(tabs)) continue;
-
       for (const tab of tabs) {
         const contents = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(contents)) processShelves(contents);
       }
     }
-  }
-
-  if (isLibraryPageNow()) {
-    pruneLibraryTabsInResponse(r);
   }
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
@@ -252,17 +631,13 @@ JSON.parse = function () {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
         'Clear Queue',
-        {
-          customAction: {
-            action: 'CLEAR_QUEUE'
-          }
-        }));
+        { customAction: { action: 'CLEAR_QUEUE' } }
+      ));
       r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.unshift(ShelfRenderer(
         'Queued Videos',
         queuedVideosClone,
         queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ?
-          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId)
-          : 0
+          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) : 0
       ));
     }
   }
@@ -276,17 +651,11 @@ JSON.parse = function () {
     resolveCommand({
       "clickTrackingParams": "null",
       "loadMarkersCommand": {
-        "visibleOnLoadKeys": [
-          chapterData.entityKey
-        ],
-        "entityKeys": [
-          chapterData.entityKey
-        ]
+        "visibleOnLoadKeys": [chapterData.entityKey],
+        "entityKeys": [chapterData.entityKey]
       }
     });
   }*/
-
-  // Manual SponsorBlock Skips
 
   if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
     const manualSkippedSegments = configRead('sponsorBlockManualSkips');
@@ -302,9 +671,7 @@ JSON.parse = function () {
               showEngagementPanelEndpoint: {
                 customAction: {
                   action: 'SKIP',
-                  parameters: {
-                    time: segment.segment[1]
-                  }
+                  parameters: { time: segment.segment[1] }
                 }
               }
             },
@@ -335,9 +702,7 @@ JSON.parse = function () {
                 clickTrackingParams: null,
                 customAction: {
                   action: 'SKIP',
-                  parameters: {
-                    time: category.segment[0]
-                  }
+                  parameters: { time: category.segment[0] }
                 }
               })
           }
@@ -416,7 +781,6 @@ function deArrowify(items) {
           const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
           item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
         }
-
         if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
           const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
           if (mostVotedThumbnail.timestamp) {
@@ -433,7 +797,6 @@ function deArrowify(items) {
     }
   }
 }
-
 
 function hqify(items) {
   for (const item of items) {
