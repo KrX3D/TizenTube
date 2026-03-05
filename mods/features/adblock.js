@@ -113,73 +113,6 @@ function getActivePage() {
   return window.__ttLastDetectedPage || detectCurrentPage();
 }
 
-function collectWatchProgressEntries(node, out = [], depth = 0, seen = new WeakSet()) {
-  if (!node || depth > 10) return out;
-  if (Array.isArray(node)) {
-    for (const child of node) collectWatchProgressEntries(child, out, depth + 1, seen);
-    return out;
-  }
-  if (typeof node !== 'object') return out;
-  if (seen.has(node)) return out;
-  seen.add(node);
-
-  const id = node.videoId || node.externalVideoId || node.contentId || null;
-  const pctRaw = node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent ?? null;
-  const pct = Number(pctRaw);
-  if (id && Number.isFinite(pct)) {
-    out.push({ id: String(id), percent: pct, source: 'deep_scan' });
-  }
-
-  for (const key of Object.keys(node)) {
-    collectWatchProgressEntries(node[key], out, depth + 1, seen);
-  }
-  return out;
-}
-
-function collectAllText(node, out = [], seen = new WeakSet(), depth = 0) {
-  if (depth > 12) return out;
-  if (!node) return out;
-  if (typeof node === 'string') {
-    out.push(node);
-    return out;
-  }
-  if (Array.isArray(node)) {
-    for (const child of node) collectAllText(child, out, seen, depth + 1);
-    return out;
-  }
-  if (typeof node === 'object') {
-    if (seen.has(node)) return out;
-    seen.add(node);
-    if (typeof node.simpleText === 'string') out.push(node.simpleText);
-    if (Array.isArray(node.runs)) {
-      for (const run of node.runs) if (typeof run?.text === 'string') out.push(run.text);
-    }
-    for (const key of Object.keys(node)) {
-      if (key === 'runs' || key === 'simpleText') continue;
-      collectAllText(node[key], out, seen, depth + 1);
-    }
-  }
-  return out;
-}
-
-function parseDurationToSeconds(text) {
-  if (!text) return null;
-  const m = String(text).match(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/);
-  if (!m) return null;
-  const parts = m[1].split(':').map(Number);
-  if (parts.some(Number.isNaN)) return null;
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return null;
-}
-
-
-function getItemTitle(item) {
-  return item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
-    || item?.tileRenderer?.contentId
-    || 'unknown';
-}
-
 const HIDDEN_LIBRARY_TAB_IDS = new Set(['femusic_last_played', 'festorefront', 'fecollection_podcasts', 'femy_videos']);
 
 function getConfiguredHiddenLibraryTabIds() {
@@ -217,8 +150,6 @@ function filterHiddenLibraryTabs(items, context = '') {
 
   return filtered;
 }
-
-
 
 function pruneLibraryTabsInResponse(node, path = 'root') {
   if (!node || typeof node !== 'object') return;
@@ -292,60 +223,6 @@ function filterLibraryNavTabs(sections, detectedPage) {
       appendFileOnlyLog('library.navtabs.result', { before, after: tabs.length });
   }
 }
-
-function normalizeHorizontalListRenderer(horizontalListRenderer, context = '') {
-  if (!horizontalListRenderer || !Array.isArray(horizontalListRenderer.items)) return;
-  const count = horizontalListRenderer.items.length;
-
-  const before = {
-    visibleItemCount: horizontalListRenderer.visibleItemCount,
-    collapsedItemCount: horizontalListRenderer.collapsedItemCount,
-    totalItemCount: horizontalListRenderer.totalItemCount
-  };
-
-  if (typeof horizontalListRenderer.visibleItemCount === 'number') {
-    horizontalListRenderer.visibleItemCount = count;
-  }
-  if (typeof horizontalListRenderer.collapsedItemCount === 'number') {
-    horizontalListRenderer.collapsedItemCount = count;
-  }
-  if (typeof horizontalListRenderer.totalItemCount === 'number') {
-    horizontalListRenderer.totalItemCount = count;
-  }
-
-  const after = {
-    visibleItemCount: horizontalListRenderer.visibleItemCount,
-    collapsedItemCount: horizontalListRenderer.collapsedItemCount,
-    totalItemCount: horizontalListRenderer.totalItemCount,
-    selectedIndex: horizontalListRenderer.selectedIndex,
-    focusIndex: horizontalListRenderer.focusIndex,
-    currentIndex: horizontalListRenderer.currentIndex
-  };
-
-  const clamp = (value) => {
-    if (typeof value !== 'number') return value;
-    if (count <= 0) return 0;
-    return Math.max(0, Math.min(count - 1, value));
-  };
-
-  if (typeof horizontalListRenderer.selectedIndex === 'number') {
-    horizontalListRenderer.selectedIndex = clamp(horizontalListRenderer.selectedIndex);
-  }
-  if (typeof horizontalListRenderer.focusIndex === 'number') {
-    horizontalListRenderer.focusIndex = clamp(horizontalListRenderer.focusIndex);
-  }
-  if (typeof horizontalListRenderer.currentIndex === 'number') {
-    horizontalListRenderer.currentIndex = clamp(horizontalListRenderer.currentIndex);
-  }
-
-  appendFileOnlyLogOnce(`list.normalize.${context}`.substring(0, 48), {
-    context,
-    count,
-    before,
-    after
-  });
-}
-
 
 function processResponsePayload(payload, detectedPage) {
   if (!payload || typeof payload !== 'object') return;
@@ -503,20 +380,17 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
 
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelve = shelves[i];
-    const shelfAllText = collectAllText(shelve).join(' ').toLowerCase();
     appendFileOnlyLog('processShelves.item', {
       page: activePage,
       index: i,
       keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
       hasShelfRenderer: !!shelve?.shelfRenderer,
-      hasReelShelfRenderer: !!shelve?.reelShelfRenderer,
-      textPreview: shelfAllText.substring(0, 80)
+      hasReelShelfRenderer: !!shelve?.reelShelfRenderer
     });
 
     if (!shelve.shelfRenderer) continue;
     if (activePage === 'library') {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
-      normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:library`);
     }
   }
 }
