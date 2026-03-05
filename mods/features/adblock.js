@@ -238,10 +238,6 @@ JSON.parse = function () {
 
     return r;
   } catch (error) {
-    if (!window.__ttAdblockParseWarned) {
-      window.__ttAdblockParseWarned = true;
-      console.warn('[TizenTube] adblock parser patch failed', error);
-    }
     return r;
   }
 };
