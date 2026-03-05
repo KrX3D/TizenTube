@@ -375,28 +375,6 @@ function normalizeHorizontalListRenderer(horizontalListRenderer, context = '') {
 function processResponsePayload(payload, detectedPage) {
   if (!payload || typeof payload !== 'object') return;
 
-  if (payload?.contents?.sectionListRenderer?.contents) {
-    processShelves(payload.contents.sectionListRenderer.contents, true, detectedPage);
-  }
-
-  if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
-    processShelves(payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
-  }
-
-  if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
-    const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
-    grid.items = hideVideo(grid.items, detectedPage);
-  }
-
-  if (payload?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(payload.continuationContents.sectionListContinuation.contents, true, detectedPage);
-  }
-
-
-  if (payload?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
-    filterLibraryNavTabs(payload.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
-  }
-
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(payload, 'arrayPayload');
   }
@@ -404,15 +382,6 @@ function processResponsePayload(payload, detectedPage) {
   processTileArraysDeep(payload, detectedPage, 'arrayPayload');
 }
 
-/**
- * This is a minimal reimplementation of the following uBlock Origin rule:
- * https://github.com/uBlockOrigin/uAssets/blob/3497eebd440f4871830b9b45af0afc406c6eb593/filters/filters.txt#L116
- *
- * This in turn calls the following snippet:
- * https://github.com/gorhill/uBlock/blob/bfdc81e9e400f7b78b2abc97576c3d7bf3a11a0b/assets/resources/scriptlets.js#L365-L470
- *
- * Seems like for now dropping just the adPlacements is enough for YouTube TV
- */
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -433,7 +402,6 @@ JSON.parse = function () {
     rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
   });
   appendFileOnlyLog('json.parse.full', r);
-  const signinReminderEnabled = configRead('enableSigninReminder');
 
   if (Array.isArray(r)) {
     appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
@@ -448,29 +416,6 @@ JSON.parse = function () {
     r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
       ?.sectionListRenderer?.contents
   ) {
-    if (!signinReminderEnabled) {
-      r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-          (elm) => !elm.feedNudgeRenderer
-        );
-    }
-
-    if (adBlockEnabled) {
-      r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-          (elm) => !elm.adSlotRenderer
-        );
-
-      for (const shelve of r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents) {
-        if (shelve.shelfRenderer) {
-          shelve.shelfRenderer.content.horizontalListRenderer.items =
-            shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
-              (item) => !item.adSlotRenderer
-            );
-        }
-      }
-    }
-
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
   }
 
@@ -480,44 +425,12 @@ JSON.parse = function () {
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
   }
-
-  if (r.endscreen && configRead('enableHideEndScreenCards')) {
-    r.endscreen = null;
-  }
-
-  if (r.messages && Array.isArray(r.messages) && !configRead('enableYouThereRenderer')) {
-    r.messages = r.messages.filter(
-      (msg) => !msg?.youThereRenderer
-    );
-  }
-
-  // Remove shorts ads
-  if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
-    r.entries = r.entries?.filter(
-      (elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd
-    );
-  }
-
   // Patch settings
 
   if (r?.title?.runs) {
     PatchSettings(r);
   }
 
-  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
-
-  if (r?.contents?.sectionListRenderer?.contents) {
-    processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
-  }
-
-  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
-    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
-    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, detectedPage);
-  }
-
-  if (r?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
-  }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     const continuation = r.continuationContents.horizontalListContinuation;
@@ -531,55 +444,13 @@ JSON.parse = function () {
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
 
-    for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
-      if (!Array.isArray(section?.tvSecondaryNavSectionRenderer?.tabs)) continue;
-
-      // Remove the "Shorts" tab from the channel nav bar when shorts are disabled.
-      // Previously only the tab's content was filtered; the tab button itself stayed visible.
-      if (!configRead('enableShorts')) {
-        const tabs = section.tvSecondaryNavSectionRenderer.tabs;
-        for (let i = tabs.length - 1; i >= 0; i--) {
-          const tab = tabs[i];
-          const tabTitle = String(
-            tab?.tabRenderer?.title?.simpleText ||
-            collectAllText(tab?.tabRenderer?.title).join(' ')
-          ).toLowerCase();
-          // Also catch via the endpoint browseId (Shorts tabs often point to a shorts browseId)
-          const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
-          if (tabTitle.includes('short') || tabBrowseId.includes('short')) {
-            appendFileOnlyLog('shorts.navtab.removed', { tabTitle, tabBrowseId, index: i });
-            tabs.splice(i, 1);
-            continue;
-          }
-        }
-      }
-
-      for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
-        const tabPage = normalizeBrowseIdToPage(tabBrowseId) || detectedPage;
-        const contents = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
-        if (Array.isArray(contents)) {
-          processShelves(contents, true, tabPage);
-        }
-
-        const gridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
-        if (Array.isArray(gridItems)) {
-          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, tabPage);
-        }
-      }
-    }
   }
 
   // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
   processTileArraysDeep(r, detectedPage, 'response');
 
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
-    if (!signinReminderEnabled) {
-      r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents =
-        r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.filter(
-          (elm) => !elm.alertWithActionsRenderer
-        );
-    }
+
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
