@@ -53,10 +53,15 @@ const defaultConfig = {
   enableUpdater: true,
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
-  enableSigninReminder: false
+  enableSigninReminder: false,
+  enableDebugConsole: false,
+  enableDebugLogging: false,
+  debugConsolePosition: 'bottom-right',
+  debugConsoleHeight: 500
 };
 
 let localConfig;
+const populatedConfigWarnings = new Set();
 
 try {
   localConfig = JSON.parse(window.localStorage[CONFIG_KEY]);
@@ -65,10 +70,18 @@ try {
   localConfig = defaultConfig;
 }
 
+if (!localConfig || typeof localConfig !== 'object') {
+  localConfig = { ...defaultConfig };
+}
+
 export function configRead(key) {
   if (localConfig[key] === undefined) {
-    console.warn('Populating key', key, 'with default value', defaultConfig[key]);
-    localConfig[key] = defaultConfig[key];
+    const hasDefault = Object.prototype.hasOwnProperty.call(defaultConfig, key);
+    localConfig[key] = hasDefault ? defaultConfig[key] : undefined;
+    if (hasDefault && !populatedConfigWarnings.has(key)) {
+      populatedConfigWarnings.add(key);
+      console.warn('Populating key', key, 'with default value', defaultConfig[key]);
+    }
   }
 
   return localConfig[key];
