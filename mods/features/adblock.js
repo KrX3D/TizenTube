@@ -471,6 +471,26 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
       normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:library`);
     }
+    if (!configRead('enableShorts')) {
+      const shelfTitleDirect = String(shelve?.shelfRenderer?.title?.simpleText || '').toLowerCase();
+      const shelfTitleFromHeader = collectAllText(shelve?.shelfRenderer?.header).join(' ').toLowerCase();
+      const shelfTitle = shelfTitleDirect || shelfTitleFromHeader;
+      appendFileOnlyLogOnce('shelf.title.' + shelfTitle.substring(0, 24), {
+        page: activePage,
+        rendererType: shelve?.shelfRenderer?.tvhtml5ShelfRendererType || '',
+        direct: shelfTitleDirect, fromHeader: shelfTitleFromHeader.substring(0, 60)
+      });
+      if (isShortsShelf(shelve)) {
+        appendFileOnlyLog('shorts.shelf.remove', {
+          page: activePage,
+          reason: 'is_shorts_shelf',
+          shelfTitle: shelve?.shelfRenderer?.title || ''
+        });
+        // Safe to splice because we are iterating in reverse
+        shelves.splice(i, 1);
+        continue;
+      }
+    }
   }
 }
 
@@ -491,6 +511,99 @@ function getGenericNodeProgress(item) {
   return { percentDurationWatched: Number(best.percent || 0), source: best.source || 'deep_scan' };
 }
 
+
+function addPreviews(items) {
+  if (!configRead('enablePreviews')) return;
+  for (const item of items) {
+    if (item.tileRenderer) {
+      const watchEndpoint = item.tileRenderer.onSelectCommand;
+      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
+      item.tileRenderer.onFocusCommand = {
+        startInlinePlaybackCommand: {
+          blockAdoption: true,
+          caption: false,
+          delayMs: 3000,
+          durationMs: 40000,
+          muted: false,
+          restartPlaybackBeforeSeconds: 10,
+          resumeVideo: true,
+          playbackEndpoint: watchEndpoint
+        }
+      };
+    }
+  }
+}
+
+function deArrowify(items) {
+  if (!Array.isArray(items)) return;
+  // Iterate in reverse so splicing an adSlotRenderer doesn't shift indices of unvisited items.
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (!item || typeof item !== 'object') continue;
+    if (item.adSlotRenderer) {
+      items.splice(i, 1);
+      continue;
+    }
+    if (!item?.tileRenderer) continue;
+    if (configRead('enableDeArrow')) {
+      // Capture item reference so the async callback isn't affected by loop variable changes.
+      const capturedItem = item;
+      const videoID = capturedItem.tileRenderer.contentId;
+      fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`).then(res => res.json()).then(data => {
+        if (data.titles.length > 0) {
+          const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
+          capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
+        }
+
+        if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
+          const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
+          if (mostVotedThumbnail.timestamp) {
+            capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
+              {
+                url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`,
+                width: 1280,
+                height: 640
+              }
+            ]
+          }
+        }
+      }).catch(() => { });
+    }
+  }
+}
+
+
+function hqify(items) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    try {
+    if (!item?.tileRenderer) continue;
+    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
+    if (
+      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
+      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
+    ) continue;
+    if (configRead('enableHqThumbnails')) {
+      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
+      if (!videoID) continue;
+      const queryArgs = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url?.split('?')[1];
+      item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
+        {
+          url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
+          width: 640,
+          height: 480
+        }
+      ];
+    }
+    } catch (error) {
+      appendFileOnlyLog('hqify.item.error', {
+        message: error?.message || String(error),
+        stack: String(error?.stack || '').substring(0, 400),
+        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
+      });
+    }
+  }
+}
 
 function addLongPress(items) {
   if (!Array.isArray(items)) return;
