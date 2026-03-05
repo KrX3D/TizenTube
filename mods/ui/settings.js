@@ -493,12 +493,20 @@ export default function modernUI(update, parameters) {
                                     value: 'subscriptions'
                                 },
                                 {
+                                    name: 'Channel Pages',
+                                    value: 'channel'
+                                },
+                                {
                                     name: 'Library',
                                     value: 'library'
                                 },
                                 {
                                     name: 'More',
                                     value: 'more'
+                                },
+                                {
+                                    name: 'Watch',
+                                    value: 'watch'
                                 }
                             ]
                         }
