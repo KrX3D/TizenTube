@@ -360,6 +360,22 @@ function patchResponseText(text) {
     logLibraryDebug('xhr.patch.error', { message: String(e?.message || e) });
     return text;
   }
+
+  // deep prune + tile scan
+  pruneLibraryTabsInResponse(r, 'response');
+  processTileArraysDeep(r, 'response');
+}
+
+// ---------------------------------------------------------------------------
+// XHR interception — patch at the network level so the framework NEVER sees
+// the unfiltered library response, even if it bypasses our JSON.parse patch.
+// ---------------------------------------------------------------------------
+function isBrowseLibraryUrl(url) {
+  if (!url) return false;
+  const s = String(url);
+  return s.includes('/youtubei/') && s.includes('browse') && (
+    s.includes('FElibrary') || s.includes('felibrary')
+  );
 }
 
 // Patch XHR
