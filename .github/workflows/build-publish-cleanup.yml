@@ -18,6 +18,7 @@ on:
       - 'package.json'
       - 'tizen.log'
       - 'dist/**'
+      - 'scripts/**'
   workflow_dispatch:
 
 # Allow this workflow to push back changes to the repo
@@ -191,5 +192,6 @@ jobs:
 
           echo "Pushing changes back to hide_tabs_library..."
           git push origin HEAD:hide_tabs_library
+
 
 
