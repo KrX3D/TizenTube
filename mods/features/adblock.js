@@ -459,26 +459,6 @@ JSON.parse = function () {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       if (!Array.isArray(section?.tvSecondaryNavSectionRenderer?.tabs)) continue;
 
-      // Remove the "Shorts" tab from the channel nav bar when shorts are disabled.
-      // Previously only the tab's content was filtered; the tab button itself stayed visible.
-      if (!configRead('enableShorts')) {
-        const tabs = section.tvSecondaryNavSectionRenderer.tabs;
-        for (let i = tabs.length - 1; i >= 0; i--) {
-          const tab = tabs[i];
-          const tabTitle = String(
-            tab?.tabRenderer?.title?.simpleText ||
-            collectAllText(tab?.tabRenderer?.title).join(' ')
-          ).toLowerCase();
-          // Also catch via the endpoint browseId (Shorts tabs often point to a shorts browseId)
-          const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
-          if (tabTitle.includes('short') || tabBrowseId.includes('short')) {
-            appendFileOnlyLog('shorts.navtab.removed', { tabTitle, tabBrowseId, index: i });
-            tabs.splice(i, 1);
-            continue;
-          }
-        }
-      }
-
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
         const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
         const tabPage = normalizeBrowseIdToPage(tabBrowseId) || detectedPage;
@@ -559,27 +539,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       textPreview: shelfAllText.substring(0, 80)
     });
 
-    if (!configRead('enableShorts') && isShortsShelf(shelve)) {
-      appendFileOnlyLog('shorts.reelShelf.remove', {
-        page: activePage,
-        reason: 'is_shorts_shelf'
-      });
-      shelves.splice(i, 1);
-      continue;
-    }
-
-    // Some channel surfaces include "Shorts" shelf-like rows under non-shelf renderers.
-    if (!configRead('enableShorts') && !shelve?.shelfRenderer && /\bshorts?\b/i.test(shelfAllText)) {
-      appendFileOnlyLog('shorts.genericShelf.remove', {
-        page: activePage,
-        index: i,
-        keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
-        textPreview: shelfAllText.substring(0, 120)
-      });
-      shelves.splice(i, 1);
-      continue;
-    }
-
     if (!shelve.shelfRenderer) continue;
 
     const shelfItems = getShelfItems(shelve);
@@ -590,26 +549,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
     if (activePage === 'library') {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
       normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:library`);
-    }
-    if (!configRead('enableShorts')) {
-      const shelfTitleDirect = String(shelve?.shelfRenderer?.title?.simpleText || '').toLowerCase();
-      const shelfTitleFromHeader = collectAllText(shelve?.shelfRenderer?.header).join(' ').toLowerCase();
-      const shelfTitle = shelfTitleDirect || shelfTitleFromHeader;
-      appendFileOnlyLogOnce('shelf.title.' + shelfTitle.substring(0, 24), {
-        page: activePage,
-        rendererType: shelve?.shelfRenderer?.tvhtml5ShelfRendererType || '',
-        direct: shelfTitleDirect, fromHeader: shelfTitleFromHeader.substring(0, 60)
-      });
-      if (isShortsShelf(shelve)) {
-        appendFileOnlyLog('shorts.shelf.remove', {
-          page: activePage,
-          reason: 'is_shorts_shelf',
-          shelfTitle: shelve?.shelfRenderer?.title || ''
-        });
-        // Safe to splice because we are iterating in reverse
-        shelves.splice(i, 1);
-        continue;
-      }
     }
   }
 }
@@ -658,15 +597,13 @@ function hideVideo(items, pageHint = null) {
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
 
   const hideWatchedEnabled = !!configRead('enableHideWatchedVideos');
-  const shortsEnabled = !!configRead('enableShorts');
 
   appendFileOnlyLog('hideVideo.start', {
     pageName,
     threshold,
     configuredPages: pages,
     inputCount: Array.isArray(items) ? items.length : 0,
-    enableHideWatchedVideos: hideWatchedEnabled,
-    enableShorts: shortsEnabled
+    enableHideWatchedVideos: hideWatchedEnabled
   });
 
   let removedShorts = 0;
