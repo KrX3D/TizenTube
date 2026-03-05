@@ -205,8 +205,6 @@ function processResponsePayload(payload, detectedPage) {
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(payload, 'arrayPayload');
   }
-
-  processTileArraysDeep(payload, detectedPage, 'arrayPayload');
 }
 
 const origParse = JSON.parse;
@@ -218,24 +216,6 @@ JSON.parse = function () {
   window.__ttLastDetectedPage = detectedPage;
   window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
   const parseSeq = window.__ttParseSeq;
-  appendFileOnlyLog('json.parse.meta', {
-    hash: location.hash || '',
-    path: location.pathname || '',
-    search: location.search || '',
-    detectedPage,
-    parseSeq,
-    rootType: Array.isArray(r) ? 'array' : typeof r,
-    rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
-  });
-  appendFileOnlyLog('json.parse.full', r);
-
-  if (Array.isArray(r)) {
-    appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
-    for (let i = 0; i < r.length; i++) {
-      processResponsePayload(r[i], detectedPage);
-    }
-    return r;
-  }
 
   // Drop "masthead" ad from home screen
   if (
@@ -245,13 +225,9 @@ JSON.parse = function () {
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
   }
 
-  // Library tab pruning: must run unconditionally whenever we're on the library page,
-  // because the library page sends its nav tabs via tvSecondaryNavRenderer (not tvSurfaceContentRenderer),
-  // so gating this inside the tvSurfaceContentRenderer block meant it never fired on library.
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
   }
-  // Patch settings
 
   if (r?.title?.runs) {
     PatchSettings(r);
@@ -265,15 +241,8 @@ JSON.parse = function () {
     }
   }
 
-  // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
-  processTileArraysDeep(r, detectedPage, 'response');
-
   return r;
   } catch (error) {
-    appendFileOnlyLog('json.parse.error', {
-      message: error?.message || String(error),
-      stack: String(error?.stack || '').substring(0, 600)
-    });
     return r;
   }
 };
@@ -320,33 +289,6 @@ function getItemVideoId(item) {
     item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
     ''
   );
-}
-
-function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
-  if (!node || depth > 10) return;
-  const pageName = pageHint || getActivePage();
-
-  if (Array.isArray(node)) {
-    if (node.some((item) => item?.tileRenderer)) {
-      const before = node.length;
-      let filtered = hideVideo(node, pageName);
-      if (pageName === 'library') {
-        filtered = filterHiddenLibraryTabs(filtered, `deep:${path}`);
-      }
-      node.splice(0, node.length, ...filtered);
-      return;
-    }
-
-    for (let i = 0; i < node.length; i++) {
-      processTileArraysDeep(node[i], pageName, `${path}[${i}]`, depth + 1);
-    }
-    return;
-  }
-
-  if (typeof node !== 'object') return;
-  for (const key of Object.keys(node)) {
-    processTileArraysDeep(node[key], pageName, `${path}.${key}`, depth + 1);
-  }
 }
 
 function hideVideo(items, pageHint = null) {
