@@ -227,15 +227,6 @@ JSON.parse = function () {
     rootType: Array.isArray(r) ? 'array' : typeof r,
     rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
   });
-  appendFileOnlyLog('json.parse.full', r);
-
-  if (Array.isArray(r)) {
-    appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
-    for (let i = 0; i < r.length; i++) {
-      processResponsePayload(r[i], detectedPage);
-    }
-    return r;
-  }
 
   // Drop "masthead" ad from home screen
   if (
