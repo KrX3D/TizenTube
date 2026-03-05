@@ -11,7 +11,7 @@ function appendFileOnlyLog(label, payload) {
   const activePage = window.__ttLastDetectedPage || detectCurrentPage();
   const labelStr = String(label || '');
   const isPlaylistPage = activePage === 'playlist' || activePage === 'playlists';
-  const isPlaylistLog = labelStr.startsWith('playlist.') || labelStr.startsWith('hideVideo.') || labelStr.startsWith('json.parse.meta') || labelStr.startsWith('page-detect');
+  const isPlaylistLog = labelStr.startsWith('playlist.') || labelStr.startsWith('json.parse.meta') || labelStr.startsWith('page-detect');
   if (!isPlaylistPage && !isPlaylistLog) return;
 
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
@@ -957,7 +957,7 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
     clearPlaylistHelperVideoIdSet(label);
   }
   clearKeepOneMarkers(items, label);
-  const filteredItems = hideVideo(items, pageName);
+  const filteredItems = true;
   if (pageName === 'playlist' && hasContinuation && filteredItems.length === 0 && Array.isArray(items) && items.length > 0) {
     const reverseItems = [...items].reverse();
     const fallbackItem =
@@ -1063,7 +1063,7 @@ function processResponsePayload(payload, detectedPage) {
 
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
-    grid.items = hideVideo(grid.items, detectedPage);
+    grid.items = true;
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
   }
 
@@ -1307,7 +1307,7 @@ JSON.parse = function () {
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
-    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, detectedPage);
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = true;
     normalizeGridRenderer(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer, 'contents.tvBrowseRenderer.grid');
   }
 
@@ -1403,7 +1403,7 @@ JSON.parse = function () {
 
         const gridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
         if (Array.isArray(gridItems)) {
-          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, tabPage);
+          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = true;
           normalizeGridRenderer(tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer, 'tab.grid');
         }
 
@@ -1601,7 +1601,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
     if (shouldAddPreviews) {
       addPreviews(shelfItems);
     }
-    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelfItems, activePage);
+    shelve.shelfRenderer.content.horizontalListRenderer.items = true;
     normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}`);
     if (activePage === 'library') {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
@@ -1848,7 +1848,7 @@ function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) 
   if (Array.isArray(node)) {
     if (node.some((item) => item?.tileRenderer)) {
       const before = node.length;
-      let filtered = hideVideo(node, pageName);
+      let filtered = true;
       if (!configRead('enableShorts')) {
         const beforeShorts = filtered.length;
         filtered = filtered.filter(item => item?.__ttKeepOneForContinuation || !isLikelyShortItem(item));
@@ -1888,197 +1888,4 @@ function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) 
   for (const key of Object.keys(node)) {
     processTileArraysDeep(node[key], pageName, `${path}.${key}`, depth + 1);
   }
-}
-
-function hideVideo(items, pageHint = null) {
-  if (!Array.isArray(items)) return [];
-  const pages = configRead('hideWatchedVideosPages') || [];
-  const pageName = pageHint || getActivePage();
-  const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-
-  const hideWatchedEnabled = !!configRead('enableHideWatchedVideos');
-  const shortsEnabled = !!configRead('enableShorts');
-
-  appendFileOnlyLog('hideVideo.start', {
-    pageName,
-    threshold,
-    configuredPages: pages,
-    inputCount: Array.isArray(items) ? items.length : 0,
-    enableHideWatchedVideos: hideWatchedEnabled,
-    enableShorts: shortsEnabled
-  });
-
-  let removedWatched = 0;
-  let removedShorts = 0;
-  const result = items.filter(item => {
-    try {
-    const hasTileRenderer = !!item?.tileRenderer;
-    if (!hasTileRenderer) {
-      if (isLikelyPlaceholderItem(item)) {
-        appendFileOnlyLog('hideVideo.item.skip', {
-          pageName,
-          rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-          reason: 'placeholder_removed'
-        });
-        return false;
-      }
-      const genericTitle = collectAllText(item).join(' ').trim().substring(0, 120) || 'unknown';
-      const genericProgress = getGenericNodeProgress(item) || (isWatchedByTextSignals(item) ? { percentDurationWatched: 100, source: 'text_signal' } : null);
-      const genericShortLike = !shortsEnabled && /\bshorts?\b/i.test(genericTitle);
-
-      if (genericShortLike) {
-        removedShorts++;
-        appendFileOnlyLog('hideVideo.item.generic', { pageName, title: genericTitle, remove: true, reason: 'generic_short_detected' });
-        return false;
-      }
-
-      if (genericProgress && hideWatchedEnabled && pages.includes(pageName)) {
-        const percentWatched = Number(genericProgress.percentDurationWatched || 0);
-        const remove = percentWatched > threshold;
-        if (remove) removedWatched++;
-        appendFileOnlyLog('hideVideo.item.generic', {
-          pageName,
-          title: genericTitle,
-          percentWatched,
-          threshold,
-          remove,
-          source: genericProgress.source || 'generic'
-        });
-        return !remove;
-      }
-
-      appendFileOnlyLog('hideVideo.item.skip', {
-        pageName,
-        rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-        reason: 'no_tile_renderer'
-      });
-      return true;
-    }
-
-    const tileProgressBar = getTileWatchProgress(item);
-    const videoId = getItemVideoId(item);
-    const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || videoId || 'unknown';
-
-    const contentId = videoId.toLowerCase();
-    const cachedProgress = window._ttVideoProgressCache?.[videoId] ?? null;
-    const textWatched = isWatchedByTextSignals(item);
-    const progressBar = tileProgressBar ?? cachedProgress ?? (textWatched ? { percentDurationWatched: 100 } : null);
-    const progressSource = tileProgressBar?.source || (cachedProgress ? 'entity_cache' : 'none');
-
-    const currentParseSeq = Number(window.__ttParseSeq || 0);
-    const itemParseSeq = Number(item?.__ttKeepOneForContinuationParseSeq || 0);
-    const keepOneStillValid = pageName === 'playlist' && itemParseSeq > 0 && itemParseSeq === currentParseSeq;
-
-    const playlistHelperIds = getPlaylistHelperVideoIdSet();
-    const isKnownPlaylistHelper = pageName === 'playlist' && videoId && playlistHelperIds.has(videoId);
-    if (isKnownPlaylistHelper && !keepOneStillValid) {
-      appendFileOnlyLog('hideVideo.item.playlist_helper.pruned', {
-        pageName,
-        title,
-        videoId,
-        reason: item?.__ttKeepOneForContinuation ? 'stale_marker' : 'known_helper_reappeared_without_marker',
-        itemParseSeq,
-        currentParseSeq
-      });
-      unregisterPlaylistHelperVideoId(videoId, 'hideVideo.item.playlist_helper');
-      return false;
-    }
-
-    if (item?.__ttKeepOneForContinuation) {
-      if (keepOneStillValid) {
-        appendFileOnlyLog('hideVideo.item.keep_one', {
-          pageName,
-          title,
-          videoId,
-          keepOneLabel: item?.__ttKeepOneForContinuationLabel || 'unknown',
-          parseSeq: itemParseSeq
-        });
-        return true;
-      }
-
-      appendFileOnlyLog('hideVideo.item.keep_one.expired', {
-        pageName,
-        title,
-        videoId,
-        keepOneLabel: item?.__ttKeepOneForContinuationLabel || 'unknown',
-        itemParseSeq,
-        currentParseSeq,
-        reason: pageName !== 'playlist' ? 'page_not_playlist' : 'parse_seq_mismatch'
-      });
-      delete item.__ttKeepOneForContinuation;
-      delete item.__ttKeepOneForContinuationLabel;
-      delete item.__ttKeepOneForContinuationParseSeq;
-      unregisterPlaylistHelperVideoId(videoId, 'hideVideo.item.keep_one.expired');
-    }
-
-    const retiredHelperIds = getRetiredPlaylistHelperVideoIdSet();
-    const activeHelperIds = getPlaylistHelperVideoIdSet();
-    if (pageName === 'playlist' && videoId && retiredHelperIds.has(videoId) && !activeHelperIds.has(videoId)) {
-      appendFileOnlyLog('hideVideo.item.playlist_helper.retired_pruned', {
-        pageName,
-        title,
-        videoId,
-        retiredCount: retiredHelperIds.size,
-        activeHelpers: activeHelperIds.size
-      });
-      return false;
-    }
-
-    if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
-      return false;
-    }
-
-    const shortLike = isLikelyShortItem(item);
-    if (!shortsEnabled && shortLike) {
-      removedShorts++;
-      appendFileOnlyLog('hideVideo.item', { pageName, title, hasProgress: !!progressBar, remove: true, reason: 'short_detected' });
-      return false;
-    }
-
-    if (!progressBar) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, videoId, hasProgress: false, progressSource, textWatched, remove: false, reason: 'no_progress' });
-      return true;
-    }
-
-    if (!hideWatchedEnabled || !pages.includes(pageName)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, hasProgress: true, percentWatched: Number(progressBar.percentDurationWatched || 0), remove: false, reason: hideWatchedEnabled ? 'page_not_enabled' : 'watched_feature_disabled' });
-      return true;
-    }
-
-    const percentWatched = Number(progressBar.percentDurationWatched || 0);
-    const remove = percentWatched > threshold;
-    if (remove) removedWatched++;
-
-    appendFileOnlyLog('hideVideo.item', {
-      pageName,
-      title,
-      hasProgress: true,
-      percentWatched,
-      threshold,
-      remove,
-      reason: remove ? 'remove' : 'below_threshold'
-    });
-
-    return !remove;
-    } catch (error) {
-      appendFileOnlyLog('hideVideo.item.error', {
-        pageName,
-        message: error?.message || String(error),
-        stack: String(error?.stack || '').substring(0, 500),
-        itemKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 10) : typeof item
-      });
-      return true;
-    }
-  });
-
-  appendFileOnlyLog('hideVideo.done', {
-    pageName,
-    input: Array.isArray(items) ? items.length : 0,
-    output: result.length,
-    removedWatched,
-    removedShorts
-  });
-
-  return result;
 }
