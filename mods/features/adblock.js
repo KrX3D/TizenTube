@@ -176,6 +176,7 @@ function filterLibrarySectionListContents(contents, detectedPage) {
     if (hideByBrowseId || hideByTitle || hideByShelfTitle) {
       contents.splice(i, 1);
     }
+    logLibraryDebug('filterLibraryNavTabs.result', { before, after: tabs.length });
   }
   if (before !== contents.length) {
     logLibraryDebug('filterLibrarySectionListContents.done', { before, after: contents.length });
