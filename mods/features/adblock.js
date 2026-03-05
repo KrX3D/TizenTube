@@ -98,18 +98,39 @@ function isHiddenLibraryTabByTitle(tab) {
 }
 
 function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
-  if (!node || depth > 8) return out;
+  if (!node || depth > 10) return out;
   if (Array.isArray(node)) {
     for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
     return out;
   }
   if (typeof node !== 'object') return out;
-  const browseId =
-    node?.navigationEndpoint?.browseEndpoint?.browseId ||
-    node?.browseEndpoint?.browseId ||
-    node?.endpoint?.browseEndpoint?.browseId ||
-    node?.onSelectCommand?.browseEndpoint?.browseId;
-  if (typeof browseId === 'string' && browseId) out.add(browseId);
+
+  const directCandidates = [
+    node?.navigationEndpoint?.browseEndpoint?.browseId,
+    node?.browseEndpoint?.browseId,
+    node?.endpoint?.browseEndpoint?.browseId,
+    node?.onSelectCommand?.browseEndpoint?.browseId,
+    node?.browseId,
+    node?.tabIdentifier,
+    node?.tabRenderer?.tabIdentifier,
+    node?.targetId,
+    node?.url,
+    node?.canonicalBaseUrl,
+    node?.webCommandMetadata?.url,
+    node?.navigationEndpoint?.commandMetadata?.webCommandMetadata?.url
+  ];
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate !== 'string' || !candidate) continue;
+    out.add(candidate);
+
+    const feMatches = candidate.match(/fe[a-z0-9_]+/gi) || [];
+    for (const match of feMatches) out.add(match);
+
+    const vlMatches = candidate.match(/vl[a-z0-9_]+/gi) || [];
+    for (const match of vlMatches) out.add(match);
+  }
+
   for (const key of Object.keys(node)) {
     extractBrowseIdsDeep(node[key], out, depth + 1);
   }
@@ -131,6 +152,7 @@ function filterLibraryNavTabs(sections, detectedPage) {
       const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
       const hideByBrowseId = browseIds.some((id) => isHiddenLibraryBrowseId(id));
       const hideByTitle = isHiddenLibraryTabByTitle(tabs[i]);
+      logLibraryDebug('filterLibraryNavTabs.tab', { index: i, browseIds, hideByBrowseId, hideByTitle });
       if (hideByBrowseId || hideByTitle) tabs.splice(i, 1);
     }
     logLibraryDebug('filterLibraryNavTabs.result', { before, after: tabs.length });
