@@ -175,40 +175,6 @@ function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
   return out;
 }
 
-function extractNavTabBrowseId(tab) {
-  return Array.from(extractBrowseIdsDeep(tab)).join(',');
-}
-
-function filterLibraryNavTabs(sections, detectedPage) {
-  if (detectedPage !== 'library') return;
-  if (!Array.isArray(sections)) return;
-  for (const section of sections) {
-    const tabs = section?.tvSecondaryNavSectionRenderer?.tabs;
-    if (!Array.isArray(tabs)) continue;
-    const before = tabs.length;
-    for (let i = tabs.length - 1; i >= 0; i--) {
-      const browseIds = Array.from(extractBrowseIdsDeep(tabs[i])).map((id) => String(id).toLowerCase());
-      appendFileOnlyLog('library.navtab.check', { browseIds, index: i });
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
-        appendFileOnlyLog('library.navtab.removed', { browseIds, index: i });
-        tabs.splice(i, 1);
-      }
-    }
-    if (tabs.length !== before)
-      appendFileOnlyLog('library.navtabs.result', { before, after: tabs.length });
-  }
-}
-
-function processResponsePayload(payload, detectedPage) {
-  if (!payload || typeof payload !== 'object') return;
-
-  if (detectedPage === 'library') {
-    pruneLibraryTabsInResponse(payload, 'arrayPayload');
-  }
-
-  processTileArraysDeep(payload, detectedPage, 'arrayPayload');
-}
-
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
