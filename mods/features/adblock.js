@@ -238,7 +238,10 @@ JSON.parse = function () {
 
     return r;
   } catch (error) {
-    console.warn('[TizenTube] adblock parser patch failed', error);
+    if (!window.__ttAdblockParseWarned) {
+      window.__ttAdblockParseWarned = true;
+      console.warn('[TizenTube] adblock parser patch failed', error);
+    }
     return r;
   }
 };
@@ -253,7 +256,8 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
-  for (const shelve of shelves) {
+  for (let index = shelves.length - 1; index >= 0; index--) {
+    const shelve = shelves[index];
     if (shelve.shelfRenderer) {
       deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
       hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
@@ -264,13 +268,36 @@ function processShelves(shelves, shouldAddPreviews = true) {
       shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
+          shelves.splice(index, 1);
           continue;
         }
         shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
       }
+
+      if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+        shelves.splice(index, 1);
+      }
     }
   }
+}
+
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
 }
 
 function addPreviews(items) {
@@ -404,13 +431,14 @@ function detectCurrentPage() {
 function hideVideo(items) {
   return items.filter(item => {
     if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
+
     const pages = configRead('hideWatchedVideosPages');
     const pageName = detectCurrentPage();
     if (!pages.includes(pageName)) return true;
 
-    const percentWatched = (progressBar.percentDurationWatched || 0);
+    const percentWatched = getWatchProgress(item);
+    if (percentWatched === null) return true;
+
     return percentWatched <= configRead('hideWatchedVideosThreshold');
   });
 }
