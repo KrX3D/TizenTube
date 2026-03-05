@@ -13,11 +13,14 @@ import { PatchSettings } from '../ui/customYTSettings.js';
  *
  * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
+
+  try {
 
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
@@ -233,7 +236,14 @@ JSON.parse = function () {
     }
   }
 
-  return r;
+    return r;
+  } catch (error) {
+    if (!window.__ttAdblockParseWarned) {
+      window.__ttAdblockParseWarned = true;
+      console.warn('[TizenTube] adblock parser patch failed', error);
+    }
+    return r;
+  }
 };
 
 // Patch JSON.parse to use the custom one
@@ -246,7 +256,8 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
-  for (const shelve of shelves) {
+  for (let index = shelves.length - 1; index >= 0; index--) {
+    const shelve = shelves[index];
     if (shelve.shelfRenderer) {
       deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
       hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
@@ -257,13 +268,36 @@ function processShelves(shelves, shouldAddPreviews = true) {
       shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
+          shelves.splice(index, 1);
           continue;
         }
         shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
       }
+
+      if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+        shelves.splice(index, 1);
+      }
     }
   }
+}
+
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
 }
 
 function addPreviews(items) {
@@ -370,17 +404,41 @@ function addLongPress(items) {
   }
 }
 
+function detectCurrentPage() {
+  const hash = location.hash ? location.hash.substring(1) : '';
+  const params = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : new URLSearchParams();
+  const cParam = (params.get('c') || '').toLowerCase();
+
+  if (cParam.includes('fesubscription')) return 'subscriptions';
+  if (cParam.startsWith('uc')) return 'channel';
+  if (cParam === 'felibrary') return 'library';
+  if (cParam === 'fehistory') return 'history';
+  if (cParam === 'feplaylist_aggregation') return 'playlists';
+  if (cParam === 'femy_youtube' || cParam === 'vlwl' || cParam === 'vlll' || cParam.startsWith('vlpl')) return 'playlist';
+  if (hash.startsWith('/watch')) return 'watch';
+
+  try {
+    return hash === '/'
+      ? 'home'
+      : hash.startsWith('/search')
+        ? 'search'
+        : (hash.split('?')[1]?.split('&')[0]?.split('=')[1] || 'home').replace('FE', '').replace('topics_', '');
+  } catch {
+    return 'home';
+  }
+}
+
 function hideVideo(items) {
   return items.filter(item => {
     if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
+
     const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
+    const pageName = detectCurrentPage();
     if (!pages.includes(pageName)) return true;
 
-    const percentWatched = (progressBar.percentDurationWatched || 0);
+    const percentWatched = getWatchProgress(item);
+    if (percentWatched === null) return true;
+
     return percentWatched <= configRead('hideWatchedVideosThreshold');
   });
 }
