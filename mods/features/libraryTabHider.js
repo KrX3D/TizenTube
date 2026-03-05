@@ -17,30 +17,57 @@ const matchesHiddenId = (value, hiddenIds) => {
   return false;
 };
 
+const extractItemIdsDeep = (node, out = new Set(), depth = 0) => {
+  if (!node || depth > 8) return out;
+  if (Array.isArray(node)) {
+    for (const child of node) extractItemIdsDeep(child, out, depth + 1);
+    return out;
+  }
+  if (typeof node !== 'object') return out;
+
+  const browseId = node?.browseEndpoint?.browseId;
+  if (typeof browseId === 'string' && browseId) out.add(browseId);
+
+  const contentId = node?.tileRenderer?.contentId;
+  if (typeof contentId === 'string' && contentId) out.add(contentId);
+
+  const playlistId = node?.watchEndpoint?.playlistId;
+  if (typeof playlistId === 'string' && playlistId) out.add(playlistId);
+
+  for (const key of Object.keys(node)) extractItemIdsDeep(node[key], out, depth + 1);
+  return out;
+};
+
 const shouldHideTabItem = (item, hiddenIds) => {
   if (!item || typeof item !== 'object') return false;
 
-  return matchesHiddenId(item?.tileRenderer?.contentId, hiddenIds)
-    || matchesHiddenId(item?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items?.[0]?.tileRenderer?.contentId, hiddenIds)
-    || matchesHiddenId(item?.tabRenderer?.endpoint?.browseEndpoint?.browseId, hiddenIds)
-    || matchesHiddenId(item?.navigationEndpoint?.browseEndpoint?.browseId, hiddenIds)
-    || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
+  const ids = extractItemIdsDeep(item);
+  for (const id of ids) {
+    if (matchesHiddenId(id, hiddenIds)) return true;
+  }
+
+  return false;
+};
+
+const filterTabArray = (items, hiddenIds) => {
+  if (!Array.isArray(items)) return items;
+  return items.filter((item) => !shouldHideTabItem(item, hiddenIds));
 };
 
 const pruneLibraryTabs = (node, hiddenIds) => {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = node.horizontalListRenderer.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
+    node.horizontalListRenderer.items = filterTabArray(node.horizontalListRenderer.items, hiddenIds);
   }
 
   if (Array.isArray(node?.continuationContents?.horizontalListContinuation?.items)) {
     node.continuationContents.horizontalListContinuation.items =
-      node.continuationContents.horizontalListContinuation.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
+      filterTabArray(node.continuationContents.horizontalListContinuation.items, hiddenIds);
   }
 
   if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
-    node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
+    node.tvSecondaryNavSectionRenderer.tabs = filterTabArray(node.tvSecondaryNavSectionRenderer.tabs, hiddenIds);
   }
 
   for (const key of Object.keys(node)) {
