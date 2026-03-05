@@ -45,6 +45,60 @@ function logLibraryDebug(label, payload) {
   } catch (_) { }
 }
 
+function getHiddenLibraryTitleTokens() {
+  const tokens = new Set();
+  for (const hiddenId of getConfiguredHiddenLibraryTabIds()) {
+    const titleTokens = LIBRARY_TAB_TITLE_BY_BROWSE_ID[hiddenId] || [];
+    for (const token of titleTokens) tokens.add(String(token).toLowerCase());
+    tokens.add(String(hiddenId).toLowerCase());
+  }
+  return tokens;
+}
+
+function hideLibraryTabsInDOM() {
+  if (!isLibraryPageNow()) return;
+
+  const hiddenTokens = getHiddenLibraryTitleTokens();
+  if (!hiddenTokens.size) return;
+
+  const candidates = document.querySelectorAll('button, [role="tab"], a, ytlr-tab-renderer, ytlr-guide-response-supported-renderer');
+  let hiddenCount = 0;
+
+  for (const el of candidates) {
+    const text = String(el.textContent || '').toLowerCase().trim();
+    const href = String(el.getAttribute?.('href') || '').toLowerCase();
+    const dataTarget = String(el.getAttribute?.('data-target-id') || '').toLowerCase();
+
+    const shouldHide = Array.from(hiddenTokens).some((token) =>
+      (text && text.includes(token)) ||
+      (href && href.includes(token)) ||
+      (dataTarget && dataTarget.includes(token))
+    );
+
+    if (!shouldHide) continue;
+
+    if (el.style.display !== 'none') {
+      el.style.display = 'none';
+      hiddenCount++;
+    }
+  }
+
+  if (hiddenCount > 0) {
+    logLibraryDebug('dom.hide.result', { hiddenCount, candidateCount: candidates.length });
+  }
+}
+
+function setupLibraryDomFallback() {
+  const run = () => {
+    try { hideLibraryTabsInDOM(); } catch (_) { }
+  };
+
+  window.addEventListener('hashchange', () => setTimeout(run, 120));
+  document.addEventListener('readystatechange', run);
+  setInterval(run, 1500);
+  setTimeout(run, 300);
+}
+
 function isHiddenLibraryBrowseId(value) {
   const id = String(value || '').toLowerCase();
   if (!id) return false;
@@ -306,6 +360,22 @@ function patchResponseText(text) {
     logLibraryDebug('xhr.patch.error', { message: String(e?.message || e) });
     return text;
   }
+
+  // deep prune + tile scan
+  pruneLibraryTabsInResponse(r, 'response');
+  processTileArraysDeep(r, 'response');
+}
+
+// ---------------------------------------------------------------------------
+// XHR interception — patch at the network level so the framework NEVER sees
+// the unfiltered library response, even if it bypasses our JSON.parse patch.
+// ---------------------------------------------------------------------------
+function isBrowseLibraryUrl(url) {
+  if (!url) return false;
+  const s = String(url);
+  return s.includes('/youtubei/') && s.includes('browse') && (
+    s.includes('FElibrary') || s.includes('felibrary')
+  );
 }
 
 // Patch XHR
@@ -385,6 +455,8 @@ function patchResponseText(text) {
   };
   logLibraryDebug('fetch.patch.installed', {});
 })();
+
+setupLibraryDomFallback();
 
 // ---------------------------------------------------------------------------
 // Page detection
