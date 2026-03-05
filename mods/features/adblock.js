@@ -386,38 +386,10 @@ const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   try {
-  const adBlockEnabled = configRead('enableAdBlock');
-
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
   window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
   const parseSeq = window.__ttParseSeq;
-  appendFileOnlyLog('json.parse.meta', {
-    hash: location.hash || '',
-    path: location.pathname || '',
-    search: location.search || '',
-    detectedPage,
-    parseSeq,
-    rootType: Array.isArray(r) ? 'array' : typeof r,
-    rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
-  });
-  appendFileOnlyLog('json.parse.full', r);
-
-  if (Array.isArray(r)) {
-    appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
-    for (let i = 0; i < r.length; i++) {
-      processResponsePayload(r[i], detectedPage);
-    }
-    return r;
-  }
-
-  // Drop "masthead" ad from home screen
-  if (
-    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
-      ?.sectionListRenderer?.contents
-  ) {
-    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
-  }
 
   // Library tab pruning: must run unconditionally whenever we're on the library page,
   // because the library page sends its nav tabs via tvSecondaryNavRenderer (not tvSurfaceContentRenderer),
@@ -433,8 +405,6 @@ JSON.parse = function () {
 
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
-    const continuation = r.continuationContents.horizontalListContinuation;
-    normalizeHorizontalListRenderer(r.continuationContents.horizontalListContinuation, 'continuation.horizontal');
     if (detectedPage === 'library') {
       r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items, 'continuation.horizontalListContinuation.items');
       pruneLibraryTabsInResponse(r.continuationContents, 'response.continuationContents');
@@ -443,112 +413,11 @@ JSON.parse = function () {
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
-
   }
 
   // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
   processTileArraysDeep(r, detectedPage, 'response');
 
-  if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
-
-    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
-    if (window.queuedVideos.videos.length > 0) {
-      const queuedVideosClone = window.queuedVideos.videos.slice();
-      queuedVideosClone.unshift(TileRenderer(
-        'Clear Queue',
-        {
-          customAction: {
-            action: 'CLEAR_QUEUE'
-          }
-        }));
-      r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.unshift(ShelfRenderer(
-        'Queued Videos',
-        queuedVideosClone,
-        queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ?
-          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId)
-          : 0
-      ));
-    }
-  }
-  /*
- 
-  Chapters are disabled due to the API removing description data which was used to generate chapters
- 
-  if (r?.contents?.singleColumnWatchNextResults?.results?.results?.contents && configRead('enableChapters')) {
-    const chapterData = Chapters(r);
-    r.frameworkUpdates.entityBatchUpdate.mutations.push(chapterData);
-    resolveCommand({
-      "clickTrackingParams": "null",
-      "loadMarkersCommand": {
-        "visibleOnLoadKeys": [
-          chapterData.entityKey
-        ],
-        "entityKeys": [
-          chapterData.entityKey
-        ]
-      }
-    });
-  }*/
-
-  // Manual SponsorBlock Skips
-
-  if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
-    const manualSkippedSegments = configRead('sponsorBlockManualSkips');
-    let timelyActions = [];
-    if (window?.sponsorblock?.segments) {
-      for (const segment of window.sponsorblock.segments) {
-        if (manualSkippedSegments.includes(segment.category)) {
-          const timelyActionData = timelyAction(
-            `Skip ${segment.category}`,
-            'SKIP_NEXT',
-            {
-              clickTrackingParams: null,
-              showEngagementPanelEndpoint: {
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: segment.segment[1]
-                  }
-                }
-              }
-            },
-            segment.segment[0] * 1000,
-            segment.segment[1] * 1000 - segment.segment[0] * 1000
-          );
-          timelyActions.push(timelyActionData);
-        }
-      }
-      r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
-    }
-  } else if (r?.playerOverlays?.playerOverlayRenderer) {
-    r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
-  }
-
-  if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
-    if (window?.sponsorblock?.segments) {
-      const category = window.sponsorblock.segments.find(seg => seg.category === 'poi_highlight');
-      if (category) {
-        r.transportControls.transportControlsRenderer.promotedActions.push({
-          type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
-          button: {
-            buttonRenderer: ButtonRenderer(
-              false,
-              'Skip to highlight',
-              'SKIP_NEXT',
-              {
-                clickTrackingParams: null,
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: category.segment[0]
-                  }
-                }
-              })
-          }
-        });
-      }
-    }
-  }
 
   return r;
   } catch (error) {
@@ -569,11 +438,6 @@ for (const key in window._yttv) {
 }
 
 
-// FIX (Bug 1): Replaced for...of + splice with a reverse for-loop.
-// The old for...of loop mutated the array while iterating — when an item was spliced out at
-// index i, the item that was at i+1 shifted to i, but the iterator advanced to i+1, silently
-// skipping it. This caused the Shorts shelf (and any shelf immediately after a removed one)
-// to be missed. Iterating in reverse avoids all index-shift problems.
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   const activePage = pageHint || getActivePage();
@@ -595,26 +459,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       textPreview: shelfAllText.substring(0, 80)
     });
 
-    if (!configRead('enableShorts') && isShortsShelf(shelve)) {
-      appendFileOnlyLog('shorts.reelShelf.remove', {
-        page: activePage,
-        reason: 'is_shorts_shelf'
-      });
-      shelves.splice(i, 1);
-      continue;
-    }
-
-    // Some channel surfaces include "Shorts" shelf-like rows under non-shelf renderers.
-    if (!configRead('enableShorts') && !shelve?.shelfRenderer && /\bshorts?\b/i.test(shelfAllText)) {
-      appendFileOnlyLog('shorts.genericShelf.remove', {
-        page: activePage,
-        index: i,
-        keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
-        textPreview: shelfAllText.substring(0, 120)
-      });
-      shelves.splice(i, 1);
-      continue;
-    }
 
     if (!shelve.shelfRenderer) continue;
 
@@ -626,26 +470,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
     if (activePage === 'library') {
       shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
       normalizeHorizontalListRenderer(shelve.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:library`);
-    }
-    if (!configRead('enableShorts')) {
-      const shelfTitleDirect = String(shelve?.shelfRenderer?.title?.simpleText || '').toLowerCase();
-      const shelfTitleFromHeader = collectAllText(shelve?.shelfRenderer?.header).join(' ').toLowerCase();
-      const shelfTitle = shelfTitleDirect || shelfTitleFromHeader;
-      appendFileOnlyLogOnce('shelf.title.' + shelfTitle.substring(0, 24), {
-        page: activePage,
-        rendererType: shelve?.shelfRenderer?.tvhtml5ShelfRendererType || '',
-        direct: shelfTitleDirect, fromHeader: shelfTitleFromHeader.substring(0, 60)
-      });
-      if (isShortsShelf(shelve)) {
-        appendFileOnlyLog('shorts.shelf.remove', {
-          page: activePage,
-          reason: 'is_shorts_shelf',
-          shelfTitle: shelve?.shelfRenderer?.title || ''
-        });
-        // Safe to splice because we are iterating in reverse
-        shelves.splice(i, 1);
-        continue;
-      }
     }
   }
 }
@@ -665,143 +489,6 @@ function getGenericNodeProgress(item) {
   if (!entries.length) return null;
   const best = entries.reduce((max, entry) => Number(entry.percent) > Number(max.percent) ? entry : max, entries[0]);
   return { percentDurationWatched: Number(best.percent || 0), source: best.source || 'deep_scan' };
-}
-
-
-function addPreviews(items) {
-  if (!configRead('enablePreviews')) return;
-  for (const item of items) {
-    if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
-      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
-      item.tileRenderer.onFocusCommand = {
-        startInlinePlaybackCommand: {
-          blockAdoption: true,
-          caption: false,
-          delayMs: 3000,
-          durationMs: 40000,
-          muted: false,
-          restartPlaybackBeforeSeconds: 10,
-          resumeVideo: true,
-          playbackEndpoint: watchEndpoint
-        }
-      };
-    }
-  }
-}
-
-function deArrowify(items) {
-  if (!Array.isArray(items)) return;
-  // Iterate in reverse so splicing an adSlotRenderer doesn't shift indices of unvisited items.
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i];
-    if (!item || typeof item !== 'object') continue;
-    if (item.adSlotRenderer) {
-      items.splice(i, 1);
-      continue;
-    }
-    if (!item?.tileRenderer) continue;
-    if (configRead('enableDeArrow')) {
-      // Capture item reference so the async callback isn't affected by loop variable changes.
-      const capturedItem = item;
-      const videoID = capturedItem.tileRenderer.contentId;
-      fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`).then(res => res.json()).then(data => {
-        if (data.titles.length > 0) {
-          const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
-          capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
-        }
-
-        if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
-          const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
-          if (mostVotedThumbnail.timestamp) {
-            capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-              {
-                url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`,
-                width: 1280,
-                height: 640
-              }
-            ]
-          }
-        }
-      }).catch(() => { });
-    }
-  }
-}
-
-
-function hqify(items) {
-  if (!Array.isArray(items)) return;
-  for (const item of items) {
-    try {
-    if (!item?.tileRenderer) continue;
-    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
-    if (
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
-    ) continue;
-    if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
-      if (!videoID) continue;
-      const queryArgs = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url?.split('?')[1];
-      item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-        {
-          url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
-          width: 640,
-          height: 480
-        }
-      ];
-    }
-    } catch (error) {
-      appendFileOnlyLog('hqify.item.error', {
-        message: error?.message || String(error),
-        stack: String(error?.stack || '').substring(0, 400),
-        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
-      });
-    }
-  }
-}
-
-function addLongPress(items) {
-  if (!Array.isArray(items)) return;
-  for (const item of items) {
-    try {
-    if (!item?.tileRenderer) continue;
-    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
-    if (
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
-    ) continue;
-    if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
-        clickTrackingParams: null,
-        playlistEditEndpoint: {
-          customAction: {
-            action: 'ADD_TO_QUEUE',
-            parameters: item
-          }
-        }
-      }));
-      continue;
-    }
-    if (!configRead('enableLongPress')) continue;
-    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
-    const data = longPressData({
-      videoId: item.tileRenderer.contentId,
-      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
-      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
-      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
-      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
-      item
-    });
-    item.tileRenderer.onLongPressCommand = data;
-    } catch (error) {
-      appendFileOnlyLog('addLongPress.item.error', {
-        message: error?.message || String(error),
-        stack: String(error?.stack || '').substring(0, 400),
-        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
-      });
-    }
-  }
 }
 
 function getTileWatchProgress(item) {
@@ -888,52 +575,8 @@ function hideVideo(items, pageHint = null) {
     enableShorts: shortsEnabled
   });
 
-  let removedWatched = 0;
-  let removedShorts = 0;
   const result = items.filter(item => {
     try {
-    const hasTileRenderer = !!item?.tileRenderer;
-    if (!hasTileRenderer) {
-      if (isLikelyPlaceholderItem(item)) {
-        appendFileOnlyLog('hideVideo.item.skip', {
-          pageName,
-          rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-          reason: 'placeholder_removed'
-        });
-        return false;
-      }
-      const genericTitle = collectAllText(item).join(' ').trim().substring(0, 120) || 'unknown';
-      const genericProgress = getGenericNodeProgress(item) || (isWatchedByTextSignals(item) ? { percentDurationWatched: 100, source: 'text_signal' } : null);
-      const genericShortLike = !shortsEnabled && /\bshorts?\b/i.test(genericTitle);
-
-      if (genericShortLike) {
-        removedShorts++;
-        appendFileOnlyLog('hideVideo.item.generic', { pageName, title: genericTitle, remove: true, reason: 'generic_short_detected' });
-        return false;
-      }
-
-      if (genericProgress && hideWatchedEnabled && pages.includes(pageName)) {
-        const percentWatched = Number(genericProgress.percentDurationWatched || 0);
-        const remove = percentWatched > threshold;
-        if (remove) removedWatched++;
-        appendFileOnlyLog('hideVideo.item.generic', {
-          pageName,
-          title: genericTitle,
-          percentWatched,
-          threshold,
-          remove,
-          source: genericProgress.source || 'generic'
-        });
-        return !remove;
-      }
-
-      appendFileOnlyLog('hideVideo.item.skip', {
-        pageName,
-        rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-        reason: 'no_tile_renderer'
-      });
-      return true;
-    }
 
     const tileProgressBar = getTileWatchProgress(item);
     const videoId = getItemVideoId(item);
@@ -983,7 +626,6 @@ function hideVideo(items, pageHint = null) {
 
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const remove = percentWatched > threshold;
-    if (remove) removedWatched++;
 
     return !remove;
     } catch (error) {
