@@ -491,6 +491,50 @@ function getGenericNodeProgress(item) {
   return { percentDurationWatched: Number(best.percent || 0), source: best.source || 'deep_scan' };
 }
 
+
+function addLongPress(items) {
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    try {
+    if (!item?.tileRenderer) continue;
+    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
+    if (
+      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
+      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
+    ) continue;
+    if (item.tileRenderer.onLongPressCommand) {
+      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
+        clickTrackingParams: null,
+        playlistEditEndpoint: {
+          customAction: {
+            action: 'ADD_TO_QUEUE',
+            parameters: item
+          }
+        }
+      }));
+      continue;
+    }
+    if (!configRead('enableLongPress')) continue;
+    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+    const data = longPressData({
+      videoId: item.tileRenderer.contentId,
+      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
+      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
+      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
+      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
+      item
+    });
+    item.tileRenderer.onLongPressCommand = data;
+    } catch (error) {
+      appendFileOnlyLog('addLongPress.item.error', {
+        message: error?.message || String(error),
+        stack: String(error?.stack || '').substring(0, 400),
+        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
+      });
+    }
+  }
+}
+
 function getTileWatchProgress(item) {
   const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
   const resumeOverlay = overlays.find((o) => o.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
@@ -575,8 +619,52 @@ function hideVideo(items, pageHint = null) {
     enableShorts: shortsEnabled
   });
 
+  let removedWatched = 0;
+  let removedShorts = 0;
   const result = items.filter(item => {
     try {
+    const hasTileRenderer = !!item?.tileRenderer;
+    if (!hasTileRenderer) {
+      if (isLikelyPlaceholderItem(item)) {
+        appendFileOnlyLog('hideVideo.item.skip', {
+          pageName,
+          rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
+          reason: 'placeholder_removed'
+        });
+        return false;
+      }
+      const genericTitle = collectAllText(item).join(' ').trim().substring(0, 120) || 'unknown';
+      const genericProgress = getGenericNodeProgress(item) || (isWatchedByTextSignals(item) ? { percentDurationWatched: 100, source: 'text_signal' } : null);
+      const genericShortLike = !shortsEnabled && /\bshorts?\b/i.test(genericTitle);
+
+      if (genericShortLike) {
+        removedShorts++;
+        appendFileOnlyLog('hideVideo.item.generic', { pageName, title: genericTitle, remove: true, reason: 'generic_short_detected' });
+        return false;
+      }
+
+      if (genericProgress && hideWatchedEnabled && pages.includes(pageName)) {
+        const percentWatched = Number(genericProgress.percentDurationWatched || 0);
+        const remove = percentWatched > threshold;
+        if (remove) removedWatched++;
+        appendFileOnlyLog('hideVideo.item.generic', {
+          pageName,
+          title: genericTitle,
+          percentWatched,
+          threshold,
+          remove,
+          source: genericProgress.source || 'generic'
+        });
+        return !remove;
+      }
+
+      appendFileOnlyLog('hideVideo.item.skip', {
+        pageName,
+        rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
+        reason: 'no_tile_renderer'
+      });
+      return true;
+    }
 
     const tileProgressBar = getTileWatchProgress(item);
     const videoId = getItemVideoId(item);
@@ -626,6 +714,7 @@ function hideVideo(items, pageHint = null) {
 
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const remove = percentWatched > threshold;
+    if (remove) removedWatched++;
 
     return !remove;
     } catch (error) {
