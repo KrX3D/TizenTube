@@ -386,7 +386,6 @@ const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   try {
-  const adBlockEnabled = configRead('enableAdBlock');
 
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
@@ -520,85 +519,6 @@ JSON.parse = function () {
       ));
     }
   }
-  /*
- 
-  Chapters are disabled due to the API removing description data which was used to generate chapters
- 
-  if (r?.contents?.singleColumnWatchNextResults?.results?.results?.contents && configRead('enableChapters')) {
-    const chapterData = Chapters(r);
-    r.frameworkUpdates.entityBatchUpdate.mutations.push(chapterData);
-    resolveCommand({
-      "clickTrackingParams": "null",
-      "loadMarkersCommand": {
-        "visibleOnLoadKeys": [
-          chapterData.entityKey
-        ],
-        "entityKeys": [
-          chapterData.entityKey
-        ]
-      }
-    });
-  }*/
-
-  // Manual SponsorBlock Skips
-
-  if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
-    const manualSkippedSegments = configRead('sponsorBlockManualSkips');
-    let timelyActions = [];
-    if (window?.sponsorblock?.segments) {
-      for (const segment of window.sponsorblock.segments) {
-        if (manualSkippedSegments.includes(segment.category)) {
-          const timelyActionData = timelyAction(
-            `Skip ${segment.category}`,
-            'SKIP_NEXT',
-            {
-              clickTrackingParams: null,
-              showEngagementPanelEndpoint: {
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: segment.segment[1]
-                  }
-                }
-              }
-            },
-            segment.segment[0] * 1000,
-            segment.segment[1] * 1000 - segment.segment[0] * 1000
-          );
-          timelyActions.push(timelyActionData);
-        }
-      }
-      r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
-    }
-  } else if (r?.playerOverlays?.playerOverlayRenderer) {
-    r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
-  }
-
-  if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
-    if (window?.sponsorblock?.segments) {
-      const category = window.sponsorblock.segments.find(seg => seg.category === 'poi_highlight');
-      if (category) {
-        r.transportControls.transportControlsRenderer.promotedActions.push({
-          type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
-          button: {
-            buttonRenderer: ButtonRenderer(
-              false,
-              'Skip to highlight',
-              'SKIP_NEXT',
-              {
-                clickTrackingParams: null,
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: category.segment[0]
-                  }
-                }
-              })
-          }
-        });
-      }
-    }
-  }
 
   return r;
   } catch (error) {
@@ -618,12 +538,6 @@ for (const key in window._yttv) {
   }
 }
 
-
-// FIX (Bug 1): Replaced for...of + splice with a reverse for-loop.
-// The old for...of loop mutated the array while iterating — when an item was spliced out at
-// index i, the item that was at i+1 shifted to i, but the iterator advanced to i+1, silently
-// skipping it. This caused the Shorts shelf (and any shelf immediately after a removed one)
-// to be missed. Iterating in reverse avoids all index-shift problems.
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   const activePage = pageHint || getActivePage();
@@ -708,75 +622,6 @@ function getItemVideoId(item) {
     item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
     ''
   );
-}
-
-function getGenericNodeProgress(item) {
-  const entries = collectWatchProgressEntries(item);
-  if (!entries.length) return null;
-  const best = entries.reduce((max, entry) => Number(entry.percent) > Number(max.percent) ? entry : max, entries[0]);
-  return { percentDurationWatched: Number(best.percent || 0), source: best.source || 'deep_scan' };
-}
-
-
-function addPreviews(items) {
-  if (!configRead('enablePreviews')) return;
-  for (const item of items) {
-    if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
-      if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
-      item.tileRenderer.onFocusCommand = {
-        startInlinePlaybackCommand: {
-          blockAdoption: true,
-          caption: false,
-          delayMs: 3000,
-          durationMs: 40000,
-          muted: false,
-          restartPlaybackBeforeSeconds: 10,
-          resumeVideo: true,
-          playbackEndpoint: watchEndpoint
-        }
-      };
-    }
-  }
-}
-
-function getTileWatchProgress(item) {
-  const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
-  const resumeOverlay = overlays.find((o) => o.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-  if (resumeOverlay?.percentDurationWatched !== undefined) {
-    return { percentDurationWatched: Number(resumeOverlay.percentDurationWatched || 0), source: 'tile_overlay_resume' };
-  }
-
-  const progressOverlay = overlays.find((o) => o.thumbnailOverlayPlaybackProgressRenderer)?.thumbnailOverlayPlaybackProgressRenderer;
-  if (progressOverlay?.percentDurationWatched !== undefined) {
-    return { percentDurationWatched: Number(progressOverlay.percentDurationWatched || 0), source: 'tile_overlay_playback_progress' };
-  }
-
-  const playedOverlay = overlays.find((o) => o.thumbnailOverlayPlaybackStatusRenderer)?.thumbnailOverlayPlaybackStatusRenderer;
-  if (playedOverlay?.status === 'PLAYBACK_STATUS_PLAYED' || playedOverlay?.status === 'WATCHED') {
-    return { percentDurationWatched: 100, source: 'tile_overlay_played_status' };
-  }
-
-  return null;
-}
-
-function isWatchedByTextSignals(item) {
-  const text = collectAllText(item?.tileRenderer || item).join(' ').toLowerCase();
-  if (!text) return false;
-  return (
-    text.includes('watched') ||
-    text.includes('already watched') ||
-    text.includes('gesehen') ||
-    text.includes('bereits angesehen')
-  );
-}
-
-function isLikelyPlaceholderItem(item) {
-  if (!item || typeof item !== 'object') return false;
-  if (item.continuationItemRenderer || item.adSlotRenderer) return true;
-
-  const keys = Object.keys(item);
-  return keys.some((key) => /placeholder|skeleton/i.test(key));
 }
 
 function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
