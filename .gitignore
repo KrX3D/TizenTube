@@ -1,6 +1,7 @@
 packets/
 node_modules/
 *.wgt
-dist/
+dist/service.js
+dist/userScript.js
 .sign
 package-lock.json
