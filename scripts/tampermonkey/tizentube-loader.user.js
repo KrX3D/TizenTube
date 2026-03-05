@@ -9,10 +9,11 @@
 // @grant        none
 // @updateURL    https://raw.githubusercontent.com/KrX3D/TizenTube/hide_tabs_library/scripts/tampermonkey/tizentube-loader.user.js
 // @downloadURL  https://raw.githubusercontent.com/KrX3D/TizenTube/hide_tabs_library/scripts/tampermonkey/tizentube-loader.user.js
-// @require      https://raw.githubusercontent.com/KrX3D/TizenTube/hide_tabs_library/dist/userScript.js
+// @require      https://raw.githubusercontent.com/KrX3D/TizenTube/refs/heads/hide_tabs_library/dist/userScript.js
 // ==/UserScript==
 
 (function () {
   // The actual TizenTube code is loaded via @require.
   // Tampermonkey updates this script by @version and update checks.
+
 })();
