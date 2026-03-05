@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TizenTube Loader
 // @namespace    https://github.com/KrX3D/TizenTube
-// @version      0.4
+// @version      0.5
 // @description  Load TizenTube userscript bundle for local /tv debugging
 // @match        https://www.youtube.com/tv*
 // @match        https://youtube.com/tv*
@@ -17,3 +17,4 @@
   // Tampermonkey updates this script by @version and update checks.
 
 })();
+
