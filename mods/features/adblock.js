@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { PatchSettings } from '../ui/customYTSettings.js';
 
 function detectCurrentPage() {
   const hash = location.hash ? location.hash.substring(1) : '';
@@ -52,45 +53,30 @@ function isHiddenLibraryBrowseId(value) {
   return false;
 }
 
-function extractBrowseIdsDeep(node, out = new Set(), depth = 0) {
-  if (!node || depth > 8) return out;
-  if (Array.isArray(node)) {
-    for (const child of node) extractBrowseIdsDeep(child, out, depth + 1);
-    return out;
-  }
-  if (typeof node !== 'object') return out;
-
-  const browseId = node?.browseEndpoint?.browseId;
-  if (typeof browseId === 'string' && browseId) out.add(browseId);
-
-  for (const key of Object.keys(node)) {
-    extractBrowseIdsDeep(node[key], out, depth + 1);
-  }
-
-  return out;
+function filterHiddenLibraryTabs(items) {
+  if (!Array.isArray(items)) return items;
+  return items.filter((item) => {
+    const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+    return !isHiddenLibraryBrowseId(contentId);
+  });
 }
 
 function pruneLibraryTabsInResponse(node) {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
-    for (let i = node.length - 1; i >= 0; i--) {
-      const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
-      if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
-        node.splice(i, 1);
-      }
-    }
-    for (let i = 0; i < node.length; i++) {
-      pruneLibraryTabsInResponse(node[i]);
+    for (const child of node) {
+      pruneLibraryTabsInResponse(child);
     }
     return;
   }
 
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = node.horizontalListRenderer.items.filter((item) => {
-      const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
-      return !isHiddenLibraryBrowseId(contentId);
-    });
+    node.horizontalListRenderer.items = filterHiddenLibraryTabs(node.horizontalListRenderer.items);
+  }
+
+  if (Array.isArray(node?.continuationContents?.horizontalListContinuation?.items)) {
+    node.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(node.continuationContents.horizontalListContinuation.items);
   }
 
   for (const key of Object.keys(node)) {
@@ -106,6 +92,10 @@ JSON.parse = function () {
     const detectedPage = detectPageFromResponse(response) || detectCurrentPage();
     if (detectedPage === 'library') {
       pruneLibraryTabsInResponse(response);
+    }
+
+    if (response?.title?.runs) {
+      PatchSettings(response);
     }
   } catch (_) {
     // Keep response unchanged if parsing hook hits an edge-case.
