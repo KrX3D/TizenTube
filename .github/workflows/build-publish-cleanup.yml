@@ -104,6 +104,10 @@
 name: Build, publish and cleanup old npm versions
 
 on:
+  pull_request:
+    paths-ignore:
+      - 'dist/**'
+      - 'package.json'
   push:
     branches:
       - main
@@ -116,6 +120,7 @@ on:
       - 'README.md'
       - 'package.json'
       - 'dist/**'
+      - 'scripts/**'
   workflow_dispatch:
 
 # Allow this workflow to push back changes to the repo
