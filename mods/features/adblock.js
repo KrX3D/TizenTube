@@ -20,6 +20,8 @@ JSON.parse = function () {
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
 
+  try {
+
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
   }
@@ -234,7 +236,11 @@ JSON.parse = function () {
     }
   }
 
-  return r;
+    return r;
+  } catch (error) {
+    console.warn('[TizenTube] adblock parser patch failed', error);
+    return r;
+  }
 };
 
 // Patch JSON.parse to use the custom one
