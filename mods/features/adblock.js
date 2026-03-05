@@ -431,7 +431,6 @@ JSON.parse = function () {
     PatchSettings(r);
   }
 
-  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
@@ -741,120 +740,6 @@ function addPreviews(items) {
   }
 }
 
-function deArrowify(items) {
-  if (!Array.isArray(items)) return;
-  // Iterate in reverse so splicing an adSlotRenderer doesn't shift indices of unvisited items.
-  for (let i = items.length - 1; i >= 0; i--) {
-    const item = items[i];
-    if (!item || typeof item !== 'object') continue;
-    if (item.adSlotRenderer) {
-      items.splice(i, 1);
-      continue;
-    }
-    if (!item?.tileRenderer) continue;
-    if (configRead('enableDeArrow')) {
-      // Capture item reference so the async callback isn't affected by loop variable changes.
-      const capturedItem = item;
-      const videoID = capturedItem.tileRenderer.contentId;
-      fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`).then(res => res.json()).then(data => {
-        if (data.titles.length > 0) {
-          const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
-          capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
-        }
-
-        if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
-          const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
-          if (mostVotedThumbnail.timestamp) {
-            capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-              {
-                url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`,
-                width: 1280,
-                height: 640
-              }
-            ]
-          }
-        }
-      }).catch(() => { });
-    }
-  }
-}
-
-
-function hqify(items) {
-  if (!Array.isArray(items)) return;
-  for (const item of items) {
-    try {
-    if (!item?.tileRenderer) continue;
-    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
-    if (
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
-    ) continue;
-    if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
-      if (!videoID) continue;
-      const queryArgs = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url?.split('?')[1];
-      item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-        {
-          url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
-          width: 640,
-          height: 480
-        }
-      ];
-    }
-    } catch (error) {
-      appendFileOnlyLog('hqify.item.error', {
-        message: error?.message || String(error),
-        stack: String(error?.stack || '').substring(0, 400),
-        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
-      });
-    }
-  }
-}
-
-function addLongPress(items) {
-  if (!Array.isArray(items)) return;
-  for (const item of items) {
-    try {
-    if (!item?.tileRenderer) continue;
-    // FIX (Bug 3): Also handle vertical-list tiles used in playlists.
-    if (
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' &&
-      item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST'
-    ) continue;
-    if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
-        clickTrackingParams: null,
-        playlistEditEndpoint: {
-          customAction: {
-            action: 'ADD_TO_QUEUE',
-            parameters: item
-          }
-        }
-      }));
-      continue;
-    }
-    if (!configRead('enableLongPress')) continue;
-    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
-    const data = longPressData({
-      videoId: item.tileRenderer.contentId,
-      thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
-      title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
-      subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText,
-      watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
-      item
-    });
-    item.tileRenderer.onLongPressCommand = data;
-    } catch (error) {
-      appendFileOnlyLog('addLongPress.item.error', {
-        message: error?.message || String(error),
-        stack: String(error?.stack || '').substring(0, 400),
-        keys: item && typeof item === 'object' ? Object.keys(item).slice(0, 8) : typeof item
-      });
-    }
-  }
-}
-
 function getTileWatchProgress(item) {
   const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
   const resumeOverlay = overlays.find((o) => o.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
@@ -939,102 +824,21 @@ function hideVideo(items, pageHint = null) {
     enableShorts: shortsEnabled
   });
 
-  let removedWatched = 0;
   let removedShorts = 0;
   const result = items.filter(item => {
     try {
-    const hasTileRenderer = !!item?.tileRenderer;
-    if (!hasTileRenderer) {
-      if (isLikelyPlaceholderItem(item)) {
-        appendFileOnlyLog('hideVideo.item.skip', {
-          pageName,
-          rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-          reason: 'placeholder_removed'
-        });
-        return false;
-      }
-      const genericTitle = collectAllText(item).join(' ').trim().substring(0, 120) || 'unknown';
-      const genericProgress = getGenericNodeProgress(item) || (isWatchedByTextSignals(item) ? { percentDurationWatched: 100, source: 'text_signal' } : null);
-      const genericShortLike = !shortsEnabled && /\bshorts?\b/i.test(genericTitle);
-
-      if (genericShortLike) {
-        removedShorts++;
-        appendFileOnlyLog('hideVideo.item.generic', { pageName, title: genericTitle, remove: true, reason: 'generic_short_detected' });
-        return false;
-      }
-
-      if (genericProgress && hideWatchedEnabled && pages.includes(pageName)) {
-        const percentWatched = Number(genericProgress.percentDurationWatched || 0);
-        const remove = percentWatched > threshold;
-        if (remove) removedWatched++;
-        appendFileOnlyLog('hideVideo.item.generic', {
-          pageName,
-          title: genericTitle,
-          percentWatched,
-          threshold,
-          remove,
-          source: genericProgress.source || 'generic'
-        });
-        return !remove;
-      }
-
-      appendFileOnlyLog('hideVideo.item.skip', {
-        pageName,
-        rendererKeys: item && typeof item === 'object' ? Object.keys(item).slice(0, 5) : typeof item,
-        reason: 'no_tile_renderer'
-      });
-      return true;
-    }
-
-    const tileProgressBar = getTileWatchProgress(item);
     const videoId = getItemVideoId(item);
     const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || videoId || 'unknown';
 
     const contentId = videoId.toLowerCase();
-    const cachedProgress = window._ttVideoProgressCache?.[videoId] ?? null;
-    const textWatched = isWatchedByTextSignals(item);
-    const progressBar = tileProgressBar ?? cachedProgress ?? (textWatched ? { percentDurationWatched: 100 } : null);
-    const progressSource = tileProgressBar?.source || (cachedProgress ? 'entity_cache' : 'none');
-
-    const currentParseSeq = Number(window.__ttParseSeq || 0);
-    const itemParseSeq = Number(item?.__ttKeepOneForContinuationParseSeq || 0);
-    const keepOneStillValid = pageName === 'playlist' && itemParseSeq > 0 && itemParseSeq === currentParseSeq;
-
-    if (item?.__ttKeepOneForContinuation) {
-      if (keepOneStillValid) {
-        appendFileOnlyLog('hideVideo.item.keep_one', {
-          pageName,
-          title,
-          videoId,
-          keepOneLabel: item?.__ttKeepOneForContinuationLabel || 'unknown',
-          parseSeq: itemParseSeq
-        });
-        return true;
-      }
-
-      appendFileOnlyLog('hideVideo.item.keep_one.expired', {
-        pageName,
-        title,
-        videoId,
-        keepOneLabel: item?.__ttKeepOneForContinuationLabel || 'unknown',
-        itemParseSeq,
-        currentParseSeq,
-        reason: pageName !== 'playlist' ? 'page_not_playlist' : 'parse_seq_mismatch'
-      });
-      delete item.__ttKeepOneForContinuation;
-      delete item.__ttKeepOneForContinuationLabel;
-      delete item.__ttKeepOneForContinuationParseSeq;
-    }
 
     if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) {
       appendFileOnlyLog('hideVideo.item', { pageName, title, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
       return false;
     }
 
-
     const percentWatched = Number(progressBar.percentDurationWatched || 0);
     const remove = percentWatched > threshold;
-    if (remove) removedWatched++;
 
     return !remove;
     } catch (error) {
