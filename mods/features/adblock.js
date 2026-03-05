@@ -1037,6 +1037,7 @@ function processResponsePayload(payload, detectedPage) {
  *
  * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
