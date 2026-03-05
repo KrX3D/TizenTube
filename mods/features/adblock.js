@@ -199,17 +199,56 @@ function filterLibraryNavTabs(sections, detectedPage) {
   }
 }
 
+function processResponsePayload(payload, detectedPage) {
+  if (!payload || typeof payload !== 'object') return;
+
+  if (detectedPage === 'library') {
+    pruneLibraryTabsInResponse(payload, 'arrayPayload');
+  }
+
+  processTileArraysDeep(payload, detectedPage, 'arrayPayload');
+}
+
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   try {
+
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
+  window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
+  const parseSeq = window.__ttParseSeq;
+  appendFileOnlyLog('json.parse.meta', {
+    hash: location.hash || '',
+    path: location.pathname || '',
+    search: location.search || '',
+    detectedPage,
+    parseSeq,
+    rootType: Array.isArray(r) ? 'array' : typeof r,
+    rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
+  });
+  appendFileOnlyLog('json.parse.full', r);
+
+  if (Array.isArray(r)) {
+    appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
+    for (let i = 0; i < r.length; i++) {
+      processResponsePayload(r[i], detectedPage);
+    }
+    return r;
+  }
+
+  // Drop "masthead" ad from home screen
+  if (
+    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
+      ?.sectionListRenderer?.contents
+  ) {
+    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
+  }
 
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
   }
-
+  
   if (r?.title?.runs) {
     PatchSettings(r);
   }
@@ -222,8 +261,15 @@ JSON.parse = function () {
     }
   }
 
+  // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
+  processTileArraysDeep(r, detectedPage, 'response');
+
   return r;
   } catch (error) {
+    appendFileOnlyLog('json.parse.error', {
+      message: error?.message || String(error),
+      stack: String(error?.stack || '').substring(0, 600)
+    });
     return r;
   }
 };
@@ -239,9 +285,21 @@ for (const key in window._yttv) {
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   const activePage = pageHint || getActivePage();
+  appendFileOnlyLog('processShelves.start', {
+    page: activePage,
+    shelfCount: shelves.length,
+    shouldAddPreviews
+  });
 
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelve = shelves[i];
+    appendFileOnlyLog('processShelves.item', {
+      page: activePage,
+      index: i,
+      keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
+      hasShelfRenderer: !!shelve?.shelfRenderer,
+      hasReelShelfRenderer: !!shelve?.reelShelfRenderer
+    });
 
     if (!shelve.shelfRenderer) continue;
     if (activePage === 'library') {
@@ -260,19 +318,65 @@ function getItemVideoId(item) {
   );
 }
 
+function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
+  if (!node || depth > 10) return;
+  const pageName = pageHint || getActivePage();
+
+  if (Array.isArray(node)) {
+    if (node.some((item) => item?.tileRenderer)) {
+      const before = node.length;
+      let filtered = hideVideo(node, pageName);
+      if (pageName === 'library') {
+        filtered = filterHiddenLibraryTabs(filtered, `deep:${path}`);
+      }
+      node.splice(0, node.length, ...filtered);
+      return;
+    }
+
+    for (let i = 0; i < node.length; i++) {
+      processTileArraysDeep(node[i], pageName, `${path}[${i}]`, depth + 1);
+    }
+    return;
+  }
+
+  if (typeof node !== 'object') return;
+  for (const key of Object.keys(node)) {
+    processTileArraysDeep(node[key], pageName, `${path}.${key}`, depth + 1);
+  }
+}
+
 function hideVideo(items, pageHint = null) {
   if (!Array.isArray(items)) return [];
+  const pages = configRead('hideWatchedVideosPages') || [];
   const pageName = pageHint || getActivePage();
+  const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
+
+  const hideWatchedEnabled = !!configRead('enableHideWatchedVideos');
+
+  appendFileOnlyLog('hideVideo.start', {
+    pageName,
+    threshold,
+    configuredPages: pages,
+    inputCount: Array.isArray(items) ? items.length : 0,
+    enableHideWatchedVideos: hideWatchedEnabled
+  });
 
   const result = items.filter(item => {
     try {
     const videoId = getItemVideoId(item);
+    const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || videoId || 'unknown';
+
     const contentId = videoId.toLowerCase();
 
     if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
+      appendFileOnlyLog('hideVideo.item', { pageName, title, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
       return false;
     }
+
+    const percentWatched = Number(progressBar.percentDurationWatched || 0);
+    const remove = percentWatched > threshold;
+
+    return !remove;
     } catch (error) {
       return true;
     }
