@@ -218,9 +218,6 @@ JSON.parse = function () {
     }
   }
 
-  // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
-  processTileArraysDeep(r, detectedPage, 'response');
-
   return r;
   } catch (error) {
     appendFileOnlyLog('json.parse.error', {
@@ -263,48 +260,10 @@ function getItemVideoId(item) {
   );
 }
 
-function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
-  if (!node || depth > 10) return;
-  const pageName = pageHint || getActivePage();
-
-  if (Array.isArray(node)) {
-    if (node.some((item) => item?.tileRenderer)) {
-      const before = node.length;
-      let filtered = hideVideo(node, pageName);
-      if (pageName === 'library') {
-        filtered = filterHiddenLibraryTabs(filtered, `deep:${path}`);
-      }
-      node.splice(0, node.length, ...filtered);
-      return;
-    }
-
-    for (let i = 0; i < node.length; i++) {
-      processTileArraysDeep(node[i], pageName, `${path}[${i}]`, depth + 1);
-    }
-    return;
-  }
-
-  if (typeof node !== 'object') return;
-  for (const key of Object.keys(node)) {
-    processTileArraysDeep(node[key], pageName, `${path}.${key}`, depth + 1);
-  }
-}
-
 function hideVideo(items, pageHint = null) {
   if (!Array.isArray(items)) return [];
-  const pages = configRead('hideWatchedVideosPages') || [];
   const pageName = pageHint || getActivePage();
   const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-
-  const hideWatchedEnabled = !!configRead('enableHideWatchedVideos');
-
-  appendFileOnlyLog('hideVideo.start', {
-    pageName,
-    threshold,
-    configuredPages: pages,
-    inputCount: Array.isArray(items) ? items.length : 0,
-    enableHideWatchedVideos: hideWatchedEnabled
-  });
 
   const result = items.filter(item => {
     try {
