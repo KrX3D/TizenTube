@@ -194,14 +194,6 @@ JSON.parse = function () {
     rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
   });
 
-  // Drop "masthead" ad from home screen
-  if (
-    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
-      ?.sectionListRenderer?.contents
-  ) {
-    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
-  }
-
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
   }
@@ -236,32 +228,6 @@ window.JSON.parse = JSON.parse;
 for (const key in window._yttv) {
   if (window._yttv[key] && window._yttv[key].JSON && window._yttv[key].JSON.parse) {
     window._yttv[key].JSON.parse = JSON.parse;
-  }
-}
-
-function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
-  if (!Array.isArray(shelves)) return;
-  const activePage = pageHint || getActivePage();
-  appendFileOnlyLog('processShelves.start', {
-    page: activePage,
-    shelfCount: shelves.length,
-    shouldAddPreviews
-  });
-
-  for (let i = shelves.length - 1; i >= 0; i--) {
-    const shelve = shelves[i];
-    appendFileOnlyLog('processShelves.item', {
-      page: activePage,
-      index: i,
-      keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
-      hasShelfRenderer: !!shelve?.shelfRenderer,
-      hasReelShelfRenderer: !!shelve?.reelShelfRenderer
-    });
-
-    if (!shelve.shelfRenderer) continue;
-    if (activePage === 'library') {
-      shelve.shelfRenderer.content.horizontalListRenderer.items = filterHiddenLibraryTabs(shelve.shelfRenderer.content.horizontalListRenderer.items, 'processShelves.shelfRenderer.horizontalListRenderer.items');
-    }
   }
 }
 
