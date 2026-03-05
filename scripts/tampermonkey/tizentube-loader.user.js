@@ -15,5 +15,4 @@
 (function () {
   // The actual TizenTube code is loaded via @require.
   // Tampermonkey updates this script by @version and update checks.
-
 })();
