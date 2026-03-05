@@ -386,6 +386,8 @@ const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   try {
+  const adBlockEnabled = configRead('enableAdBlock');
+
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
   window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
@@ -418,6 +420,65 @@ JSON.parse = function () {
   // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
   processTileArraysDeep(r, detectedPage, 'response');
 
+  // Manual SponsorBlock Skips
+
+  if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
+    const manualSkippedSegments = configRead('sponsorBlockManualSkips');
+    let timelyActions = [];
+    if (window?.sponsorblock?.segments) {
+      for (const segment of window.sponsorblock.segments) {
+        if (manualSkippedSegments.includes(segment.category)) {
+          const timelyActionData = timelyAction(
+            `Skip ${segment.category}`,
+            'SKIP_NEXT',
+            {
+              clickTrackingParams: null,
+              showEngagementPanelEndpoint: {
+                customAction: {
+                  action: 'SKIP',
+                  parameters: {
+                    time: segment.segment[1]
+                  }
+                }
+              }
+            },
+            segment.segment[0] * 1000,
+            segment.segment[1] * 1000 - segment.segment[0] * 1000
+          );
+          timelyActions.push(timelyActionData);
+        }
+      }
+      r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
+    }
+  } else if (r?.playerOverlays?.playerOverlayRenderer) {
+    r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
+  }
+
+  if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
+    if (window?.sponsorblock?.segments) {
+      const category = window.sponsorblock.segments.find(seg => seg.category === 'poi_highlight');
+      if (category) {
+        r.transportControls.transportControlsRenderer.promotedActions.push({
+          type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
+          button: {
+            buttonRenderer: ButtonRenderer(
+              false,
+              'Skip to highlight',
+              'SKIP_NEXT',
+              {
+                clickTrackingParams: null,
+                customAction: {
+                  action: 'SKIP',
+                  parameters: {
+                    time: category.segment[0]
+                  }
+                }
+              })
+          }
+        });
+      }
+    }
+  }
 
   return r;
   } catch (error) {
@@ -438,6 +499,11 @@ for (const key in window._yttv) {
 }
 
 
+// FIX (Bug 1): Replaced for...of + splice with a reverse for-loop.
+// The old for...of loop mutated the array while iterating — when an item was spliced out at
+// index i, the item that was at i+1 shifted to i, but the iterator advanced to i+1, silently
+// skipping it. This caused the Shorts shelf (and any shelf immediately after a removed one)
+// to be missed. Iterating in reverse avoids all index-shift problems.
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   const activePage = pageHint || getActivePage();
@@ -459,6 +525,26 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       textPreview: shelfAllText.substring(0, 80)
     });
 
+    if (!configRead('enableShorts') && isShortsShelf(shelve)) {
+      appendFileOnlyLog('shorts.reelShelf.remove', {
+        page: activePage,
+        reason: 'is_shorts_shelf'
+      });
+      shelves.splice(i, 1);
+      continue;
+    }
+
+    // Some channel surfaces include "Shorts" shelf-like rows under non-shelf renderers.
+    if (!configRead('enableShorts') && !shelve?.shelfRenderer && /\bshorts?\b/i.test(shelfAllText)) {
+      appendFileOnlyLog('shorts.genericShelf.remove', {
+        page: activePage,
+        index: i,
+        keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
+        textPreview: shelfAllText.substring(0, 120)
+      });
+      shelves.splice(i, 1);
+      continue;
+    }
 
     if (!shelve.shelfRenderer) continue;
 
