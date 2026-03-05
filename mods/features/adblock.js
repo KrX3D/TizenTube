@@ -392,6 +392,32 @@ JSON.parse = function () {
   window.__ttLastDetectedPage = detectedPage;
   window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
   const parseSeq = window.__ttParseSeq;
+  appendFileOnlyLog('json.parse.meta', {
+    hash: location.hash || '',
+    path: location.pathname || '',
+    search: location.search || '',
+    detectedPage,
+    parseSeq,
+    rootType: Array.isArray(r) ? 'array' : typeof r,
+    rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
+  });
+  appendFileOnlyLog('json.parse.full', r);
+
+  if (Array.isArray(r)) {
+    appendFileOnlyLog('json.parse.array.root', { detectedPage, length: r.length });
+    for (let i = 0; i < r.length; i++) {
+      processResponsePayload(r[i], detectedPage);
+    }
+    return r;
+  }
+
+  // Drop "masthead" ad from home screen
+  if (
+    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
+      ?.sectionListRenderer?.contents
+  ) {
+    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
+  }
 
   // Library tab pruning: must run unconditionally whenever we're on the library page,
   // because the library page sends its nav tabs via tvSecondaryNavRenderer (not tvSurfaceContentRenderer),
@@ -405,8 +431,24 @@ JSON.parse = function () {
     PatchSettings(r);
   }
 
+  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
+
+  if (r?.contents?.sectionListRenderer?.contents) {
+    processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
+  }
+
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, detectedPage);
+  }
+
+  if (r?.continuationContents?.sectionListContinuation?.contents) {
+    processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
+  }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
+    const continuation = r.continuationContents.horizontalListContinuation;
+    normalizeHorizontalListRenderer(r.continuationContents.horizontalListContinuation, 'continuation.horizontal');
     if (detectedPage === 'library') {
       r.continuationContents.horizontalListContinuation.items = filterHiddenLibraryTabs(r.continuationContents.horizontalListContinuation.items, 'continuation.horizontalListContinuation.items');
       pruneLibraryTabsInResponse(r.continuationContents, 'response.continuationContents');
@@ -415,10 +457,89 @@ JSON.parse = function () {
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     filterLibraryNavTabs(r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections, detectedPage);
+
+    for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
+      if (!Array.isArray(section?.tvSecondaryNavSectionRenderer?.tabs)) continue;
+
+      // Remove the "Shorts" tab from the channel nav bar when shorts are disabled.
+      // Previously only the tab's content was filtered; the tab button itself stayed visible.
+      if (!configRead('enableShorts')) {
+        const tabs = section.tvSecondaryNavSectionRenderer.tabs;
+        for (let i = tabs.length - 1; i >= 0; i--) {
+          const tab = tabs[i];
+          const tabTitle = String(
+            tab?.tabRenderer?.title?.simpleText ||
+            collectAllText(tab?.tabRenderer?.title).join(' ')
+          ).toLowerCase();
+          // Also catch via the endpoint browseId (Shorts tabs often point to a shorts browseId)
+          const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
+          if (tabTitle.includes('short') || tabBrowseId.includes('short')) {
+            appendFileOnlyLog('shorts.navtab.removed', { tabTitle, tabBrowseId, index: i });
+            tabs.splice(i, 1);
+            continue;
+          }
+        }
+      }
+
+      for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
+        const tabBrowseId = String(extractNavTabBrowseId(tab)).toLowerCase();
+        const tabPage = normalizeBrowseIdToPage(tabBrowseId) || detectedPage;
+        const contents = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(contents)) {
+          processShelves(contents, true, tabPage);
+        }
+
+        const gridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
+        if (Array.isArray(gridItems)) {
+          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, tabPage);
+        }
+      }
+    }
   }
 
   // Last-pass safety net for unknown/new TV response shapes that still carry tileRenderer arrays.
   processTileArraysDeep(r, detectedPage, 'response');
+
+  if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
+
+    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
+    if (window.queuedVideos.videos.length > 0) {
+      const queuedVideosClone = window.queuedVideos.videos.slice();
+      queuedVideosClone.unshift(TileRenderer(
+        'Clear Queue',
+        {
+          customAction: {
+            action: 'CLEAR_QUEUE'
+          }
+        }));
+      r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.unshift(ShelfRenderer(
+        'Queued Videos',
+        queuedVideosClone,
+        queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ?
+          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId)
+          : 0
+      ));
+    }
+  }
+  /*
+ 
+  Chapters are disabled due to the API removing description data which was used to generate chapters
+ 
+  if (r?.contents?.singleColumnWatchNextResults?.results?.results?.contents && configRead('enableChapters')) {
+    const chapterData = Chapters(r);
+    r.frameworkUpdates.entityBatchUpdate.mutations.push(chapterData);
+    resolveCommand({
+      "clickTrackingParams": "null",
+      "loadMarkersCommand": {
+        "visibleOnLoadKeys": [
+          chapterData.entityKey
+        ],
+        "entityKeys": [
+          chapterData.entityKey
+        ]
+      }
+    });
+  }*/
 
   // Manual SponsorBlock Skips
 
