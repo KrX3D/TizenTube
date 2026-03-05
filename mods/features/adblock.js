@@ -199,31 +199,12 @@ function filterLibraryNavTabs(sections, detectedPage) {
   }
 }
 
-function processResponsePayload(payload, detectedPage) {
-  if (!payload || typeof payload !== 'object') return;
-
-  if (detectedPage === 'library') {
-    pruneLibraryTabsInResponse(payload, 'arrayPayload');
-  }
-}
-
 const origParse = JSON.parse;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   try {
-
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
-  window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
-  const parseSeq = window.__ttParseSeq;
-
-  // Drop "masthead" ad from home screen
-  if (
-    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
-      ?.sectionListRenderer?.contents
-  ) {
-    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
-  }
 
   if (detectedPage === 'library') {
     pruneLibraryTabsInResponse(r, 'response');
@@ -258,21 +239,9 @@ for (const key in window._yttv) {
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   const activePage = pageHint || getActivePage();
-  appendFileOnlyLog('processShelves.start', {
-    page: activePage,
-    shelfCount: shelves.length,
-    shouldAddPreviews
-  });
 
   for (let i = shelves.length - 1; i >= 0; i--) {
     const shelve = shelves[i];
-    appendFileOnlyLog('processShelves.item', {
-      page: activePage,
-      index: i,
-      keys: shelve && typeof shelve === 'object' ? Object.keys(shelve).slice(0, 8) : typeof shelve,
-      hasShelfRenderer: !!shelve?.shelfRenderer,
-      hasReelShelfRenderer: !!shelve?.reelShelfRenderer
-    });
 
     if (!shelve.shelfRenderer) continue;
     if (activePage === 'library') {
@@ -293,36 +262,17 @@ function getItemVideoId(item) {
 
 function hideVideo(items, pageHint = null) {
   if (!Array.isArray(items)) return [];
-  const pages = configRead('hideWatchedVideosPages') || [];
   const pageName = pageHint || getActivePage();
-  const threshold = Number(configRead('hideWatchedVideosThreshold') || 0);
-
-  const hideWatchedEnabled = !!configRead('enableHideWatchedVideos');
-
-  appendFileOnlyLog('hideVideo.start', {
-    pageName,
-    threshold,
-    configuredPages: pages,
-    inputCount: Array.isArray(items) ? items.length : 0,
-    enableHideWatchedVideos: hideWatchedEnabled
-  });
 
   const result = items.filter(item => {
     try {
     const videoId = getItemVideoId(item);
-    const title = item?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText || videoId || 'unknown';
-
     const contentId = videoId.toLowerCase();
 
     if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
+      appendFileOnlyLog('hideVideo.item', { pageName, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
       return false;
     }
-
-    const percentWatched = Number(progressBar.percentDurationWatched || 0);
-    const remove = percentWatched > threshold;
-
-    return !remove;
     } catch (error) {
       return true;
     }
