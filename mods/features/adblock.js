@@ -4,28 +4,6 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer, showToast } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 
-function appendFileOnlyLog(label, payload) {
-  if (!configRead('enableDebugLogging')) return;
-
-  const activePage = window.__ttLastDetectedPage || detectCurrentPage();
-  const labelStr = String(label || '');
-  const isPlaylistPage = activePage === 'playlist' || activePage === 'playlists';
-  const isPlaylistLog = labelStr.startsWith('playlist.') || labelStr.startsWith('hideVideo.') || labelStr.startsWith('json.parse.meta') || labelStr.startsWith('page-detect');
-  if (!isPlaylistPage && !isPlaylistLog) return;
-
-  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
-
-  const stamp = new Date().toISOString();
-  let message = '';
-  if (typeof payload === 'string') message = payload;
-  else {
-    try { message = JSON.stringify(payload); } catch (_) { message = String(payload); }
-  }
-
-  window.__ttFileOnlyLogs.push(`[${stamp}] [TT_ADBLOCK_FILE] ${label} ${message}`);
-  if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
-}
-
 function detectCurrentPage() {
   const hash = location.hash ? location.hash.substring(1) : '';
   const cParam = (hash.match(/[?&]c=([^&]+)/i)?.[1] || '').toLowerCase();
@@ -108,20 +86,10 @@ function isHiddenLibraryBrowseId(value) {
 
 function filterHiddenLibraryTabs(items, context = '') {
   if (!Array.isArray(items)) return items;
-  const before = items.length;
   const filtered = items.filter((item) => {
     const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
     return !isHiddenLibraryBrowseId(contentId);
   });
-
-  if (before !== filtered.length) {
-    appendFileOnlyLog('library.tabs.filter', {
-      context,
-      before,
-      after: filtered.length,
-      removed: before - filtered.length
-    });
-  }
 
   return filtered;
 }
@@ -130,16 +98,11 @@ function pruneLibraryTabsInResponse(node, path = 'root') {
   if (!node || typeof node !== 'object') return;
 
   if (Array.isArray(node)) {
-    const before = node.length;
     for (let i = node.length - 1; i >= 0; i--) {
       const browseIds = Array.from(extractBrowseIdsDeep(node[i])).map((v) => String(v).toLowerCase());
       if (browseIds.some((id) => isHiddenLibraryBrowseId(id))) {
-        appendFileOnlyLog('library.array.pruned', { path, index: i, browseIds });
         node.splice(i, 1);
       }
-    }
-    if (before !== node.length) {
-      appendFileOnlyLog('library.array.pruned.summary', { path, before, after: node.length, removed: before - node.length });
     }
     for (let i = 0; i < node.length; i++) {
       pruneLibraryTabsInResponse(node[i], `${path}[${i}]`);
@@ -182,17 +145,6 @@ JSON.parse = function () {
 
   const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
   window.__ttLastDetectedPage = detectedPage;
-  window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
-  const parseSeq = window.__ttParseSeq;
-  appendFileOnlyLog('json.parse.meta', {
-    hash: location.hash || '',
-    path: location.pathname || '',
-    search: location.search || '',
-    detectedPage,
-    parseSeq,
-    rootType: Array.isArray(r) ? 'array' : typeof r,
-    rootKeys: r && typeof r === 'object' ? Object.keys(r).slice(0, 40) : []
-  });
 
   // Drop "masthead" ad from home screen
   if (
@@ -220,10 +172,6 @@ JSON.parse = function () {
 
   return r;
   } catch (error) {
-    appendFileOnlyLog('json.parse.error', {
-      message: error?.message || String(error),
-      stack: String(error?.stack || '').substring(0, 600)
-    });
     return r;
   }
 };
@@ -273,7 +221,6 @@ function hideVideo(items, pageHint = null) {
     const contentId = videoId.toLowerCase();
 
     if (pageName === 'library' && isHiddenLibraryBrowseId(contentId)) {
-      appendFileOnlyLog('hideVideo.item', { pageName, title, contentId, hasProgress: !!progressBar, remove: true, reason: 'library_tab_hidden' });
       return false;
     }
 
