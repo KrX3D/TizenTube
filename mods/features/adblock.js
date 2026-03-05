@@ -376,9 +376,13 @@ function detectCurrentPage() {
   const params = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : new URLSearchParams();
   const cParam = (params.get('c') || '').toLowerCase();
 
-  if (hash.startsWith('/watch')) return 'watch';
   if (cParam.includes('fesubscription')) return 'subscriptions';
   if (cParam.startsWith('uc')) return 'channel';
+  if (cParam === 'felibrary') return 'library';
+  if (cParam === 'fehistory') return 'history';
+  if (cParam === 'feplaylist_aggregation') return 'playlists';
+  if (cParam === 'femy_youtube' || cParam === 'vlwl' || cParam === 'vlll' || cParam.startsWith('vlpl')) return 'playlist';
+  if (hash.startsWith('/watch')) return 'watch';
 
   try {
     return hash === '/'
