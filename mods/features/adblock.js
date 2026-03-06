@@ -177,7 +177,7 @@ JSON.parse = function () {
         );
     }
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
-    consolidateWatchShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents);
+    consolidateShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
