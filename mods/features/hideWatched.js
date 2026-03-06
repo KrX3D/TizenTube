@@ -330,7 +330,7 @@ const _consolidatedArrays = new WeakSet();
 
 export function consolidateShelves(contents) {
   if (!configRead('enableHideWatchedVideos')) return;
-  if (_consolidatedArrays.has(contents)) return;  // already processed, skip
+  if (_consolidatedArrays.has(contents)) return;
   _consolidatedArrays.add(contents);
   
   const shelves = contents.filter(c => c.shelfRenderer);
