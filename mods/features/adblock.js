@@ -170,6 +170,11 @@ JSON.parse = function () {
     r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
   }
 
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
+  }
+
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
   }
