@@ -543,6 +543,11 @@ export default function modernUI(update, parameters) {
                                     value: 'library'
                                 },
                                 {
+                                    name: 'Library → Individual Playlists (WL, LL, etc)',
+                                    icon: 'PLAYLIST_PLAY',
+                                    value: 'playlist'
+                                },
+                                {
                                     name: 'More',
                                     value: 'more'
                                 },

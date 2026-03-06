@@ -44,7 +44,6 @@ const defaultConfig = {
       'gaming', 
       'subscriptions', 
       'channel',
-      'playlist',
       'more',
       'watch'
   ],

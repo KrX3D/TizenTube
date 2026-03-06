@@ -167,12 +167,7 @@ JSON.parse = function () {
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
-    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
-  }
-
-  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
-    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
-    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, detectedPage);
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
@@ -314,7 +309,6 @@ JSON.parse = function () {
     }
   }
 
-    processTileArraysDeep(r, detectedPage, 'response');
     return r;
   } catch (error) {
     if (!window.__ttAdblockParseWarned) {
@@ -358,6 +352,52 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       }
     }
   }
+}
+
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
+}
+
+function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
+  if (!node || depth > 7) return null;
+  if (typeof node !== 'object') return null;
+  if (seen.has(node)) return null;
+  seen.add(node);
+
+  const direct = Number(node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const childProgress = getGenericNodeProgress(child, depth + 1, seen);
+      if (childProgress !== null) return childProgress;
+    }
+    return null;
+  }
+
+  for (const key of Object.keys(node)) {
+    const childProgress = getGenericNodeProgress(node[key], depth + 1, seen);
+    if (childProgress !== null) return childProgress;
+  }
+
+  return null;
 }
 
 function getWatchProgress(item) {
@@ -534,47 +574,19 @@ function detectCurrentPage() {
   }
 }
 
-function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
-  if (!node || depth > 10) return;
-
-  if (Array.isArray(node)) {
-    if (node.some((item) => item?.tileRenderer)) {
-      const before = node.length;
-      const filtered = hideVideo(node, pageHint);
-      if (before !== filtered.length) {
-        appendFileOnlyLog('deep.tiles.filtered', {
-          path,
-          pageHint,
-          before,
-          after: filtered.length,
-          removed: before - filtered.length
-        });
-      }
-      node.splice(0, node.length, ...filtered);
-      return;
-    }
-
-    for (let i = 0; i < node.length; i++) {
-      processTileArraysDeep(node[i], pageHint, `${path}[${i}]`, depth + 1);
-    }
-    return;
-  }
-
-  if (typeof node !== 'object') return;
-  for (const key of Object.keys(node)) {
-    processTileArraysDeep(node[key], pageHint, `${path}.${key}`, depth + 1);
-  }
-}
-
 function hideVideo(items, pageHint = null) {
   return items.filter(item => {
     try {
+      if (!configRead('enableHideWatchedVideos')) return true;
+
       const pages = configRead('hideWatchedVideosPages');
       const hashPage = detectCurrentPage();
       const pageName = pageHint || ((hashPage === 'home' || hashPage === 'search')
         ? (window.__ttLastDetectedPage || hashPage)
         : hashPage);
-      if (!pages.includes(pageName)) return true;
+      if (!pages.includes(pageName)) {
+        return true;
+      }
 
       let percentWatched = null;
 
