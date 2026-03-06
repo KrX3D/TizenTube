@@ -102,10 +102,15 @@ function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
   return null;
 }
 
+function readChannelParamFromHash(hashValue) {
+  const hash = String(hashValue || '');
+  const match = hash.match(/(?:^|[?&])c=([^&]+)/i) || hash.match(/^c=([^&]+)/i);
+  return (match?.[1] || '').toLowerCase();
+}
+
 function detectCurrentPage() {
   const hash = location.hash ? location.hash.substring(1) : '';
-  const params = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : new URLSearchParams();
-  const cParam = (params.get('c') || '').toLowerCase();
+  const cParam = readChannelParamFromHash(hash) || readChannelParamFromHash(location.search);
 
   if (cParam.includes('fesubscription')) return 'subscriptions';
   if (cParam.startsWith('uc')) return 'channel';
@@ -142,6 +147,10 @@ export function hideVideo(items, pageHint = null) {
         pageName = (hashPage === 'home' || hashPage === 'search')
           ? (window.__ttLastDetectedPage || hashPage)
           : hashPage;
+      }
+
+      if (configRead('enableDebugLogging') && pageHint && pageHint !== pageName) {
+        appendFileOnlyLog('hideVideo.page.override', { pageHint, hashPage, pageName });
       }
 
       if (!pages.includes(pageName)) {
