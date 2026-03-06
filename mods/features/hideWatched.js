@@ -86,6 +86,8 @@ function getThumbnailOverlaysFromNode(node) {
     || node?.videoRenderer?.thumbnailOverlays
     || node?.gridVideoRenderer?.thumbnailOverlays
     || node?.compactVideoRenderer?.thumbnailOverlays
+    || node?.lockupViewModel?.contentImage?.thumbnailViewModel?.overlays
+    || node?.lockupViewModel?.contentImage?.collectionThumbnailViewModel?.primaryThumbnail?.thumbnailViewModel?.overlays
     || [];
 }
 
@@ -109,7 +111,13 @@ function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
     return 100;
   }
 
-  const direct = Number(node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent);
+  const direct = Number(
+    node.watchProgressPercentage
+    ?? node.percentDurationWatched
+    ?? node.watchedPercent
+    ?? node?.thumbnailOverlayResumePlaybackRenderer?.percentDurationWatched
+    ?? node?.lockupViewModel?.progressPercentage
+  );
   if (Number.isFinite(direct)) {
     return direct;
   }
@@ -139,7 +147,6 @@ function readChannelParamFromHash(hashValue) {
 export function detectCurrentPage() {
   const hash = location.hash ? location.hash.substring(1) : '';
   const cParam = readChannelParamFromHash(hash) || readChannelParamFromHash(location.search);
-  debugLog('page.detect.current.input', { hash, search: location.search || '', cParam, lastDetected: window.__ttLastDetectedPage || null });
 
   if (cParam.includes('fesubscription')) return 'subscriptions';
   if (cParam.startsWith('uc')) return 'channel';
@@ -185,6 +192,7 @@ function initializeLocationPageTracking() {
 export function hideVideo(items, pageHint = null) {
   initializeLocationPageTracking();
   let loggedContext = false;
+  let loggedNoProgressChannel = false;
 
   return items.filter(item => {
     try {
@@ -216,7 +224,18 @@ export function hideVideo(items, pageHint = null) {
 
       const percentWatched = extractWatchProgress(item);
 
-      if (percentWatched === null) return true;
+      if (percentWatched === null) {
+        if (!loggedNoProgressChannel && configRead('enableDebugLogging') && pageName === 'channel') {
+          loggedNoProgressChannel = true;
+          appendFileOnlyLog('hideVideo.noProgress.channel', {
+            pageHint,
+            hashPage,
+            pageName,
+            sampleKeys: Object.keys(item || {}).slice(0, 12)
+          });
+        }
+        return true;
+      }
 
       const keep = percentWatched <= configRead('hideWatchedVideosThreshold');
       if (!keep) {
