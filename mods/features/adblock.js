@@ -166,8 +166,7 @@ JSON.parse = function () {
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
-    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
-    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems, detectedPage);
+    processTileArraysDeep(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items, detectedPage, 'contents.tvBrowseRenderer.grid');
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
@@ -178,11 +177,11 @@ JSON.parse = function () {
     deArrowify(r.continuationContents.horizontalListContinuation.items);
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
-    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items, detectedPage);
+    processTileArraysDeep(r.continuationContents.horizontalListContinuation.items, detectedPage, 'continuation.horizontal');
   }
 
   if (r?.continuationContents?.gridContinuation?.items) {
-    r.continuationContents.gridContinuation.items = hideVideo(r.continuationContents.gridContinuation.items, detectedPage);
+    processTileArraysDeep(r.continuationContents.gridContinuation.items, detectedPage, 'continuation.grid');
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
@@ -201,7 +200,7 @@ JSON.parse = function () {
 
         const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
         if (Array.isArray(tabGridItems)) {
-          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(tabGridItems, tabPage || detectedPage);
+          processTileArraysDeep(tabGridItems, tabPage || detectedPage, 'tab.grid');
         }
       }
     }
