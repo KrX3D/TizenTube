@@ -347,25 +347,18 @@ export function startEmptyTileObserver() {
   window.__ttEmptyTileObserver = observer;
 }
 
-export function consolidateWatchShelves(contents) {
+export function consolidateShelves(contents) {
   if (!configRead('enableHideWatchedVideos')) return;
-
   const shelves = contents.filter(c => c.shelfRenderer);
   if (shelves.length <= 1) return;
-
-  // Gather all remaining items across all sparse shelves
   const allItems = [];
   for (const shelf of shelves) {
     allItems.push(...shelf.shelfRenderer.content.horizontalListRenderer.items);
   }
   if (allItems.length === 0) return;
-
-  // Remove all shelf rows from contents
   for (let i = contents.length - 1; i >= 0; i--) {
     if (contents[i].shelfRenderer) contents.splice(i, 1);
   }
-
-  // Re-add shelves packed 3 items each, reusing existing shelf objects as templates
   const ITEMS_PER_ROW = 3;
   for (let i = 0; i < allItems.length; i += ITEMS_PER_ROW) {
     const shelf = shelves[Math.floor(i / ITEMS_PER_ROW) % shelves.length];

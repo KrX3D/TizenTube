@@ -96,6 +96,7 @@ JSON.parse = function () {
     }
 
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
+    consolidateShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
   }
 
   if (r.endscreen && configRead('enableHideEndScreenCards')) {
@@ -125,6 +126,7 @@ JSON.parse = function () {
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
+    consolidateShelves(r.contents.sectionListRenderer.contents);
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
@@ -133,6 +135,7 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
+    consolidateShelves(r.continuationContents.sectionListContinuation.contents);
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
@@ -155,6 +158,7 @@ JSON.parse = function () {
         const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabSectionList)) {
           processShelves(tabSectionList, true, tabPage || detectedPage);
+          consolidateShelves(tabSectionList);
         }
 
         const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
