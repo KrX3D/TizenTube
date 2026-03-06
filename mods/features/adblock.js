@@ -137,6 +137,11 @@ JSON.parse = function () {
     processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
     consolidateShelves(r.continuationContents.sectionListContinuation.contents);
   }
+  
+  if (r?.continuationContents?.pivotContinuation?.contents) {
+    processShelves(r.continuationContents.pivotContinuation.contents, false, detectedPage);
+    consolidateShelves(r.continuationContents.pivotContinuation.contents);
+  }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     deArrowify(r.continuationContents.horizontalListContinuation.items);
@@ -299,17 +304,6 @@ for (const key in window._yttv) {
     window._yttv[key].JSON.parse = JSON.parse;
   }
 }
-
-const origFetch = window.fetch;
-window.fetch = async function(...args) {
-  const response = await origFetch.apply(this, args);
-  const clone = response.clone();
-  clone.json = async function() {
-    const text = await clone.text();
-    return JSON.parse(text); // routes through our patched JSON.parse
-  };
-  return response;
-};
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
