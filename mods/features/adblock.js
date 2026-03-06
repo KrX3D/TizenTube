@@ -3,7 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
+import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -17,11 +17,24 @@ import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, hid
 
 const origParse = JSON.parse;
 
+function appendAdblockDebugLog(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
+  let serialized = '';
+  try { serialized = JSON.stringify(payload); } catch (_) { serialized = String(payload); }
+  window.__ttFileOnlyLogs.push(`[${new Date().toISOString()}] [TT_ADBLOCK_FILE] ${label} ${serialized}`);
+  if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
+}
+
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
-  const detectedPage = detectAndStorePage(detectPageFromResponse(r));
+  const responseDetectedPage = detectPageFromResponse(r);
+  const locationDetectedPage = detectCurrentPage();
+  const detectedPage = detectAndStorePage(responseDetectedPage || locationDetectedPage, responseDetectedPage ? 'response' : 'location-fallback');
+
+  appendAdblockDebugLog('parse.begin', { responseDetectedPage, locationDetectedPage, detectedPage, hash: location.hash || '', search: location.search || '', lastDetected: window.__ttLastDetectedPage || null });
 
   try {
 

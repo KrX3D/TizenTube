@@ -1,5 +1,10 @@
 import { configRead } from '../config.js';
 
+function debugLog(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  appendFileOnlyLog(label, payload);
+}
+
 function appendFileOnlyLog(label, payload) {
   if (!configRead('enableDebugLogging')) return;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
@@ -10,9 +15,13 @@ function appendFileOnlyLog(label, payload) {
   if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
 }
 
-export function detectAndStorePage(pageName) {
+export function detectAndStorePage(pageName, source = 'unknown') {
   if (pageName) {
+    const previous = window.__ttLastDetectedPage || null;
     window.__ttLastDetectedPage = pageName;
+    if (previous !== pageName) {
+      debugLog('page.store', { source, previous, next: pageName, hash: location.hash || '', search: location.search || '' });
+    }
   }
   return pageName;
 }
@@ -39,11 +48,18 @@ export function detectPageFromResponse(response) {
     if (browseId.startsWith('uc')) return 'channel';
   }
 
-  if (response?.contents?.singleColumnWatchNextResults) return 'watch';
+  if (response?.contents?.singleColumnWatchNextResults) {
+    debugLog('page.detect.response', { from: 'watchNext', detected: 'watch' });
+    return 'watch';
+  }
 
   const endpointBrowseId = String(response?.currentVideoEndpoint?.watchEndpoint?.browseEndpoint?.browseId || '').toLowerCase();
-  if (endpointBrowseId.startsWith('uc')) return 'channel';
+  if (endpointBrowseId.startsWith('uc')) {
+    debugLog('page.detect.response', { from: 'endpointBrowseId', endpointBrowseId, detected: 'channel' });
+    return 'channel';
+  }
 
+  debugLog('page.detect.response', { from: 'none', detected: null, hash: location.hash || '', lastDetected: window.__ttLastDetectedPage || null });
   return null;
 }
 
@@ -51,13 +67,17 @@ export function detectPageFromResponse(response) {
 
 export function detectPageFromBrowseId(browseId) {
   const normalizedBrowseId = String(browseId || '').toLowerCase();
-  if (!normalizedBrowseId) return null;
+  if (!normalizedBrowseId) {
+    debugLog('page.detect.browseId', { browseId: browseId || null, detected: null });
+    return null;
+  }
   if (normalizedBrowseId.includes('fesubscription')) return 'subscriptions';
   if (normalizedBrowseId.startsWith('uc')) return 'channel';
   if (normalizedBrowseId === 'fehistory') return 'history';
   if (normalizedBrowseId === 'felibrary') return 'library';
   if (normalizedBrowseId === 'feplaylist_aggregation') return 'playlists';
   if (normalizedBrowseId === 'femy_youtube' || normalizedBrowseId === 'vlwl' || normalizedBrowseId === 'vlll' || normalizedBrowseId.startsWith('vlpl')) return 'playlist';
+  debugLog('page.detect.browseId', { browseId: normalizedBrowseId, detected: null });
   return null;
 }
 
@@ -108,9 +128,10 @@ function readChannelParamFromHash(hashValue) {
   return (match?.[1] || '').toLowerCase();
 }
 
-function detectCurrentPage() {
+export function detectCurrentPage() {
   const hash = location.hash ? location.hash.substring(1) : '';
   const cParam = readChannelParamFromHash(hash) || readChannelParamFromHash(location.search);
+  debugLog('page.detect.current.input', { hash, search: location.search || '', cParam, lastDetected: window.__ttLastDetectedPage || null });
 
   if (cParam.includes('fesubscription')) return 'subscriptions';
   if (cParam.startsWith('uc')) return 'channel';
@@ -140,7 +161,7 @@ function initializeLocationPageTracking() {
   const sync = () => {
     const page = detectCurrentPage();
     if (page && page !== 'home' && page !== 'search') {
-      detectAndStorePage(page);
+      detectAndStorePage(page, 'location-tracker');
     }
   };
 
@@ -155,6 +176,7 @@ function initializeLocationPageTracking() {
 
 export function hideVideo(items, pageHint = null) {
   initializeLocationPageTracking();
+  let loggedContext = false;
 
   return items.filter(item => {
     try {
@@ -172,6 +194,10 @@ export function hideVideo(items, pageHint = null) {
           : hashPage;
       }
 
+      if (configRead('enableDebugLogging') && !loggedContext) {
+        loggedContext = true;
+        appendFileOnlyLog('hideVideo.context', { pageHint, hashPage, pageName, lastDetected: window.__ttLastDetectedPage || null, hash: location.hash || '' });
+      }
       if (configRead('enableDebugLogging') && pageHint && pageHint !== pageName) {
         appendFileOnlyLog('hideVideo.page.override', { pageHint, hashPage, pageName });
       }
