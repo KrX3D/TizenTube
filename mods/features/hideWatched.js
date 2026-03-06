@@ -326,31 +326,10 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
   }
 }
 
-function removeEmptyShelfRows() {
-  document.querySelectorAll('ytlr-shelf-renderer').forEach(shelf => {
-    if (!shelf.querySelector('ytlr-tile-renderer')) {
-      // Walk up to the absolute-positioned row wrapper and remove it
-      shelf.closest('.TXB27d')?.remove();
-    }
-  });
-}
-
-export function startEmptyTileObserver() {
-  if (window.__ttEmptyTileObserver) return;
-
-  const observer = new MutationObserver(() => {
-    if (!configRead('enableHideWatchedVideos')) return;
-    removeEmptyShelfRows();
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-  window.__ttEmptyTileObserver = observer;
-}
-
 export function consolidateShelves(contents) {
   if (!configRead('enableHideWatchedVideos')) return;
   const shelves = contents.filter(c => c.shelfRenderer);
-  if (shelves.length <= 1) return;
+  if (shelves.length === 0) return;
   const allItems = [];
   for (const shelf of shelves) {
     allItems.push(...shelf.shelfRenderer.content.horizontalListRenderer.items);

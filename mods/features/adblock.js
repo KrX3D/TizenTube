@@ -300,8 +300,6 @@ for (const key in window._yttv) {
   }
 }
 
-startEmptyTileObserver();
-
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
     const shelve = shelves[index];
