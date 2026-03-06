@@ -465,7 +465,10 @@ function hideVideo(items) {
     if (!item.tileRenderer) return true;
 
     const pages = configRead('hideWatchedVideosPages');
-    const pageName = window.__ttLastDetectedPage || detectCurrentPage();
+    const hashPage = detectCurrentPage();
+    const pageName = (hashPage === 'home' || hashPage === 'search')
+      ? (window.__ttLastDetectedPage || hashPage)
+      : hashPage;
     if (!pages.includes(pageName)) return true;
 
     const percentWatched = getWatchProgress(item);
