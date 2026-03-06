@@ -43,6 +43,18 @@ function detectPageFromResponse(response) {
   return null;
 }
 
+function detectPageFromBrowseId(browseId) {
+  const normalizedBrowseId = String(browseId || '').toLowerCase();
+  if (!normalizedBrowseId) return null;
+  if (normalizedBrowseId.includes('fesubscription')) return 'subscriptions';
+  if (normalizedBrowseId.startsWith('uc')) return 'channel';
+  if (normalizedBrowseId === 'fehistory') return 'history';
+  if (normalizedBrowseId === 'felibrary') return 'library';
+  if (normalizedBrowseId === 'feplaylist_aggregation') return 'playlists';
+  if (normalizedBrowseId === 'femy_youtube' || normalizedBrowseId === 'vlwl' || normalizedBrowseId === 'vlll' || normalizedBrowseId.startsWith('vlpl')) return 'playlist';
+  return null;
+}
+
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
@@ -143,6 +155,11 @@ JSON.parse = function () {
     processShelves(r.contents.sectionListRenderer.contents);
   }
 
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
+  }
+
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
@@ -157,7 +174,21 @@ JSON.parse = function () {
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+        const tabBrowseId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
+        const tabPage = detectPageFromBrowseId(tabBrowseId);
+        if (tabPage) {
+          window.__ttLastDetectedPage = tabPage;
+        }
+
+        const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(tabSectionList)) {
+          processShelves(tabSectionList);
+        }
+
+        const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
+        if (Array.isArray(tabGridItems)) {
+          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(tabGridItems);
+        }
       }
     }
   }
