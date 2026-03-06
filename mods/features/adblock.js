@@ -3,7 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectAndStorePageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
+import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -21,7 +21,7 @@ JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
-  const detectedPage = detectAndStorePageFromResponse(r);
+  const detectedPage = detectAndStorePage(detectPageFromResponse(r));
 
   try {
 
@@ -137,10 +137,7 @@ JSON.parse = function () {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
         const tabBrowseId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
-        const tabPage = detectPageFromBrowseId(tabBrowseId);
-        if (tabPage) {
-          window.__ttLastDetectedPage = tabPage;
-        }
+        const tabPage = detectAndStorePage(detectPageFromBrowseId(tabBrowseId));
 
         const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabSectionList)) {

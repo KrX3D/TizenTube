@@ -10,6 +10,13 @@ function appendFileOnlyLog(label, payload) {
   if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
 }
 
+export function detectAndStorePage(pageName) {
+  if (pageName) {
+    window.__ttLastDetectedPage = pageName;
+  }
+  return pageName;
+}
+
 export function detectPageFromResponse(response) {
   const serviceParams = response?.responseContext?.serviceTrackingParams || [];
   for (const entry of serviceParams) {
@@ -34,17 +41,14 @@ export function detectPageFromResponse(response) {
 
   if (response?.contents?.singleColumnWatchNextResults) return 'watch';
 
+  const endpointBrowseId = String(response?.currentVideoEndpoint?.watchEndpoint?.browseEndpoint?.browseId || '').toLowerCase();
+  if (endpointBrowseId.startsWith('uc')) return 'channel';
+
   return null;
 }
 
 
-export function detectAndStorePageFromResponse(response) {
-  const detectedPage = detectPageFromResponse(response);
-  if (detectedPage) {
-    window.__ttLastDetectedPage = detectedPage;
-  }
-  return detectedPage;
-}
+
 export function detectPageFromBrowseId(browseId) {
   const normalizedBrowseId = String(browseId || '').toLowerCase();
   if (!normalizedBrowseId) return null;
@@ -105,6 +109,7 @@ function detectCurrentPage() {
 
   if (cParam.includes('fesubscription')) return 'subscriptions';
   if (cParam.startsWith('uc')) return 'channel';
+  if (hash.startsWith('/channel/') || hash.startsWith('/c/') || hash.startsWith('/@')) return 'channel';
   if (cParam === 'felibrary') return 'library';
   if (cParam === 'fehistory') return 'history';
   if (cParam === 'feplaylist_aggregation') return 'playlists';
