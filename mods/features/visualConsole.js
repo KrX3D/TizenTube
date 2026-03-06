@@ -1,9 +1,44 @@
-import { configRead, configWrite } from '../config.js';
+import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
 
 const APP_VERSION_LABEL = 'TizenTube';
 const APP_VERSION = rootPkg.version;
+
+function detectTvModel() {
+  let modelName = null;
+  let modelCode = null;
+
+  try {
+    const h5vccModel = window?.h5vcc?.system?.getDeviceInfo?.()?.modelName;
+    if (h5vccModel) modelName = String(h5vccModel);
+  } catch (_) { }
+
+  try {
+    const webapisModel = window?.webapis?.productinfo?.getModel?.();
+    if (webapisModel) modelName = String(webapisModel);
+  } catch (_) { }
+
+  try {
+    const webapisRealModel = window?.webapis?.productinfo?.getRealModel?.();
+    if (webapisRealModel) modelName = String(webapisRealModel);
+  } catch (_) { }
+
+  try {
+    const maybeCode = window?.webapis?.productinfo?.getModelCode?.();
+    if (maybeCode) modelCode = String(maybeCode);
+  } catch (_) { }
+
+  try {
+    const ua = String(navigator.userAgent || '');
+    const match = ua.match(/\(([^)]*?TV[^)]*?)\)/i);
+    if (!modelName && match?.[1]) modelName = match[1];
+  } catch (_) { }
+
+  if (!modelName && !modelCode) return 'unknown';
+  if (modelName && modelCode) return `${modelName} (${modelCode})`;
+  return modelName || modelCode;
+}
 
 function initVisualConsole() {
   const positions = {
@@ -41,7 +76,7 @@ function initVisualConsole() {
     border: 3px solid #0f0;
     display: none;
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
-    pointer-events: auto;
+    pointer-events: none;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   `;
@@ -56,6 +91,7 @@ function initVisualConsole() {
   document.addEventListener('DOMContentLoaded', mount);
 
   let logs = [];
+  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   const original = {
     log: console.log,
     info: console.info,
@@ -64,10 +100,21 @@ function initVisualConsole() {
     debug: console.debug
   };
 
-  const esc = (value) => String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const renderLogs = () => {
+    while (consoleDiv.firstChild) {
+      consoleDiv.removeChild(consoleDiv.firstChild);
+    }
+
+    for (const entry of logs) {
+      const row = document.createElement('div');
+      row.style.color = entry.color;
+      row.style.marginBottom = '4px';
+      row.style.whiteSpace = 'pre-wrap';
+      row.style.wordWrap = 'break-word';
+      row.textContent = `[${entry.time}] ${entry.msg}`;
+      consoleDiv.appendChild(row);
+    }
+  };
 
   const syncVisible = () => {
     const enabled = !!configRead('enableDebugConsole');
@@ -75,7 +122,7 @@ function initVisualConsole() {
     if (enabled) {
       applyPosition();
       applyHeight();
-      consoleDiv.innerHTML = logs.join('');
+      renderLogs();
       consoleDiv.scrollTop = 0;
     }
   };
@@ -87,10 +134,14 @@ function initVisualConsole() {
       if (typeof a === 'string') return a;
       try { return JSON.stringify(a); } catch (_) { return String(a); }
     }).join(' ');
-    logs.unshift(`<div style="color:${color};margin-bottom:4px;white-space:pre-wrap;word-wrap:break-word;">[${new Date().toLocaleTimeString()}] ${esc(msg)}</div>`);
+    logs.unshift({
+      color,
+      msg,
+      time: new Date().toLocaleTimeString()
+    });
     if (logs.length > 600) logs.pop();
     if (consoleDiv.style.display !== 'none') {
-      consoleDiv.innerHTML = logs.join('');
+      renderLogs();
       consoleDiv.scrollTop = 0;
     }
   };
@@ -104,9 +155,11 @@ function initVisualConsole() {
   const downloadLogs = () => {
     try {
       const plainTextLogs = logs
-        .map((entry) => entry.replace(/<div[^>]*>/g, '').replace(/<\/div>/g, ''))
+        .map((entry) => `[${entry.time}] ${entry.msg}`)
         .join('\n');
-      const blob = new Blob([plainTextLogs], { type: 'text/plain;charset=utf-8' });
+      const fileOnlyLogs = Array.isArray(window.__ttFileOnlyLogs) ? window.__ttFileOnlyLogs.join('\n') : '';
+      const combinedLogs = `${plainTextLogs}\n\n===== FILE-ONLY DEBUG LOGS =====\n${fileOnlyLogs}`;
+      const blob = new Blob([combinedLogs], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -120,19 +173,26 @@ function initVisualConsole() {
 
   window.downloadTizenTubeLogs = downloadLogs;
 
-  window.toggleDebugConsole = function () {
+  const toggleDebugConsole = function () {
     configWrite('enableDebugConsole', !configRead('enableDebugConsole'));
     syncVisible();
   };
 
-  setInterval(syncVisible, 500);
+  window.toggleDebugConsole = toggleDebugConsole;
+
+  configChangeEmitter.addEventListener('configChange', (event) => {
+    if (event?.detail?.key === 'enableDebugConsole' || event?.detail?.key === 'debugConsolePosition' || event?.detail?.key === 'debugConsoleHeight') {
+      syncVisible();
+    }
+  });
+
   syncVisible();
 
   console.log('[Console] ========================================');
   console.log('[Console] Use TizenTube settings to configure position/height');
   console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${APP_VERSION}`);
+  console.log(`[Console] TV Model: ${detectTvModel()}`);
   console.log(`[Console] User-Agent: ${navigator.userAgent}`);
-  console.log('[Console] User-Agent (raw):', navigator.userAgent);
   console.log('[Console] ========================================');
 
   const versionToastCmd = {
@@ -151,6 +211,12 @@ function initVisualConsole() {
   setTimeout(() => {
     try { resolveCommand(versionToastCmd); } catch (_) { }
   }, 1200);
+}
+
+if (typeof window.toggleDebugConsole !== 'function') {
+  window.toggleDebugConsole = function () {
+    configWrite('enableDebugConsole', !configRead('enableDebugConsole'));
+  };
 }
 
 const interval = setInterval(() => {
