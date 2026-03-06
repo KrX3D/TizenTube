@@ -132,7 +132,30 @@ function detectCurrentPage() {
   }
 }
 
+
+function initializeLocationPageTracking() {
+  if (window.__ttHideWatchedLocationTrackingInit) return;
+  window.__ttHideWatchedLocationTrackingInit = true;
+
+  const sync = () => {
+    const page = detectCurrentPage();
+    if (page && page !== 'home' && page !== 'search') {
+      detectAndStorePage(page);
+    }
+  };
+
+  try {
+    sync();
+    window.addEventListener('hashchange', sync);
+    window.addEventListener('popstate', sync);
+  } catch {
+    // no-op
+  }
+}
+
 export function hideVideo(items, pageHint = null) {
+  initializeLocationPageTracking();
+
   return items.filter(item => {
     try {
       if (!configRead('enableHideWatchedVideos')) return true;
