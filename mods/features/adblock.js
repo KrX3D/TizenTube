@@ -313,6 +313,9 @@ JSON.parse = function () {
     }
   }
 
+    // Safety net for response shapes where tile arrays are nested beyond explicit shelf/grid paths.
+    processTileArraysDeep(r, detectedPage, 'response');
+
     return r;
   } catch (error) {
     if (!window.__ttAdblockParseWarned) {
@@ -355,15 +358,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         shelves.splice(index, 1);
       }
     }
-    return null;
   }
-
-  for (const key of Object.keys(node)) {
-    const childProgress = getGenericNodeProgress(node[key], depth + 1, seen);
-    if (childProgress !== null) return childProgress;
-  }
-
-  return null;
 }
 
 function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
@@ -532,6 +527,38 @@ function detectCurrentPage() {
         : (hash.split('?')[1]?.split('&')[0]?.split('=')[1] || 'home').replace('FE', '').replace('topics_', '');
   } catch {
     return 'home';
+  }
+}
+
+function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
+  if (!node || depth > 10) return;
+
+  if (Array.isArray(node)) {
+    if (node.some((item) => item?.tileRenderer)) {
+      const before = node.length;
+      const filtered = hideVideo(node, pageHint);
+      if (before !== filtered.length) {
+        appendFileOnlyLog('deep.tiles.filtered', {
+          path,
+          pageHint,
+          before,
+          after: filtered.length,
+          removed: before - filtered.length
+        });
+      }
+      node.splice(0, node.length, ...filtered);
+      return;
+    }
+
+    for (let i = 0; i < node.length; i++) {
+      processTileArraysDeep(node[i], pageHint, `${path}[${i}]`, depth + 1);
+    }
+    return;
+  }
+
+  if (typeof node !== 'object') return;
+  for (const key of Object.keys(node)) {
+    processTileArraysDeep(node[key], pageHint, `${path}.${key}`, depth + 1);
   }
 }
 
