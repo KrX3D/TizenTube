@@ -326,8 +326,13 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
   }
 }
 
+const _consolidatedArrays = new WeakSet();
+
 export function consolidateShelves(contents) {
   if (!configRead('enableHideWatchedVideos')) return;
+  if (_consolidatedArrays.has(contents)) return;  // already processed, skip
+  _consolidatedArrays.add(contents);
+  
   const shelves = contents.filter(c => c.shelfRenderer);
   if (shelves.length === 0) return;
   const allItems = [];

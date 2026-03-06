@@ -137,8 +137,9 @@ JSON.parse = function () {
     processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
     consolidateShelves(r.continuationContents.sectionListContinuation.contents);
   }
-  
+
   if (r?.continuationContents?.pivotContinuation?.contents) {
+    appendAdblockDebugLog('pivot.continuation.hit', { count: r.continuationContents.pivotContinuation.contents.length });
     processShelves(r.continuationContents.pivotContinuation.contents, false, detectedPage);
     consolidateShelves(r.continuationContents.pivotContinuation.contents);
   }
