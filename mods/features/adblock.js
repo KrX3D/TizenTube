@@ -300,6 +300,17 @@ for (const key in window._yttv) {
   }
 }
 
+const origFetch = window.fetch;
+window.fetch = async function(...args) {
+  const response = await origFetch.apply(this, args);
+  const clone = response.clone();
+  clone.json = async function() {
+    const text = await clone.text();
+    return JSON.parse(text); // routes through our patched JSON.parse
+  };
+  return response;
+};
+
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
     const shelve = shelves[index];
