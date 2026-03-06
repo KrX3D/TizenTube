@@ -54,6 +54,8 @@ JSON.parse = function () {
 
   try {
 
+  try {
+
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
   }
