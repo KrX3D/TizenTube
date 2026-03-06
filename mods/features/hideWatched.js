@@ -81,13 +81,21 @@ export function detectPageFromBrowseId(browseId) {
   return null;
 }
 
+function getThumbnailOverlaysFromNode(node) {
+  return node?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
+    || node?.videoRenderer?.thumbnailOverlays
+    || node?.gridVideoRenderer?.thumbnailOverlays
+    || node?.compactVideoRenderer?.thumbnailOverlays
+    || [];
+}
+
 function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
   if (!node || depth > 7) return null;
   if (typeof node !== 'object') return null;
   if (seen.has(node)) return null;
   seen.add(node);
 
-  const overlays = node?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const overlays = getThumbnailOverlaysFromNode(node);
   const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
   if (resumeOverlay) {
     return Number(resumeOverlay.percentDurationWatched || 0);
@@ -225,11 +233,21 @@ export function hideVideo(items, pageHint = null) {
   });
 }
 
+function isLikelyVideoItem(item) {
+  return Boolean(
+    item?.tileRenderer
+    || item?.videoRenderer
+    || item?.gridVideoRenderer
+    || item?.compactVideoRenderer
+    || item?.lockupViewModel
+  );
+}
+
 export function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
   if (!node || depth > 10) return;
 
   if (Array.isArray(node)) {
-    if (node.some((item) => item?.tileRenderer)) {
+    if (node.some((item) => isLikelyVideoItem(item))) {
       const before = node.length;
       const filtered = hideVideo(node, pageHint);
       if (before !== filtered.length) {
@@ -239,6 +257,13 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
           before,
           after: filtered.length,
           removed: before - filtered.length
+        });
+      } else if (configRead('enableDebugLogging') && (pageHint === 'channel' || detectCurrentPage() === 'channel')) {
+        appendFileOnlyLog('deep.tiles.noop.channel', {
+          path,
+          pageHint,
+          before,
+          sampleKeys: Object.keys(node.find(Boolean) || {}).slice(0, 8)
         });
       }
       node.splice(0, node.length, ...filtered);
