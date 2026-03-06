@@ -16,6 +16,16 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 
 const origParse = JSON.parse;
 
+function appendFileOnlyLog(label, payload) {
+  if (!configRead('enableDebugLogging')) return;
+  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
+
+  let serialized = '';
+  try { serialized = JSON.stringify(payload); } catch (_) { serialized = String(payload); }
+  window.__ttFileOnlyLogs.push(`[${new Date().toISOString()}] [TT_ADBLOCK_FILE] ${label} ${serialized}`);
+  if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
+}
+
 function detectPageFromResponse(response) {
   const serviceParams = response?.responseContext?.serviceTrackingParams || [];
   for (const entry of serviceParams) {
@@ -123,7 +133,7 @@ JSON.parse = function () {
       }
     }
 
-    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
   }
 
   if (r.endscreen && configRead('enableHideEndScreenCards')) {
@@ -152,7 +162,12 @@ JSON.parse = function () {
   // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
-    processShelves(r.contents.sectionListRenderer.contents);
+    processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
+  }
+
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
@@ -161,14 +176,14 @@ JSON.parse = function () {
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(r.continuationContents.sectionListContinuation.contents);
+    processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     deArrowify(r.continuationContents.horizontalListContinuation.items);
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
-    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
+    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items, detectedPage);
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
@@ -182,12 +197,12 @@ JSON.parse = function () {
 
         const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabSectionList)) {
-          processShelves(tabSectionList);
+          processShelves(tabSectionList, true, tabPage || detectedPage);
         }
 
         const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
         if (Array.isArray(tabGridItems)) {
-          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(tabGridItems);
+          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(tabGridItems, tabPage || detectedPage);
         }
       }
     }
@@ -200,7 +215,7 @@ JSON.parse = function () {
           (elm) => !elm.alertWithActionsRenderer
         );
     }
-    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false);
+    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
@@ -299,6 +314,7 @@ JSON.parse = function () {
     }
   }
 
+    processTileArraysDeep(r, detectedPage, 'response');
     return r;
   } catch (error) {
     if (!window.__ttAdblockParseWarned) {
@@ -318,7 +334,7 @@ for (const key in window._yttv) {
 }
 
 
-function processShelves(shelves, shouldAddPreviews = true) {
+function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
     const shelve = shelves[index];
     if (shelve.shelfRenderer) {
@@ -328,7 +344,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (shouldAddPreviews) {
         addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
       }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items, pageHint);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
           shelves.splice(index, 1);
@@ -518,14 +534,46 @@ function detectCurrentPage() {
   }
 }
 
-function hideVideo(items) {
+function processTileArraysDeep(node, pageHint = null, path = 'root', depth = 0) {
+  if (!node || depth > 10) return;
+
+  if (Array.isArray(node)) {
+    if (node.some((item) => item?.tileRenderer)) {
+      const before = node.length;
+      const filtered = hideVideo(node, pageHint);
+      if (before !== filtered.length) {
+        appendFileOnlyLog('deep.tiles.filtered', {
+          path,
+          pageHint,
+          before,
+          after: filtered.length,
+          removed: before - filtered.length
+        });
+      }
+      node.splice(0, node.length, ...filtered);
+      return;
+    }
+
+    for (let i = 0; i < node.length; i++) {
+      processTileArraysDeep(node[i], pageHint, `${path}[${i}]`, depth + 1);
+    }
+    return;
+  }
+
+  if (typeof node !== 'object') return;
+  for (const key of Object.keys(node)) {
+    processTileArraysDeep(node[key], pageHint, `${path}.${key}`, depth + 1);
+  }
+}
+
+function hideVideo(items, pageHint = null) {
   return items.filter(item => {
     try {
       const pages = configRead('hideWatchedVideosPages');
       const hashPage = detectCurrentPage();
-      const pageName = (hashPage === 'home' || hashPage === 'search')
+      const pageName = pageHint || ((hashPage === 'home' || hashPage === 'search')
         ? (window.__ttLastDetectedPage || hashPage)
-        : hashPage;
+        : hashPage);
       if (!pages.includes(pageName)) return true;
 
       let percentWatched = null;
@@ -538,7 +586,15 @@ function hideVideo(items) {
 
       if (percentWatched === null) return true;
 
-      return percentWatched <= configRead('hideWatchedVideosThreshold');
+      const keep = percentWatched <= configRead('hideWatchedVideosThreshold');
+      if (!keep) {
+        appendFileOnlyLog('hideVideo.removed', {
+          pageName,
+          percentWatched,
+          videoId: item?.tileRenderer?.contentId || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId || null
+        });
+      }
+      return keep;
     } catch {
       return true;
     }
