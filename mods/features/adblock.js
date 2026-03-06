@@ -319,7 +319,15 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         shelves.splice(index, 1);
       }
     }
+    return null;
   }
+
+  for (const key of Object.keys(node)) {
+    const childProgress = extractWatchProgress(node[key], depth + 1, seen);
+    if (childProgress !== null) return childProgress;
+  }
+
+  return null;
 }
 
 
