@@ -3,7 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep, startEmptyTileObserver } from './hideWatched.js';
+import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep, startEmptyTileObserver, consolidateWatchShelves } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -173,6 +173,7 @@ JSON.parse = function () {
         );
     }
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
+    consolidateWatchShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
