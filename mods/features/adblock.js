@@ -3,6 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
+import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -13,11 +14,16 @@ import { PatchSettings } from '../ui/customYTSettings.js';
  *
  * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
+
 const origParse = JSON.parse;
+
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
+  const detectedPage = detectAndStorePage(detectPageFromResponse(r));
+
+  try {
 
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
@@ -76,7 +82,7 @@ JSON.parse = function () {
       }
     }
 
-    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+    processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
   }
 
   if (r.endscreen && configRead('enableHideEndScreenCards')) {
@@ -105,24 +111,43 @@ JSON.parse = function () {
   // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
 
   if (r?.contents?.sectionListRenderer?.contents) {
-    processShelves(r.contents.sectionListRenderer.contents);
+    processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
+  }
+
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    processTileArraysDeep(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items, detectedPage, 'contents.tvBrowseRenderer.grid');
   }
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
-    processShelves(r.continuationContents.sectionListContinuation.contents);
+    processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
     deArrowify(r.continuationContents.horizontalListContinuation.items);
     hqify(r.continuationContents.horizontalListContinuation.items);
     addLongPress(r.continuationContents.horizontalListContinuation.items);
-    r.continuationContents.horizontalListContinuation.items = hideVideo(r.continuationContents.horizontalListContinuation.items);
+    processTileArraysDeep(r.continuationContents.horizontalListContinuation.items, detectedPage, 'continuation.horizontal');
+  }
+
+  if (r?.continuationContents?.gridContinuation?.items) {
+    processTileArraysDeep(r.continuationContents.gridContinuation.items, detectedPage, 'continuation.grid');
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+        const tabBrowseId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
+        const tabPage = detectAndStorePage(detectPageFromBrowseId(tabBrowseId));
+
+        const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(tabSectionList)) {
+          processShelves(tabSectionList, true, tabPage || detectedPage);
+        }
+
+        const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
+        if (Array.isArray(tabGridItems)) {
+          processTileArraysDeep(tabGridItems, tabPage || detectedPage, 'tab.grid');
+        }
       }
     }
   }
@@ -134,7 +159,7 @@ JSON.parse = function () {
           (elm) => !elm.alertWithActionsRenderer
         );
     }
-    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false);
+    processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
@@ -233,7 +258,17 @@ JSON.parse = function () {
     }
   }
 
-  return r;
+    // Safety net for response shapes where tile arrays are nested beyond explicit shelf/grid paths.
+    processTileArraysDeep(r, detectedPage, 'response');
+
+    return r;
+  } catch (error) {
+    if (!window.__ttAdblockParseWarned) {
+      window.__ttAdblockParseWarned = true;
+      console.warn('[TizenTube] adblock parser patch failed', error);
+    }
+    return r;
+  }
 };
 
 // Patch JSON.parse to use the custom one
@@ -245,8 +280,9 @@ for (const key in window._yttv) {
 }
 
 
-function processShelves(shelves, shouldAddPreviews = true) {
-  for (const shelve of shelves) {
+function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
+  for (let index = shelves.length - 1; index >= 0; index--) {
+    const shelve = shelves[index];
     if (shelve.shelfRenderer) {
       deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
       hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
@@ -254,17 +290,22 @@ function processShelves(shelves, shouldAddPreviews = true) {
       if (shouldAddPreviews) {
         addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
       }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items, pageHint);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
+          shelves.splice(index, 1);
           continue;
         }
         shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
       }
+
+      if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+        shelves.splice(index, 1);
+      }
     }
   }
 }
+
 
 function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
@@ -370,17 +411,3 @@ function addLongPress(items) {
   }
 }
 
-function hideVideo(items) {
-  return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
-
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
-  });
-}
