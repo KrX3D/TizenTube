@@ -13,11 +13,58 @@ import { PatchSettings } from '../ui/customYTSettings.js';
  *
  * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
+
 const origParse = JSON.parse;
+
+function detectPageFromResponse(response) {
+  const serviceParams = response?.responseContext?.serviceTrackingParams || [];
+  for (const entry of serviceParams) {
+    for (const param of (entry?.params || [])) {
+      if (param?.key !== 'browse_id') continue;
+      const browseId = String(param?.value || '').toLowerCase();
+      if (browseId.includes('fesubscription')) return 'subscriptions';
+      if (browseId.startsWith('uc')) return 'channel';
+      if (browseId === 'fehistory') return 'history';
+      if (browseId === 'felibrary') return 'library';
+      if (browseId === 'feplaylist_aggregation') return 'playlists';
+      if (browseId === 'femy_youtube' || browseId === 'vlwl' || browseId === 'vlll' || browseId.startsWith('vlpl')) return 'playlist';
+    }
+  }
+
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.startsWith('browse-feed')) {
+    const browseId = targetId.replace('browse-feed', '');
+    if (browseId.includes('fesubscription')) return 'subscriptions';
+    if (browseId.startsWith('uc')) return 'channel';
+  }
+
+  if (response?.contents?.singleColumnWatchNextResults) return 'watch';
+
+  return null;
+}
+
+function detectPageFromBrowseId(browseId) {
+  const normalizedBrowseId = String(browseId || '').toLowerCase();
+  if (!normalizedBrowseId) return null;
+  if (normalizedBrowseId.includes('fesubscription')) return 'subscriptions';
+  if (normalizedBrowseId.startsWith('uc')) return 'channel';
+  if (normalizedBrowseId === 'fehistory') return 'history';
+  if (normalizedBrowseId === 'felibrary') return 'library';
+  if (normalizedBrowseId === 'feplaylist_aggregation') return 'playlists';
+  if (normalizedBrowseId === 'femy_youtube' || normalizedBrowseId === 'vlwl' || normalizedBrowseId === 'vlll' || normalizedBrowseId.startsWith('vlpl')) return 'playlist';
+  return null;
+}
+
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
+  const detectedPage = detectPageFromResponse(r);
+  if (detectedPage) {
+    window.__ttLastDetectedPage = detectedPage;
+  }
+
+  try {
 
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
@@ -108,6 +155,11 @@ JSON.parse = function () {
     processShelves(r.contents.sectionListRenderer.contents);
   }
 
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
+    const gridItems = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items;
+    r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(gridItems);
+  }
+
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(r.continuationContents.sectionListContinuation.contents);
   }
@@ -122,7 +174,21 @@ JSON.parse = function () {
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
       for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
-        processShelves(tab.tabRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents);
+        const tabBrowseId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
+        const tabPage = detectPageFromBrowseId(tabBrowseId);
+        if (tabPage) {
+          window.__ttLastDetectedPage = tabPage;
+        }
+
+        const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
+        if (Array.isArray(tabSectionList)) {
+          processShelves(tabSectionList);
+        }
+
+        const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
+        if (Array.isArray(tabGridItems)) {
+          tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = hideVideo(tabGridItems);
+        }
       }
     }
   }
@@ -233,7 +299,14 @@ JSON.parse = function () {
     }
   }
 
-  return r;
+    return r;
+  } catch (error) {
+    if (!window.__ttAdblockParseWarned) {
+      window.__ttAdblockParseWarned = true;
+      console.warn('[TizenTube] adblock parser patch failed', error);
+    }
+    return r;
+  }
 };
 
 // Patch JSON.parse to use the custom one
@@ -246,7 +319,8 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
-  for (const shelve of shelves) {
+  for (let index = shelves.length - 1; index >= 0; index--) {
+    const shelve = shelves[index];
     if (shelve.shelfRenderer) {
       deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
       hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
@@ -257,13 +331,63 @@ function processShelves(shelves, shouldAddPreviews = true) {
       shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
+          shelves.splice(index, 1);
           continue;
         }
         shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
       }
+
+      if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+        shelves.splice(index, 1);
+      }
     }
   }
+}
+
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
+}
+
+function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
+  if (!node || depth > 7) return null;
+  if (typeof node !== 'object') return null;
+  if (seen.has(node)) return null;
+  seen.add(node);
+
+  const direct = Number(node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const childProgress = getGenericNodeProgress(child, depth + 1, seen);
+      if (childProgress !== null) return childProgress;
+    }
+    return null;
+  }
+
+  for (const key of Object.keys(node)) {
+    const childProgress = getGenericNodeProgress(node[key], depth + 1, seen);
+    if (childProgress !== null) return childProgress;
+  }
+
+  return null;
 }
 
 function addPreviews(items) {
@@ -370,17 +494,53 @@ function addLongPress(items) {
   }
 }
 
+function detectCurrentPage() {
+  const hash = location.hash ? location.hash.substring(1) : '';
+  const params = hash.includes('?') ? new URLSearchParams(hash.split('?')[1]) : new URLSearchParams();
+  const cParam = (params.get('c') || '').toLowerCase();
+
+  if (cParam.includes('fesubscription')) return 'subscriptions';
+  if (cParam.startsWith('uc')) return 'channel';
+  if (cParam === 'felibrary') return 'library';
+  if (cParam === 'fehistory') return 'history';
+  if (cParam === 'feplaylist_aggregation') return 'playlists';
+  if (cParam === 'femy_youtube' || cParam === 'vlwl' || cParam === 'vlll' || cParam.startsWith('vlpl')) return 'playlist';
+  if (hash.startsWith('/watch')) return 'watch';
+
+  try {
+    return hash === '/'
+      ? 'home'
+      : hash.startsWith('/search')
+        ? 'search'
+        : (hash.split('?')[1]?.split('&')[0]?.split('=')[1] || 'home').replace('FE', '').replace('topics_', '');
+  } catch {
+    return 'home';
+  }
+}
+
 function hideVideo(items) {
   return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
+    try {
+      const pages = configRead('hideWatchedVideosPages');
+      const hashPage = detectCurrentPage();
+      const pageName = (hashPage === 'home' || hashPage === 'search')
+        ? (window.__ttLastDetectedPage || hashPage)
+        : hashPage;
+      if (!pages.includes(pageName)) return true;
 
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
+      let percentWatched = null;
+
+      if (item?.tileRenderer) {
+        percentWatched = getWatchProgress(item);
+      } else {
+        percentWatched = getGenericNodeProgress(item);
+      }
+
+      if (percentWatched === null) return true;
+
+      return percentWatched <= configRead('hideWatchedVideosThreshold');
+    } catch {
+      return true;
+    }
   });
 }
