@@ -81,6 +81,13 @@ export function detectPageFromBrowseId(browseId) {
   return null;
 }
 
+function parsePercentValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const match = String(value).match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : null;
+}
+
 function getThumbnailOverlaysFromNode(node) {
   return node?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
     || node?.tileRenderer?.thumbnailOverlays
@@ -102,7 +109,10 @@ function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
   const overlays = getThumbnailOverlaysFromNode(node);
   const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
   if (resumeOverlay) {
-    return Number(resumeOverlay.percentDurationWatched || 0);
+    const resumePercent = parsePercentValue(resumeOverlay.percentDurationWatched);
+    if (resumePercent !== null) return resumePercent;
+    // Presence of resume overlay means watched progress exists; treat missing percent as watched.
+    return 100;
   }
 
   const hasWatchedBadge = overlays.some(overlay =>
@@ -124,14 +134,14 @@ function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
     return 100;
   }
 
-  const direct = Number(
+  const direct = parsePercentValue(
     node.watchProgressPercentage
     ?? node.percentDurationWatched
     ?? node.watchedPercent
     ?? node?.thumbnailOverlayResumePlaybackRenderer?.percentDurationWatched
     ?? node?.lockupViewModel?.progressPercentage
   );
-  if (Number.isFinite(direct)) {
+  if (direct !== null) {
     return direct;
   }
 
@@ -238,13 +248,15 @@ export function hideVideo(items, pageHint = null) {
       const percentWatched = extractWatchProgress(item);
 
       if (percentWatched === null) {
-        if (!loggedNoProgressChannel && configRead('enableDebugLogging') && pageName === 'channel') {
+        if (!loggedNoProgressChannel && configRead('enableDebugLogging') && (pageName === 'channel' || pageName === 'watch')) {
           loggedNoProgressChannel = true;
-          appendFileOnlyLog('hideVideo.noProgress.channel', {
+          appendFileOnlyLog('hideVideo.noProgress', {
             pageHint,
             hashPage,
             pageName,
-            sampleKeys: Object.keys(item || {}).slice(0, 12)
+            sampleKeys: Object.keys(item || {}).slice(0, 12),
+            tileRendererKeys: Object.keys(item?.tileRenderer || {}).slice(0, 12),
+            headerKeys: Object.keys(item?.tileRenderer?.header || {}).slice(0, 12)
           });
         }
         return true;
