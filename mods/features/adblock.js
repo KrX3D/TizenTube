@@ -379,7 +379,6 @@ function deArrowify(items) {
   }
 }
 
-
 function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
@@ -427,4 +426,3 @@ function addLongPress(items) {
     item.tileRenderer.onLongPressCommand = data;
   }
 }
-

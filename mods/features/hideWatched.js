@@ -326,10 +326,12 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
   }
 }
 
-function removeEmptyTileSlots() {
-  // Empty tile slots YouTube renders when continuation items were filtered
-  document.querySelectorAll('ytlr-tile-renderer:empty, ytlr-tile-renderer:not([data-content-id])').forEach(el => {
-    el.closest('ytlr-shelf-renderer-item, li')?.remove();
+function removeEmptyShelfRows() {
+  document.querySelectorAll('ytlr-shelf-renderer').forEach(shelf => {
+    if (!shelf.querySelector('ytlr-tile-renderer')) {
+      // Walk up to the absolute-positioned row wrapper and remove it
+      shelf.closest('.TXB27d')?.remove();
+    }
   });
 }
 
@@ -338,7 +340,7 @@ export function startEmptyTileObserver() {
 
   const observer = new MutationObserver(() => {
     if (!configRead('enableHideWatchedVideos')) return;
-    removeEmptyTileSlots();
+    removeEmptyShelfRows();
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
