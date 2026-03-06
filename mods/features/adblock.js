@@ -3,7 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectPageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
+import { detectAndStorePageFromResponse, detectPageFromBrowseId, hideVideo, processTileArraysDeep } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -21,10 +21,7 @@ JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
-  const detectedPage = detectPageFromResponse(r);
-  if (detectedPage) {
-    window.__ttLastDetectedPage = detectedPage;
-  }
+  const detectedPage = detectAndStorePageFromResponse(r);
 
   try {
 

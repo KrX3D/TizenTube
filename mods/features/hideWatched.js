@@ -37,6 +37,14 @@ export function detectPageFromResponse(response) {
   return null;
 }
 
+
+export function detectAndStorePageFromResponse(response) {
+  const detectedPage = detectPageFromResponse(response);
+  if (detectedPage) {
+    window.__ttLastDetectedPage = detectedPage;
+  }
+  return detectedPage;
+}
 export function detectPageFromBrowseId(browseId) {
   const normalizedBrowseId = String(browseId || '').toLowerCase();
   if (!normalizedBrowseId) return null;
