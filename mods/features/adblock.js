@@ -373,25 +373,6 @@ function getWatchProgress(item) {
   return null;
 }
 
-function getWatchProgress(item) {
-  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
-  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-  if (resumeOverlay) {
-    return Number(resumeOverlay.percentDurationWatched || 0);
-  }
-
-  const hasWatchedBadge = overlays.some(overlay =>
-    overlay.thumbnailOverlayPlaybackStatusRenderer ||
-    overlay.thumbnailOverlayPlayedRenderer
-  );
-
-  if (hasWatchedBadge) {
-    return 100;
-  }
-
-  return null;
-}
-
 function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
   if (!node || depth > 7) return null;
   if (typeof node !== 'object') return null;
