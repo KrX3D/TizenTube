@@ -134,9 +134,16 @@ export function hideVideo(items, pageHint = null) {
 
       const pages = configRead('hideWatchedVideosPages');
       const hashPage = detectCurrentPage();
-      const pageName = pageHint || ((hashPage === 'home' || hashPage === 'search')
-        ? (window.__ttLastDetectedPage || hashPage)
-        : hashPage);
+
+      let pageName = pageHint;
+      if (hashPage && hashPage !== 'home' && hashPage !== 'search') {
+        pageName = hashPage;
+      } else if (!pageName) {
+        pageName = (hashPage === 'home' || hashPage === 'search')
+          ? (window.__ttLastDetectedPage || hashPage)
+          : hashPage;
+      }
+
       if (!pages.includes(pageName)) {
         return true;
       }
