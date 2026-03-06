@@ -23,40 +23,54 @@ const defaultConfig = {
   enableHqThumbnails: false,
   enableChapters: true,
   enableLongPress: true,
-  enableShorts: true,
+  enableShorts: false,
   dontCheckUpdateUntil: 0,
   enableWhoIsWatchingMenu: false,
   permanentlyEnableWhoIsWatchingMenu: false,
   enableWhosWatchingMenuOnAppExit: false,
   enableShowUserLanguage: true,
   enableShowOtherLanguages: false,
-  showWelcomeToast: true,
-  enablePreviousNextButtons: true,
+  showWelcomeToast: false,
+  enablePreviousNextButtons: false,
   enableSuperThanksButton: false,
   enableSpeedControlsButton: true,
   enablePatchingVideoPlayer: true,
-  enablePreviews: true,
+  enablePreviews: false,
   enableHideWatchedVideos: false,
-  hideWatchedVideosThreshold: 80,
-  hideWatchedVideosPages: [],
+  enableHideWatchedVideosPlaylist: false,
+  hideWatchedVideosThreshold: 5,
+  hideWatchedVideosPages: [
+      'home', 
+      'music', 
+      'gaming', 
+      'subscriptions', 
+      'channel',
+      'more',
+      'watch'
+  ],
   enableHideEndScreenCards: false,
-  enableYouThereRenderer: true,
+  enableYouThereRenderer: false,
   lastAnnouncementCheck: 0,
   enableScreenDimming: false,
   dimmingTimeout: 60,
   dimmingOpacity: 0.5,
-  enablePaidPromotionOverlay: true,
+  enablePaidPromotionOverlay: false,
   speedSettingsIncrement: 0.25,
   videoPreferredCodec: 'any',
   launchToOnStartup: null,
-  disabledSidebarContents: [],
+  disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE'],
   enableUpdater: true,
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
-  enableSigninReminder: false
+  enableSigninReminder: false,
+  enableDebugConsole: false,
+  enableDebugLogging: false,
+  debugConsolePosition: 'top-left',
+  debugConsoleHeight: 500
 };
 
 let localConfig;
+const populatedConfigWarnings = new Set();
 
 try {
   localConfig = JSON.parse(window.localStorage[CONFIG_KEY]);
@@ -65,10 +79,18 @@ try {
   localConfig = defaultConfig;
 }
 
+if (!localConfig || typeof localConfig !== 'object') {
+  localConfig = { ...defaultConfig };
+}
+
 export function configRead(key) {
   if (localConfig[key] === undefined) {
-    console.warn('Populating key', key, 'with default value', defaultConfig[key]);
-    localConfig[key] = defaultConfig[key];
+    const hasDefault = Object.prototype.hasOwnProperty.call(defaultConfig, key);
+    localConfig[key] = hasDefault ? defaultConfig[key] : undefined;
+    if (hasDefault && !populatedConfigWarnings.has(key)) {
+      populatedConfigWarnings.add(key);
+      console.warn('Populating key', key, 'with default value', defaultConfig[key]);
+    }
   }
 
   return localConfig[key];
