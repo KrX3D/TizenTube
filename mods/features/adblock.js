@@ -272,7 +272,10 @@ JSON.parse = function () {
   }
 
     // Safety net for response shapes where tile arrays are nested beyond explicit shelf/grid paths.
-    processTileArraysDeep(r, detectedPage, 'response');
+    // Skip for watch page to avoid leaving empty visual rows in watch-next shelves.
+    if (detectedPage !== 'watch') {
+      processTileArraysDeep(r, detectedPage, 'response');
+    }
 
     return r;
   } catch (error) {

@@ -83,6 +83,8 @@ export function detectPageFromBrowseId(browseId) {
 
 function getThumbnailOverlaysFromNode(node) {
   return node?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
+    || node?.tileRenderer?.thumbnailOverlays
+    || node?.tileRenderer?.thumbnail?.thumbnails?.[0]?.overlays
     || node?.videoRenderer?.thumbnailOverlays
     || node?.gridVideoRenderer?.thumbnailOverlays
     || node?.compactVideoRenderer?.thumbnailOverlays
@@ -108,6 +110,17 @@ function extractWatchProgress(node, depth = 0, seen = new WeakSet()) {
     overlay.thumbnailOverlayPlayedRenderer
   );
   if (hasWatchedBadge) {
+    return 100;
+  }
+
+  const badgeText = JSON.stringify(node?.tileRenderer?.metadata?.tileMetadataRenderer?.lines || []);
+  const styleBadges = node?.tileRenderer?.badges || [];
+  const hasWatchedStyleBadge = styleBadges.some((badge) => {
+    const style = String(badge?.metadataBadgeRenderer?.style || '').toLowerCase();
+    const label = String(badge?.metadataBadgeRenderer?.label || '').toLowerCase();
+    return style.includes('watched') || label.includes('watched');
+  });
+  if (hasWatchedStyleBadge || badgeText.toLowerCase().includes('watched')) {
     return 100;
   }
 
