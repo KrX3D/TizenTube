@@ -314,7 +314,6 @@ JSON.parse = function () {
     }
   }
 
-    processTileArraysDeep(r, detectedPage, 'response');
     return r;
   } catch (error) {
     if (!window.__ttAdblockParseWarned) {
