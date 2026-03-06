@@ -400,6 +400,98 @@ function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
   return null;
 }
 
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
+}
+
+function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
+  if (!node || depth > 7) return null;
+  if (typeof node !== 'object') return null;
+  if (seen.has(node)) return null;
+  seen.add(node);
+
+  const direct = Number(node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const childProgress = getGenericNodeProgress(child, depth + 1, seen);
+      if (childProgress !== null) return childProgress;
+    }
+    return null;
+  }
+
+  for (const key of Object.keys(node)) {
+    const childProgress = getGenericNodeProgress(node[key], depth + 1, seen);
+    if (childProgress !== null) return childProgress;
+  }
+
+  return null;
+}
+
+function getWatchProgress(item) {
+  const overlays = item.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  const resumeOverlay = overlays.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resumeOverlay) {
+    return Number(resumeOverlay.percentDurationWatched || 0);
+  }
+
+  const hasWatchedBadge = overlays.some(overlay =>
+    overlay.thumbnailOverlayPlaybackStatusRenderer ||
+    overlay.thumbnailOverlayPlayedRenderer
+  );
+
+  if (hasWatchedBadge) {
+    return 100;
+  }
+
+  return null;
+}
+
+function getGenericNodeProgress(node, depth = 0, seen = new WeakSet()) {
+  if (!node || depth > 7) return null;
+  if (typeof node !== 'object') return null;
+  if (seen.has(node)) return null;
+  seen.add(node);
+
+  const direct = Number(node.watchProgressPercentage ?? node.percentDurationWatched ?? node.watchedPercent);
+  if (Number.isFinite(direct)) {
+    return direct;
+  }
+
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const childProgress = getGenericNodeProgress(child, depth + 1, seen);
+      if (childProgress !== null) return childProgress;
+    }
+    return null;
+  }
+
+  for (const key of Object.keys(node)) {
+    const childProgress = getGenericNodeProgress(node[key], depth + 1, seen);
+    if (childProgress !== null) return childProgress;
+  }
+
+  return null;
+}
+
 function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
   for (const item of items) {
