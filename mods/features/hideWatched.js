@@ -328,12 +328,16 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
 
 const _consolidatedArrays = new WeakSet();
 
-export function consolidateShelves(contents) {
+export function consolidateShelves(contents, path = 'unknown') {
   if (!configRead('enableHideWatchedVideos')) return;
-  if (_consolidatedArrays.has(contents)) return;
+  if (_consolidatedArrays.has(contents)) {
+    appendFileOnlyLog('consolidate.skip.weakset', { path, contentsLength: contents.length });
+    return;
+  }
   _consolidatedArrays.add(contents);
-  
+
   const shelves = contents.filter(c => c.shelfRenderer);
+  appendFileOnlyLog('consolidate.begin', { path, contentsLength: contents.length, shelvesFound: shelves.length });
   if (shelves.length === 0) return;
   const allItems = [];
   for (const shelf of shelves) {
@@ -349,4 +353,5 @@ export function consolidateShelves(contents) {
     shelf.shelfRenderer.content.horizontalListRenderer.items = allItems.slice(i, i + ITEMS_PER_ROW);
     contents.push(shelf);
   }
+  appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows: Math.ceil(allItems.length / ITEMS_PER_ROW) });
 }
