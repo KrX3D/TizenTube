@@ -15,10 +15,44 @@ import { PatchSettings } from '../ui/customYTSettings.js';
  */
 
 const origParse = JSON.parse;
+
+function detectPageFromResponse(response) {
+  const serviceParams = response?.responseContext?.serviceTrackingParams || [];
+  for (const entry of serviceParams) {
+    for (const param of (entry?.params || [])) {
+      if (param?.key !== 'browse_id') continue;
+      const browseId = String(param?.value || '').toLowerCase();
+      if (browseId.includes('fesubscription')) return 'subscriptions';
+      if (browseId.startsWith('uc')) return 'channel';
+      if (browseId === 'fehistory') return 'history';
+      if (browseId === 'felibrary') return 'library';
+      if (browseId === 'feplaylist_aggregation') return 'playlists';
+      if (browseId === 'femy_youtube' || browseId === 'vlwl' || browseId === 'vlll' || browseId.startsWith('vlpl')) return 'playlist';
+    }
+  }
+
+  const targetId = String(response?.contents?.tvBrowseRenderer?.targetId || '').toLowerCase();
+  if (targetId.startsWith('browse-feed')) {
+    const browseId = targetId.replace('browse-feed', '');
+    if (browseId.includes('fesubscription')) return 'subscriptions';
+    if (browseId.startsWith('uc')) return 'channel';
+  }
+
+  if (response?.contents?.singleColumnWatchNextResults) return 'watch';
+
+  return null;
+}
+
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   const adBlockEnabled = configRead('enableAdBlock');
   const signinReminderEnabled = configRead('enableSigninReminder');
+  const detectedPage = detectPageFromResponse(r);
+  if (detectedPage) {
+    window.__ttLastDetectedPage = detectedPage;
+  }
+
+  try {
 
   try {
 
@@ -433,7 +467,7 @@ function hideVideo(items) {
     if (!item.tileRenderer) return true;
 
     const pages = configRead('hideWatchedVideosPages');
-    const pageName = detectCurrentPage();
+    const pageName = window.__ttLastDetectedPage || detectCurrentPage();
     if (!pages.includes(pageName)) return true;
 
     const percentWatched = getWatchProgress(item);

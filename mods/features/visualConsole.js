@@ -100,10 +100,21 @@ function initVisualConsole() {
     debug: console.debug
   };
 
-  const esc = (value) => String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const renderLogs = () => {
+    while (consoleDiv.firstChild) {
+      consoleDiv.removeChild(consoleDiv.firstChild);
+    }
+
+    for (const entry of logs) {
+      const row = document.createElement('div');
+      row.style.color = entry.color;
+      row.style.marginBottom = '4px';
+      row.style.whiteSpace = 'pre-wrap';
+      row.style.wordWrap = 'break-word';
+      row.textContent = `[${entry.time}] ${entry.msg}`;
+      consoleDiv.appendChild(row);
+    }
+  };
 
   const syncVisible = () => {
     const enabled = !!configRead('enableDebugConsole');
@@ -111,7 +122,7 @@ function initVisualConsole() {
     if (enabled) {
       applyPosition();
       applyHeight();
-      consoleDiv.innerHTML = logs.join('');
+      renderLogs();
       consoleDiv.scrollTop = 0;
     }
   };
@@ -123,10 +134,14 @@ function initVisualConsole() {
       if (typeof a === 'string') return a;
       try { return JSON.stringify(a); } catch (_) { return String(a); }
     }).join(' ');
-    logs.unshift(`<div style="color:${color};margin-bottom:4px;white-space:pre-wrap;word-wrap:break-word;">[${new Date().toLocaleTimeString()}] ${esc(msg)}</div>`);
+    logs.unshift({
+      color,
+      msg,
+      time: new Date().toLocaleTimeString()
+    });
     if (logs.length > 600) logs.pop();
     if (consoleDiv.style.display !== 'none') {
-      consoleDiv.innerHTML = logs.join('');
+      renderLogs();
       consoleDiv.scrollTop = 0;
     }
   };
@@ -140,7 +155,7 @@ function initVisualConsole() {
   const downloadLogs = () => {
     try {
       const plainTextLogs = logs
-        .map((entry) => entry.replace(/<div[^>]*>/g, '').replace(/<\/div>/g, ''))
+        .map((entry) => `[${entry.time}] ${entry.msg}`)
         .join('\n');
       const fileOnlyLogs = Array.isArray(window.__ttFileOnlyLogs) ? window.__ttFileOnlyLogs.join('\n') : '';
       const combinedLogs = `${plainTextLogs}\n\n===== FILE-ONLY DEBUG LOGS =====\n${fileOnlyLogs}`;
