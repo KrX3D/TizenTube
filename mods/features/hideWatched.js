@@ -325,3 +325,22 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
     processTileArraysDeep(node[key], pageHint, `${path}.${key}`, depth + 1);
   }
 }
+
+function removeEmptyTileSlots() {
+  // Empty tile slots YouTube renders when continuation items were filtered
+  document.querySelectorAll('ytlr-tile-renderer:empty, ytlr-tile-renderer:not([data-content-id])').forEach(el => {
+    el.closest('ytlr-shelf-renderer-item, li')?.remove();
+  });
+}
+
+export function startEmptyTileObserver() {
+  if (window.__ttEmptyTileObserver) return;
+
+  const observer = new MutationObserver(() => {
+    if (!configRead('enableHideWatchedVideos')) return;
+    removeEmptyTileSlots();
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+  window.__ttEmptyTileObserver = observer;
+}

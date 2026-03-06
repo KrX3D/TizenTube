@@ -3,7 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep } from './hideWatched.js';
+import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep, startEmptyTileObserver } from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -294,6 +294,8 @@ for (const key in window._yttv) {
     window._yttv[key].JSON.parse = JSON.parse;
   }
 }
+
+startEmptyTileObserver();
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
