@@ -352,19 +352,22 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null) 
   
   const ITEMS_PER_ROW = shelves[0].shelfRenderer.content.horizontalListRenderer.items.length || 3;
   const template = shelves[0];
+  let newRows = 0;
   for (let i = 0; i < allItems.length; i += ITEMS_PER_ROW) {
-    const rowShelf = {
+    const rowItems = allItems.slice(i, i + ITEMS_PER_ROW);
+    if (rowItems.length < ITEMS_PER_ROW) break;
+    contents.push({
       shelfRenderer: {
         ...template.shelfRenderer,
         content: {
           horizontalListRenderer: {
             ...template.shelfRenderer.content.horizontalListRenderer,
-            items: allItems.slice(i, i + ITEMS_PER_ROW)
+            items: rowItems
           }
         }
       }
-    };
-    contents.push(rowShelf);
+    });
+    newRows++;
   }
-  appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows: Math.ceil(allItems.length / ITEMS_PER_ROW) });
+  appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows });
 }
