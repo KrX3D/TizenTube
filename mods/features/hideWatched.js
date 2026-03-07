@@ -327,9 +327,11 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
 }
 
 const _consolidatedArrays = new WeakSet();
+const CONSOLIDATE_PAGES = new Set(['home', 'subscriptions', 'watch']);
 
-export function consolidateShelves(contents, path = 'unknown') {
+export function consolidateShelves(contents, path = 'unknown', pageName = null) {
   if (!configRead('enableHideWatchedVideos')) return;
+  if (pageName && !CONSOLIDATE_PAGES.has(pageName)) return;  // ← skip library/channel
   if (_consolidatedArrays.has(contents)) {
     appendFileOnlyLog('consolidate.skip.weakset', { path, contentsLength: contents.length });
     return;
