@@ -23,6 +23,7 @@ export function getCurrentPageName() {
 
   if (hash.startsWith('/search')) return 'search';
   if (hash.startsWith('/watch')) return 'watch';
+  if (hash.startsWith('/playlist')) return 'playlist';
   if (hash.startsWith('/channel') || hash.startsWith('/c/') || hash.startsWith('/user/') || hash.startsWith('/@')) {
     return 'channel';
   }
@@ -63,7 +64,14 @@ export function getTileText(item) {
 export function shouldApplyOnCurrentPage(settingKey) {
   const pages = configRead(settingKey) || [];
   if (!Array.isArray(pages) || pages.length === 0) return true;
-  return pages.includes(getCurrentPageName());
+
+  const currentPage = getCurrentPageName();
+  if (pages.includes(currentPage)) return true;
+
+  if (currentPage === 'playlist' && pages.includes('playlists')) return true;
+  if (currentPage === 'playlists' && pages.includes('playlist')) return true;
+
+  return false;
 }
 
 export function parseViewsFromText(texts) {

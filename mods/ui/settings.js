@@ -497,6 +497,26 @@ export default function modernUI(update, parameters) {
                                     value: 'channel'
                                 },
                                 {
+                                    name: 'Watch',
+                                    value: 'watch'
+                                },
+                                {
+                                    name: 'Playlist',
+                                    value: 'playlist'
+                                },
+                                {
+                                    name: 'Playlists',
+                                    value: 'playlists'
+                                },
+                                {
+                                    name: 'Mix',
+                                    value: 'mix'
+                                },
+                                {
+                                    name: 'Live',
+                                    value: 'live'
+                                },
+                                {
                                     name: 'Library',
                                     value: 'library'
                                 },
@@ -534,6 +554,11 @@ export default function modernUI(update, parameters) {
                                 { name: 'Gaming', value: 'gaming' },
                                 { name: 'Subscriptions', value: 'subscriptions' },
                                 { name: 'Channel', value: 'channel' },
+                                { name: 'Watch', value: 'watch' },
+                                { name: 'Playlist', value: 'playlist' },
+                                { name: 'Playlists', value: 'playlists' },
+                                { name: 'Mix', value: 'mix' },
+                                { name: 'Live', value: 'live' },
                                 { name: 'Library', value: 'library' },
                                 { name: 'More', value: 'more' }
                             ]
@@ -554,6 +579,11 @@ export default function modernUI(update, parameters) {
                                 { name: 'Gaming', value: 'gaming' },
                                 { name: 'Subscriptions', value: 'subscriptions' },
                                 { name: 'Channel', value: 'channel' },
+                                { name: 'Watch', value: 'watch' },
+                                { name: 'Playlist', value: 'playlist' },
+                                { name: 'Playlists', value: 'playlists' },
+                                { name: 'Mix', value: 'mix' },
+                                { name: 'Live', value: 'live' },
                                 { name: 'Library', value: 'library' },
                                 { name: 'More', value: 'more' }
                             ]
@@ -574,6 +604,11 @@ export default function modernUI(update, parameters) {
                                 { name: 'Gaming', value: 'gaming' },
                                 { name: 'Subscriptions', value: 'subscriptions' },
                                 { name: 'Channel', value: 'channel' },
+                                { name: 'Watch', value: 'watch' },
+                                { name: 'Playlist', value: 'playlist' },
+                                { name: 'Playlists', value: 'playlists' },
+                                { name: 'Mix', value: 'mix' },
+                                { name: 'Live', value: 'live' },
                                 { name: 'Library', value: 'library' },
                                 { name: 'More', value: 'more' }
                             ]
@@ -604,6 +639,11 @@ export default function modernUI(update, parameters) {
                                 { name: 'Gaming', value: 'gaming' },
                                 { name: 'Subscriptions', value: 'subscriptions' },
                                 { name: 'Channel', value: 'channel' },
+                                { name: 'Watch', value: 'watch' },
+                                { name: 'Playlist', value: 'playlist' },
+                                { name: 'Playlists', value: 'playlists' },
+                                { name: 'Mix', value: 'mix' },
+                                { name: 'Live', value: 'live' },
                                 { name: 'Library', value: 'library' },
                                 { name: 'More', value: 'more' }
                             ]
@@ -644,6 +684,11 @@ export default function modernUI(update, parameters) {
                                 { name: 'Gaming', value: 'gaming' },
                                 { name: 'Subscriptions', value: 'subscriptions' },
                                 { name: 'Channel', value: 'channel' },
+                                { name: 'Watch', value: 'watch' },
+                                { name: 'Playlist', value: 'playlist' },
+                                { name: 'Playlists', value: 'playlists' },
+                                { name: 'Mix', value: 'mix' },
+                                { name: 'Live', value: 'live' },
                                 { name: 'Library', value: 'library' },
                                 { name: 'More', value: 'more' }
                             ]
