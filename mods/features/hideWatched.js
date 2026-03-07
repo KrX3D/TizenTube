@@ -333,9 +333,9 @@ const _consolidatedArrays = new WeakSet();
 const CONSOLIDATE_PAGES = new Set(['subscriptions', 'watch']);
 
 export function consolidateShelves(contents, path = 'unknown', pageName = null) {
-  appendFileOnlyLog('consolidate.check', { path, contentsLength: contents.length, pageName: pageName });
+  appendFileOnlyLog('consolidate.check', { path, contentsLength: contents.length, pageName });
   if (!configRead('enableHideWatchedVideos')) return;
-  if (pageName && !CONSOLIDATE_PAGES.has(pageName)) return;  // ← skip library/channel
+  if (pageName && !CONSOLIDATE_PAGES.has(pageName)) return;
   if (_consolidatedArrays.has(contents)) {
     appendFileOnlyLog('consolidate.skip.weakset', { path, contentsLength: contents.length });
     return;
@@ -345,23 +345,28 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null) 
   const shelves = contents.filter(c => c.shelfRenderer);
   appendFileOnlyLog('consolidate.begin', { path, contentsLength: contents.length, shelvesFound: shelves.length });
   if (shelves.length === 0) return;
+
   const allItems = [];
   for (const shelf of shelves) {
     allItems.push(...shelf.shelfRenderer.content.horizontalListRenderer.items);
   }
   if (allItems.length === 0) return;
+
+  // ↓ Remember insertion point BEFORE removing shelves
+  const insertAt = contents.findIndex(c => c.shelfRenderer);
+
   for (let i = contents.length - 1; i >= 0; i--) {
     if (contents[i].shelfRenderer) contents.splice(i, 1);
   }
-  
+
   const ITEMS_PER_ROW = shelves[0].shelfRenderer.content.horizontalListRenderer._originalRowSize
     || Math.max(...shelves.map(s => s.shelfRenderer.content.horizontalListRenderer.items.length), 3);
   const template = shelves[0];
-  let newRows = 0;
+  const newShelves = [];
   for (let i = 0; i < allItems.length; i += ITEMS_PER_ROW) {
     const rowItems = allItems.slice(i, i + ITEMS_PER_ROW);
     if (rowItems.length < ITEMS_PER_ROW) break;
-    contents.push({
+    newShelves.push({
       shelfRenderer: {
         ...template.shelfRenderer,
         content: {
@@ -372,7 +377,9 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null) 
         }
       }
     });
-    newRows++;
   }
-  appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows });
+
+  // ↓ Insert at original shelf position, not at the end
+  contents.splice(insertAt, 0, ...newShelves);
+  appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows: newShelves.length });
 }
