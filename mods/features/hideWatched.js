@@ -244,7 +244,8 @@ export function hideVideo(items, pageHint = null) {
       if (!pages.includes(pageName)) {
         return true;
       }
-
+      
+      if (!item?.tileRenderer?.contentId) return item; // skip non-video tiles
       const percentWatched = extractWatchProgress(item);
 
       if (percentWatched === null) {
