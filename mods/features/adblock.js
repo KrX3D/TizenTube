@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { shouldHideTile } from './youtubeHider.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
@@ -371,16 +372,6 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
-
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
-  });
+  return items.filter(item => !shouldHideTile(item));
 }
+
