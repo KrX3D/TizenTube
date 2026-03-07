@@ -247,10 +247,32 @@ for (const key in window._yttv) {
 }
 
 
+
+function countRenderableTiles(shelves) {
+  let count = 0;
+  for (const shelve of shelves) {
+    const items = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (item?.tileRenderer || item?.reelItemRenderer || item?.shortsLockupViewModel) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
 function processShelves(shelves, shouldAddPreviews = true) {
   const filteredShelves = [];
+  const originalShelves = [...shelves];
+  const originalItemsByShelf = new Map();
 
   for (const shelve of shelves) {
+    const originalItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
+    if (Array.isArray(originalItems)) {
+      originalItemsByShelf.set(shelve, [...originalItems]);
+    }
+
     if (!shelve.shelfRenderer) {
       filteredShelves.push(shelve);
       continue;
@@ -260,23 +282,35 @@ function processShelves(shelves, shouldAddPreviews = true) {
       continue;
     }
 
-    const originalItems = [...shelve.shelfRenderer.content.horizontalListRenderer.items];
+    const shelveItems = shelve.shelfRenderer.content.horizontalListRenderer.items;
 
-    deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-    hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-    addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    deArrowify(shelveItems);
+    hqify(shelveItems);
+    addLongPress(shelveItems);
     if (shouldAddPreviews) {
-      addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
+      addPreviews(shelveItems);
     }
-    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelveItems);
 
-    // Safety fallback: never let a shelf become completely empty due filtering.
-    // Empty shelves can lead to a full-page gray/blank UI on some TV clients.
-    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0 && originalItems.length > 0) {
-      shelve.shelfRenderer.content.horizontalListRenderer.items = originalItems;
+    // Per-shelf safety fallback.
+    const shelfOriginalItems = originalItemsByShelf.get(shelve) || [];
+    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0 && shelfOriginalItems.length > 0) {
+      shelve.shelfRenderer.content.horizontalListRenderer.items = shelfOriginalItems;
     }
 
     filteredShelves.push(shelve);
+  }
+
+  // Global safety fallback: never allow a whole page to become blank.
+  if (countRenderableTiles(filteredShelves) === 0 && countRenderableTiles(originalShelves) > 0) {
+    for (const shelve of originalShelves) {
+      const originalItems = originalItemsByShelf.get(shelve);
+      if (originalItems && shelve?.shelfRenderer?.content?.horizontalListRenderer) {
+        shelve.shelfRenderer.content.horizontalListRenderer.items = originalItems;
+      }
+    }
+    shelves.splice(0, shelves.length, ...originalShelves);
+    return;
   }
 
   shelves.splice(0, shelves.length, ...filteredShelves);
@@ -387,6 +421,15 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  return items.filter(item => !shouldHideTile(item));
+  const filteredItems = items.filter(item => !shouldHideTile(item));
+  const hadRenderableItems = items.some(item => item?.tileRenderer || item?.reelItemRenderer || item?.shortsLockupViewModel);
+  const hasRenderableItemsAfter = filteredItems.some(item => item?.tileRenderer || item?.reelItemRenderer || item?.shortsLockupViewModel);
+
+  // Safety fallback for continuations/other contexts that do not go through shelf-level fallback.
+  if (hadRenderableItems && !hasRenderableItemsAfter) {
+    return items;
+  }
+
+  return filteredItems;
 }
 
