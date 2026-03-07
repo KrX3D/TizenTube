@@ -96,7 +96,7 @@ JSON.parse = function () {
     }
 
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
-    consolidateShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, 'tvBrowse.sectionList', pageName);
+    consolidateShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, 'tvBrowse.sectionList', detectedPage);
 
   }
 
@@ -127,7 +127,7 @@ JSON.parse = function () {
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
-    consolidateShelves(r.contents.sectionListRenderer.contents, 'sectionList', pageName);
+    consolidateShelves(r.contents.sectionListRenderer.contents, 'sectionList', detectedPage);
   }
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
@@ -136,13 +136,13 @@ JSON.parse = function () {
 
   if (r?.continuationContents?.sectionListContinuation?.contents) {
     processShelves(r.continuationContents.sectionListContinuation.contents, true, detectedPage);
-    consolidateShelves(r.continuationContents.sectionListContinuation.contents, 'continuation.sectionList', pageName);
+    consolidateShelves(r.continuationContents.sectionListContinuation.contents, 'continuation.sectionList', detectedPage);
   }
 
   if (r?.continuationContents?.pivotContinuation?.contents) {
     appendAdblockDebugLog('pivot.continuation.hit', { count: r.continuationContents.pivotContinuation.contents.length });
     processShelves(r.continuationContents.pivotContinuation.contents, false, detectedPage);
-    consolidateShelves(r.continuationContents.pivotContinuation.contents, 'continuation.pivot', pageName);
+    consolidateShelves(r.continuationContents.pivotContinuation.contents, 'continuation.pivot', detectedPage);
   }
 
   if (r?.continuationContents?.horizontalListContinuation?.items) {
@@ -165,7 +165,7 @@ JSON.parse = function () {
         const tabSectionList = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents;
         if (Array.isArray(tabSectionList)) {
           processShelves(tabSectionList, true, tabPage || detectedPage);
-          consolidateShelves(tabSectionList, `tab.${tabBrowseId || 'unknown'}`, pageName);
+          consolidateShelves(tabSectionList, `tab.${tabBrowseId || 'unknown'}`, detectedPage);
         }
 
         const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
@@ -184,7 +184,7 @@ JSON.parse = function () {
         );
     }
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
-    consolidateShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, 'watchNext', pageName);
+    consolidateShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, 'watchNext', detectedPage);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
       queuedVideosClone.unshift(TileRenderer(
