@@ -247,24 +247,29 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
+  const filteredShelves = [];
+
   for (const shelve of shelves) {
-    if (shelve.shelfRenderer) {
-      deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (shouldAddPreviews) {
-        addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (!configRead('enableShorts')) {
-        if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
-          continue;
-        }
-        shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
-      }
+    if (!shelve.shelfRenderer) {
+      filteredShelves.push(shelve);
+      continue;
     }
+
+    if (!configRead('enableShorts') && shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+      continue;
+    }
+
+    deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    if (shouldAddPreviews) {
+      addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    }
+    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    filteredShelves.push(shelve);
   }
+
+  shelves.splice(0, shelves.length, ...filteredShelves);
 }
 
 function addPreviews(items) {

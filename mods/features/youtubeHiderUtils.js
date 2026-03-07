@@ -9,38 +9,60 @@ const PAGE_QUERY_MAP = {
   FEtopics_live: 'live'
 };
 
+function normalizeBrowsePageName(browseId) {
+  if (!browseId) return 'unknown';
+  if (browseId.startsWith('UC')) return 'channel';
+  if (browseId.startsWith('VL')) return 'playlist';
+  if (browseId.startsWith('RD')) return 'mix';
+  return PAGE_QUERY_MAP[browseId] || browseId.replace('FE', '').replace('topics_', '');
+}
+
 export function getCurrentPageName() {
   const hash = window.location.hash?.substring(1) || '';
   if (hash === '/' || hash === '') return 'home';
+
   if (hash.startsWith('/search')) return 'search';
+  if (hash.startsWith('/watch')) return 'watch';
+  if (hash.startsWith('/channel') || hash.startsWith('/c/') || hash.startsWith('/user/') || hash.startsWith('/@')) {
+    return 'channel';
+  }
 
   const queryPart = hash.split('?')[1] || '';
   const params = new URLSearchParams(queryPart);
   const browse = params.get('browseId');
-  if (!browse) return 'unknown';
-  return PAGE_QUERY_MAP[browse] || browse.replace('FE', '').replace('topics_', '');
+  return normalizeBrowsePageName(browse);
+}
+
+function collectTexts(node, bucket) {
+  if (!node || typeof node !== 'object') return;
+
+  if (typeof node.simpleText === 'string') {
+    bucket.push(node.simpleText);
+  }
+
+  if (Array.isArray(node.runs)) {
+    const runText = node.runs.map(run => run?.text || '').join('').trim();
+    if (runText) bucket.push(runText);
+  }
+
+  for (const value of Object.values(node)) {
+    if (Array.isArray(value)) {
+      for (const item of value) collectTexts(item, bucket);
+    } else if (value && typeof value === 'object') {
+      collectTexts(value, bucket);
+    }
+  }
 }
 
 export function getTileText(item) {
-  const lines = item?.tileRenderer?.metadata?.tileMetadataRenderer?.lines || [];
   const texts = [];
-
-  for (const line of lines) {
-    const lineItems = line?.lineRenderer?.items || [];
-    for (const lineItem of lineItems) {
-      const text = lineItem?.lineItemRenderer?.text;
-      if (!text) continue;
-      if (text.simpleText) texts.push(text.simpleText);
-      if (Array.isArray(text.runs)) texts.push(text.runs.map(run => run.text).join(''));
-    }
-  }
-
-  return texts.filter(Boolean);
+  collectTexts(item?.tileRenderer?.metadata || item?.tileRenderer || item, texts);
+  return [...new Set(texts.filter(Boolean))];
 }
 
 export function shouldApplyOnCurrentPage(settingKey) {
   const pages = configRead(settingKey) || [];
-  if (!Array.isArray(pages) || pages.length === 0) return false;
+  if (!Array.isArray(pages) || pages.length === 0) return true;
   return pages.includes(getCurrentPageName());
 }
 
@@ -100,4 +122,35 @@ export function isMixTile(item, texts) {
 
 export function isLiveTile(texts) {
   return texts.some(text => /\blive\b|watching now|started streaming/i.test(text.toLowerCase()));
+}
+
+export function isShortsItem(item) {
+  if (!item || typeof item !== 'object') return false;
+
+  if (item.reelItemRenderer || item.shortsLockupViewModel || item.reelShelfRenderer) return true;
+
+  const tileType = item?.tileRenderer?.tvhtml5ShelfRendererType;
+  if (tileType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return true;
+
+  const endpoint = item?.tileRenderer?.onSelectCommand?.watchEndpoint;
+  if (endpoint?.webPageType === 'WEB_PAGE_TYPE_SHORTS' || endpoint?.reelWatchEndpoint) return true;
+
+  const texts = getTileText(item).map(text => text.toLowerCase());
+  return texts.some(text => text === 'shorts' || text.includes('#shorts'));
+}
+
+export function getWatchedPercent(item) {
+  const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || [];
+  for (const overlay of overlays) {
+    const progress = overlay?.thumbnailOverlayResumePlaybackRenderer?.percentDurationWatched;
+    if (typeof progress === 'number') return progress;
+  }
+
+  const fallback = item?.tileRenderer?.thumbnailOverlays || [];
+  for (const overlay of fallback) {
+    const progress = overlay?.thumbnailOverlayResumePlaybackRenderer?.percentDurationWatched;
+    if (typeof progress === 'number') return progress;
+  }
+
+  return null;
 }
