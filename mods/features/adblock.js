@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { shouldHideTile } from './youtubeHider.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
@@ -246,24 +247,38 @@ for (const key in window._yttv) {
 
 
 function processShelves(shelves, shouldAddPreviews = true) {
+  const filteredShelves = [];
+
   for (const shelve of shelves) {
-    if (shelve.shelfRenderer) {
-      deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (shouldAddPreviews) {
-        addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      }
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (!configRead('enableShorts')) {
-        if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(shelves.indexOf(shelve), 1);
-          continue;
-        }
-        shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
-      }
+    if (!shelve.shelfRenderer) {
+      filteredShelves.push(shelve);
+      continue;
     }
+
+    if (!configRead('enableShorts') && shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
+      continue;
+    }
+
+    const originalItems = [...shelve.shelfRenderer.content.horizontalListRenderer.items];
+
+    deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    if (shouldAddPreviews) {
+      addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    }
+    shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+
+    // Safety fallback: never let a shelf become completely empty due filtering.
+    // Empty shelves can lead to a full-page gray/blank UI on some TV clients.
+    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0 && originalItems.length > 0) {
+      shelve.shelfRenderer.content.horizontalListRenderer.items = originalItems;
+    }
+
+    filteredShelves.push(shelve);
   }
+
+  shelves.splice(0, shelves.length, ...filteredShelves);
 }
 
 function addPreviews(items) {
@@ -371,16 +386,6 @@ function addLongPress(items) {
 }
 
 function hideVideo(items) {
-  return items.filter(item => {
-    if (!item.tileRenderer) return true;
-    const progressBar = item.tileRenderer.header?.tileHeaderRenderer?.thumbnailOverlays?.find(overlay => overlay.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (!progressBar) return true;
-    const pages = configRead('hideWatchedVideosPages');
-    const hash = location.hash.substring(1);
-    const pageName = hash === '/' ? 'home' : hash.startsWith('/search') ? 'search' : hash.split('?')[1].split('&')[0].split('=')[1].replace('FE', '').replace('topics_', '');
-    if (!pages.includes(pageName)) return true;
-
-    const percentWatched = (progressBar.percentDurationWatched || 0);
-    return percentWatched <= configRead('hideWatchedVideosThreshold');
-  });
+  return items.filter(item => !shouldHideTile(item));
 }
+
