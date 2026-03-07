@@ -327,7 +327,7 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
 }
 
 const _consolidatedArrays = new WeakSet();
-const CONSOLIDATE_PAGES = new Set(['home', 'subscriptions', 'watch']);
+const CONSOLIDATE_PAGES = new Set(['subscriptions', 'watch']);
 
 export function consolidateShelves(contents, path = 'unknown', pageName = null) {
   if (!configRead('enableHideWatchedVideos')) return;
