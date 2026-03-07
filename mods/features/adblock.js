@@ -339,7 +339,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         shelves.splice(index, 1);
       }
     }
-    // nothing here — no return null, no orphaned node loop
   }
 }
 
