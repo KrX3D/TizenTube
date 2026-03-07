@@ -351,7 +351,8 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null) 
     if (contents[i].shelfRenderer) contents.splice(i, 1);
   }
   
-  const ITEMS_PER_ROW = shelves[0].shelfRenderer.content.horizontalListRenderer.items.length || 3;
+  const ITEMS_PER_ROW = shelves[0].shelfRenderer.content.horizontalListRenderer._originalRowSize
+    || Math.max(...shelves.map(s => s.shelfRenderer.content.horizontalListRenderer.items.length), 3);
   const template = shelves[0];
   let newRows = 0;
   for (let i = 0; i < allItems.length; i += ITEMS_PER_ROW) {

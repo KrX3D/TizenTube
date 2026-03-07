@@ -175,7 +175,13 @@ JSON.parse = function () {
       }
     }
   }
-
+  
+  if (r?.contents?.singleColumnWatchNextResults) {
+    appendAdblockDebugLog('watchNext.shape', {
+      hasPivot: !!r.contents.singleColumnWatchNextResults.pivot,
+      keys: Object.keys(r.contents.singleColumnWatchNextResults)
+    });
+  }
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     if (!signinReminderEnabled) {
       r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents =
@@ -317,6 +323,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       if (shouldAddPreviews) {
         addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
       }
+      shelve.shelfRenderer.content.horizontalListRenderer._originalRowSize = shelve.shelfRenderer.content.horizontalListRenderer.items.length;
       shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items, pageHint);
       if (!configRead('enableShorts')) {
         if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {

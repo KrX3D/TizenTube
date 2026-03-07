@@ -20,7 +20,7 @@ const defaultConfig = {
   focusContainerColor: '#0f0f0f',
   routeColor: '#0f0f0f',
   enableFixedUI: (window.h5vcc && window.h5vcc.tizentube) ? false : true,
-  enableHqThumbnails: false,
+  enableHqThumbnails: true,
   enableChapters: true,
   enableLongPress: true,
   enableShorts: false,
@@ -36,10 +36,11 @@ const defaultConfig = {
   enableSpeedControlsButton: true,
   enablePatchingVideoPlayer: true,
   enablePreviews: false,
-  enableHideWatchedVideos: false,
+  enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,
   hideWatchedVideosPages: [
       'home', 
+      'search', 
       'music', 
       'gaming', 
       'subscriptions', 
@@ -63,7 +64,7 @@ const defaultConfig = {
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
   enableDebugConsole: false,
-  enableDebugLogging: false,
+  enableDebugLogging: true,
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 500
 };
