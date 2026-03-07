@@ -267,6 +267,11 @@ function processShelves(shelves, shouldAddPreviews = true) {
       addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
     }
     shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
+
+    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0) {
+      continue;
+    }
+
     filteredShelves.push(shelve);
   }
 

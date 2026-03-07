@@ -63,7 +63,7 @@ export function getTileText(item) {
 
 export function shouldApplyOnCurrentPage(settingKey) {
   const pages = configRead(settingKey) || [];
-  if (!Array.isArray(pages) || pages.length === 0) return true;
+  if (!Array.isArray(pages) || pages.length === 0) return false;
 
   const currentPage = getCurrentPageName();
   if (pages.includes(currentPage)) return true;
