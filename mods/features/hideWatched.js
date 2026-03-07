@@ -330,6 +330,7 @@ const _consolidatedArrays = new WeakSet();
 const CONSOLIDATE_PAGES = new Set(['subscriptions', 'watch']);
 
 export function consolidateShelves(contents, path = 'unknown', pageName = null) {
+  appendFileOnlyLog('consolidate.check', { path, contentsLength: contents.length, pageName: pageName });
   if (!configRead('enableHideWatchedVideos')) return;
   if (pageName && !CONSOLIDATE_PAGES.has(pageName)) return;  // ← skip library/channel
   if (_consolidatedArrays.has(contents)) {
