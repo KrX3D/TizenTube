@@ -403,7 +403,8 @@ function hqify(items) {
     if (!item.tileRenderer) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand.watchEndpoint.videoId;
+      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
+      if (!videoID) continue;
       const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
       item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
         {
@@ -421,7 +422,7 @@ function addLongPress(items) {
     if (!item.tileRenderer) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand.menu.menuRenderer.items.push(MenuServiceItemRenderer('Add to Queue', {
+      item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(MenuServiceItemRenderer('Add to Queue', {
         clickTrackingParams: null,
         playlistEditEndpoint: {
           customAction: {
