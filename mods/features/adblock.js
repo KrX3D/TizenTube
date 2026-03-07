@@ -260,6 +260,8 @@ function processShelves(shelves, shouldAddPreviews = true) {
       continue;
     }
 
+    const originalItems = [...shelve.shelfRenderer.content.horizontalListRenderer.items];
+
     deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
     hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
     addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
@@ -268,8 +270,10 @@ function processShelves(shelves, shouldAddPreviews = true) {
     }
     shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items);
 
-    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0) {
-      continue;
+    // Safety fallback: never let a shelf become completely empty due filtering.
+    // Empty shelves can lead to a full-page gray/blank UI on some TV clients.
+    if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0 && originalItems.length > 0) {
+      shelve.shelfRenderer.content.horizontalListRenderer.items = originalItems;
     }
 
     filteredShelves.push(shelve);
