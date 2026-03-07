@@ -265,6 +265,7 @@ function countRenderableTiles(shelves) {
 function processShelves(shelves, shouldAddPreviews = true) {
   const filteredShelves = [];
   const originalShelves = [...shelves];
+  const originalRenderableCount = countRenderableTiles(shelves);
   const originalItemsByShelf = new Map();
 
   for (const shelve of shelves) {
@@ -302,7 +303,7 @@ function processShelves(shelves, shouldAddPreviews = true) {
   }
 
   // Global safety fallback: never allow a whole page to become blank.
-  if (countRenderableTiles(filteredShelves) === 0 && countRenderableTiles(originalShelves) > 0) {
+  if (countRenderableTiles(filteredShelves) === 0 && originalRenderableCount > 0) {
     for (const shelve of originalShelves) {
       const originalItems = originalItemsByShelf.get(shelve);
       if (originalItems && shelve?.shelfRenderer?.content?.horizontalListRenderer) {
