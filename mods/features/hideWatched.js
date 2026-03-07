@@ -254,9 +254,11 @@ export function hideVideo(items, pageHint = null) {
             pageHint,
             hashPage,
             pageName,
-            sampleKeys: Object.keys(item || {}).slice(0, 12),
             tileRendererKeys: Object.keys(item?.tileRenderer || {}).slice(0, 12),
-            headerKeys: Object.keys(item?.tileRenderer?.header || {}).slice(0, 12)
+            headerKeys: Object.keys(item?.tileRenderer?.header || {}).slice(0, 12),
+            tileHeaderRendererKeys: Object.keys(item?.tileRenderer?.header?.tileHeaderRenderer || {}).slice(0, 12),
+            thumbnailOverlaysLength: (item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || []).length,
+            thumbnailOverlaysSample: (item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays || []).map(o => Object.keys(o)).slice(0, 4),
           });
         }
         return true;

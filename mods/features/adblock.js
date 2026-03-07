@@ -37,6 +37,7 @@ JSON.parse = function () {
   appendAdblockDebugLog('parse.begin', { responseDetectedPage, locationDetectedPage, detectedPage, hash: location.hash || '', search: location.search || '', lastDetected: window.__ttLastDetectedPage || null });
 
   try {
+  appendAdblockDebugLog('parse.try.enter', { detectedPage, hash: location.hash || '' });
 
   if (r.adPlacements && adBlockEnabled) {
     r.adPlacements = [];
@@ -297,6 +298,7 @@ JSON.parse = function () {
 
     return r;
   } catch (error) {
+    appendAdblockDebugLog('parse.error', { msg: String(error), stack: String(error?.stack || '').slice(0, 200) });
     if (!window.__ttAdblockParseWarned) {
       window.__ttAdblockParseWarned = true;
       console.warn('[TizenTube] adblock parser patch failed', error);
