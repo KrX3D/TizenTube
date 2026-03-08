@@ -37,9 +37,10 @@ const defaultConfig = {
   enablePatchingVideoPlayer: true,
   enablePreviews: false,
   enableHideWatchedVideos: true,
-  hideWatchedVideosThreshold: 10,
+  hideWatchedVideosThreshold: 5,
   hideWatchedVideosPages: [
       'home', 
+      'search', 
       'music', 
       'gaming', 
       'subscriptions', 
@@ -62,7 +63,7 @@ const defaultConfig = {
   hideVideosOlderThanDays: null,
   uploadDateFilterPages: [],
   enableHideEndScreenCards: false,
-  enableYouThereRenderer: true,
+  enableYouThereRenderer: false,
   lastAnnouncementCheck: 0,
   enableScreenDimming: false,
   dimmingTimeout: 60,
@@ -77,12 +78,13 @@ const defaultConfig = {
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
   enableDebugConsole: false,
-  enableDebugLogging: false,
+  enableDebugLogging: true,
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 500
 };
 
 let localConfig;
+const populatedConfigWarnings = new Set();
 
 try {
   localConfig = JSON.parse(window.localStorage[CONFIG_KEY]);
@@ -91,10 +93,18 @@ try {
   localConfig = defaultConfig;
 }
 
+if (!localConfig || typeof localConfig !== 'object') {
+  localConfig = { ...defaultConfig };
+}
+
 export function configRead(key) {
   if (localConfig[key] === undefined) {
-    console.warn('Populating key', key, 'with default value', defaultConfig[key]);
-    localConfig[key] = defaultConfig[key];
+    const hasDefault = Object.prototype.hasOwnProperty.call(defaultConfig, key);
+    localConfig[key] = hasDefault ? defaultConfig[key] : undefined;
+    if (hasDefault && !populatedConfigWarnings.has(key)) {
+      populatedConfigWarnings.add(key);
+      console.warn('Populating key', key, 'with default value', defaultConfig[key]);
+    }
   }
 
   return localConfig[key];
