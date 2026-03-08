@@ -234,4 +234,28 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null) 
   appendFileOnlyLog('consolidate.done', { path, totalItems: allItems.length, newRows: newShelves.length });
 }
 
+// ── Entity mutation progress cache ────────────────────────────────────────────
+// Called from adblock.js whenever a response contains frameworkUpdates.
+// YouTube frequently sends watch progress separately from tile JSON via mutations.
+
+export function updateProgressCache(r) {
+  if (!r?.frameworkUpdates?.entityBatchUpdate?.mutations) return;
+  if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+  for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
+    const key = String(mutation?.entityKey || '');
+    const payload = mutation?.payload || {};
+    const pct = payload?.videoAttributionModel?.watchProgressPercentage
+      ?? payload?.videoData?.watchProgressPercentage
+      ?? payload?.macroMarkersListEntity?.watchProgressPercentage
+      ?? null;
+    if (pct !== null) {
+      const videoId = key.includes('|') ? key.split('|')[0] : key;
+      window._ttVideoProgressCache[videoId] = Number(pct);
+      const explicitId = payload?.videoAttributionModel?.externalVideoId
+        || payload?.videoData?.videoId || null;
+      if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+    }
+  }
+}
+
 export function startEmptyTileObserver() {} // no-op, kept for import compatibility

@@ -12,6 +12,7 @@ import {
   hideVideo,
   processTileArraysDeep,
   consolidateShelves,
+  updateProgressCache,
 } from './hideWatched.js';
 
 /**
@@ -37,26 +38,7 @@ JSON.parse = function () {
   if (r.playerAds && adBlockEnabled) r.playerAds = false;
   if (r.adSlots && adBlockEnabled) r.adSlots = [];
 
-  // Populate watch-progress cache from entity mutations.
-  // YouTube frequently sends watch progress via frameworkUpdates separately from tile JSON,
-  // so we cache it here and getWatchPercent() in hideWatched.js checks it as a fallback.
-  if (r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
-    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
-    for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
-      const key = String(mutation?.entityKey || '');
-      const payload = mutation?.payload || {};
-      const pct = payload?.videoAttributionModel?.watchProgressPercentage
-        ?? payload?.videoData?.watchProgressPercentage
-        ?? payload?.macroMarkersListEntity?.watchProgressPercentage
-        ?? null;
-      if (pct !== null) {
-        const videoId = key.includes('|') ? key.split('|')[0] : key;
-        window._ttVideoProgressCache[videoId] = Number(pct);
-        const explicitId = payload?.videoAttributionModel?.externalVideoId || payload?.videoData?.videoId || null;
-        if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
-      }
-    }
-  }
+  updateProgressCache(r);
 
   if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
     r.paidContentOverlay = null;
@@ -330,10 +312,14 @@ function hqify(items) {
     // Do NOT carry over query args: the original `sqp` param is a signed token tied to the
     // original filename — reusing it on a different filename causes a CDN signature mismatch
     // and YouTube returns the grey "not available" placeholder instead of the real thumbnail.
-    item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{
-      url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg`,
-      width: 640, height: 480
-    }];
+    // Start with hqdefault (guaranteed for every video), then async-upgrade to
+    // sddefault (640x480) if it exists on the CDN. On a TV the JSON parse →
+    // layout pipeline is slow enough that the HEAD usually resolves in time.
+    const thumbs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails;
+    thumbs[0] = { url: `https://i.ytimg.com/vi/${videoID}/hqdefault.jpg`, width: 480, height: 360 };
+    fetch(`https://i.ytimg.com/vi/${videoID}/sddefault.jpg`, { method: 'HEAD' })
+      .then(res => { if (res.ok) thumbs[0] = { url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg`, width: 640, height: 480 }; })
+      .catch(() => {});
   }
 }
 
