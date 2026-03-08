@@ -37,6 +37,27 @@ JSON.parse = function () {
   if (r.playerAds && adBlockEnabled) r.playerAds = false;
   if (r.adSlots && adBlockEnabled) r.adSlots = [];
 
+  // Populate watch-progress cache from entity mutations.
+  // YouTube frequently sends watch progress via frameworkUpdates separately from tile JSON,
+  // so we cache it here and getWatchPercent() in hideWatched.js checks it as a fallback.
+  if (r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
+    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+    for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
+      const key = String(mutation?.entityKey || '');
+      const payload = mutation?.payload || {};
+      const pct = payload?.videoAttributionModel?.watchProgressPercentage
+        ?? payload?.videoData?.watchProgressPercentage
+        ?? payload?.macroMarkersListEntity?.watchProgressPercentage
+        ?? null;
+      if (pct !== null) {
+        const videoId = key.includes('|') ? key.split('|')[0] : key;
+        window._ttVideoProgressCache[videoId] = Number(pct);
+        const explicitId = payload?.videoAttributionModel?.externalVideoId || payload?.videoData?.videoId || null;
+        if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+      }
+    }
+  }
+
   if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
     r.paidContentOverlay = null;
   }
@@ -303,7 +324,10 @@ function hqify(items) {
     if (!configRead('enableHqThumbnails')) continue;
     const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
     if (!videoID) continue;
-    const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
+    // Guard: some home page tiles have no thumbnail yet (lazy-loaded) — skip rather than crash.
+    const existingUrl = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
+    if (!existingUrl) continue;
+    const queryArgs = existingUrl.split('?')[1];
     item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{
       url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
       width: 640, height: 480

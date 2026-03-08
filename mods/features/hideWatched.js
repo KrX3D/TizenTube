@@ -110,7 +110,17 @@ function getWatchPercent(item) {
 
   const raw = item?.watchProgressPercentage ?? item?.percentDurationWatched
     ?? item?.lockupViewModel?.progressPercentage ?? null;
-  return raw !== null ? Number(raw) : null;
+  if (raw !== null) return Number(raw);
+
+  // Fallback: entity mutation cache populated by adblock.js from frameworkUpdates.
+  // YouTube often sends watch progress via mutations separately, not in the tile JSON.
+  const videoId = item?.tileRenderer?.contentId
+    || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
+  if (videoId && window._ttVideoProgressCache?.[videoId] !== undefined) {
+    return window._ttVideoProgressCache[videoId];
+  }
+
+  return null;
 }
 
 // ── hideVideo ─────────────────────────────────────────────────────────────────
