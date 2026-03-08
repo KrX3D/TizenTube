@@ -87,48 +87,6 @@ export default function modernUI(update, parameters) {
             })
         },
         {
-            name: 'Debug Tools',
-            icon: 'BUG_REPORT',
-            value: null,
-            menuId: 'tt-debug-tools-settings',
-            options: [
-                {
-                    name: 'Enable Debug Console',
-                    icon: 'BUG_REPORT',
-                    value: 'enableDebugConsole'
-                },
-                {
-                    name: 'Enable Background Debug Logging',
-                    icon: 'ARTICLE',
-                    value: 'enableDebugLogging'
-                },
-                {
-                    name: 'Console Position',
-                    value: null,
-                    menuId: 'tt-debug-console-position-quick',
-                    options: [
-                        { name: 'Top Left', key: 'debugConsolePosition', value: 'top-left' },
-                        { name: 'Top Right', key: 'debugConsolePosition', value: 'top-right' },
-                        { name: 'Bottom Left', key: 'debugConsolePosition', value: 'bottom-left' },
-                        { name: 'Bottom Right', key: 'debugConsolePosition', value: 'bottom-right' },
-                        { name: 'Center', key: 'debugConsolePosition', value: 'center' }
-                    ]
-                },
-                {
-                    name: 'Console Height',
-                    value: null,
-                    menuId: 'tt-debug-console-height-quick',
-                    options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
-                        return {
-                            name: `${height}px`,
-                            key: 'debugConsoleHeight',
-                            value: height
-                        }
-                    })
-                }
-            ]
-        },
-        {
             name: 'Ad block',
             icon: 'DOLLAR_SIGN',
             value: 'enableAdBlock'
@@ -542,7 +500,7 @@ export default function modernUI(update, parameters) {
                                 title: 'Watched Videos Threshold',
                                 subtitle: 'Set the percentage threshold for hiding watched videos'
                             },
-                            options: [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
+                            options: [0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => {
                                 return {
                                     name: `${percent}%`,
                                     key: 'hideWatchedVideosThreshold',
@@ -577,15 +535,16 @@ export default function modernUI(update, parameters) {
                                     value: 'subscriptions'
                                 },
                                 {
-                                    name: 'Channel',
+                                    name: 'Channel Pages',
                                     value: 'channel'
                                 },
                                 {
-                                    name: 'Watch',
-                                    value: 'watch'
+                                    name: 'Library',
+                                    value: 'library'
                                 },
                                 {
-                                    name: 'Playlist',
+                                    name: 'Library → Individual Playlists (WL, LL, etc)',
+                                    icon: 'PLAYLIST_PLAY',
                                     value: 'playlist'
                                 },
                                 {
@@ -601,180 +560,13 @@ export default function modernUI(update, parameters) {
                                     value: 'live'
                                 },
                                 {
-                                    name: 'Library',
-                                    value: 'library'
-                                },
-                                {
                                     name: 'More',
                                     value: 'more'
+                                },
+                                {
+                                    name: 'Watch',
+                                    value: 'watch'
                                 }
-                            ]
-                        }
-                    ]
-                },
-                {
-                    name: 'YouTube Hider Filters',
-                    icon: 'FILTER',
-                    value: null,
-                    menuId: 'tt-youtube-hider-filters',
-                    menuHeader: {
-                        title: 'YouTube Hider Filters',
-                        subtitle: 'Inspired by MatteoLucerni/youtube-hider-extension'
-                    },
-                    options: [
-                        {
-                            name: 'Hide Mixes',
-                            value: 'enableHideMixes'
-                        },
-                        {
-                            name: 'Mixes Pages',
-                            value: null,
-                            arrayToEdit: 'hideMixesPages',
-                            menuId: 'tt-hide-mixes-pages',
-                            options: [
-                                { name: 'Search Results', value: 'search' },
-                                { name: 'Home', value: 'home' },
-                                { name: 'Music', value: 'music' },
-                                { name: 'Gaming', value: 'gaming' },
-                                { name: 'Subscriptions', value: 'subscriptions' },
-                                { name: 'Channel', value: 'channel' },
-                                { name: 'Watch', value: 'watch' },
-                                { name: 'Playlist', value: 'playlist' },
-                                { name: 'Playlists', value: 'playlists' },
-                                { name: 'Mix', value: 'mix' },
-                                { name: 'Live', value: 'live' },
-                                { name: 'Library', value: 'library' },
-                                { name: 'More', value: 'more' }
-                            ]
-                        },
-                        {
-                            name: 'Hide Playlists',
-                            value: 'enableHidePlaylists'
-                        },
-                        {
-                            name: 'Playlists Pages',
-                            value: null,
-                            arrayToEdit: 'hidePlaylistsPages',
-                            menuId: 'tt-hide-playlists-pages',
-                            options: [
-                                { name: 'Search Results', value: 'search' },
-                                { name: 'Home', value: 'home' },
-                                { name: 'Music', value: 'music' },
-                                { name: 'Gaming', value: 'gaming' },
-                                { name: 'Subscriptions', value: 'subscriptions' },
-                                { name: 'Channel', value: 'channel' },
-                                { name: 'Watch', value: 'watch' },
-                                { name: 'Playlist', value: 'playlist' },
-                                { name: 'Playlists', value: 'playlists' },
-                                { name: 'Mix', value: 'mix' },
-                                { name: 'Live', value: 'live' },
-                                { name: 'Library', value: 'library' },
-                                { name: 'More', value: 'more' }
-                            ]
-                        },
-                        {
-                            name: 'Hide Live Streams',
-                            value: 'enableHideLives'
-                        },
-                        {
-                            name: 'Live Streams Pages',
-                            value: null,
-                            arrayToEdit: 'hideLivesPages',
-                            menuId: 'tt-hide-lives-pages',
-                            options: [
-                                { name: 'Search Results', value: 'search' },
-                                { name: 'Home', value: 'home' },
-                                { name: 'Music', value: 'music' },
-                                { name: 'Gaming', value: 'gaming' },
-                                { name: 'Subscriptions', value: 'subscriptions' },
-                                { name: 'Channel', value: 'channel' },
-                                { name: 'Watch', value: 'watch' },
-                                { name: 'Playlist', value: 'playlist' },
-                                { name: 'Playlists', value: 'playlists' },
-                                { name: 'Mix', value: 'mix' },
-                                { name: 'Live', value: 'live' },
-                                { name: 'Library', value: 'library' },
-                                { name: 'More', value: 'more' }
-                            ]
-                        },
-                        {
-                            name: 'Enable Minimum Views Filter',
-                            value: 'enableMinimumViewsFilter'
-                        },
-                        {
-                            name: 'Minimum Views Threshold',
-                            value: null,
-                            menuId: 'tt-minimum-views-threshold',
-                            options: [0, 100, 500, 1000, 5000, 10000, 50000, 100000, 500000, 1000000, 5000000, 10000000].map((views) => ({
-                                name: views.toLocaleString(),
-                                key: 'minimumViewsThreshold',
-                                value: views
-                            }))
-                        },
-                        {
-                            name: 'Minimum Views Pages',
-                            value: null,
-                            arrayToEdit: 'minimumViewsFilterPages',
-                            menuId: 'tt-minimum-views-pages',
-                            options: [
-                                { name: 'Search Results', value: 'search' },
-                                { name: 'Home', value: 'home' },
-                                { name: 'Music', value: 'music' },
-                                { name: 'Gaming', value: 'gaming' },
-                                { name: 'Subscriptions', value: 'subscriptions' },
-                                { name: 'Channel', value: 'channel' },
-                                { name: 'Watch', value: 'watch' },
-                                { name: 'Playlist', value: 'playlist' },
-                                { name: 'Playlists', value: 'playlists' },
-                                { name: 'Mix', value: 'mix' },
-                                { name: 'Live', value: 'live' },
-                                { name: 'Library', value: 'library' },
-                                { name: 'More', value: 'more' }
-                            ]
-                        },
-                        {
-                            name: 'Enable Upload Date Filter',
-                            value: 'enableUploadDateFilter'
-                        },
-                        {
-                            name: 'Hide Videos Newer Than',
-                            value: null,
-                            menuId: 'tt-hide-videos-newer-than',
-                            options: [1, 3, 7, 14, 30, 90, 180, 365, 730, 1825, 3650].map((days) => ({
-                                name: `${days} day${days === 1 ? '' : 's'}`,
-                                key: 'hideVideosNewerThanDays',
-                                value: days
-                            })).concat([{ name: 'Disabled', key: 'hideVideosNewerThanDays', value: null }])
-                        },
-                        {
-                            name: 'Hide Videos Older Than',
-                            value: null,
-                            menuId: 'tt-hide-videos-older-than',
-                            options: [30, 90, 180, 365, 730, 1825, 3650].map((days) => ({
-                                name: `${days} day${days === 1 ? '' : 's'}`,
-                                key: 'hideVideosOlderThanDays',
-                                value: days
-                            })).concat([{ name: 'Disabled', key: 'hideVideosOlderThanDays', value: null }])
-                        },
-                        {
-                            name: 'Upload Date Filter Pages',
-                            value: null,
-                            arrayToEdit: 'uploadDateFilterPages',
-                            menuId: 'tt-upload-date-filter-pages',
-                            options: [
-                                { name: 'Search Results', value: 'search' },
-                                { name: 'Home', value: 'home' },
-                                { name: 'Music', value: 'music' },
-                                { name: 'Gaming', value: 'gaming' },
-                                { name: 'Subscriptions', value: 'subscriptions' },
-                                { name: 'Channel', value: 'channel' },
-                                { name: 'Watch', value: 'watch' },
-                                { name: 'Playlist', value: 'playlist' },
-                                { name: 'Playlists', value: 'playlists' },
-                                { name: 'Mix', value: 'mix' },
-                                { name: 'Live', value: 'live' },
-                                { name: 'Library', value: 'library' },
-                                { name: 'More', value: 'more' }
                             ]
                         }
                     ]
