@@ -327,9 +327,11 @@ function hqify(items) {
     // Guard: some home page tiles have no thumbnail yet (lazy-loaded) — skip rather than crash.
     const existingUrl = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
     if (!existingUrl) continue;
-    const queryArgs = existingUrl.split('?')[1];
+    // Do NOT carry over query args: the original `sqp` param is a signed token tied to the
+    // original filename — reusing it on a different filename causes a CDN signature mismatch
+    // and YouTube returns the grey "not available" placeholder instead of the real thumbnail.
     item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{
-      url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
+      url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg`,
       width: 640, height: 480
     }];
   }
