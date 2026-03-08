@@ -100,6 +100,37 @@ function initVisualConsole() {
     debug: console.debug
   };
 
+  const MAX_LOGS = 200;
+  let renderScheduled = false;
+
+  const renderLogsScheduled = () => {
+    if (renderScheduled || consoleDiv.style.display === 'none') return;
+    renderScheduled = true;
+    requestAnimationFrame(() => {
+      renderScheduled = false;
+      renderLogs();
+      consoleDiv.scrollTop = 0;
+    });
+  };
+
+  const toLogString = (value) => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (value === null || value === undefined) return String(value);
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return String(value);
+    if (typeof value === 'function') return `[Function ${value.name || 'anonymous'}]`;
+
+    try {
+      const json = JSON.stringify(value);
+      if (typeof json === 'string') {
+        return json.length > 1000 ? `${json.slice(0, 1000)}…` : json;
+      }
+    } catch (_) { }
+
+    const tag = Object.prototype.toString.call(value);
+    return tag;
+  };
+
   const renderLogs = () => {
     while (consoleDiv.firstChild) {
       consoleDiv.removeChild(consoleDiv.firstChild);
@@ -130,20 +161,14 @@ function initVisualConsole() {
   const addLog = (type, args) => {
     if (!configRead('enableDebugConsole') && !configRead('enableDebugLogging')) return;
     const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
-    const msg = args.map((a) => {
-      if (typeof a === 'string') return a;
-      try { return JSON.stringify(a); } catch (_) { return String(a); }
-    }).join(' ');
+    const msg = args.map((a) => toLogString(a)).join(' ');
     logs.unshift({
       color,
       msg,
       time: new Date().toLocaleTimeString()
     });
-    if (logs.length > 600) logs.pop();
-    if (consoleDiv.style.display !== 'none') {
-      renderLogs();
-      consoleDiv.scrollTop = 0;
-    }
+    if (logs.length > MAX_LOGS) logs.pop();
+    renderLogsScheduled();
   };
 
   console.log = (...args) => { original.log.apply(console, args); addLog('log', args); };
