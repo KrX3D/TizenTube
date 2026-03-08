@@ -3,28 +3,23 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
-import { detectAndStorePage, detectPageFromResponse, detectPageFromBrowseId, detectCurrentPage, hideVideo, processTileArraysDeep, startEmptyTileObserver, consolidateShelves } from './hideWatched.js';
+import {
+  appendFileOnlyLog,
+  detectAndStorePage,
+  detectPageFromResponse,
+  detectPageFromBrowseId,
+  detectCurrentPage,
+  hideVideo,
+  processTileArraysDeep,
+  consolidateShelves,
+} from './hideWatched.js';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
  * https://github.com/uBlockOrigin/uAssets/blob/3497eebd440f4871830b9b45af0afc406c6eb593/filters/filters.txt#L116
- *
- * This in turn calls the following snippet:
- * https://github.com/gorhill/uBlock/blob/bfdc81e9e400f7b78b2abc97576c3d7bf3a11a0b/assets/resources/scriptlets.js#L365-L470
- *
- * Seems like for now dropping just the adPlacements is enough for YouTube TV
  */
 
 const origParse = JSON.parse;
-
-function appendAdblockDebugLog(label, payload) {
-  if (!configRead('enableDebugLogging')) return;
-  if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
-  let serialized = '';
-  try { serialized = JSON.stringify(payload); } catch (_) { serialized = String(payload); }
-  window.__ttFileOnlyLogs.push(`[${new Date().toISOString()}] [TT_ADBLOCK_FILE] ${label} ${serialized}`);
-  if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
-}
 
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
@@ -34,24 +29,13 @@ JSON.parse = function () {
   const locationDetectedPage = detectCurrentPage();
   const detectedPage = detectAndStorePage(responseDetectedPage || locationDetectedPage, responseDetectedPage ? 'response' : 'location-fallback');
 
-  appendAdblockDebugLog('parse.begin', { responseDetectedPage, locationDetectedPage, detectedPage, hash: location.hash || '', search: location.search || '', lastDetected: window.__ttLastDetectedPage || null });
+  appendFileOnlyLog('parse.begin', { responseDetectedPage, locationDetectedPage, detectedPage, hash: location.hash || '' });
 
   try {
-  appendAdblockDebugLog('parse.try.enter', { detectedPage, hash: location.hash || '' });
 
-  if (r.adPlacements && adBlockEnabled) {
-    r.adPlacements = [];
-  }
-
-  // Also set playerAds to false, just incase.
-  if (r.playerAds && adBlockEnabled) {
-    r.playerAds = false;
-  }
-
-  // Also set adSlots to an empty array, emptying only the adPlacements won't work.
-  if (r.adSlots && adBlockEnabled) {
-    r.adSlots = [];
-  }
+  if (r.adPlacements && adBlockEnabled) r.adPlacements = [];
+  if (r.playerAds && adBlockEnabled) r.playerAds = false;
+  if (r.adSlots && adBlockEnabled) r.adSlots = [];
 
   if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) {
     r.paidContentOverlay = null;
@@ -59,72 +43,45 @@ JSON.parse = function () {
 
   if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
     const preferredCodec = configRead('videoPreferredCodec');
-    const hasPreferredCodec = r.streamingData.adaptiveFormats.find(format => format.mimeType.includes(preferredCodec));
-    if (hasPreferredCodec) {
-      r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(format => {
-        if (format.mimeType.startsWith('audio/')) return true;
-        return format.mimeType.includes(preferredCodec);
-      });
+    if (r.streamingData.adaptiveFormats.find(f => f.mimeType.includes(preferredCodec))) {
+      r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(f =>
+        f.mimeType.startsWith('audio/') || f.mimeType.includes(preferredCodec)
+      );
     }
   }
 
   // Drop "masthead" ad from home screen
-  if (
-    r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content
-      ?.sectionListRenderer?.contents
-  ) {
+  if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     if (!signinReminderEnabled) {
       r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-          (elm) => !elm.feedNudgeRenderer
-        );
+        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(elm => !elm.feedNudgeRenderer);
     }
-
     if (adBlockEnabled) {
       r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
-        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(
-          (elm) => !elm.adSlotRenderer
-        );
-
+        r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(elm => !elm.adSlotRenderer);
       for (const shelve of r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents) {
         if (shelve.shelfRenderer) {
           shelve.shelfRenderer.content.horizontalListRenderer.items =
-            shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
-              (item) => !item.adSlotRenderer
-            );
+            shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => !item.adSlotRenderer);
         }
       }
     }
-
     processShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, true, detectedPage);
     consolidateShelves(r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents, 'tvBrowse.sectionList', detectedPage);
-
   }
 
-  if (r.endscreen && configRead('enableHideEndScreenCards')) {
-    r.endscreen = null;
-  }
+  if (r.endscreen && configRead('enableHideEndScreenCards')) r.endscreen = null;
 
   if (r.messages && Array.isArray(r.messages) && !configRead('enableYouThereRenderer')) {
-    r.messages = r.messages.filter(
-      (msg) => !msg?.youThereRenderer
-    );
+    r.messages = r.messages.filter(msg => !msg?.youThereRenderer);
   }
 
   // Remove shorts ads
   if (!Array.isArray(r) && r?.entries && adBlockEnabled) {
-    r.entries = r.entries?.filter(
-      (elm) => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd
-    );
+    r.entries = r.entries?.filter(elm => !elm?.command?.reelWatchEndpoint?.adClientParams?.isAd);
   }
 
-  // Patch settings
-
-  if (r?.title?.runs) {
-    PatchSettings(r);
-  }
-
-  // DeArrow Implementation. I think this is the best way to do it. (DOM manipulation would be a pain)
+  if (r?.title?.runs) PatchSettings(r);
 
   if (r?.contents?.sectionListRenderer?.contents) {
     processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
@@ -141,7 +98,7 @@ JSON.parse = function () {
   }
 
   if (r?.continuationContents?.pivotContinuation?.contents) {
-    appendAdblockDebugLog('pivot.continuation.hit', { count: r.continuationContents.pivotContinuation.contents.length });
+    appendFileOnlyLog('pivot.continuation.hit', { count: r.continuationContents.pivotContinuation.contents.length });
     processShelves(r.continuationContents.pivotContinuation.contents, false, detectedPage);
     consolidateShelves(r.continuationContents.pivotContinuation.contents, 'continuation.pivot', detectedPage);
   }
@@ -176,86 +133,54 @@ JSON.parse = function () {
       }
     }
   }
-  
+
   if (r?.contents?.singleColumnWatchNextResults) {
-    appendAdblockDebugLog('watchNext.shape', {
+    appendFileOnlyLog('watchNext.shape', {
       hasPivot: !!r.contents.singleColumnWatchNextResults.pivot,
       keys: Object.keys(r.contents.singleColumnWatchNextResults)
     });
   }
+
   if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
     if (!signinReminderEnabled) {
       r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents =
-        r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.filter(
-          (elm) => !elm.alertWithActionsRenderer
-        );
+        r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.filter(elm => !elm.alertWithActionsRenderer);
     }
     processShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, false, detectedPage);
     consolidateShelves(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents, 'watchNext', detectedPage);
     if (window.queuedVideos.videos.length > 0) {
       const queuedVideosClone = window.queuedVideos.videos.slice();
-      queuedVideosClone.unshift(TileRenderer(
-        'Clear Queue',
-        {
-          customAction: {
-            action: 'CLEAR_QUEUE'
-          }
-        }));
+      queuedVideosClone.unshift(TileRenderer('Clear Queue', { customAction: { action: 'CLEAR_QUEUE' } }));
       r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer.contents.unshift(ShelfRenderer(
         'Queued Videos',
         queuedVideosClone,
-        queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ?
-          queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId)
-          : 0
+        queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1
+          ? queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) : 0
       ));
     }
   }
+
   /*
- 
   Chapters are disabled due to the API removing description data which was used to generate chapters
- 
+
   if (r?.contents?.singleColumnWatchNextResults?.results?.results?.contents && configRead('enableChapters')) {
     const chapterData = Chapters(r);
     r.frameworkUpdates.entityBatchUpdate.mutations.push(chapterData);
-    resolveCommand({
-      "clickTrackingParams": "null",
-      "loadMarkersCommand": {
-        "visibleOnLoadKeys": [
-          chapterData.entityKey
-        ],
-        "entityKeys": [
-          chapterData.entityKey
-        ]
-      }
-    });
+    resolveCommand({ "clickTrackingParams": "null", "loadMarkersCommand": { "visibleOnLoadKeys": [chapterData.entityKey], "entityKeys": [chapterData.entityKey] } });
   }*/
 
   // Manual SponsorBlock Skips
-
   if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
     const manualSkippedSegments = configRead('sponsorBlockManualSkips');
-    let timelyActions = [];
+    const timelyActions = [];
     if (window?.sponsorblock?.segments) {
       for (const segment of window.sponsorblock.segments) {
         if (manualSkippedSegments.includes(segment.category)) {
-          const timelyActionData = timelyAction(
-            `Skip ${segment.category}`,
-            'SKIP_NEXT',
-            {
-              clickTrackingParams: null,
-              showEngagementPanelEndpoint: {
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: segment.segment[1]
-                  }
-                }
-              }
-            },
-            segment.segment[0] * 1000,
-            segment.segment[1] * 1000 - segment.segment[0] * 1000
-          );
-          timelyActions.push(timelyActionData);
+          timelyActions.push(timelyAction(
+            `Skip ${segment.category}`, 'SKIP_NEXT',
+            { clickTrackingParams: null, showEngagementPanelEndpoint: { customAction: { action: 'SKIP', parameters: { time: segment.segment[1] } } } },
+            segment.segment[0] * 1000, segment.segment[1] * 1000 - segment.segment[0] * 1000
+          ));
         }
       }
       r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
@@ -270,35 +195,21 @@ JSON.parse = function () {
       if (category) {
         r.transportControls.transportControlsRenderer.promotedActions.push({
           type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
-          button: {
-            buttonRenderer: ButtonRenderer(
-              false,
-              'Skip to highlight',
-              'SKIP_NEXT',
-              {
-                clickTrackingParams: null,
-                customAction: {
-                  action: 'SKIP',
-                  parameters: {
-                    time: category.segment[0]
-                  }
-                }
-              })
-          }
+          button: { buttonRenderer: ButtonRenderer(false, 'Skip to highlight', 'SKIP_NEXT', { clickTrackingParams: null, customAction: { action: 'SKIP', parameters: { time: category.segment[0] } } }) }
         });
       }
     }
   }
 
-    // Safety net for response shapes where tile arrays are nested beyond explicit shelf/grid paths.
-    // Skip for watch page to avoid leaving empty visual rows in watch-next shelves.
-    if (detectedPage !== 'watch') {
-      processTileArraysDeep(r, detectedPage, 'response');
-    }
+  // Safety net for response shapes where tile arrays are nested beyond explicit paths.
+  // Skip watch page to avoid leaving empty visual rows in watch-next shelves.
+  if (detectedPage !== 'watch') {
+    processTileArraysDeep(r, detectedPage, 'response');
+  }
 
-    return r;
+  return r;
   } catch (error) {
-    appendAdblockDebugLog('parse.error', { msg: String(error), stack: String(error?.stack || '').slice(0, 200) });
+    appendFileOnlyLog('parse.error', { msg: String(error), stack: String(error?.stack || '').slice(0, 200) });
     if (!window.__ttAdblockParseWarned) {
       window.__ttAdblockParseWarned = true;
       console.warn('[TizenTube] adblock parser patch failed', error);
@@ -318,26 +229,28 @@ for (const key in window._yttv) {
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
     const shelve = shelves[index];
-    if (shelve.shelfRenderer) {
-      deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      if (shouldAddPreviews) {
-        addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
-      }
-      shelve.shelfRenderer.content.horizontalListRenderer._originalRowSize = shelve.shelfRenderer.content.horizontalListRenderer.items.length;
-      shelve.shelfRenderer.content.horizontalListRenderer.items = hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items, pageHint);
-      if (!configRead('enableShorts')) {
-        if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
-          shelves.splice(index, 1);
-          continue;
-        }
-        shelve.shelfRenderer.content.horizontalListRenderer.items = shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS');
-      }
-
-      if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+    if (!shelve.shelfRenderer) continue;
+    deArrowify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    hqify(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    addLongPress(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    if (shouldAddPreviews) addPreviews(shelve.shelfRenderer.content.horizontalListRenderer.items);
+    // Preserve original row size before hideVideo filters items — used by consolidateShelves.
+    shelve.shelfRenderer.content.horizontalListRenderer._originalRowSize =
+      shelve.shelfRenderer.content.horizontalListRenderer.items.length;
+    shelve.shelfRenderer.content.horizontalListRenderer.items =
+      hideVideo(shelve.shelfRenderer.content.horizontalListRenderer.items, pageHint);
+    if (!configRead('enableShorts')) {
+      if (shelve.shelfRenderer.tvhtml5ShelfRendererType === 'TVHTML5_SHELF_RENDERER_TYPE_SHORTS') {
         shelves.splice(index, 1);
+        continue;
       }
+      shelve.shelfRenderer.content.horizontalListRenderer.items =
+        shelve.shelfRenderer.content.horizontalListRenderer.items.filter(
+          item => item.tileRenderer?.tvhtml5ShelfRendererType !== 'TVHTML5_TILE_RENDERER_TYPE_SHORTS'
+        );
+    }
+    if (!shelve.shelfRenderer.content.horizontalListRenderer.items.length) {
+      shelves.splice(index, 1);
     }
   }
 }
@@ -346,18 +259,12 @@ function addPreviews(items) {
   if (!configRead('enablePreviews')) return;
   for (const item of items) {
     if (item.tileRenderer) {
-      const watchEndpoint = item.tileRenderer.onSelectCommand;
       if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
       item.tileRenderer.onFocusCommand = {
         startInlinePlaybackCommand: {
-          blockAdoption: true,
-          caption: false,
-          delayMs: 3000,
-          durationMs: 40000,
-          muted: false,
-          restartPlaybackBeforeSeconds: 10,
-          resumeVideo: true,
-          playbackEndpoint: watchEndpoint
+          blockAdoption: true, caption: false, delayMs: 3000, durationMs: 40000,
+          muted: false, restartPlaybackBeforeSeconds: 10, resumeVideo: true,
+          playbackEndpoint: item.tileRenderer.onSelectCommand
         }
       };
     }
@@ -366,33 +273,25 @@ function addPreviews(items) {
 
 function deArrowify(items) {
   for (const item of items) {
-    if (item.adSlotRenderer) {
-      const index = items.indexOf(item);
-      items.splice(index, 1);
-      continue;
-    }
+    if (item.adSlotRenderer) { items.splice(items.indexOf(item), 1); continue; }
     if (!item.tileRenderer) continue;
     if (configRead('enableDeArrow')) {
       const videoID = item.tileRenderer.contentId;
       fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`).then(res => res.json()).then(data => {
         if (data.titles.length > 0) {
-          const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
+          const mostVoted = data.titles.reduce((max, t) => max.votes > t.votes ? max : t);
           item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
         }
-
         if (data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
-          const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
-          if (mostVotedThumbnail.timestamp) {
-            item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-              {
-                url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`,
-                width: 1280,
-                height: 640
-              }
-            ]
+          const best = data.thumbnails.reduce((max, t) => max.votes > t.votes ? max : t);
+          if (best.timestamp) {
+            item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{
+              url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${best.timestamp}`,
+              width: 1280, height: 640
+            }];
           }
         }
-      }).catch(() => { });
+      }).catch(() => {});
     }
   }
 }
@@ -401,18 +300,14 @@ function hqify(items) {
   for (const item of items) {
     if (!item.tileRenderer) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
-    if (configRead('enableHqThumbnails')) {
-      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
-      if (!videoID) continue;
-      const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
-      item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [
-        {
-          url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
-          width: 640,
-          height: 480
-        }
-      ];
-    }
+    if (!configRead('enableHqThumbnails')) continue;
+    const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
+    if (!videoID) continue;
+    const queryArgs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails[0].url.split('?')[1];
+    item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{
+      url: `https://i.ytimg.com/vi/${videoID}/sddefault.jpg${queryArgs ? `?${queryArgs}` : ''}`,
+      width: 640, height: 480
+    }];
   }
 }
 
@@ -421,20 +316,17 @@ function addLongPress(items) {
     if (!item.tileRenderer) continue;
     if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') continue;
     if (item.tileRenderer.onLongPressCommand) {
-      item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(MenuServiceItemRenderer('Add to Queue', {
-        clickTrackingParams: null,
-        playlistEditEndpoint: {
-          customAction: {
-            action: 'ADD_TO_QUEUE',
-            parameters: item
-          }
-        }
-      }));
+      item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(
+        MenuServiceItemRenderer('Add to Queue', {
+          clickTrackingParams: null,
+          playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } }
+        })
+      );
       continue;
     }
     if (!configRead('enableLongPress')) continue;
     const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
-    const data = longPressData({
+    item.tileRenderer.onLongPressCommand = longPressData({
       videoId: item.tileRenderer.contentId,
       thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
       title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText,
@@ -442,6 +334,5 @@ function addLongPress(items) {
       watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint,
       item
     });
-    item.tileRenderer.onLongPressCommand = data;
   }
 }
