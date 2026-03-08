@@ -77,7 +77,7 @@ const defaultConfig = {
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
   enableDebugConsole: false,
-  enableDebugLogging: true,
+  enableDebugLogging: false,
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 500
 };
