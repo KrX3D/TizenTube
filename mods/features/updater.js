@@ -3,6 +3,8 @@
 import { buttonItem, showModal, showToast, overlayPanelItemListRenderer } from '../ui/ytUI.js';
 import { configRead } from '../config.js';
 
+const DEFAULT_UPDATER_REPO = 'reisxd/TizenTubeCobalt';
+
 // If TizenTube is not running on Cobalt, do nothing
 if (window.h5vcc && window.h5vcc.tizentube && configRead('enableUpdater')) {
     const currentEpoch = Math.floor(Date.now() / 1000);
@@ -11,11 +13,36 @@ if (window.h5vcc && window.h5vcc.tizentube && configRead('enableUpdater')) {
     } else checkForUpdates();
 }
 
+function normalizeGithubRepo(repo) {
+    if (typeof repo !== 'string') return null;
+
+    const trimmed = repo.trim();
+    if (!trimmed) return null;
+
+    const withoutProtocol = trimmed
+        .replace(/^https?:\/\/github\.com\//i, '')
+        .replace(/^github\.com\//i, '')
+        .replace(/\.git$/i, '')
+        .replace(/^\/+|\/+$/g, '');
+
+    const [owner, name] = withoutProtocol.split('/');
+    if (!owner || !name) return null;
+
+    return `${owner}/${name}`;
+}
+
+function getUpdateRepo() {
+    const configuredRepo = normalizeGithubRepo(configRead('updaterRepo'));
+    return configuredRepo || DEFAULT_UPDATER_REPO;
+}
+
 function getLatestRelease() {
-    return fetch('https://api.github.com/repos/reisxd/TizenTubeCobalt/releases/latest')
+    const repo = getUpdateRepo();
+
+    return fetch(`https://api.github.com/repos/${repo}/releases/latest`)
         .then(response => {
             if (!response.ok) {
-                throw new Error('Network response was not ok');
+                throw new Error(`GitHub API request failed for ${repo}`);
             }
             return response.json();
         });
@@ -44,7 +71,7 @@ function checkForUpdates(showNoUpdateToast) {
                     downloadUrl = release.assets.find(asset => asset.name.includes('arm.apk')).browser_download_url;
                 }
             } else downloadUrl = release.assets[0].browser_download_url;
-            
+
             if (latestVersion !== currentAppVersion) {
                 console.info(`New version available: ${latestVersion} (current: ${currentAppVersion})`);
                 showModal(

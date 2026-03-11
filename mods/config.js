@@ -74,6 +74,7 @@ const defaultConfig = {
   launchToOnStartup: null,
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE'],
   enableUpdater: true,
+  updaterRepo: 'reisxd/TizenTubeCobalt',
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,
   enableSigninReminder: false,
