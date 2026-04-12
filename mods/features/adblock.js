@@ -14,6 +14,7 @@ import {
   consolidateShelves,
   updateProgressCache,
 } from './hideWatched.js';
+import { t } from 'i18next';
 
 /**
  * This is a minimal reimplementation of the following uBlock Origin rule:
@@ -63,7 +64,7 @@ JSON.parse = function () {
       r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents =
         r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents.filter(elm => !elm.adSlotRenderer);
       for (const shelve of r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer.contents) {
-        if (shelve.shelfRenderer) {
+        if (shelve.shelfRenderer && shelve.shelfRenderer.content?.horizontalListRenderer?.items) {
           shelve.shelfRenderer.content.horizontalListRenderer.items =
             shelve.shelfRenderer.content.horizontalListRenderer.items.filter(item => !item.adSlotRenderer);
         }
@@ -119,7 +120,18 @@ JSON.parse = function () {
 
   if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
     for (const section of r.contents.tvBrowseRenderer.content.tvSecondaryNavRenderer.sections) {
-      for (const tab of section.tvSecondaryNavSectionRenderer.tabs) {
+      const sectionRenderer = section.tvSecondaryNavSectionRenderer;
+      if (!sectionRenderer || !sectionRenderer.tabs) continue;
+
+      if (configRead('sortSubscriptionsByAlphabet')) {
+        sectionRenderer.tabs.sort((a, b) => {
+          if (a.tabRenderer.selected && !b.tabRenderer.selected) return -1;
+          if (!a.tabRenderer.selected && b.tabRenderer.selected) return 1;
+          return a.tabRenderer.title.localeCompare(b.tabRenderer.title);
+        });
+      }
+
+      for (const tab of sectionRenderer.tabs) {
         const tabBrowseId = tab?.tabRenderer?.endpoint?.browseEndpoint?.browseId;
         const tabPage = detectAndStorePage(detectPageFromBrowseId(tabBrowseId));
 
@@ -180,7 +192,8 @@ JSON.parse = function () {
       for (const segment of window.sponsorblock.segments) {
         if (manualSkippedSegments.includes(segment.category)) {
           timelyActions.push(timelyAction(
-            `Skip ${segment.category}`, 'SKIP_NEXT',
+            t('sponsorblock.toasts.skip', { segment: segment.category }),
+            'SKIP_NEXT',
             { clickTrackingParams: null, showEngagementPanelEndpoint: { customAction: { action: 'SKIP', parameters: { time: segment.segment[1] } } } },
             segment.segment[0] * 1000, segment.segment[1] * 1000 - segment.segment[0] * 1000
           ));
@@ -198,7 +211,7 @@ JSON.parse = function () {
       if (category) {
         r.transportControls.transportControlsRenderer.promotedActions.push({
           type: 'TRANSPORT_CONTROLS_BUTTON_TYPE_SPONSORBLOCK_HIGHLIGHT',
-          button: { buttonRenderer: ButtonRenderer(false, 'Skip to highlight', 'SKIP_NEXT', { clickTrackingParams: null, customAction: { action: 'SKIP', parameters: { time: category.segment[0] } } }) }
+          button: { buttonRenderer: ButtonRenderer(false, t('sponsorblock.toasts.skipToHighlight'), 'SKIP_NEXT', { clickTrackingParams: null, customAction: { action: 'SKIP', parameters: { time: category.segment[0] } } }) }
         });
       }
     }
@@ -228,6 +241,7 @@ for (const key in window._yttv) {
     window._yttv[key].JSON.parse = JSON.parse;
   }
 }
+
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   for (let index = shelves.length - 1; index >= 0; index--) {
@@ -263,6 +277,7 @@ function addPreviews(items) {
   for (const item of items) {
     if (item.tileRenderer) {
       if (item.tileRenderer?.onFocusCommand?.playbackEndpoint) continue;
+      if (item.tileRenderer?.onFocusCommand?.commandExecutorCommand) continue;
       item.tileRenderer.onFocusCommand = {
         startInlinePlaybackCommand: {
           blockAdoption: true, caption: false, delayMs: 3000, durationMs: 40000,
@@ -337,7 +352,12 @@ function addLongPress(items) {
       continue;
     }
     if (!configRead('enableLongPress')) continue;
-    const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+    if (!item.tileRenderer?.metadata?.tileMetadataRenderer) continue;
+    if (!item.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails) continue;
+    if (!item.tileRenderer.onSelectCommand?.watchEndpoint) continue;
+    const subtitleNode = item.tileRenderer.metadata.tileMetadataRenderer.lines?.[0]?.lineRenderer?.items?.[0]?.lineItemRenderer?.text;
+    if (!subtitleNode) continue;
+    const subtitle = subtitleNode;
     item.tileRenderer.onLongPressCommand = longPressData({
       videoId: item.tileRenderer.contentId,
       thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails,
