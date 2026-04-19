@@ -68,11 +68,11 @@ const defaultConfig = {
   enableSigninReminder: false,
   sortSubscriptionsByAlphabet: false,
   enableDebugConsole: false,
-  enableDebugLogging: true,
+  enableDebugLogging: false,
   debugConsolePosition: 'top-left',
-  debugConsoleHeight: 500,
+  debugConsoleHeight: 1054,
   logServerEnabled: false,
-  enablePlaylistBatchCollect: true,
+  enablePlaylistBatchCollect: false,
   playlistBatchCollectMaxBatches: 50
 };
 
