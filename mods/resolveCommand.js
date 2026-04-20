@@ -5,7 +5,7 @@ import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
-import { sendRemotePayload } from './features/logServer.js';
+import { sendRemotePayload, isEnabled as isLogEnabled } from './features/logServer.js';
 import { t } from 'i18next';
 
 
@@ -205,18 +205,23 @@ function customAction(action, parameters) {
             playlistContinue(resolveCommand, showToast);
             break;
         case 'LOG_SERVER_TEST_PING': {
+            if (!isLogEnabled()) {
+                showToast('TizenTube', t('settings.options.misc.options.logServer.testDisabled'));
+                break;
+            }
             const ts = new Date().toISOString();
-            sendRemotePayload(null, {
+            const queued = sendRemotePayload(null, {
                 ts,
                 level: 'INFO',
                 context: 'TizenTube',
                 message: 'Manual test ping from settings',
                 _formatted: `[${ts}] [INFO] [TizenTube] Manual test ping from settings`,
-            }).then(() => {
-                showToast('TizenTube', t('settings.options.misc.options.logServer.testSuccess'));
-            }).catch((err) => {
-                showToast('TizenTube', `${t('settings.options.misc.options.logServer.testFailed')}: ${String(err?.message || err)}`);
             });
+            if (queued) {
+                showToast('TizenTube', t('settings.options.misc.options.logServer.testQueued'));
+            } else {
+                showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
+            }
             break;
         }
     }

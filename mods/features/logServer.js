@@ -16,7 +16,7 @@ import { configRead } from '../config.js';
 
 const MAX_QUEUE = 300;
 
-function isEnabled() {
+export function isEnabled() {
     try { return !!configRead('logServerEnabled'); } catch { return false; }
 }
 
@@ -26,9 +26,9 @@ function pushToQueue(entry) {
 }
 
 export function sendRemotePayload(_url, entry) {
-    if (!isEnabled()) return Promise.resolve();
+    if (!isEnabled()) return false;
     pushToQueue(entry);
-    return Promise.resolve();
+    return true;
 }
 
 // ── Install ───────────────────────────────────────────────────────────────────
