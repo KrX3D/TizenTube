@@ -77,7 +77,8 @@
                         "enable": "Enable Remote Logging",
                         "test": "Test Log Server Connection",
                         "testSubtitle": "Send a test entry via TizenBrew relay to verify the connection",
-                        "testSuccess": "Log ping sent successfully via TizenBrew relay",
+                        "testQueued": "Test entry queued — check TizenBrew log viewer",
+                        "testDisabled": "Enable Remote Logging first",
                         "testFailed": "Log ping failed"
                     }
                 }
