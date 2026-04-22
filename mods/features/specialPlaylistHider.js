@@ -18,11 +18,10 @@ const getShelfSpecialPlaylistId = (shelve) =>
 const getSpecialPlaylistIdFromTile = (item) =>
   checkId(item?.tileRenderer?.contentId)
   || checkId(item?.tileRenderer?.onSelectCommand?.browseEndpoint?.browseId)
-  || checkId(item?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId)
   || null;
 
 export function filterHiddenSpecialPlaylistTiles(items) {
-  const hidden = configRead('hiddenSpecialPlaylists');
+  const hidden = configRead('hiddenSpecialPlaylistTiles');
   if (!Array.isArray(hidden) || hidden.length === 0) return items;
   return items.filter(item => {
     const id = getSpecialPlaylistIdFromTile(item);
@@ -31,7 +30,7 @@ export function filterHiddenSpecialPlaylistTiles(items) {
 }
 
 export function filterHiddenSpecialPlaylistShelves(shelves) {
-  const hidden = configRead('hiddenSpecialPlaylists');
+  const hidden = configRead('hiddenSpecialPlaylistShelves');
   if (!Array.isArray(hidden) || hidden.length === 0) return;
   for (let i = shelves.length - 1; i >= 0; i--) {
     const id = getShelfSpecialPlaylistId(shelves[i]);

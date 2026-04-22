@@ -930,8 +930,10 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         if (/\bshorts?\b/i.test(allText)) { shelves.splice(i, 1); continue; }
       }
       if (!shelve.shelfRenderer) continue;
-      const shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
+      let shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
+      shelfItems = filterHiddenSpecialPlaylistTiles(shelfItems);
+      shelve.shelfRenderer.content.horizontalListRenderer.items = shelfItems;
       deArrowify(shelfItems);
       hqify(shelfItems);
       addLongPress(shelfItems);
