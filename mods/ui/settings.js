@@ -549,7 +549,6 @@ export default function modernUI(update, parameters) {
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.subscriptions'), icon: 'SUBSCRIPTIONS', value: 'subscriptions' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.channel'), icon: 'ACCOUNT_CIRCLE', value: 'channel' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.library'), icon: 'TAB_LIBRARY', value: 'library' },
-                                { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.playlists'), icon: 'PLAY_ARROW', value: 'playlists' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.playlist'), icon: 'PLAY_ARROW', value: 'playlist' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.history'), icon: 'TIMER', value: 'history' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.more'), icon: 'TAB_MORE', value: 'more' },
