@@ -483,6 +483,47 @@ function filterPlaylistRendererContents(playlistRenderer, pageName, label = 'pla
   appendFileOnlyLog(`${label}.result`, { pageName, hasContinuation, before, after: playlistRenderer.contents.length });
 }
 
+// ===== Special playlist hiding (LL / WL) =====
+
+function getShelfSpecialPlaylistId(shelve) {
+  const check = (id) => {
+    const l = String(id || '').toLowerCase();
+    if (l === 'vlll') return 'LL';
+    if (l === 'vlwl' || l === 'femy_youtube') return 'WL';
+    const u = l.toUpperCase();
+    if (u === 'LL' || u === 'WL') return u;
+    return null;
+  };
+  return check(shelve?.shelfRenderer?.endpoint?.browseEndpoint?.browseId)
+    || check(shelve?.shelfRenderer?.title?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId)
+    || check(shelve?.shelfRenderer?.content?.horizontalListRenderer?.items?.[0]?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId)
+    || null;
+}
+
+function getSpecialPlaylistIdFromTile(item) {
+  const check = (id) => {
+    const l = String(id || '').toLowerCase();
+    if (l === 'vlll') return 'LL';
+    if (l === 'vlwl' || l === 'femy_youtube') return 'WL';
+    const u = l.toUpperCase();
+    if (u === 'LL' || u === 'WL') return u;
+    return null;
+  };
+  return check(item?.tileRenderer?.contentId)
+    || check(item?.tileRenderer?.onSelectCommand?.browseEndpoint?.browseId)
+    || check(item?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId)
+    || null;
+}
+
+function filterHiddenSpecialPlaylistTiles(items) {
+  const hidden = configRead('hiddenSpecialPlaylists');
+  if (!Array.isArray(hidden) || hidden.length === 0) return items;
+  return items.filter(item => {
+    const id = getSpecialPlaylistIdFromTile(item);
+    return !id || !hidden.includes(id);
+  });
+}
+
 // ===== processResponsePayload (array-root responses) =====
 
 function processResponsePayload(payload, detectedPage) {
@@ -500,6 +541,7 @@ function processResponsePayload(payload, detectedPage) {
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
     grid.items = hideVideo(grid.items, detectedPage);
+    if (detectedPage === 'playlists') grid.items = filterHiddenSpecialPlaylistTiles(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
   }
   if (payload?.continuationContents?.sectionListContinuation?.contents) {
@@ -722,6 +764,7 @@ JSON.parse = function () {
       const grid = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
       let gridItems = hideVideo(grid.items, detectedPage);
       gridItems = filterShortsFromItems(gridItems, detectedPage);
+      if (detectedPage === 'playlists') gridItems = filterHiddenSpecialPlaylistTiles(gridItems);
       grid.items = gridItems;
       normalizeGridRenderer(grid, 'contents.tvBrowseRenderer.grid');
     }
@@ -820,6 +863,7 @@ JSON.parse = function () {
             if (Array.isArray(tabGridItems)) {
               let filteredTabGrid = hideVideo(tabGridItems, tabPage);
               filteredTabGrid = filterShortsFromItems(filteredTabGrid, tabPage);
+              if (tabPage === 'playlists') filteredTabGrid = filterHiddenSpecialPlaylistTiles(filteredTabGrid);
               tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = filteredTabGrid;
               normalizeGridRenderer(tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer, 'tab.grid');
             }
@@ -925,6 +969,14 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         if (/\bshorts?\b/i.test(allText)) { shelves.splice(i, 1); continue; }
       }
       if (!shelve.shelfRenderer) continue;
+      const shelfSpecialId = getShelfSpecialPlaylistId(shelve);
+      if (shelfSpecialId) {
+        const hiddenPlaylists = configRead('hiddenSpecialPlaylists');
+        if (Array.isArray(hiddenPlaylists) && hiddenPlaylists.includes(shelfSpecialId)) {
+          shelves.splice(i, 1);
+          continue;
+        }
+      }
       const shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
       deArrowify(shelfItems);

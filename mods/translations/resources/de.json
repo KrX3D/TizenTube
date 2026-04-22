@@ -181,6 +181,13 @@
                         "maxBatchesSubtitle": "Maximale Anzahl an Stapeln, die auf einmal geladen werden (jeder Stapel = 15 Videos). Höher = vollständiger, aber langsamerer erster Ladevorgang.",
                         "maxBatchesOption": "{{n}} Stapel (~{{videos}} Videos)"
                     },
+                    "hiddenPlaylists": {
+                        "title": "Spezielle Playlists ausblenden",
+                        "options": {
+                            "likedVideos": "Videos die ich mag",
+                            "watchLater": "Später ansehen"
+                        }
+                    },
                     "libraryTabs": {
                         "title": "Bibliotheks-Tabs ausblenden",
                         "options": {
