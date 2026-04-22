@@ -50,7 +50,8 @@ const defaultConfig = {
       'watch'
   ],
   hiddenLibraryTabIds: [],
-  hiddenSpecialPlaylists: [],
+  hiddenSpecialPlaylistShelves: [],
+  hiddenSpecialPlaylistTiles: [],
   enableHideEndScreenCards: false,
   enableYouThereRenderer: false,
   lastAnnouncementCheck: 0,

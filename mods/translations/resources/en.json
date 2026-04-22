@@ -182,6 +182,12 @@
                     },
                     "hiddenPlaylists": {
                         "title": "Hide Special Playlists",
+                        "shelves": {
+                            "title": "Library Shelves"
+                        },
+                        "tiles": {
+                            "title": "Playlists"
+                        },
                         "options": {
                             "likedVideos": "Liked Videos",
                             "watchLater": "Watch Later"

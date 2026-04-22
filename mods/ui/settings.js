@@ -602,13 +602,32 @@ export default function modernUI(update, parameters) {
                 },
                 {
                     name: t('settings.options.uiSettings.options.hiddenPlaylists.title'),
-                    icon: 'PLAYLIST_PLAY',
+                    icon: 'VISIBILITY_OFF',
                     value: null,
-                    arrayToEdit: 'hiddenSpecialPlaylists',
                     menuId: 'tt-hidden-special-playlists',
                     options: [
-                        { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'THUMB_UP', value: 'LL' },
-                        { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'WL' }
+                        {
+                            name: t('settings.options.uiSettings.options.hiddenPlaylists.shelves.title'),
+                            icon: 'TAB_LIBRARY',
+                            value: null,
+                            arrayToEdit: 'hiddenSpecialPlaylistShelves',
+                            menuId: 'tt-hidden-special-playlist-shelves',
+                            options: [
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'THUMB_UP', value: 'LL' },
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'WL' }
+                            ]
+                        },
+                        {
+                            name: t('settings.options.uiSettings.options.hiddenPlaylists.tiles.title'),
+                            icon: 'PLAYLIST_PLAY',
+                            value: null,
+                            arrayToEdit: 'hiddenSpecialPlaylistTiles',
+                            menuId: 'tt-hidden-special-playlist-tiles',
+                            options: [
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'THUMB_UP', value: 'LL' },
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'WL' }
+                            ]
+                        }
                     ]
                 },
                 {
