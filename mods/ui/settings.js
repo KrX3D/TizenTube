@@ -613,18 +613,18 @@ export default function modernUI(update, parameters) {
                             arrayToEdit: 'hiddenSpecialPlaylistShelves',
                             menuId: 'tt-hidden-special-playlist-shelves',
                             options: [
-                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'THUMB_UP', value: 'LL' },
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'STAR', value: 'LL' },
                                 { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'WL' }
                             ]
                         },
                         {
                             name: t('settings.options.uiSettings.options.hiddenPlaylists.tiles.title'),
-                            icon: 'PLAYLIST_PLAY',
+                            icon: 'PLAY_ARROW',
                             value: null,
                             arrayToEdit: 'hiddenSpecialPlaylistTiles',
                             menuId: 'tt-hidden-special-playlist-tiles',
                             options: [
-                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'THUMB_UP', value: 'LL' },
+                                { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.likedVideos'), icon: 'STAR', value: 'LL' },
                                 { name: t('settings.options.uiSettings.options.hiddenPlaylists.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'WL' }
                             ]
                         }
