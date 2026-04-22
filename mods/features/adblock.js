@@ -29,6 +29,7 @@ import {
   filterShortsFromItems,
 } from './shorts.js';
 import { applyLibraryTabHiding } from './libraryTabHider.js';
+import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 
 // ===== Local utilities =====
 
@@ -483,47 +484,6 @@ function filterPlaylistRendererContents(playlistRenderer, pageName, label = 'pla
   appendFileOnlyLog(`${label}.result`, { pageName, hasContinuation, before, after: playlistRenderer.contents.length });
 }
 
-// ===== Special playlist hiding (LL / WL) =====
-
-function getShelfSpecialPlaylistId(shelve) {
-  const check = (id) => {
-    const l = String(id || '').toLowerCase();
-    if (l === 'vlll') return 'LL';
-    if (l === 'vlwl' || l === 'femy_youtube') return 'WL';
-    const u = l.toUpperCase();
-    if (u === 'LL' || u === 'WL') return u;
-    return null;
-  };
-  return check(shelve?.shelfRenderer?.endpoint?.browseEndpoint?.browseId)
-    || check(shelve?.shelfRenderer?.title?.runs?.[0]?.navigationEndpoint?.browseEndpoint?.browseId)
-    || check(shelve?.shelfRenderer?.content?.horizontalListRenderer?.items?.[0]?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId)
-    || null;
-}
-
-function getSpecialPlaylistIdFromTile(item) {
-  const check = (id) => {
-    const l = String(id || '').toLowerCase();
-    if (l === 'vlll') return 'LL';
-    if (l === 'vlwl' || l === 'femy_youtube') return 'WL';
-    const u = l.toUpperCase();
-    if (u === 'LL' || u === 'WL') return u;
-    return null;
-  };
-  return check(item?.tileRenderer?.contentId)
-    || check(item?.tileRenderer?.onSelectCommand?.browseEndpoint?.browseId)
-    || check(item?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId)
-    || null;
-}
-
-function filterHiddenSpecialPlaylistTiles(items) {
-  const hidden = configRead('hiddenSpecialPlaylists');
-  if (!Array.isArray(hidden) || hidden.length === 0) return items;
-  return items.filter(item => {
-    const id = getSpecialPlaylistIdFromTile(item);
-    return !id || !hidden.includes(id);
-  });
-}
-
 // ===== processResponsePayload (array-root responses) =====
 
 function processResponsePayload(payload, detectedPage) {
@@ -959,6 +919,7 @@ setTimeout(() => clearInterval(_yttvPatchInterval), 15000);
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
+  filterHiddenSpecialPlaylistShelves(shelves);
   const activePage = pageHint || window.__ttLastDetectedPage || detectCurrentPage();
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {
@@ -969,14 +930,6 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         if (/\bshorts?\b/i.test(allText)) { shelves.splice(i, 1); continue; }
       }
       if (!shelve.shelfRenderer) continue;
-      const shelfSpecialId = getShelfSpecialPlaylistId(shelve);
-      if (shelfSpecialId) {
-        const hiddenPlaylists = configRead('hiddenSpecialPlaylists');
-        if (Array.isArray(hiddenPlaylists) && hiddenPlaylists.includes(shelfSpecialId)) {
-          shelves.splice(i, 1);
-          continue;
-        }
-      }
       const shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
       deArrowify(shelfItems);
