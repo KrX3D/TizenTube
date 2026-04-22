@@ -29,6 +29,7 @@ import {
   filterShortsFromItems,
 } from './shorts.js';
 import { applyLibraryTabHiding } from './libraryTabHider.js';
+import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 
 // ===== Local utilities =====
 
@@ -500,6 +501,7 @@ function processResponsePayload(payload, detectedPage) {
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
     grid.items = hideVideo(grid.items, detectedPage);
+    if (detectedPage === 'playlists') grid.items = filterHiddenSpecialPlaylistTiles(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
   }
   if (payload?.continuationContents?.sectionListContinuation?.contents) {
@@ -722,6 +724,7 @@ JSON.parse = function () {
       const grid = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
       let gridItems = hideVideo(grid.items, detectedPage);
       gridItems = filterShortsFromItems(gridItems, detectedPage);
+      if (detectedPage === 'playlists') gridItems = filterHiddenSpecialPlaylistTiles(gridItems);
       grid.items = gridItems;
       normalizeGridRenderer(grid, 'contents.tvBrowseRenderer.grid');
     }
@@ -820,6 +823,7 @@ JSON.parse = function () {
             if (Array.isArray(tabGridItems)) {
               let filteredTabGrid = hideVideo(tabGridItems, tabPage);
               filteredTabGrid = filterShortsFromItems(filteredTabGrid, tabPage);
+              if (tabPage === 'playlists') filteredTabGrid = filterHiddenSpecialPlaylistTiles(filteredTabGrid);
               tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = filteredTabGrid;
               normalizeGridRenderer(tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer, 'tab.grid');
             }
@@ -915,6 +919,7 @@ setTimeout(() => clearInterval(_yttvPatchInterval), 15000);
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
+  filterHiddenSpecialPlaylistShelves(shelves);
   const activePage = pageHint || window.__ttLastDetectedPage || detectCurrentPage();
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {

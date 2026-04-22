@@ -143,7 +143,6 @@
                             "subscriptions": "Subscriptions",
                             "channel": "Channel Pages",
                             "library": "Library",
-                            "playlists": "Library → Playlists Overview",
                             "playlist": "Library → Individual Playlists (WL, LL, etc)",
                             "history": "Library → History",
                             "more": "More",
@@ -180,6 +179,13 @@
                         "maxBatches": "Max Batches to Fetch",
                         "maxBatchesSubtitle": "Maximum number of batches to fetch at once (each batch = 15 videos). Higher = more complete but slower initial load.",
                         "maxBatchesOption": "{{n}} batches (~{{videos}} videos)"
+                    },
+                    "hiddenPlaylists": {
+                        "title": "Hide Special Playlists",
+                        "options": {
+                            "likedVideos": "Liked Videos",
+                            "watchLater": "Watch Later"
+                        }
                     },
                     "libraryTabs": {
                         "title": "Library Tabs Buttons to Hide",
