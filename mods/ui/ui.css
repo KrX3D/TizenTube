@@ -166,14 +166,15 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
 /* The virtual list positions shelves with a fixed 3rem row gap via translateY().
    Negative margin-top pulls each shelf up into that gap, reducing the visible spacing. */
 ytlr-shelf-renderer {
-  margin-top: -3rem !important;
+  margin-top: -2rem !important;
 }
 
 /* When all library tabs are hidden, remove the top space left by the absent tab bar */
 body.tt-no-library-tabs ytlr-tv-surface-content-renderer {
+  margin-top: -2rem !important;
   padding-top: 0 !important;
 }
 body.tt-no-library-tabs ytlr-section-list-renderer {
-  margin-top: 0 !important;
+  margin-top: -2rem !important;
   padding-top: 0 !important;
 }
