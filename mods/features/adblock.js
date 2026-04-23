@@ -589,10 +589,7 @@ JSON.parse = function () {
     if (r.playerAds && adBlockEnabled) r.playerAds = false;
     if (r.adSlots && adBlockEnabled) r.adSlots = [];
 
-    const hiddenLibraryTabIds = configRead('hiddenLibraryTabIds');
-    if (Array.isArray(hiddenLibraryTabIds) && hiddenLibraryTabIds.length > 0) {
-      applyLibraryTabHiding(r, hiddenLibraryTabIds);
-    }
+    applyLibraryTabHiding(r, configRead('hiddenLibraryTabIds'));
 
     updateProgressCache(r);
     if (detectedPage !== 'watch' && r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
