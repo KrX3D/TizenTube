@@ -163,17 +163,17 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
 
 /* ===== Library shelf spacing ===== */
 
-/* Tighten the vertical gap between shelves by reducing the shelf header top padding */
-ytlr-shelf-header-renderer {
-  padding-top: 8px !important;
+/* The virtual list positions shelves with a fixed 3rem row gap via translateY().
+   Negative margin-top pulls each shelf up into that gap, reducing the visible spacing. */
+ytlr-shelf-renderer {
+  margin-top: -2rem !important;
 }
 
-/* When all library tabs are hidden, remove the extra top space above the first shelf */
-body.tt-no-library-tabs ytlr-section-list-renderer {
+/* When all library tabs are hidden, remove the top space left by the absent tab bar */
+body.tt-no-library-tabs ytlr-tv-surface-content-renderer {
   padding-top: 0 !important;
-  margin-top: 0 !important;
 }
-body.tt-no-library-tabs ytlr-shelf-renderer:first-child {
+body.tt-no-library-tabs ytlr-section-list-renderer {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
