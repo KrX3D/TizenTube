@@ -21,6 +21,8 @@ const shouldHideTabItem = (item, hiddenIds) => {
     || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
 };
 
+let _hadSecondaryNav = false;
+
 const pruneLibraryTabs = (node, hiddenIds) => {
   if (!node || typeof node !== 'object') return;
 
@@ -34,6 +36,7 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 
   if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
+    _hadSecondaryNav = true;
     node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
   }
 
@@ -51,25 +54,25 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
-export function scheduleLibraryTabsClassUpdate() {
-  setTimeout(() => {
-    const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-    if (!navEl) {
-      // Not on a page with a secondary nav — clear the class
-      document.body?.classList.remove('tt-no-library-tabs');
-      return;
-    }
-    // Secondary nav is present — check if it has any rendered tab items
-    const hasTabs = !!(
-      navEl.querySelector('ytlr-tab-renderer') ||
-      navEl.querySelector('[role="tab"]')
-    );
-    document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
-  }, 200);
+function updateLibraryTabsClass() {
+  const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
+  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
+  document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
-  if (hiddenIds.size === 0) return;
+  if (hiddenIds.size === 0) {
+    document.body?.classList.remove('tt-no-library-tabs');
+    return;
+  }
+  _hadSecondaryNav = false;
   pruneLibraryTabs(response, hiddenIds);
+  if (_hadSecondaryNav) {
+    // Library response — check DOM after render to update body class
+    setTimeout(updateLibraryTabsClass, 200);
+  } else {
+    // Not a library response — clear the class so it doesn't persist on other pages
+    document.body?.classList.remove('tt-no-library-tabs');
+  }
 };
