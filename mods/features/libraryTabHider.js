@@ -56,69 +56,23 @@ const pruneLibraryTabs = (node, hiddenIds) => {
 
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  if (!navEl) {
-    document.body?.classList.remove('tt-no-library-tabs');
-    return;
-  }
-  const hasTabs = !!(navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]'));
+  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
-}
-
-const SHELF_TOP_REM = 0.5;
-const SHELF_GAP_REM = 0.5;
-let _spacingObserver = null;
-
-function applyShelfSpacing() {
-  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  if (!nuDen) return;
-  const wrappers = Array.from(nuDen.children).filter(
-    (el) => el.style?.transform?.includes('translateY')
-  );
-  if (!wrappers.length) return;
-  let cursor = SHELF_TOP_REM;
-  for (const wrapper of wrappers) {
-    const h = parseFloat(wrapper.style.height);
-    if (isNaN(h)) continue;
-    const desired = `translateY(${cursor}rem)`;
-    if (!wrapper.style.transform.includes(desired)) {
-      wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
-    }
-    cursor += h + SHELF_GAP_REM;
-  }
-}
-
-function startShelfSpacingObserver() {
-  if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
-  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  if (!nuDen) return;
-  applyShelfSpacing();
-  _spacingObserver = new MutationObserver(applyShelfSpacing);
-  _spacingObserver.observe(nuDen, { childList: true });
-  Array.from(nuDen.children).forEach((el) => {
-    _spacingObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
-  });
-}
-
-function stopShelfSpacingObserver() {
-  if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
 }
 
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
   if (hiddenIds.size === 0) {
     document.body?.classList.remove('tt-no-library-tabs');
-    stopShelfSpacingObserver();
     return;
   }
   _hadSecondaryNav = false;
   pruneLibraryTabs(response, hiddenIds);
   if (_hadSecondaryNav) {
-    setTimeout(() => {
-      updateLibraryTabsClass();
-      startShelfSpacingObserver();
-    }, 200);
+    // Library response — check DOM after render to update body class
+    setTimeout(updateLibraryTabsClass, 200);
   } else {
+    // Not a library response — clear the class so it doesn't persist on other pages
     document.body?.classList.remove('tt-no-library-tabs');
-    stopShelfSpacingObserver();
   }
 };
