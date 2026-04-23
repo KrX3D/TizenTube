@@ -105,6 +105,11 @@ function stopShelfSpacingObserver() {
 
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
+  if (hiddenIds.size === 0) {
+    document.body?.classList.remove('tt-no-library-tabs');
+    stopShelfSpacingObserver();
+    return;
+  }
   _hadSecondaryNav = false;
   pruneLibraryTabs(response, hiddenIds);
   if (_hadSecondaryNav) {
