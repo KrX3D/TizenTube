@@ -54,16 +54,6 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
-// Short-circuits as soon as tvSecondaryNavSectionRenderer is found
-const detectLibraryPage = (node) => {
-  if (!node || typeof node !== 'object' || _hadSecondaryNav) return;
-  if (node.tvSecondaryNavSectionRenderer) { _hadSecondaryNav = true; return; }
-  for (const value of Object.values(node)) {
-    if (_hadSecondaryNav) return;
-    if (value && typeof value === 'object') detectLibraryPage(value);
-  }
-};
-
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
   if (!navEl) {
@@ -113,18 +103,6 @@ function stopShelfSpacingObserver() {
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
 }
 
-// Called when tab hiding is not configured — handles spacing only
-export const applyLibraryShelfSpacing = (response) => {
-  _hadSecondaryNav = false;
-  detectLibraryPage(response);
-  if (_hadSecondaryNav) {
-    setTimeout(startShelfSpacingObserver, 200);
-  } else {
-    stopShelfSpacingObserver();
-  }
-};
-
-// Called when tab hiding is configured — handles tab pruning + spacing + body class
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
   _hadSecondaryNav = false;
