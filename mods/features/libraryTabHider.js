@@ -51,6 +51,23 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
+export function scheduleLibraryTabsClassUpdate() {
+  setTimeout(() => {
+    const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
+    if (!navEl) {
+      // Not on a page with a secondary nav — clear the class
+      document.body?.classList.remove('tt-no-library-tabs');
+      return;
+    }
+    // Secondary nav is present — check if it has any rendered tab items
+    const hasTabs = !!(
+      navEl.querySelector('ytlr-tab-renderer') ||
+      navEl.querySelector('[role="tab"]')
+    );
+    document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
+  }, 200);
+}
+
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
   if (hiddenIds.size === 0) return;
