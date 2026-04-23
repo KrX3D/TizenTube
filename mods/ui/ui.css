@@ -163,6 +163,12 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
 
 /* ===== Library shelf spacing ===== */
 
+/* The virtual list positions shelves with a fixed 3rem row gap via translateY().
+   Negative margin-top pulls each shelf up into that gap, reducing the visible spacing. */
+ytlr-shelf-renderer {
+  margin-top: -2rem !important;
+}
+
 /* When all library tabs are hidden, remove the top space left by the absent tab bar */
 body.tt-no-library-tabs ytlr-tv-surface-content-renderer {
   padding-top: 0 !important;
