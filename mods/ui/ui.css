@@ -161,7 +161,13 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
   width: 17rem !important;
 }
 
-/* ===== Library shelf spacing ===== */
+/* ===== Library page ===== */
+
+/* Scale down shelf content slightly — targets the shelf itself, not the virtual
+   list container, so scroll/clip calculations stay intact */
+body.tt-library-page ytlr-shelf-renderer {
+  zoom: 0.95;
+}
 
 /* When all library tabs are hidden, remove the top space left by the absent tab bar */
 body.tt-no-library-tabs ytlr-tv-surface-content-renderer {
