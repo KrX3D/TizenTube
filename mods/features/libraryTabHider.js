@@ -72,6 +72,7 @@ function updateLibraryTabsClass() {
 
 const SHELF_TOP_REM = 2.7;
 let _spacingObserver = null;
+let _applyInProgress = false;
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -80,6 +81,7 @@ function applyShelfSpacing() {
     (el) => el.style?.transform?.includes('translateY')
   );
   if (!wrappers.length) return;
+  _applyInProgress = true;
   let cursor = SHELF_TOP_REM;
   for (const wrapper of wrappers) {
     const h = parseFloat(wrapper.style.height);
@@ -90,6 +92,8 @@ function applyShelfSpacing() {
     }
     cursor += h;
   }
+  // Reset after observer callbacks for our own changes have already fired
+  requestAnimationFrame(() => { _applyInProgress = false; });
 }
 
 function startShelfSpacingObserver(retriesLeft = 10) {
@@ -101,10 +105,13 @@ function startShelfSpacingObserver(retriesLeft = 10) {
     return;
   }
   applyShelfSpacing();
-  // Only watch for new shelves being added (e.g. pagination) — don't watch style
-  // attributes to avoid fighting the virtual list's own repositioning logic
-  _spacingObserver = new MutationObserver(applyShelfSpacing);
+  // _applyInProgress guards against our own changes re-triggering applyShelfSpacing;
+  // only the virtual list's own resets will pass the check and cause a re-apply
+  _spacingObserver = new MutationObserver(() => { if (!_applyInProgress) applyShelfSpacing(); });
   _spacingObserver.observe(nuDen, { childList: true });
+  Array.from(nuDen.children).forEach((el) => {
+    _spacingObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
+  });
 }
 
 function stopShelfSpacingObserver() {
