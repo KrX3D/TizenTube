@@ -93,15 +93,19 @@ function applyShelfSpacing() {
     }
     cursor += h + SHELF_GAP_REM;
   }
-  console.log(`[TT-shelf] applied spacing to ${wrappers.length} wrappers`);
 }
 
-function startShelfSpacingObserver(retriesLeft = 15, generation = ++_spacingGeneration) {
-  if (generation !== _spacingGeneration) return;
-  stopShelfSpacingObserver();
+function startShelfSpacingObserver(retriesLeft = 15, generation) {
+  if (generation === undefined) {
+    // Fresh start: claim a new generation slot and clear any existing work.
+    generation = ++_spacingGeneration;
+    if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
+    if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
+  } else if (generation !== _spacingGeneration) {
+    return;
+  }
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY'));
-  console.log(`[TT-shelf] startShelfSpacingObserver retriesLeft=${retriesLeft} nuDen=${!!nuDen} hasWrappers=${hasWrappers}`);
   if (!nuDen || !hasWrappers) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
     return;
@@ -119,7 +123,6 @@ function startShelfSpacingObserver(retriesLeft = 15, generation = ++_spacingGene
       if (container) {
         _spacingObserver = new MutationObserver(applyShelfSpacing);
         _spacingObserver.observe(container, { childList: true });
-        console.log('[TT-shelf] switched to childList observer');
       }
     }
   }, 100);
