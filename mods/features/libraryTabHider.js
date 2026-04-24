@@ -99,6 +99,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
     return;
   }
+  document.body?.classList.add('tt-library-page');
   // Apply every 100ms for 1s to outlast the virtual list's own initialization resets,
   // then switch to a childList observer for ongoing maintenance (pagination).
   let ticks = 10;
@@ -119,6 +120,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
 
 function stopShelfSpacingObserver() {
   _spacingGeneration++;
+  document.body?.classList.remove('tt-library-page');
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
   if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
 }

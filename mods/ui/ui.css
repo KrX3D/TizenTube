@@ -161,7 +161,12 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
   width: 17rem !important;
 }
 
-/* ===== Library shelf spacing ===== */
+/* ===== Library page ===== */
+
+/* Scale down all library content slightly */
+body.tt-library-page ytlr-section-list-renderer {
+  zoom: 0.85;
+}
 
 /* When all library tabs are hidden, remove the top space left by the absent tab bar */
 body.tt-no-library-tabs ytlr-tv-surface-content-renderer {
