@@ -92,16 +92,19 @@ function applyShelfSpacing() {
   }
 }
 
-function startShelfSpacingObserver() {
+function startShelfSpacingObserver(retriesLeft = 10) {
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  if (!nuDen) return;
+  const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY'));
+  if (!nuDen || !hasWrappers) {
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1), 150);
+    return;
+  }
   applyShelfSpacing();
+  // Only watch for new shelves being added (e.g. pagination) — don't watch style
+  // attributes to avoid fighting the virtual list's own repositioning logic
   _spacingObserver = new MutationObserver(applyShelfSpacing);
   _spacingObserver.observe(nuDen, { childList: true });
-  Array.from(nuDen.children).forEach((el) => {
-    _spacingObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
-  });
 }
 
 function stopShelfSpacingObserver() {
@@ -113,7 +116,7 @@ export const applyLibraryShelfSpacing = (response) => {
   _hadSecondaryNav = false;
   detectLibraryPage(response);
   if (_hadSecondaryNav) {
-    setTimeout(startShelfSpacingObserver, 200);
+    startShelfSpacingObserver();
   } else {
     stopShelfSpacingObserver();
   }
@@ -129,10 +132,8 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   _hadSecondaryNav = false;
   pruneLibraryTabs(response, hiddenIds);
   if (_hadSecondaryNav) {
-    setTimeout(() => {
-      updateLibraryTabsClass();
-      startShelfSpacingObserver();
-    }, 200);
+    setTimeout(updateLibraryTabsClass, 200);
+    startShelfSpacingObserver();
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
