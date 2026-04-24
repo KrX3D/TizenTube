@@ -163,9 +163,10 @@ ytlr-guide-response.RYo6Fb[aria-hidden="false"] .hsdF6b {
 
 /* ===== Library page ===== */
 
-/* Scale down all library content slightly */
-body.tt-library-page ytlr-section-list-renderer {
-  zoom: 0.85;
+/* Scale down shelf content slightly — targets the shelf itself, not the virtual
+   list container, so scroll/clip calculations stay intact */
+body.tt-library-page ytlr-shelf-renderer {
+  zoom: 0.95;
 }
 
 /* When all library tabs are hidden, remove the top space left by the absent tab bar */
