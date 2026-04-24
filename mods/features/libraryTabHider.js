@@ -74,6 +74,7 @@ const SHELF_TOP_REM = 0;
 const SHELF_GAP_REM = 1;
 let _spacingObserver = null;
 let _spacingInterval = null;
+let _spacingGeneration = 0;
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -95,13 +96,14 @@ function applyShelfSpacing() {
   console.log(`[TT-shelf] applied spacing to ${wrappers.length} wrappers`);
 }
 
-function startShelfSpacingObserver(retriesLeft = 15) {
+function startShelfSpacingObserver(retriesLeft = 15, generation = ++_spacingGeneration) {
+  if (generation !== _spacingGeneration) return;
   stopShelfSpacingObserver();
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY'));
   console.log(`[TT-shelf] startShelfSpacingObserver retriesLeft=${retriesLeft} nuDen=${!!nuDen} hasWrappers=${hasWrappers}`);
   if (!nuDen || !hasWrappers) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1), 100);
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
     return;
   }
   // Apply every 100ms for 1s to outlast the virtual list's own initialization resets,
@@ -124,6 +126,7 @@ function startShelfSpacingObserver(retriesLeft = 15) {
 }
 
 function stopShelfSpacingObserver() {
+  _spacingGeneration++;
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
   if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
 }
@@ -160,5 +163,13 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
 // Supplement the XHR-based trigger: re-apply spacing on SPA navigation
 // (handles cases where the library page is served from cache without a new XHR)
 if (typeof window !== 'undefined') {
-  window.addEventListener('hashchange', () => startShelfSpacingObserver());
+  window.addEventListener('hashchange', () => {
+    setTimeout(() => {
+      if (document.querySelector('ytlr-tv-secondary-nav-section-renderer')) {
+        startShelfSpacingObserver();
+      } else {
+        stopShelfSpacingObserver();
+      }
+    }, 200);
+  });
 }
