@@ -28,7 +28,7 @@ import {
   isShortsShelf,
   filterShortsFromItems,
 } from './shorts.js';
-import { applyLibraryTabHiding } from './libraryTabHider.js';
+import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHider.js';
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 
 // ===== Local utilities =====
@@ -592,6 +592,8 @@ JSON.parse = function () {
     const hiddenLibraryTabIds = configRead('hiddenLibraryTabIds');
     if (Array.isArray(hiddenLibraryTabIds) && hiddenLibraryTabIds.length > 0) {
       applyLibraryTabHiding(r, hiddenLibraryTabIds);
+    } else {
+      applyLibraryShelfSpacing(r);
     }
 
     updateProgressCache(r);
