@@ -64,6 +64,7 @@ const SHELF_GAP_REM = 1;
 let _spacingObserver = null;
 let _spacingInterval = null;
 let _spacingGeneration = 0;
+let _debounceTimer = null;
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -88,7 +89,7 @@ function applyShelfSpacing() {
   }
 }
 
-function startShelfSpacingObserver(retriesLeft = 15, generation) {
+function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
   if (generation === undefined) {
     // Fresh start: claim a new generation slot and clear any existing work.
     generation = ++_spacingGeneration;
@@ -100,12 +101,19 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
   if (!nuDen || !hasWrappers) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, undefined), 100);
+    return;
+  }
+  // Wait for translateY values to stabilize (unchanged for two consecutive 100ms checks)
+  // before applying, to avoid locking in intermediate positions during virtual list re-init.
+  const currentPositions = Array.from(nuDen.children)
+    .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
+    .map(el => el.style.transform).join('|');
+  if (currentPositions !== lastPositions) {
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
     return;
   }
   document.body?.classList.add('tt-library-page');
-  // Apply every 100ms for 1s to outlast the virtual list's own initialization resets,
-  // then switch to a childList observer for ongoing maintenance (pagination).
   let ticks = 10;
   applyShelfSpacing();
   _spacingInterval = setInterval(() => {
@@ -115,7 +123,10 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
       _spacingInterval = null;
       const container = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
       if (container) {
-        _spacingObserver = new MutationObserver(applyShelfSpacing);
+        _spacingObserver = new MutationObserver(() => {
+          if (_debounceTimer) clearTimeout(_debounceTimer);
+          _debounceTimer = setTimeout(applyShelfSpacing, 50);
+        });
         _spacingObserver.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
       }
     }
@@ -127,6 +138,7 @@ function stopShelfSpacingObserver() {
   document.body?.classList.remove('tt-library-page');
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
   if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
+  if (_debounceTimer) { clearTimeout(_debounceTimer); _debounceTimer = null; }
 }
 
 // Called when tab hiding is not configured — spacing only
