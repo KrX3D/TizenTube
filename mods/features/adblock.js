@@ -593,7 +593,7 @@ JSON.parse = function () {
     if (Array.isArray(hiddenLibraryTabIds) && hiddenLibraryTabIds.length > 0) {
       applyLibraryTabHiding(r, hiddenLibraryTabIds);
     } else {
-      applyLibraryShelfSpacing(r);
+      applyLibraryShelfSpacing();
     }
 
     updateProgressCache(r);

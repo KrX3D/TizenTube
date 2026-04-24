@@ -1,3 +1,5 @@
+import { detectCurrentPage } from './hideWatched.js';
+
 const getHiddenLibraryTabIds = (configured) => {
   if (!Array.isArray(configured) || configured.length === 0) return new Set();
   return new Set(configured.map((id) => String(id || '').toLowerCase()).filter(Boolean));
@@ -21,8 +23,6 @@ const shouldHideTabItem = (item, hiddenIds) => {
     || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
 };
 
-let _hadSecondaryNav = false;
-
 const pruneLibraryTabs = (node, hiddenIds) => {
   if (!node || typeof node !== 'object') return;
 
@@ -36,7 +36,6 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 
   if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
-    _hadSecondaryNav = true;
     node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
   }
 
@@ -51,16 +50,6 @@ const pruneLibraryTabs = (node, hiddenIds) => {
         pruneLibraryTabs(value, hiddenIds);
       }
     }
-  }
-};
-
-// Short-circuits as soon as tvSecondaryNavSectionRenderer is found
-const detectLibraryPage = (node) => {
-  if (!node || typeof node !== 'object' || _hadSecondaryNav) return;
-  if (node.tvSecondaryNavSectionRenderer) { _hadSecondaryNav = true; return; }
-  for (const value of Object.values(node)) {
-    if (_hadSecondaryNav) return;
-    if (value && typeof value === 'object') detectLibraryPage(value);
   }
 };
 
@@ -135,10 +124,8 @@ function stopShelfSpacingObserver() {
 }
 
 // Called when tab hiding is not configured — spacing only
-export const applyLibraryShelfSpacing = (response) => {
-  _hadSecondaryNav = false;
-  detectLibraryPage(response);
-  if (_hadSecondaryNav) {
+export const applyLibraryShelfSpacing = () => {
+  if (detectCurrentPage() === 'library') {
     startShelfSpacingObserver();
   } else {
     stopShelfSpacingObserver();
@@ -152,9 +139,8 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     document.body?.classList.remove('tt-no-library-tabs');
     return;
   }
-  _hadSecondaryNav = false;
-  pruneLibraryTabs(response, hiddenIds);
-  if (_hadSecondaryNav) {
+  if (detectCurrentPage() === 'library') {
+    pruneLibraryTabs(response, hiddenIds);
     setTimeout(updateLibraryTabsClass, 200);
     startShelfSpacingObserver();
   } else {
@@ -167,12 +153,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
 // (handles cases where the library page is served from cache without a new XHR)
 if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
-    setTimeout(() => {
-      if (document.querySelector('ytlr-tv-secondary-nav-section-renderer')) {
-        startShelfSpacingObserver();
-      } else {
-        stopShelfSpacingObserver();
-      }
-    }, 200);
+    if (detectCurrentPage() === 'library') startShelfSpacingObserver();
+    else stopShelfSpacingObserver();
   });
 }
