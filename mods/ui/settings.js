@@ -229,7 +229,6 @@ export default function modernUI(update, parameters) {
             name: t('settings.options.misc.title'),
             icon: 'SETTINGS',
             value: null,
-            menuId: 'tt-misc-settings',
             options: [
                 {
                     name: t('settings.options.misc.options.endScreenCards'),
