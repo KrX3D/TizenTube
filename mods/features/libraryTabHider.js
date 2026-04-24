@@ -59,86 +59,24 @@ function updateLibraryTabsClass() {
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
-const SHELF_TOP_REM = 0;
-const SHELF_GAP_REM = 1;
-let _spacingObserver = null;
-let _spacingInterval = null;
-let _spacingGeneration = 0;
-let _debounceTimer = null;
+let _libraryGeneration = 0;
 
-function applyShelfSpacing() {
-  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  if (!nuDen) return;
-  const wrappers = Array.from(nuDen.children)
-    .filter((el) => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
-    .sort((a, b) => {
-      const yA = parseFloat(a.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
-      const yB = parseFloat(b.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
-      return yA - yB;
-    });
-  if (!wrappers.length) return;
-  let cursor = SHELF_TOP_REM;
-  for (const wrapper of wrappers) {
-    const h = parseFloat(wrapper.style.height);
-    if (isNaN(h)) continue;
-    const desired = `translateY(${cursor}rem)`;
-    if (!wrapper.style.transform.includes(desired)) {
-      wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
-    }
-    cursor += h + SHELF_GAP_REM;
-  }
-}
-
-function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
+function startShelfSpacingObserver(retriesLeft = 15, generation) {
   if (generation === undefined) {
-    // Fresh start: claim a new generation slot and clear any existing work.
-    generation = ++_spacingGeneration;
-    if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
-    if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
-  } else if (generation !== _spacingGeneration) {
+    generation = ++_libraryGeneration;
+  } else if (generation !== _libraryGeneration) {
     return;
   }
-  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
-  if (!nuDen || !hasWrappers) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, undefined), 100);
-    return;
-  }
-  // Wait for translateY values to stabilize (unchanged for two consecutive 100ms checks)
-  // before applying, to avoid locking in intermediate positions during virtual list re-init.
-  const currentPositions = Array.from(nuDen.children)
-    .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
-    .map(el => el.style.transform).join('|');
-  if (currentPositions !== lastPositions) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
+  if (!document.querySelector('ytlr-section-list-renderer')) {
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
     return;
   }
   document.body?.classList.add('tt-library-page');
-  let ticks = 10;
-  applyShelfSpacing();
-  _spacingInterval = setInterval(() => {
-    applyShelfSpacing();
-    if (--ticks <= 0) {
-      clearInterval(_spacingInterval);
-      _spacingInterval = null;
-      const container = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-      if (container) {
-        _spacingObserver = new MutationObserver(() => {
-          if (_debounceTimer) clearTimeout(_debounceTimer);
-          _debounceTimer = setTimeout(applyShelfSpacing, 50);
-        });
-        _spacingObserver.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
-      }
-    }
-  }, 100);
 }
 
 function stopShelfSpacingObserver() {
-  _spacingGeneration++;
+  _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
-  if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
-  if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
-  if (_debounceTimer) { clearTimeout(_debounceTimer); _debounceTimer = null; }
 }
 
 // Called when tab hiding is not configured — spacing only
