@@ -70,9 +70,7 @@ function updateLibraryTabsClass() {
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
-// Rem from the top of the scroll container to the first shelf, and between shelves
-const SHELF_TOP_REM = 0.5;
-const SHELF_GAP_REM = 1.0;
+const SHELF_TOP_REM = 2.7;
 let _spacingObserver = null;
 
 function applyShelfSpacing() {
@@ -90,7 +88,7 @@ function applyShelfSpacing() {
     if (!wrapper.style.transform.includes(desired)) {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     }
-    cursor += h + SHELF_GAP_REM;
+    cursor += h;
   }
 }
 
