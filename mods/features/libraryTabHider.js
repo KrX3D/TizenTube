@@ -59,24 +59,64 @@ function updateLibraryTabsClass() {
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
+const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
+let _libraryObserver = null;
 
-function startShelfSpacingObserver(retriesLeft = 15, generation) {
+function applyShelfSpacing() {
+  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
+  if (!nuDen) return;
+  const wrappers = Array.from(nuDen.children)
+    .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
+    .sort((a, b) => {
+      const yA = parseFloat(a.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+      const yB = parseFloat(b.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+      return yA - yB;
+    });
+  if (!wrappers.length) return;
+  let cursor = 0;
+  for (const wrapper of wrappers) {
+    const h = parseFloat(wrapper.style.height);
+    if (isNaN(h)) continue;
+    const desired = `translateY(${cursor}rem)`;
+    if (!wrapper.style.transform.includes(desired))
+      wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
+    cursor += h + SHELF_GAP_REM;
+  }
+}
+
+function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
   if (generation === undefined) {
     generation = ++_libraryGeneration;
+    if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
   } else if (generation !== _libraryGeneration) {
     return;
   }
-  if (!document.querySelector('ytlr-section-list-renderer')) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
+  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
+  const wrappers = nuDen
+    ? Array.from(nuDen.children).filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
+    : [];
+  if (!wrappers.length) {
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, undefined), 100);
+    return;
+  }
+  // Wait for positions to stabilize before applying to avoid locking in intermediate order.
+  const currentPositions = wrappers.map(el => el.style.transform).join('|');
+  if (currentPositions !== lastPositions) {
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
     return;
   }
   document.body?.classList.add('tt-library-page');
+  applyShelfSpacing();
+  // childList only — avoids feedback loop from YouTube's own translateY writes.
+  _libraryObserver = new MutationObserver(applyShelfSpacing);
+  _libraryObserver.observe(nuDen, { childList: true });
 }
 
 function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
+  if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
 }
 
 // Called when tab hiding is not configured — spacing only
