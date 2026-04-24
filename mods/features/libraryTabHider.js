@@ -68,9 +68,13 @@ let _spacingGeneration = 0;
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   if (!nuDen) return;
-  const wrappers = Array.from(nuDen.children).filter(
-    (el) => el.style?.transform?.includes('translateY')
-  );
+  const wrappers = Array.from(nuDen.children)
+    .filter((el) => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
+    .sort((a, b) => {
+      const yA = parseFloat(a.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+      const yB = parseFloat(b.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+      return yA - yB;
+    });
   if (!wrappers.length) return;
   let cursor = SHELF_TOP_REM;
   for (const wrapper of wrappers) {
@@ -94,7 +98,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
     return;
   }
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY'));
+  const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
   if (!nuDen || !hasWrappers) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation), 100);
     return;
