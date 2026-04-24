@@ -70,9 +70,10 @@ function updateLibraryTabsClass() {
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
-const SHELF_TOP_REM = 2.7;
+const SHELF_TOP_REM = 0;
+const SHELF_GAP_REM = 1;
 let _spacingObserver = null;
-let _applyInProgress = false;
+let _spacingInterval = null;
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -81,7 +82,6 @@ function applyShelfSpacing() {
     (el) => el.style?.transform?.includes('translateY')
   );
   if (!wrappers.length) return;
-  _applyInProgress = true;
   let cursor = SHELF_TOP_REM;
   for (const wrapper of wrappers) {
     const h = parseFloat(wrapper.style.height);
@@ -90,32 +90,39 @@ function applyShelfSpacing() {
     if (!wrapper.style.transform.includes(desired)) {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     }
-    cursor += h;
+    cursor += h + SHELF_GAP_REM;
   }
-  // Reset after observer callbacks for our own changes have already fired
-  requestAnimationFrame(() => { _applyInProgress = false; });
 }
 
-function startShelfSpacingObserver(retriesLeft = 10) {
-  if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
+function startShelfSpacingObserver(retriesLeft = 15) {
+  stopShelfSpacingObserver();
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   const hasWrappers = nuDen && Array.from(nuDen.children).some(el => el.style?.transform?.includes('translateY'));
   if (!nuDen || !hasWrappers) {
-    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1), 150);
+    if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1), 100);
     return;
   }
+  // Apply every 100ms for 1s to outlast the virtual list's own initialization resets,
+  // then switch to a childList observer for ongoing maintenance (pagination).
+  let ticks = 10;
   applyShelfSpacing();
-  // _applyInProgress guards against our own changes re-triggering applyShelfSpacing;
-  // only the virtual list's own resets will pass the check and cause a re-apply
-  _spacingObserver = new MutationObserver(() => { if (!_applyInProgress) applyShelfSpacing(); });
-  _spacingObserver.observe(nuDen, { childList: true });
-  Array.from(nuDen.children).forEach((el) => {
-    _spacingObserver.observe(el, { attributes: true, attributeFilter: ['style'] });
-  });
+  _spacingInterval = setInterval(() => {
+    applyShelfSpacing();
+    if (--ticks <= 0) {
+      clearInterval(_spacingInterval);
+      _spacingInterval = null;
+      const container = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
+      if (container) {
+        _spacingObserver = new MutationObserver(applyShelfSpacing);
+        _spacingObserver.observe(container, { childList: true });
+      }
+    }
+  }, 100);
 }
 
 function stopShelfSpacingObserver() {
   if (_spacingObserver) { _spacingObserver.disconnect(); _spacingObserver = null; }
+  if (_spacingInterval) { clearInterval(_spacingInterval); _spacingInterval = null; }
 }
 
 // Called when tab hiding is not configured — spacing only
