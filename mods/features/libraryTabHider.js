@@ -153,3 +153,9 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     stopShelfSpacingObserver();
   }
 };
+
+// Supplement the XHR-based trigger: re-apply spacing on SPA navigation
+// (handles cases where the library page is served from cache without a new XHR)
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', () => startShelfSpacingObserver());
+}
