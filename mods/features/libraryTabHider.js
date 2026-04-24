@@ -116,7 +116,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation) {
       const container = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
       if (container) {
         _spacingObserver = new MutationObserver(applyShelfSpacing);
-        _spacingObserver.observe(container, { childList: true });
+        _spacingObserver.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
       }
     }
   }, 100);
@@ -158,8 +158,11 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
 // Supplement the XHR-based trigger: re-apply spacing on SPA navigation
 // (handles cases where the library page is served from cache without a new XHR)
 if (typeof window !== 'undefined') {
+  let _prevWasLibrary = false;
   window.addEventListener('hashchange', () => {
-    if (detectCurrentPage() === 'library') startShelfSpacingObserver();
-    else stopShelfSpacingObserver();
+    const isLibrary = detectCurrentPage() === 'library';
+    if (isLibrary && !_prevWasLibrary) startShelfSpacingObserver();
+    else if (!isLibrary) stopShelfSpacingObserver();
+    _prevWasLibrary = isLibrary;
   });
 }
