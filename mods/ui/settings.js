@@ -229,7 +229,6 @@ export default function modernUI(update, parameters) {
             name: t('settings.options.misc.title'),
             icon: 'SETTINGS',
             value: null,
-            menuId: 'tt-misc-settings',
             options: [
                 {
                     name: t('settings.options.misc.options.endScreenCards'),
@@ -346,6 +345,27 @@ export default function modernUI(update, parameters) {
                                     value: height
                                 }
                             })
+                        }
+                    ]
+                },
+                {
+                    name: t('settings.options.misc.options.logServer.title'),
+                    icon: 'SEND',
+                    value: null,
+                    menuId: 'tt-log-server-settings',
+                    options: [
+                        {
+                            name: t('settings.options.misc.options.logServer.enable'),
+                            icon: 'WIFI',
+                            value: 'logServerEnabled'
+                        },
+                        {
+                            name: t('settings.options.misc.options.logServer.test'),
+                            subtitle: t('settings.options.misc.options.logServer.testSubtitle'),
+                            icon: 'SEND',
+                            customAction: {
+                                action: 'LOG_SERVER_TEST_PING'
+                            }
                         }
                     ]
                 }
