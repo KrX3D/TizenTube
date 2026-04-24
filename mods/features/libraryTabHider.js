@@ -71,6 +71,7 @@ function updateLibraryTabsClass() {
 }
 
 const SHELF_TOP_REM = 0;
+const SHELF_GAP_REM = 1;
 let _spacingObserver = null;
 let _spacingInterval = null;
 
@@ -89,7 +90,7 @@ function applyShelfSpacing() {
     if (!wrapper.style.transform.includes(desired)) {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     }
-    cursor += h;
+    cursor += h + SHELF_GAP_REM;
   }
 }
 
