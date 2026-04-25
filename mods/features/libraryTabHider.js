@@ -62,6 +62,7 @@ function updateLibraryTabsClass() {
 const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
 let _libraryObserver = null;
+let _prevPage = null;
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -74,7 +75,10 @@ function applyShelfSpacing() {
       return yA - yB;
     });
   if (!wrappers.length) return;
-  let cursor = 0;
+  // When tabs are visible keep the first shelf at YouTube's natural Y so it doesn't
+  // slide behind the tab bar; when all tabs are hidden we can pack from 0.
+  const firstY = parseFloat(wrappers[0].style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+  let cursor = document.body?.classList.contains('tt-no-library-tabs') ? 0 : firstY;
   for (const wrapper of wrappers) {
     const h = parseFloat(wrapper.style.height);
     if (isNaN(h)) continue;
@@ -122,6 +126,7 @@ function stopShelfSpacingObserver() {
 // Called when tab hiding is not configured — spacing only
 export const applyLibraryShelfSpacing = () => {
   if (detectCurrentPage() === 'library') {
+    if (_prevPage === 'playlist') { document.body?.classList.add('tt-library-page'); return; }
     startShelfSpacingObserver();
   } else {
     stopShelfSpacingObserver();
@@ -138,6 +143,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   if (detectCurrentPage() === 'library') {
     pruneLibraryTabs(response, hiddenIds);
     setTimeout(updateLibraryTabsClass, 200);
+    if (_prevPage === 'playlist') { document.body?.classList.add('tt-library-page'); return; }
     startShelfSpacingObserver();
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
@@ -145,14 +151,11 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   }
 };
 
-// On SPA navigation: manage the body class directly. Gap compaction is left to the
-// XHR-based trigger (applyLibraryShelfSpacing / applyLibraryTabHiding) which fires
-// after YouTube renders fresh positions — calling startShelfSpacingObserver here
-// would apply compaction against stale/recycled wrapper positions and swap shelf order.
 if (typeof window !== 'undefined') {
   let _prevWasLibrary = false;
   window.addEventListener('hashchange', () => {
     const isLibrary = detectCurrentPage() === 'library';
+    if (!isLibrary) _prevPage = detectCurrentPage();
     if (isLibrary && !_prevWasLibrary) document.body?.classList.add('tt-library-page');
     else if (!isLibrary) stopShelfSpacingObserver();
     _prevWasLibrary = isLibrary;
