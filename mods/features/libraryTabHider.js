@@ -147,6 +147,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     setTimeout(() => {
       updateLibraryTabsClass();
       if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
+      else document.body?.classList.remove('tt-library-page');
     }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
@@ -159,9 +160,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     const isLibrary = detectCurrentPage() === 'library';
     if (!isLibrary) _prevPage = detectCurrentPage();
-    // Only add zoom class when all tabs are hidden; tabs visible = no adjustments.
-    if (isLibrary && !_prevWasLibrary && noTabs()) document.body?.classList.add('tt-library-page');
-    else if (!isLibrary) stopShelfSpacingObserver();
+    if (!isLibrary) stopShelfSpacingObserver();
     _prevWasLibrary = isLibrary;
   });
 }
