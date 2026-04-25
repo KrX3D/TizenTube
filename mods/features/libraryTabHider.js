@@ -145,13 +145,15 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   }
 };
 
-// Supplement the XHR-based trigger: re-apply spacing on SPA navigation
-// (handles cases where the library page is served from cache without a new XHR)
+// On SPA navigation: manage the body class directly. Gap compaction is left to the
+// XHR-based trigger (applyLibraryShelfSpacing / applyLibraryTabHiding) which fires
+// after YouTube renders fresh positions — calling startShelfSpacingObserver here
+// would apply compaction against stale/recycled wrapper positions and swap shelf order.
 if (typeof window !== 'undefined') {
   let _prevWasLibrary = false;
   window.addEventListener('hashchange', () => {
     const isLibrary = detectCurrentPage() === 'library';
-    if (isLibrary && !_prevWasLibrary) startShelfSpacingObserver();
+    if (isLibrary && !_prevWasLibrary) document.body?.classList.add('tt-library-page');
     else if (!isLibrary) stopShelfSpacingObserver();
     _prevWasLibrary = isLibrary;
   });
