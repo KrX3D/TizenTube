@@ -143,7 +143,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   }
   if (detectCurrentPage() === 'library') {
     pruneLibraryTabs(response, hiddenIds);
-    // Wait for DOM to reflect pruned tabs before checking visibility.
+    document.body?.classList.remove('tt-no-library-tabs');
     setTimeout(() => {
       updateLibraryTabsClass();
       if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();

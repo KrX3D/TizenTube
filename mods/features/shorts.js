@@ -182,7 +182,7 @@ export function isShortsShelf(shelve) {
 export function filterShortsFromItems(items, pageName) {
   // Playlist tiles (playlist/playlists pages) are never shorts. Skip the check
   // entirely to avoid noisy shorts.miss log entries for every tile.
-  if (!Array.isArray(items) || configRead('enableShorts') || pageName === 'playlist' || pageName === 'playlists') return items;
+  if (!Array.isArray(items) || configRead('enableShorts') || pageName === 'playlist' || pageName === 'playlists' || pageName === 'library') return items;
   const before = items.length;
   const filtered = items.filter(item => {
     const info = getShortInfo(item, { pageName });
