@@ -62,29 +62,7 @@ function updateLibraryTabsClass() {
 const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
 let _libraryObserver = null;
-let _navPinObserver = null;
 let _prevPage = null;
-
-function startNavPinObserver() {
-  if (_navPinObserver) return;
-  const nav = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  if (!nav) return;
-  let wrapper = nav.parentElement;
-  while (wrapper && wrapper !== document.body) {
-    if (wrapper.style?.transform?.includes('translateY')) break;
-    wrapper = wrapper.parentElement;
-  }
-  if (!wrapper || wrapper === document.body) return;
-  const pinned = wrapper.style.transform;
-  _navPinObserver = new MutationObserver(() => {
-    if (wrapper.style.transform !== pinned) wrapper.style.transform = pinned;
-  });
-  _navPinObserver.observe(wrapper, { attributes: true, attributeFilter: ['style'] });
-}
-
-function stopNavPinObserver() {
-  if (_navPinObserver) { _navPinObserver.disconnect(); _navPinObserver = null; }
-}
 
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
@@ -143,7 +121,6 @@ function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
   if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
-  stopNavPinObserver();
 }
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
@@ -170,7 +147,6 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     setTimeout(() => {
       updateLibraryTabsClass();
       if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
-      else { document.body?.classList.remove('tt-library-page'); startNavPinObserver(); }
     }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
