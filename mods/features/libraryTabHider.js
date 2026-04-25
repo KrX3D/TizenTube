@@ -123,11 +123,12 @@ function stopShelfSpacingObserver() {
   if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
 }
 
+const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
+
 // Called when tab hiding is not configured — spacing only
 export const applyLibraryShelfSpacing = () => {
   if (detectCurrentPage() === 'library') {
-    if (_prevPage === 'playlist') { document.body?.classList.add('tt-library-page'); return; }
-    startShelfSpacingObserver();
+    if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
   } else {
     stopShelfSpacingObserver();
   }
@@ -142,9 +143,11 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   }
   if (detectCurrentPage() === 'library') {
     pruneLibraryTabs(response, hiddenIds);
-    setTimeout(updateLibraryTabsClass, 200);
-    if (_prevPage === 'playlist') { document.body?.classList.add('tt-library-page'); return; }
-    startShelfSpacingObserver();
+    // Wait for DOM to reflect pruned tabs before checking visibility.
+    setTimeout(() => {
+      updateLibraryTabsClass();
+      if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
+    }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
@@ -156,7 +159,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     const isLibrary = detectCurrentPage() === 'library';
     if (!isLibrary) _prevPage = detectCurrentPage();
-    if (isLibrary && !_prevWasLibrary) document.body?.classList.add('tt-library-page');
+    // Only add zoom class when all tabs are hidden; tabs visible = no adjustments.
+    if (isLibrary && !_prevWasLibrary && noTabs()) document.body?.classList.add('tt-library-page');
     else if (!isLibrary) stopShelfSpacingObserver();
     _prevWasLibrary = isLibrary;
   });
