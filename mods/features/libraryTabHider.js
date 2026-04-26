@@ -14,34 +14,48 @@ const matchesHiddenId = (value, hiddenIds) => {
   return false;
 };
 
-function getTabId(tab) {
-  const d = tab.data;
-  return String(
-    d?.endpoint?.browseEndpoint?.browseId
-    || d?.tabRenderer?.endpoint?.browseEndpoint?.browseId
-    || d?.navigationEndpoint?.browseEndpoint?.browseId
-    || d?.tileRenderer?.contentId
-    || d?.contentId
-    || tab.getAttribute('href')
-    || ''
-  ).toLowerCase();
-}
+const shouldHideTabItem = (item, hiddenIds) => {
+  if (!item || typeof item !== 'object') return false;
+  return matchesHiddenId(item?.tileRenderer?.contentId, hiddenIds)
+    || matchesHiddenId(item?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items?.[0]?.tileRenderer?.contentId, hiddenIds)
+    || matchesHiddenId(item?.tabRenderer?.endpoint?.browseEndpoint?.browseId, hiddenIds)
+    || matchesHiddenId(item?.navigationEndpoint?.browseEndpoint?.browseId, hiddenIds)
+    || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
+};
 
-function hideTabsInDom(hiddenIds) {
-  const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  if (!navEl) return false;
-  const tabs = navEl.querySelectorAll('ytlr-tab-renderer, [role="tab"]');
-  if (!tabs.length) return false;
-  for (const tab of tabs) {
-    tab.style.display = matchesHiddenId(getTabId(tab), hiddenIds) ? 'none' : '';
+const pruneLibraryTabs = (node, hiddenIds) => {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node?.horizontalListRenderer?.items)) {
+    node.horizontalListRenderer.items = node.horizontalListRenderer.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
   }
-  return true;
-}
+
+  if (Array.isArray(node?.continuationContents?.horizontalListContinuation?.items)) {
+    node.continuationContents.horizontalListContinuation.items =
+      node.continuationContents.horizontalListContinuation.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
+  }
+
+  if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
+    node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
+  }
+
+  for (const key of Object.keys(node)) {
+    const value = node[key];
+    if (value && typeof value === 'object') {
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          if (entry && typeof entry === 'object') pruneLibraryTabs(entry, hiddenIds);
+        }
+      } else {
+        pruneLibraryTabs(value, hiddenIds);
+      }
+    }
+  }
+};
 
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  const tabs = navEl ? Array.from(navEl.querySelectorAll('ytlr-tab-renderer, [role="tab"]')) : [];
-  const hasTabs = tabs.some(t => t.style.display !== 'none');
+  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
@@ -61,6 +75,8 @@ function applyShelfSpacing() {
       return yA - yB;
     });
   if (!wrappers.length) return;
+  // When tabs are visible keep the first shelf at YouTube's natural Y so it doesn't
+  // slide behind the tab bar; when all tabs are hidden we can pack from 0.
   const firstY = parseFloat(wrappers[0].style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
   let cursor = document.body?.classList.contains('tt-no-library-tabs') ? 0 : firstY;
   for (const wrapper of wrappers) {
@@ -88,6 +104,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, undefined), 100);
     return;
   }
+  // Wait for positions to stabilize before applying to avoid locking in intermediate order.
   const currentPositions = wrappers.map(el => el.style.transform).join('|');
   if (currentPositions !== lastPositions) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
@@ -108,16 +125,6 @@ function stopShelfSpacingObserver() {
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
-function applyTabHidingInDom(hiddenIds, retriesLeft = 15) {
-  if (detectCurrentPage() !== 'library') return;
-  if (!hideTabsInDom(hiddenIds)) {
-    if (retriesLeft > 0) setTimeout(() => applyTabHidingInDom(hiddenIds, retriesLeft - 1), 200);
-    return;
-  }
-  updateLibraryTabsClass();
-  if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
-}
-
 // Called when tab hiding is not configured — spacing only
 export const applyLibraryShelfSpacing = () => {
   if (detectCurrentPage() === 'library') {
@@ -127,7 +134,7 @@ export const applyLibraryShelfSpacing = () => {
   }
 };
 
-// Called when tab hiding is configured — DOM-based tab hiding + spacing
+// Called when tab hiding is configured — tab pruning + spacing + body class
 export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   const hiddenIds = getHiddenLibraryTabIds(configuredHiddenIds);
   if (hiddenIds.size === 0) {
@@ -135,8 +142,12 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     return;
   }
   if (detectCurrentPage() === 'library') {
+    pruneLibraryTabs(response, hiddenIds);
     document.body?.classList.remove('tt-no-library-tabs');
-    applyTabHidingInDom(hiddenIds);
+    setTimeout(() => {
+      updateLibraryTabsClass();
+      if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
+    }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
