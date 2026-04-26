@@ -17,7 +17,6 @@ const matchesHiddenId = (value, hiddenIds) => {
 function getTabIdFromItem(item) {
   return String(
     item?.tabRenderer?.endpoint?.browseEndpoint?.browseId
-    || item?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items?.[0]?.tileRenderer?.contentId
     || item?.tileRenderer?.contentId
     || item?.navigationEndpoint?.browseEndpoint?.browseId
     || item?.browseEndpoint?.browseId
@@ -25,51 +24,31 @@ function getTabIdFromItem(item) {
   ).toLowerCase();
 }
 
-// Finds tvSecondaryNavSectionRenderer anywhere in the response tree.
-function findNavRenderer(node, depth = 0) {
-  if (!node || typeof node !== 'object' || depth > 20) return null;
-  if (node.tvSecondaryNavSectionRenderer) return node.tvSecondaryNavSectionRenderer;
-  const children = Array.isArray(node) ? node : Object.values(node);
-  for (const child of children) {
-    if (child && typeof child === 'object') {
-      const r = findNavRenderer(child, depth + 1);
+// Returns ordered array of tab IDs from the XHR response, or null if not found.
+function extractResponseTabIds(node, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 10) return null;
+  if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
+    return node.tvSecondaryNavSectionRenderer.tabs.map(getTabIdFromItem);
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const r = extractResponseTabIds(item, depth + 1);
       if (r) return r;
     }
+    return null;
+  }
+  for (const key of Object.keys(node)) {
+    const r = extractResponseTabIds(node[key], depth + 1);
+    if (r) return r;
   }
   return null;
 }
 
-// Collects tab IDs from within the nav renderer (tabs[], items[], or recursed).
-function gatherTabIds(nav, out = [], seen = new WeakSet(), depth = 0) {
-  if (!nav || typeof nav !== 'object' || depth > 8 || seen.has(nav)) return;
-  seen.add(nav);
-  if (Array.isArray(nav.tabs) && nav.tabs.length) {
-    for (const item of nav.tabs) out.push(getTabIdFromItem(item));
-    return;
-  }
-  if (Array.isArray(nav.items) && nav.items.length) {
-    for (const item of nav.items) out.push(getTabIdFromItem(item));
-    return;
-  }
-  const children = Array.isArray(nav) ? nav : Object.values(nav);
-  for (const child of children) gatherTabIds(child, out, seen, depth + 1);
-}
-
-// Returns ordered tab ID array from the XHR response, or null if not found.
-function extractResponseTabIds(response) {
-  const nav = findNavRenderer(response);
-  if (!nav) return null;
-  const ids = [];
-  gatherTabIds(nav, ids);
-  return ids.length > 0 ? ids : null;
-}
-
-// Hides tabs by positional mapping: response order === DOM render order.
+// Hides tabs by matching response-order IDs to DOM-order elements positionally.
 function hideTabsInDom(hiddenIds, responseTabIds) {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
   if (!navEl) return false;
-  let tabs = Array.from(navEl.querySelectorAll('ytlr-tab-renderer'));
-  if (!tabs.length) tabs = Array.from(navEl.querySelectorAll('[role="tab"]'));
+  const tabs = navEl.querySelectorAll('ytlr-tab-renderer, [role="tab"]');
   if (!tabs.length) return false;
   for (let i = 0; i < tabs.length; i++) {
     const tabId = i < responseTabIds.length ? responseTabIds[i] : '';
@@ -80,8 +59,7 @@ function hideTabsInDom(hiddenIds, responseTabIds) {
 
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  let tabs = navEl ? Array.from(navEl.querySelectorAll('ytlr-tab-renderer')) : [];
-  if (!tabs.length && navEl) tabs = Array.from(navEl.querySelectorAll('[role="tab"]'));
+  const tabs = navEl ? Array.from(navEl.querySelectorAll('ytlr-tab-renderer, [role="tab"]')) : [];
   const hasTabs = tabs.some(t => t.style.display !== 'none');
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
