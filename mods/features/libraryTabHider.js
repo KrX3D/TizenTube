@@ -14,26 +14,45 @@ const matchesHiddenId = (value, hiddenIds) => {
   return false;
 };
 
-function getTabId(tab) {
-  const d = tab.data;
+function getTabIdFromItem(item) {
   return String(
-    d?.endpoint?.browseEndpoint?.browseId
-    || d?.tabRenderer?.endpoint?.browseEndpoint?.browseId
-    || d?.navigationEndpoint?.browseEndpoint?.browseId
-    || d?.tileRenderer?.contentId
-    || d?.contentId
-    || tab.getAttribute('href')
+    item?.tabRenderer?.endpoint?.browseEndpoint?.browseId
+    || item?.tileRenderer?.contentId
+    || item?.navigationEndpoint?.browseEndpoint?.browseId
+    || item?.browseEndpoint?.browseId
     || ''
   ).toLowerCase();
 }
 
-function hideTabsInDom(hiddenIds) {
+// Returns ordered array of tab IDs from the XHR response, or null if not found.
+function extractResponseTabIds(node, depth = 0) {
+  if (!node || typeof node !== 'object' || depth > 10) return null;
+  if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
+    return node.tvSecondaryNavSectionRenderer.tabs.map(getTabIdFromItem);
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const r = extractResponseTabIds(item, depth + 1);
+      if (r) return r;
+    }
+    return null;
+  }
+  for (const key of Object.keys(node)) {
+    const r = extractResponseTabIds(node[key], depth + 1);
+    if (r) return r;
+  }
+  return null;
+}
+
+// Hides tabs by matching response-order IDs to DOM-order elements positionally.
+function hideTabsInDom(hiddenIds, responseTabIds) {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
   if (!navEl) return false;
   const tabs = navEl.querySelectorAll('ytlr-tab-renderer, [role="tab"]');
   if (!tabs.length) return false;
-  for (const tab of tabs) {
-    tab.style.display = matchesHiddenId(getTabId(tab), hiddenIds) ? 'none' : '';
+  for (let i = 0; i < tabs.length; i++) {
+    const tabId = i < responseTabIds.length ? responseTabIds[i] : '';
+    tabs[i].style.display = matchesHiddenId(tabId, hiddenIds) ? 'none' : '';
   }
   return true;
 }
@@ -108,10 +127,10 @@ function stopShelfSpacingObserver() {
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
-function applyTabHidingInDom(hiddenIds, retriesLeft = 15) {
+function applyTabHidingInDom(hiddenIds, responseTabIds, retriesLeft = 15) {
   if (detectCurrentPage() !== 'library') return;
-  if (!hideTabsInDom(hiddenIds)) {
-    if (retriesLeft > 0) setTimeout(() => applyTabHidingInDom(hiddenIds, retriesLeft - 1), 200);
+  if (!hideTabsInDom(hiddenIds, responseTabIds)) {
+    if (retriesLeft > 0) setTimeout(() => applyTabHidingInDom(hiddenIds, responseTabIds, retriesLeft - 1), 200);
     return;
   }
   updateLibraryTabsClass();
@@ -135,8 +154,12 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     return;
   }
   if (detectCurrentPage() === 'library') {
-    document.body?.classList.remove('tt-no-library-tabs');
-    applyTabHidingInDom(hiddenIds);
+    const responseTabIds = extractResponseTabIds(response);
+    if (responseTabIds) {
+      document.body?.classList.remove('tt-no-library-tabs');
+      applyTabHidingInDom(hiddenIds, responseTabIds);
+    }
+    // Continuation responses have no tab list — existing DOM hiding stays in place.
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
