@@ -35,10 +35,6 @@ const pruneLibraryTabs = (node, hiddenIds) => {
       node.continuationContents.horizontalListContinuation.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
   }
 
-  if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
-    node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
-  }
-
   for (const key of Object.keys(node)) {
     const value = node[key];
     if (value && typeof value === 'object') {
@@ -87,6 +83,7 @@ function applyShelfSpacing() {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     cursor += h + SHELF_GAP_REM;
   }
+  nuDen.style.height = cursor + 'rem';
 }
 
 function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
