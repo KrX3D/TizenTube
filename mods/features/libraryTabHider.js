@@ -100,16 +100,13 @@ function applyShelfSpacing() {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     cursor += h + SHELF_GAP_REM;
   }
-  let targetH = cursor + 'rem';
-  if (document.body?.classList.contains('tt-no-library-tabs')) {
-    // When all tabs are hidden the shelves fit within the viewport (they're scaled down via CSS).
-    // Cap nuDen.style.height at the virtual-list's visible clientHeight so yt-virtual-list
-    // sees scrollH === clientH and stops exposing the empty rem-gap below the last shelf.
-    const vlH = nuDen.parentElement?.clientHeight;
-    const fs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    if (vlH) targetH = Math.min(cursor, vlH / fs) + 'rem';
-  }
+  const targetH = cursor + 'rem';
   if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
+
+  // When no nav is present (all tabs pruned) the shelves fit on screen. Block scroll on the
+  // virtual list so the user can't scroll into the empty rem-gap below the last shelf.
+  const vlEl = nuDen.parentElement;
+  if (vlEl) vlEl.style.overflow = navWrapper ? '' : 'hidden';
 }
 
 function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
@@ -143,6 +140,8 @@ function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
   if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
+  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
+  if (nuDen?.parentElement) nuDen.parentElement.style.overflow = '';
 }
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
