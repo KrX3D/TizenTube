@@ -35,6 +35,10 @@ const pruneLibraryTabs = (node, hiddenIds) => {
       node.continuationContents.horizontalListContinuation.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
   }
 
+  if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
+    node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
+  }
+
   for (const key of Object.keys(node)) {
     const value = node[key];
     if (value && typeof value === 'object') {
@@ -51,7 +55,8 @@ const pruneLibraryTabs = (node, hiddenIds) => {
 
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
+  if (!navEl) return; // Not rendered yet — don't change the class based on a missing element
+  const hasTabs = !!(navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]'));
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
@@ -60,21 +65,35 @@ let _libraryGeneration = 0;
 let _libraryObserver = null;
 let _prevPage = null;
 
+const getTranslateY = (el) =>
+  parseFloat(el.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
+
+const isNavWrapper = (el) => !!el.querySelector('ytlr-tv-secondary-nav-section-renderer');
+
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   if (!nuDen) return;
-  const wrappers = Array.from(nuDen.children)
-    .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
-    .sort((a, b) => {
-      const yA = parseFloat(a.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
-      const yB = parseFloat(b.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
-      return yA - yB;
-    });
+
+  const allWrappers = Array.from(nuDen.children)
+    .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
+
+  // Never reposition the secondary nav — let YouTube control it.
+  const navWrapper = allWrappers.find(isNavWrapper);
+  const wrappers = allWrappers
+    .filter(el => el !== navWrapper)
+    .sort((a, b) => getTranslateY(a) - getTranslateY(b));
+
   if (!wrappers.length) return;
-  // When tabs are visible keep the first shelf at YouTube's natural Y so it doesn't
-  // slide behind the tab bar; when all tabs are hidden we can pack from 0.
-  const firstY = parseFloat(wrappers[0].style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
-  let cursor = document.body?.classList.contains('tt-no-library-tabs') ? 0 : firstY;
+
+  let cursor;
+  if (document.body?.classList.contains('tt-no-library-tabs')) {
+    cursor = 0;
+  } else if (navWrapper) {
+    cursor = getTranslateY(navWrapper) + (parseFloat(navWrapper.style.height) || 0);
+  } else {
+    cursor = getTranslateY(wrappers[0]);
+  }
+
   for (const wrapper of wrappers) {
     const h = parseFloat(wrapper.style.height);
     if (isNaN(h)) continue;
@@ -95,13 +114,12 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   }
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   const wrappers = nuDen
-    ? Array.from(nuDen.children).filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0)
+    ? Array.from(nuDen.children).filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0 && !isNavWrapper(el))
     : [];
   if (!wrappers.length) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, undefined), 100);
     return;
   }
-  // Wait for positions to stabilize before applying to avoid locking in intermediate order.
   const currentPositions = wrappers.map(el => el.style.transform).join('|');
   if (currentPositions !== lastPositions) {
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
@@ -109,7 +127,6 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   }
   document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
-  // childList only — avoids feedback loop from YouTube's own translateY writes.
   _libraryObserver = new MutationObserver(applyShelfSpacing);
   _libraryObserver.observe(nuDen, { childList: true });
 }
@@ -143,7 +160,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     document.body?.classList.remove('tt-no-library-tabs');
     setTimeout(() => {
       updateLibraryTabsClass();
-      if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
+      if (_prevPage !== 'playlist') startShelfSpacingObserver();
     }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
