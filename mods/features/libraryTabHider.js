@@ -55,8 +55,7 @@ const pruneLibraryTabs = (node, hiddenIds) => {
 
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  if (!navEl) return; // Not rendered yet — don't change the class based on a missing element
-  const hasTabs = !!(navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]'));
+  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
@@ -86,12 +85,11 @@ function applyShelfSpacing() {
   if (!wrappers.length) return;
 
   let cursor;
-  if (document.body?.classList.contains('tt-no-library-tabs')) {
-    cursor = 0;
-  } else if (navWrapper) {
-    cursor = getTranslateY(navWrapper) + (parseFloat(navWrapper.style.height) || 0);
+  if (navWrapper) {
+    const navH = parseFloat(navWrapper.style.height) || 0;
+    cursor = navH > 0 ? getTranslateY(navWrapper) + navH : 0;
   } else {
-    cursor = getTranslateY(wrappers[0]);
+    cursor = 0; // No nav rendered (all tabs pruned) — pack shelves from top
   }
 
   for (const wrapper of wrappers) {
