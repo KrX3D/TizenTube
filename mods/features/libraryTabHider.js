@@ -100,7 +100,15 @@ function applyShelfSpacing() {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     cursor += h + SHELF_GAP_REM;
   }
-  const targetH = cursor + 'rem';
+  let targetH = cursor + 'rem';
+  if (document.body?.classList.contains('tt-no-library-tabs')) {
+    // When all tabs are hidden the shelves fit within the viewport (they're scaled down via CSS).
+    // Cap nuDen.style.height at the virtual-list's visible clientHeight so yt-virtual-list
+    // sees scrollH === clientH and stops exposing the empty rem-gap below the last shelf.
+    const vlH = nuDen.parentElement?.clientHeight;
+    const fs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    if (vlH) targetH = Math.min(cursor, vlH / fs) + 'rem';
+  }
   if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
 }
 
