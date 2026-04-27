@@ -102,7 +102,8 @@ function applyShelfSpacing() {
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
     cursor += h + SHELF_GAP_REM;
   }
-  nuDen.style.height = cursor + 'rem';
+  const targetH = cursor + 'rem';
+  if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
 }
 
 function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
@@ -128,7 +129,8 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
   _libraryObserver = new MutationObserver(applyShelfSpacing);
-  _libraryObserver.observe(nuDen, { childList: true });
+  // childList catches element recycling; attributes catches YouTube resetting nuDen's height.
+  _libraryObserver.observe(nuDen, { childList: true, attributes: true, attributeFilter: ['style'] });
 }
 
 function stopShelfSpacingObserver() {
