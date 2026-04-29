@@ -61,7 +61,6 @@ function updateLibraryTabsClass() {
 
 const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
-let _libraryObserver = null;
 let _scrollLockEl = null;
 let _onScroll = null;
 
@@ -73,6 +72,10 @@ const isNavWrapper = (el) => !!el.querySelector('ytlr-tv-secondary-nav-section-r
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   if (!nuDen) return;
+
+  // If YouTube scrolls via nuDen's own transform, reset it.
+  if (nuDen.style.transform && !nuDen.style.transform.includes('translateY(0rem)'))
+    nuDen.style.transform = nuDen.style.transform.replace(/translateY\([^)]+\)/, 'translateY(0rem)');
 
   const allWrappers = Array.from(nuDen.children)
     .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
@@ -108,7 +111,6 @@ function applyShelfSpacing() {
 function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
   if (generation === undefined) {
     generation = ++_libraryGeneration;
-    if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
   } else if (generation !== _libraryGeneration) {
     return;
   }
@@ -132,24 +134,27 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   const hasNav = Array.from(nuDen.children).some(isNavWrapper);
   if (vlEl && !hasNav) {
     _scrollLockEl = vlEl;
-    // Override scrollTop setter so YouTube's virtual list JS cannot scroll the container.
     Object.defineProperty(vlEl, 'scrollTop', { get: () => 0, set: () => {}, configurable: true });
-    // Fallback: if Cobalt bypasses the property override via C++ binding, catch scroll events.
     const protoDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')
       ?? Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop');
     _onScroll = () => { if (protoDesc?.set) protoDesc.set.call(vlEl, 0); };
     vlEl.addEventListener('scroll', _onScroll, { passive: true });
   }
 
-  _libraryObserver = new MutationObserver(applyShelfSpacing);
-  // subtree: true catches YouTube repositioning individual shelf wrapper children via translateY.
-  _libraryObserver.observe(nuDen, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
+  // Use a rAF loop instead of MutationObserver: YouTube's virtual list uses its own rAF
+  // layout loop to reposition shelf wrappers, so our corrections must also run every frame
+  // (registered after YouTube's, so we fire last and win each frame).
+  const rafLoop = () => {
+    if (generation !== _libraryGeneration) return;
+    applyShelfSpacing();
+    requestAnimationFrame(rafLoop);
+  };
+  requestAnimationFrame(rafLoop);
 }
 
 function stopShelfSpacingObserver() {
-  _libraryGeneration++;
+  _libraryGeneration++; // causes rafLoop to self-terminate on next tick
   document.body?.classList.remove('tt-library-page');
-  if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
   if (_scrollLockEl) {
     if (_onScroll) _scrollLockEl.removeEventListener('scroll', _onScroll);
     delete _scrollLockEl.scrollTop;
@@ -191,6 +196,11 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
-    if (detectCurrentPage() !== 'library') stopShelfSpacingObserver();
+    if (detectCurrentPage() !== 'library') {
+      stopShelfSpacingObserver();
+    } else if (noTabs()) {
+      // Safety net: if YouTube uses cached data and skips XHR on return, restart the rAF loop.
+      setTimeout(startShelfSpacingObserver, 600);
+    }
   });
 }
