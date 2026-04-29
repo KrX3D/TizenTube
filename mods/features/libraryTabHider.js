@@ -62,8 +62,8 @@ function updateLibraryTabsClass() {
 const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
 let _libraryObserver = null;
-let _prevPage = null;
 let _scrollLockEl = null;
+let _onScroll = null;
 
 const getTranslateY = (el) =>
   parseFloat(el.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
@@ -129,9 +129,16 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   applyShelfSpacing();
 
   const vlEl = nuDen.parentElement;
-  if (vlEl && !document.querySelector('ytlr-tv-secondary-nav-section-renderer')) {
+  const hasNav = Array.from(nuDen.children).some(isNavWrapper);
+  if (vlEl && !hasNav) {
     _scrollLockEl = vlEl;
+    // Override scrollTop setter so YouTube's virtual list JS cannot scroll the container.
     Object.defineProperty(vlEl, 'scrollTop', { get: () => 0, set: () => {}, configurable: true });
+    // Fallback: if Cobalt bypasses the property override via C++ binding, catch scroll events.
+    const protoDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')
+      ?? Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop');
+    _onScroll = () => { if (protoDesc?.set) protoDesc.set.call(vlEl, 0); };
+    vlEl.addEventListener('scroll', _onScroll, { passive: true });
   }
 
   _libraryObserver = new MutationObserver(applyShelfSpacing);
@@ -142,7 +149,12 @@ function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
   if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
-  if (_scrollLockEl) { delete _scrollLockEl.scrollTop; _scrollLockEl = null; }
+  if (_scrollLockEl) {
+    if (_onScroll) _scrollLockEl.removeEventListener('scroll', _onScroll);
+    delete _scrollLockEl.scrollTop;
+    _scrollLockEl = null;
+  }
+  _onScroll = null;
 }
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
@@ -150,7 +162,7 @@ const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 // Called when tab hiding is not configured — spacing only
 export const applyLibraryShelfSpacing = () => {
   if (detectCurrentPage() === 'library') {
-    if (noTabs() && _prevPage !== 'playlist') startShelfSpacingObserver();
+    if (noTabs()) startShelfSpacingObserver();
   } else {
     stopShelfSpacingObserver();
   }
@@ -168,7 +180,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     document.body?.classList.remove('tt-no-library-tabs');
     setTimeout(() => {
       updateLibraryTabsClass();
-      if (_prevPage !== 'playlist') startShelfSpacingObserver();
+      startShelfSpacingObserver();
     }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
@@ -177,11 +189,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
 };
 
 if (typeof window !== 'undefined') {
-  let _prevWasLibrary = false;
   window.addEventListener('hashchange', () => {
-    const isLibrary = detectCurrentPage() === 'library';
-    if (!isLibrary) _prevPage = detectCurrentPage();
-    if (!isLibrary) stopShelfSpacingObserver();
-    _prevWasLibrary = isLibrary;
+    if (detectCurrentPage() !== 'library') stopShelfSpacingObserver();
   });
 }
