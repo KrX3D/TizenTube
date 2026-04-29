@@ -63,6 +63,7 @@ const SHELF_GAP_REM = 0;
 let _libraryGeneration = 0;
 let _libraryObserver = null;
 let _prevPage = null;
+let _scrollLockEl = null;
 
 const getTranslateY = (el) =>
   parseFloat(el.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
@@ -102,11 +103,6 @@ function applyShelfSpacing() {
   }
   const targetH = cursor + 'rem';
   if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
-
-  // When no nav is present (all tabs pruned) the shelves fit on screen. Block scroll on the
-  // virtual list so the user can't scroll into the empty rem-gap below the last shelf.
-  const vlEl = nuDen.parentElement;
-  if (vlEl) vlEl.style.overflow = navWrapper ? '' : 'hidden';
 }
 
 function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) {
@@ -131,8 +127,14 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   }
   document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
+
+  const vlEl = nuDen.parentElement;
+  if (vlEl && !document.querySelector('ytlr-tv-secondary-nav-section-renderer')) {
+    _scrollLockEl = vlEl;
+    Object.defineProperty(vlEl, 'scrollTop', { get: () => 0, set: () => {}, configurable: true });
+  }
+
   _libraryObserver = new MutationObserver(applyShelfSpacing);
-  // childList catches element recycling; attributes catches YouTube resetting nuDen's height.
   _libraryObserver.observe(nuDen, { childList: true, attributes: true, attributeFilter: ['style'] });
 }
 
@@ -140,8 +142,7 @@ function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
   if (_libraryObserver) { _libraryObserver.disconnect(); _libraryObserver = null; }
-  const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
-  if (nuDen?.parentElement) nuDen.parentElement.style.overflow = '';
+  if (_scrollLockEl) { delete _scrollLockEl.scrollTop; _scrollLockEl = null; }
 }
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
