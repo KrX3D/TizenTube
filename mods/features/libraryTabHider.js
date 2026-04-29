@@ -142,7 +142,8 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   }
 
   _libraryObserver = new MutationObserver(applyShelfSpacing);
-  _libraryObserver.observe(nuDen, { childList: true, attributes: true, attributeFilter: ['style'] });
+  // subtree: true catches YouTube repositioning individual shelf wrapper children via translateY.
+  _libraryObserver.observe(nuDen, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
 }
 
 function stopShelfSpacingObserver() {
