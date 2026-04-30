@@ -53,14 +53,21 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
+// Tracks whether all tabs were hidden on the last library visit.
+// Used by hashchange to decide whether to restart the observer on return.
+// Kept as a JS variable so it survives navigation away from the library page
+// (the CSS class must be removed when leaving to avoid affecting other pages).
+let _allTabsHidden = false;
+
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
   const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
+  _allTabsHidden = !hasTabs;
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
 const SHELF_GAP_REM = 0;
-const SHELF_SCALE_Y = 0.92; // must match CSS scaleY value on ytlr-shelf-renderer
+const SHELF_SCALE_Y = 0.95; // must match CSS scaleY value on ytlr-shelf-renderer
 let _libraryGeneration = 0;
 let _scrollLockEl = null;
 let _onScroll = null;
@@ -74,30 +81,25 @@ function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   if (!nuDen) return;
 
+  // Bail out if tabs are visible — let YouTube handle layout entirely.
+  if (!document.body?.classList.contains('tt-no-library-tabs')) return;
+
   // If YouTube scrolls via nuDen's own transform, reset it.
   if (nuDen.style.transform && !nuDen.style.transform.includes('translateY(0rem)'))
     nuDen.style.transform = nuDen.style.transform.replace(/translateY\([^)]+\)/, 'translateY(0rem)');
-
-  const noNavMode = document.body?.classList.contains('tt-no-library-tabs');
 
   const allWrappers = Array.from(nuDen.children)
     .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
 
   // Never reposition the secondary nav — let YouTube control it.
-  const navWrapper = allWrappers.find(isNavWrapper);
   const wrappers = allWrappers
-    .filter(el => el !== navWrapper)
+    .filter(el => !isNavWrapper(el))
     .sort((a, b) => getTranslateY(a) - getTranslateY(b));
 
   if (!wrappers.length) return;
 
-  let cursor;
-  if (!noNavMode && navWrapper) {
-    const navH = parseFloat(navWrapper.style.height) || 0;
-    cursor = navH > 0 ? getTranslateY(navWrapper) + navH : 0;
-  } else {
-    cursor = 0; // all tabs hidden or no nav: pack shelves from top
-  }
+  // All tabs hidden: always pack shelves from top, ignoring nav wrapper height.
+  let cursor = 0;
 
   for (const wrapper of wrappers) {
     const h = parseFloat(wrapper.style.height);
@@ -105,7 +107,7 @@ function applyShelfSpacing() {
     const desired = `translateY(${cursor}rem)`;
     if (!wrapper.style.transform.includes(desired))
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
-    cursor += h * (noNavMode ? SHELF_SCALE_Y : 1) + SHELF_GAP_REM;
+    cursor += h * SHELF_SCALE_Y + SHELF_GAP_REM;
   }
   const targetH = cursor + 'rem';
   if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
@@ -130,12 +132,16 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
     return;
   }
-  if (noTabs()) document.body?.classList.add('tt-library-page');
+
+  // Past stabilization: re-check tabs — they may have changed during retries.
+  if (!noTabs()) return;
+
+  document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
 
+  // All tabs hidden → always lock scroll (nav wrapper may still be in DOM).
   const vlEl = nuDen.parentElement;
-  const hasNav = !noTabs() && Array.from(nuDen.children).some(isNavWrapper);
-  if (vlEl && !hasNav) {
+  if (vlEl) {
     _scrollLockEl = vlEl;
     Object.defineProperty(vlEl, 'scrollTop', { get: () => 0, set: () => {}, configurable: true });
     const protoDesc = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')
@@ -149,6 +155,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
   // (registered after YouTube's, so we fire last and win each frame).
   const rafLoop = () => {
     if (generation !== _libraryGeneration) return;
+    if (!noTabs()) { stopShelfSpacingObserver(); return; } // tabs became visible mid-session
     applyShelfSpacing();
     requestAnimationFrame(rafLoop);
   };
@@ -158,6 +165,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
 function stopShelfSpacingObserver() {
   _libraryGeneration++; // causes rafLoop to self-terminate on next tick
   document.body?.classList.remove('tt-library-page');
+  document.body?.classList.remove('tt-no-library-tabs');
   if (_scrollLockEl) {
     if (_onScroll) _scrollLockEl.removeEventListener('scroll', _onScroll);
     delete _scrollLockEl.scrollTop;
@@ -192,7 +200,6 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
       if (noTabs()) startShelfSpacingObserver();
     }, 300);
   } else {
-    document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
   }
 };
@@ -201,10 +208,10 @@ if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     if (detectCurrentPage() !== 'library') {
       stopShelfSpacingObserver();
-    } else if (noTabs()) {
+    } else if (_allTabsHidden) {
       // Safety net: if YouTube uses cached data and skips XHR on return, restart the rAF loop.
-      // Immediate call — stabilization retries handle DOM not-yet-ready; a setTimeout here was
-      // killing the XHR-triggered loop (started at ~300ms) when it fired at 600ms.
+      // Uses _allTabsHidden (JS variable) rather than noTabs() because stopShelfSpacingObserver
+      // removes tt-no-library-tabs when leaving the library page to avoid CSS leaking to other pages.
       startShelfSpacingObserver();
     }
   });
