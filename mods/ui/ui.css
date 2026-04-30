@@ -171,3 +171,9 @@ body.tt-no-library-tabs ytlr-section-list-renderer {
   margin-top: 0 !important;
   padding-top: 0 !important;
 }
+
+/* Scale shelves vertically to prevent content overflowing the bottom of the screen */
+body.tt-library-page ytlr-shelf-renderer {
+  transform: scaleY(0.92); /* matches SHELF_SCALE_Y in libraryTabHider.js */
+  transform-origin: top left;
+}
