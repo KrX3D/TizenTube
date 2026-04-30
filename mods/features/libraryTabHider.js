@@ -53,21 +53,14 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
-// Tracks whether all tabs were hidden on the last library visit.
-// Used by hashchange to decide whether to restart the observer on return.
-// Kept as a JS variable so it survives navigation away from the library page
-// (the CSS class must be removed when leaving to avoid affecting other pages).
-let _allTabsHidden = false;
-
 function updateLibraryTabsClass() {
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
   const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
-  _allTabsHidden = !hasTabs;
   document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
 }
 
 const SHELF_GAP_REM = 0;
-const SHELF_SCALE_Y = 0.95; // must match CSS scaleY value on ytlr-shelf-renderer
+const SHELF_SCALE_Y = 0.97; // must match CSS scaleY value on ytlr-shelf-renderer
 let _libraryGeneration = 0;
 let _scrollLockEl = null;
 let _onScroll = null;
@@ -77,12 +70,17 @@ const getTranslateY = (el) =>
 
 const isNavWrapper = (el) => !!el.querySelector('ytlr-tv-secondary-nav-section-renderer');
 
+// noTabs() reflects the last known state from updateLibraryTabsClass.
+// tt-no-library-tabs is intentionally NOT removed when leaving the library page so that
+// it remains accurate for the hashchange-triggered observer restart on return.
+const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
+
 function applyShelfSpacing() {
   const nuDen = document.querySelector('ytlr-section-list-renderer > yt-virtual-list > div');
   if (!nuDen) return;
 
-  // Bail out if tabs are visible — let YouTube handle layout entirely.
-  if (!document.body?.classList.contains('tt-no-library-tabs')) return;
+  // Only run when all tabs are hidden. If a tab is visible, YouTube handles layout entirely.
+  if (!noTabs()) return;
 
   // If YouTube scrolls via nuDen's own transform, reset it.
   if (nuDen.style.transform && !nuDen.style.transform.includes('translateY(0rem)'))
@@ -133,7 +131,7 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
     return;
   }
 
-  // Past stabilization: re-check tabs — they may have changed during retries.
+  // Past stabilization: tabs may have changed since first call, re-check.
   if (!noTabs()) return;
 
   document.body?.classList.add('tt-library-page');
@@ -165,7 +163,9 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
 function stopShelfSpacingObserver() {
   _libraryGeneration++; // causes rafLoop to self-terminate on next tick
   document.body?.classList.remove('tt-library-page');
-  document.body?.classList.remove('tt-no-library-tabs');
+  // tt-no-library-tabs is intentionally NOT removed here. It persists across page navigation
+  // so that noTabs() returns the correct value when the hashchange handler fires on return
+  // to the library page (before a new XHR can call updateLibraryTabsClass).
   if (_scrollLockEl) {
     if (_onScroll) _scrollLockEl.removeEventListener('scroll', _onScroll);
     delete _scrollLockEl.scrollTop;
@@ -173,8 +173,6 @@ function stopShelfSpacingObserver() {
   }
   _onScroll = null;
 }
-
-const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
 // Called when tab hiding is not configured — spacing only
 export const applyLibraryShelfSpacing = () => {
@@ -208,10 +206,10 @@ if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     if (detectCurrentPage() !== 'library') {
       stopShelfSpacingObserver();
-    } else if (_allTabsHidden) {
+    } else if (noTabs()) {
       // Safety net: if YouTube uses cached data and skips XHR on return, restart the rAF loop.
-      // Uses _allTabsHidden (JS variable) rather than noTabs() because stopShelfSpacingObserver
-      // removes tt-no-library-tabs when leaving the library page to avoid CSS leaking to other pages.
+      // noTabs() is reliable here because tt-no-library-tabs persists across navigation
+      // (stopShelfSpacingObserver does not remove it).
       startShelfSpacingObserver();
     }
   });
