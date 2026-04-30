@@ -60,6 +60,7 @@ function updateLibraryTabsClass() {
 }
 
 const SHELF_GAP_REM = 0;
+const SHELF_SCALE_Y = 0.92; // must match CSS scaleY value on ytlr-shelf-renderer
 let _libraryGeneration = 0;
 let _scrollLockEl = null;
 let _onScroll = null;
@@ -77,6 +78,8 @@ function applyShelfSpacing() {
   if (nuDen.style.transform && !nuDen.style.transform.includes('translateY(0rem)'))
     nuDen.style.transform = nuDen.style.transform.replace(/translateY\([^)]+\)/, 'translateY(0rem)');
 
+  const noNavMode = document.body?.classList.contains('tt-no-library-tabs');
+
   const allWrappers = Array.from(nuDen.children)
     .filter(el => el.style?.transform?.includes('translateY') && el.childElementCount > 0);
 
@@ -89,11 +92,11 @@ function applyShelfSpacing() {
   if (!wrappers.length) return;
 
   let cursor;
-  if (navWrapper) {
+  if (!noNavMode && navWrapper) {
     const navH = parseFloat(navWrapper.style.height) || 0;
     cursor = navH > 0 ? getTranslateY(navWrapper) + navH : 0;
   } else {
-    cursor = 0; // No nav rendered (all tabs pruned) — pack shelves from top
+    cursor = 0; // all tabs hidden or no nav: pack shelves from top
   }
 
   for (const wrapper of wrappers) {
@@ -102,7 +105,7 @@ function applyShelfSpacing() {
     const desired = `translateY(${cursor}rem)`;
     if (!wrapper.style.transform.includes(desired))
       wrapper.style.transform = wrapper.style.transform.replace(/translateY\([^)]+\)/, desired);
-    cursor += h + SHELF_GAP_REM;
+    cursor += h * (noNavMode ? SHELF_SCALE_Y : 1) + SHELF_GAP_REM;
   }
   const targetH = cursor + 'rem';
   if (nuDen.style.height !== targetH) nuDen.style.height = targetH;
@@ -127,11 +130,11 @@ function startShelfSpacingObserver(retriesLeft = 15, generation, lastPositions) 
     if (retriesLeft > 0) setTimeout(() => startShelfSpacingObserver(retriesLeft - 1, generation, currentPositions), 100);
     return;
   }
-  document.body?.classList.add('tt-library-page');
+  if (noTabs()) document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
 
   const vlEl = nuDen.parentElement;
-  const hasNav = Array.from(nuDen.children).some(isNavWrapper);
+  const hasNav = !noTabs() && Array.from(nuDen.children).some(isNavWrapper);
   if (vlEl && !hasNav) {
     _scrollLockEl = vlEl;
     Object.defineProperty(vlEl, 'scrollTop', { get: () => 0, set: () => {}, configurable: true });
@@ -186,7 +189,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     document.body?.classList.remove('tt-no-library-tabs');
     setTimeout(() => {
       updateLibraryTabsClass();
-      startShelfSpacingObserver();
+      if (noTabs()) startShelfSpacingObserver();
     }, 300);
   } else {
     document.body?.classList.remove('tt-no-library-tabs');
@@ -200,7 +203,9 @@ if (typeof window !== 'undefined') {
       stopShelfSpacingObserver();
     } else if (noTabs()) {
       // Safety net: if YouTube uses cached data and skips XHR on return, restart the rAF loop.
-      setTimeout(startShelfSpacingObserver, 600);
+      // Immediate call — stabilization retries handle DOM not-yet-ready; a setTimeout here was
+      // killing the XHR-triggered loop (started at ~300ms) when it fired at 600ms.
+      startShelfSpacingObserver();
     }
   });
 }
