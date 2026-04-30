@@ -174,6 +174,6 @@ body.tt-no-library-tabs ytlr-section-list-renderer {
 
 /* Scale shelves vertically to prevent content overflowing the bottom of the screen */
 body.tt-library-page ytlr-shelf-renderer {
-  transform: scaleY(0.95); /* matches SHELF_SCALE_Y in libraryTabHider.js */
+  transform: scaleY(0.97); /* matches SHELF_SCALE_Y in libraryTabHider.js */
   transform-origin: top left;
 }
