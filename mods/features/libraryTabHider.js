@@ -98,8 +98,6 @@ const getTranslateY = (el) =>
 
 const isNavWrapper = (el) => !!el.querySelector('ytlr-tv-secondary-nav-section-renderer');
 
-// tt-no-library-tabs persists across navigation so noTabs() is accurate on hashchange
-// (before any XHR fires). Only changed by applyLibraryTabHiding or updateLibraryTabsClass.
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
 function applyShelfSpacing() {
@@ -158,7 +156,6 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
     return;
   }
 
-  // Wrappers found. Re-check tabs before committing.
   if (!noTabs()) return;
 
   document.body?.classList.add('tt-library-page');
@@ -193,8 +190,7 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
 function stopShelfSpacingObserver() {
   _libraryGeneration++;
   document.body?.classList.remove('tt-library-page');
-  // tt-no-library-tabs is intentionally NOT removed here — it must persist across navigation
-  // so noTabs() returns the right value when hashchange fires on return to library.
+  document.body?.classList.remove('tt-no-library-tabs');
   if (_scrollLockEl) {
     if (_onScroll) _scrollLockEl.removeEventListener('scroll', _onScroll);
     delete _scrollLockEl.scrollTop;
@@ -254,11 +250,6 @@ if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', () => {
     if (detectCurrentPage() !== 'library') {
       stopShelfSpacingObserver();
-    } else if (noTabs()) {
-      // Safety net: if YouTube uses cached data and fires no XHR on return,
-      // restart the observer. noTabs() is reliable because tt-no-library-tabs
-      // persists across navigation (stopShelfSpacingObserver does not clear it).
-      startShelfSpacingObserver();
     }
   });
 }
