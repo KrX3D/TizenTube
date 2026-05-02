@@ -53,15 +53,23 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 };
 
-// Returns remaining tab count in tvSecondaryNavSectionRenderer.tabs after pruning,
-// or -1 if the nav section is absent from this response (fall back to DOM check).
+// Returns the maximum remaining tab count across all tvSecondaryNavSectionRenderer nodes
+// found in the response after pruning. Returns 0 only if every such section is empty
+// (all library tabs hidden). Returns -1 if no such section exists (continuation XHR).
+// Searching all occurrences prevents a nested empty section (e.g. inside music shelf
+// content) from being mistaken for the main library nav being fully pruned.
 const getRemainingTabCount = (node, depth = 0) => {
   if (!node || typeof node !== 'object' || depth > 15) return -1;
+
+  let best = -1;
+
   if (node.tvSecondaryNavSectionRenderer !== undefined) {
     const tabs = node.tvSecondaryNavSectionRenderer?.tabs;
-    if (!Array.isArray(tabs)) return -1; // unusual structure — fall back to DOM check
-    return tabs.length;
+    if (Array.isArray(tabs)) best = Math.max(best, tabs.length);
+    // best === 0 means empty section found; keep searching for a non-empty one.
+    if (best > 0) return best;
   }
+
   for (const key of Object.keys(node)) {
     const val = node[key];
     if (!val || typeof val !== 'object') continue;
@@ -69,15 +77,18 @@ const getRemainingTabCount = (node, depth = 0) => {
       for (const entry of val) {
         if (entry && typeof entry === 'object') {
           const r = getRemainingTabCount(entry, depth + 1);
-          if (r !== -1) return r;
+          if (r > best) best = r;
+          if (best > 0) return best;
         }
       }
     } else {
       const r = getRemainingTabCount(val, depth + 1);
-      if (r !== -1) return r;
+      if (r > best) best = r;
+      if (best > 0) return best;
     }
   }
-  return -1;
+
+  return best; // -1 = not found, 0 = all sections empty (all tabs hidden)
 };
 
 function updateLibraryTabsClass() {
