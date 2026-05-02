@@ -158,7 +158,9 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
     return;
   }
 
-  // Wrappers found. Re-check tabs before committing.
+  // Re-sync body class from DOM before committing — tt-no-library-tabs may be stale
+  // from a previous all-hidden session if YouTube used cached data and fired no XHR.
+  updateLibraryTabsClass();
   if (!noTabs()) return;
 
   document.body?.classList.add('tt-library-page');
@@ -181,9 +183,15 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
   }
 
   // rAF loop: runs after YouTube's own rAF each frame, so our positions always win.
+  // Every 30 frames re-sync from DOM to catch stale class when no XHR arrives.
+  let _rafCount = 0;
   const rafLoop = () => {
     if (generation !== _libraryGeneration) return;
     if (!noTabs()) { stopShelfSpacingObserver(); return; }
+    if (++_rafCount % 30 === 0) {
+      updateLibraryTabsClass();
+      if (!noTabs()) { stopShelfSpacingObserver(); return; }
+    }
     applyShelfSpacing();
     requestAnimationFrame(rafLoop);
   };
