@@ -6,10 +6,16 @@ import { getComprehensiveLanguageList } from '../features/moreSubtitles.js';
 
 const qrcodes = {};
 
-export const LIBRARY_TAB_IDS = [
-    'femusic_last_played', 'festorefront', 'fecollection_podcasts',
-    'femy_videos', 'fehistory', 'femy_youtube', 'feplaylist_aggregation',
+const LIBRARY_TABS_DATA = [
+    { value: 'femusic_last_played',    icon: 'YOUTUBE_MUSIC',  nameKey: 'settings.options.uiSettings.options.libraryTabs.options.music' },
+    { value: 'festorefront',           icon: 'CLAPPERBOARD',   nameKey: 'settings.options.uiSettings.options.libraryTabs.options.moviesShows' },
+    { value: 'fecollection_podcasts',  icon: 'BROADCAST',      nameKey: 'settings.options.uiSettings.options.libraryTabs.options.podcasts' },
+    { value: 'femy_videos',            icon: 'VIDEO_YOUTUBE',  nameKey: 'settings.options.uiSettings.options.libraryTabs.options.myVideos' },
+    { value: 'fehistory',              icon: 'TIMER',          nameKey: 'settings.options.uiSettings.options.libraryTabs.options.history' },
+    { value: 'femy_youtube',           icon: 'PLAY_CIRCLE',    nameKey: 'settings.options.uiSettings.options.libraryTabs.options.watchLater' },
+    { value: 'feplaylist_aggregation', icon: 'PLAY_ARROW',     nameKey: 'settings.options.uiSettings.options.libraryTabs.options.playlists' },
 ];
+export const LIBRARY_TAB_IDS = LIBRARY_TABS_DATA.map(d => d.value);
 
 export default function modernUI(update, parameters) {
     const settings = [
@@ -596,15 +602,7 @@ export default function modernUI(update, parameters) {
                     value: null,
                     arrayToEdit: 'hiddenLibraryTabIds',
                     menuId: 'tt-hidden-library-tabs',
-                    options: [
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.music'), icon: 'YOUTUBE_MUSIC', value: 'femusic_last_played' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.moviesShows'), icon: 'CLAPPERBOARD', value: 'festorefront' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.podcasts'), icon: 'BROADCAST', value: 'fecollection_podcasts' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.myVideos'), icon: 'VIDEO_YOUTUBE', value: 'femy_videos' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.history'), icon: 'TIMER', value: 'fehistory' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.watchLater'), icon: 'PLAY_CIRCLE', value: 'femy_youtube' },
-                        { name: t('settings.options.uiSettings.options.libraryTabs.options.playlists'), icon: 'PLAY_ARROW', value: 'feplaylist_aggregation' }
-                    ]
+                    options: LIBRARY_TABS_DATA.map(d => ({ name: t(d.nameKey), icon: d.icon, value: d.value }))
                 },
                 {
                     name: t('settings.options.uiSettings.options.hiddenPlaylists.title'),
