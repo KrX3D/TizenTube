@@ -99,12 +99,16 @@ let _protoScrollSet = null; // cached prototype scrollTop setter
 const getTranslateY = (el) =>
   parseFloat(el.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
 
-// Detects both old-style (ytlr-tv-secondary-nav-section-renderer) and new-style
-// (ytlr-tile-renderer[role="button"] tab tiles) nav/tab bar wrappers so they are
-// excluded from shelf repositioning.
+// Detects nav/tab bar wrappers to exclude from shelf repositioning.
+// Handles three cases:
+//   1. Old-style: ytlr-tv-secondary-nav-section-renderer
+//   2. New-style with tiles: ytlr-tile-renderer[role="button"] tiles present
+//   3. New-style empty: all tiles pruned → shelf exists but has no ytlr-shelf-header
+//      (content shelves always have a ytlr-shelf-header; the tab bar shelf never does)
 const isNavWrapper = (el) =>
   !!el.querySelector('ytlr-tv-secondary-nav-section-renderer') ||
-  !!el.querySelector('ytlr-tile-renderer[role="button"]');
+  !!el.querySelector('ytlr-tile-renderer[role="button"]') ||
+  (!!el.querySelector('ytlr-shelf-renderer') && !el.querySelector('ytlr-shelf-header'));
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
@@ -169,10 +173,10 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
   document.body?.classList.add('tt-library-page');
   applyShelfSpacing();
 
-  // Lock scroll only when 1 or fewer shelves remain. With 2+ shelves (WL or LL visible)
-  // the user must be able to scroll between them.
+  // Lock scroll when 2 or fewer content shelves remain (all tabs + WL + LL hidden).
+  // With 3+ shelves (WL or LL visible) the user must be able to scroll between them.
   const vlEl = nuDen.parentElement;
-  if (vlEl && wrappers.length <= 1) {
+  if (vlEl && wrappers.length <= 2) {
     _scrollLockEl = vlEl;
     _protoScrollSet = (
       Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop') ??
