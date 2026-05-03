@@ -23,11 +23,43 @@ const shouldHideTabItem = (item, hiddenIds) => {
     || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
 };
 
-const pruneLibraryTabs = (node, hiddenIds) => {
+// All library tab IDs shown in the settings. Used to identify tile-based tab bar items
+// (new YouTube TV style where tabs are rendered as tileRenderer tiles in a shelf).
+const KNOWN_LIBRARY_TAB_IDS = new Set([
+  'femusic_last_played', 'festorefront', 'fecollection_podcasts',
+  'femy_videos', 'fehistory', 'femy_youtube', 'feplaylist_aggregation',
+]);
+
+const isKnownLibraryTab = (item) => {
+  const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
+  const browseId = String(
+    item?.tabRenderer?.endpoint?.browseEndpoint?.browseId ||
+    item?.navigationEndpoint?.browseEndpoint?.browseId ||
+    item?.browseEndpoint?.browseId || ''
+  ).toLowerCase();
+  return KNOWN_LIBRARY_TAB_IDS.has(contentId) || KNOWN_LIBRARY_TAB_IDS.has(browseId);
+};
+
+// Prunes hidden tabs from the response in-place and returns the remaining library tab count.
+// Returns -1 if no library tab structure was found in this response (e.g. continuation XHR).
+// Handles both old-style (tvSecondaryNavSectionRenderer.tabs) and new-style
+// (horizontalListRenderer.items with tileRenderer library tab tiles).
+const pruneLibraryTabs = (node, hiddenIds, _state) => {
   if (!node || typeof node !== 'object') return;
 
+  const isRoot = _state === undefined;
+  if (isRoot) _state = { found: false, remaining: 0 };
+
   if (Array.isArray(node?.horizontalListRenderer?.items)) {
-    node.horizontalListRenderer.items = node.horizontalListRenderer.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
+    const before = node.horizontalListRenderer.items;
+    const beforeTabCount = before.filter(isKnownLibraryTab).length;
+    node.horizontalListRenderer.items = before.filter((item) => !shouldHideTabItem(item, hiddenIds));
+    if (beforeTabCount > 0) {
+      // This horizontalListRenderer contained library tab tiles — it's the tab bar.
+      const afterTabCount = node.horizontalListRenderer.items.filter(isKnownLibraryTab).length;
+      _state.found = true;
+      _state.remaining = Math.max(_state.remaining, afterTabCount);
+    }
   }
 
   if (Array.isArray(node?.continuationContents?.horizontalListContinuation?.items)) {
@@ -36,7 +68,10 @@ const pruneLibraryTabs = (node, hiddenIds) => {
   }
 
   if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
-    node.tvSecondaryNavSectionRenderer.tabs = node.tvSecondaryNavSectionRenderer.tabs.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
+    const before = node.tvSecondaryNavSectionRenderer.tabs;
+    node.tvSecondaryNavSectionRenderer.tabs = before.filter((tab) => !shouldHideTabItem(tab, hiddenIds));
+    _state.found = true;
+    _state.remaining = Math.max(_state.remaining, node.tvSecondaryNavSectionRenderer.tabs.length);
   }
 
   for (const key of Object.keys(node)) {
@@ -44,57 +79,24 @@ const pruneLibraryTabs = (node, hiddenIds) => {
     if (value && typeof value === 'object') {
       if (Array.isArray(value)) {
         for (const entry of value) {
-          if (entry && typeof entry === 'object') pruneLibraryTabs(entry, hiddenIds);
+          if (entry && typeof entry === 'object') pruneLibraryTabs(entry, hiddenIds, _state);
         }
       } else {
-        pruneLibraryTabs(value, hiddenIds);
+        pruneLibraryTabs(value, hiddenIds, _state);
       }
     }
   }
-};
 
-// Returns the maximum remaining tab count across all tvSecondaryNavSectionRenderer nodes
-// found in the response after pruning. Returns 0 only if every such section is empty
-// (all library tabs hidden). Returns -1 if no such section exists (continuation XHR).
-// Searching all occurrences prevents a nested empty section (e.g. inside music shelf
-// content) from being mistaken for the main library nav being fully pruned.
-const getRemainingTabCount = (node, depth = 0) => {
-  if (!node || typeof node !== 'object' || depth > 15) return -1;
-
-  let best = -1;
-
-  if (node.tvSecondaryNavSectionRenderer !== undefined) {
-    const tabs = node.tvSecondaryNavSectionRenderer?.tabs;
-    if (Array.isArray(tabs)) best = Math.max(best, tabs.length);
-    // best === 0 means empty section found; keep searching for a non-empty one.
-    if (best > 0) return best;
-  }
-
-  for (const key of Object.keys(node)) {
-    const val = node[key];
-    if (!val || typeof val !== 'object') continue;
-    if (Array.isArray(val)) {
-      for (const entry of val) {
-        if (entry && typeof entry === 'object') {
-          const r = getRemainingTabCount(entry, depth + 1);
-          if (r > best) best = r;
-          if (best > 0) return best;
-        }
-      }
-    } else {
-      const r = getRemainingTabCount(val, depth + 1);
-      if (r > best) best = r;
-      if (best > 0) return best;
-    }
-  }
-
-  return best; // -1 = not found, 0 = all sections empty (all tabs hidden)
+  if (isRoot) return _state.found ? _state.remaining : -1;
 };
 
 function updateLibraryTabsClass() {
+  // Old style: tabs rendered inside ytlr-tv-secondary-nav-section-renderer
   const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  const hasTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
-  document.body?.classList.toggle('tt-no-library-tabs', !hasTabs);
+  const oldStyleTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
+  // New style: tabs rendered as ytlr-tile-renderer[role="button"] tiles in a shelf
+  const newStyleTabs = !!document.querySelector('ytlr-section-list-renderer ytlr-tile-renderer[role="button"]');
+  document.body?.classList.toggle('tt-no-library-tabs', !(oldStyleTabs || newStyleTabs));
 }
 
 const SHELF_GAP_REM = 0;
@@ -107,7 +109,12 @@ let _protoScrollSet = null; // cached prototype scrollTop setter
 const getTranslateY = (el) =>
   parseFloat(el.style.transform.match(/translateY\(([^r]+)rem\)/)?.[1]) || 0;
 
-const isNavWrapper = (el) => !!el.querySelector('ytlr-tv-secondary-nav-section-renderer');
+// Detects both old-style (ytlr-tv-secondary-nav-section-renderer) and new-style
+// (ytlr-tile-renderer[role="button"] tab tiles) nav/tab bar wrappers so they are
+// excluded from shelf repositioning.
+const isNavWrapper = (el) =>
+  !!el.querySelector('ytlr-tv-secondary-nav-section-renderer') ||
+  !!el.querySelector('ytlr-tile-renderer[role="button"]');
 
 const noTabs = () => document.body?.classList.contains('tt-no-library-tabs');
 
@@ -235,9 +242,11 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     return;
   }
 
-  pruneLibraryTabs(response, hiddenIds);
-
-  const remaining = getRemainingTabCount(response);
+  // pruneLibraryTabs modifies the response in-place and returns the remaining tab count:
+  // -1 = no tab structure in this response (continuation XHR) → DOM fallback
+  //  0 = all library tabs hidden → apply spacing treatment
+  // >0 = some tabs still visible → hands off entirely
+  const remaining = pruneLibraryTabs(response, hiddenIds);
 
   if (remaining === 0) {
     // All tabs hidden — apply treatment.
@@ -248,7 +257,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
   } else {
-    // Nav section absent from this response (continuation XHR) — DOM fallback.
+    // No tab structure in this response (continuation XHR) — DOM fallback.
     setTimeout(() => {
       updateLibraryTabsClass();
       if (noTabs()) startShelfSpacingObserver();
