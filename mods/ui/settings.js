@@ -6,6 +6,11 @@ import { getComprehensiveLanguageList } from '../features/moreSubtitles.js';
 
 const qrcodes = {};
 
+export const LIBRARY_TAB_IDS = [
+    'femusic_last_played', 'festorefront', 'fecollection_podcasts',
+    'femy_videos', 'fehistory', 'femy_youtube', 'feplaylist_aggregation',
+];
+
 export default function modernUI(update, parameters) {
     const settings = [
         {
