@@ -1,4 +1,5 @@
 import { detectCurrentPage } from './hideWatched.js';
+import { LIBRARY_TAB_IDS } from '../ui/settings.js';
 
 const getHiddenLibraryTabIds = (configured) => {
   if (!Array.isArray(configured) || configured.length === 0) return new Set();
@@ -23,12 +24,9 @@ const shouldHideTabItem = (item, hiddenIds) => {
     || matchesHiddenId(item?.browseEndpoint?.browseId, hiddenIds);
 };
 
-// All library tab IDs shown in the settings. Used to identify tile-based tab bar items
-// (new YouTube TV style where tabs are rendered as tileRenderer tiles in a shelf).
-const KNOWN_LIBRARY_TAB_IDS = new Set([
-  'femusic_last_played', 'festorefront', 'fecollection_podcasts',
-  'femy_videos', 'fehistory', 'femy_youtube', 'feplaylist_aggregation',
-]);
+// Used to identify tile-based tab bar items (new YouTube TV style where tabs are
+// rendered as tileRenderer tiles in a shelf). Sourced from the settings options.
+const KNOWN_LIBRARY_TAB_IDS = new Set(LIBRARY_TAB_IDS);
 
 const isKnownLibraryTab = (item) => {
   const contentId = String(item?.tileRenderer?.contentId || '').toLowerCase();
@@ -90,14 +88,6 @@ const pruneLibraryTabs = (node, hiddenIds, _state) => {
   if (isRoot) return _state.found ? _state.remaining : -1;
 };
 
-function updateLibraryTabsClass() {
-  // Old style: tabs rendered inside ytlr-tv-secondary-nav-section-renderer
-  const navEl = document.querySelector('ytlr-tv-secondary-nav-section-renderer');
-  const oldStyleTabs = !!(navEl && (navEl.querySelector('ytlr-tab-renderer') || navEl.querySelector('[role="tab"]')));
-  // New style: tabs rendered as ytlr-tile-renderer[role="button"] tiles in a shelf
-  const newStyleTabs = !!document.querySelector('ytlr-section-list-renderer ytlr-tile-renderer[role="button"]');
-  document.body?.classList.toggle('tt-no-library-tabs', !(oldStyleTabs || newStyleTabs));
-}
 
 const SHELF_GAP_REM = 0;
 const SHELF_SCALE_Y = 0.97; // must match CSS scaleY value on ytlr-shelf-renderer
@@ -243,7 +233,7 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
   }
 
   // pruneLibraryTabs modifies the response in-place and returns the remaining tab count:
-  // -1 = no tab structure in this response (continuation XHR) → DOM fallback
+  // -1 = no tab structure in this response (continuation XHR) → leave state unchanged
   //  0 = all library tabs hidden → apply spacing treatment
   // >0 = some tabs still visible → hands off entirely
   const remaining = pruneLibraryTabs(response, hiddenIds);
@@ -256,14 +246,8 @@ export const applyLibraryTabHiding = (response, configuredHiddenIds) => {
     // Some tabs still visible — hands off entirely.
     document.body?.classList.remove('tt-no-library-tabs');
     stopShelfSpacingObserver();
-  } else {
-    // No tab structure in this response (continuation XHR) — DOM fallback.
-    setTimeout(() => {
-      updateLibraryTabsClass();
-      if (noTabs()) startShelfSpacingObserver();
-      else stopShelfSpacingObserver();
-    }, 300);
   }
+  // remaining === -1: continuation XHR with no tab structure — leave current state unchanged.
 };
 
 if (typeof window !== 'undefined') {
