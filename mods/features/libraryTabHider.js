@@ -1,5 +1,6 @@
 import { detectCurrentPage } from './hideWatched.js';
 import { LIBRARY_TAB_IDS } from '../ui/settings.js';
+import { configRead } from '../config.js';
 
 const getHiddenLibraryTabIds = (configured) => {
   if (!Array.isArray(configured) || configured.length === 0) return new Set();
@@ -61,8 +62,14 @@ const pruneLibraryTabs = (node, hiddenIds, _state) => {
   }
 
   if (Array.isArray(node?.continuationContents?.horizontalListContinuation?.items)) {
-    node.continuationContents.horizontalListContinuation.items =
-      node.continuationContents.horizontalListContinuation.items.filter((item) => !shouldHideTabItem(item, hiddenIds));
+    const before = node.continuationContents.horizontalListContinuation.items;
+    const beforeTabCount = before.filter(isKnownLibraryTab).length;
+    node.continuationContents.horizontalListContinuation.items = before.filter((item) => !shouldHideTabItem(item, hiddenIds));
+    if (beforeTabCount > 0) {
+      const afterTabCount = node.continuationContents.horizontalListContinuation.items.filter(isKnownLibraryTab).length;
+      _state.found = true;
+      _state.remaining = Math.max(_state.remaining, afterTabCount);
+    }
   }
 
   if (Array.isArray(node?.tvSecondaryNavSectionRenderer?.tabs)) {
@@ -88,6 +95,11 @@ const pruneLibraryTabs = (node, hiddenIds, _state) => {
   if (isRoot) return _state.found ? _state.remaining : -1;
 };
 
+
+const bothWlLlHidden = () => {
+  const hidden = configRead('hiddenSpecialPlaylistShelves');
+  return Array.isArray(hidden) && hidden.includes('WL') && hidden.includes('LL');
+};
 
 const SHELF_GAP_REM = 0;
 const SHELF_SCALE_Y = 0.97; // must match CSS scaleY value on ytlr-shelf-renderer
@@ -176,7 +188,7 @@ function startShelfSpacingObserver(retriesLeft = 30, generation) {
   // Lock scroll when 2 or fewer content shelves remain (all tabs + WL + LL hidden).
   // With 3+ shelves (WL or LL visible) the user must be able to scroll between them.
   const vlEl = nuDen.parentElement;
-  if (vlEl && wrappers.length <= 2) {
+  if (vlEl && (wrappers.length <= 1 || bothWlLlHidden())) {
     _scrollLockEl = vlEl;
     _protoScrollSet = (
       Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop') ??
