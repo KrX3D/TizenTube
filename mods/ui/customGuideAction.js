@@ -7,6 +7,7 @@ JSON.parse = function () {
 
     try {
         const disabledSidebarContents = configRead('disabledSidebarContents');
+        const disableChannelsOnSidebar = configRead('disableChannelsOnSidebar');
         // Guard: r.items[0] may not exist, or may not have guideSectionRenderer
         if (r.items && Array.isArray(r.items) && r.items[0] && r.items[0].guideSectionRenderer) {
             for (let i = 0; i < r.items.length; i++) {
@@ -17,8 +18,8 @@ JSON.parse = function () {
                         try {
                             const item = section.items[j].guideEntryRenderer;
                             if (!item) continue;
-                            if (!item.icon?.iconType) continue;
-                            if (disabledSidebarContents.includes(item.icon.iconType)) {
+                            if ((disabledSidebarContents?.length && item.icon?.iconType && disabledSidebarContents.includes(item.icon.iconType))
+                                || (disableChannelsOnSidebar && item?.thumbnail)) {
                                 section.items.splice(j, 1);
                                 j--;
                             }
@@ -39,7 +40,7 @@ JSON.parse = function () {
 };
 
 configChangeEmitter.addEventListener('configChange', (e) => {
-    if (e.detail.key === 'disabledSidebarContents') {
+    if (e.detail.key === 'disabledSidebarContents' || e.detail.key === 'disableChannelsOnSidebar') {
         try {
             const commandExecutor = getCommandExecutor();
             if (commandExecutor) {

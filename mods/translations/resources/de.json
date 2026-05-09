@@ -173,6 +173,7 @@
                         "subtitle": "Wähle die Standardseite, die TizenTube beim Start öffnet"
                     },
                     "sortSubscriptionsByAlphabet": "Abonnements alphabetisch sortieren",
+                    "disableChannelsOnSidebar": "Kanäle in der Seitenleiste deaktivieren",
                     "playlistBatchLoad": {
                         "title": "Playlist-Stapelladen",
                         "loadAllAtOnce": "Alle Stapel auf einmal laden",

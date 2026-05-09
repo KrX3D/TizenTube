@@ -173,6 +173,7 @@
                         "subtitle": "Choose the default page TizenTube opens to on startup"
                     },
                     "sortSubscriptionsByAlphabet": "Sort Subscriptions Alphabetically",
+                    "disableChannelsOnSidebar": "Disable Channels on Sidebar",
                     "playlistBatchLoad": {
                         "title": "Playlist Batch Load",
                         "loadAllAtOnce": "Load All Batches at Once",
