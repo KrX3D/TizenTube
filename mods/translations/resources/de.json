@@ -41,7 +41,7 @@
                 "options": {
                     "endScreenCards": "Endbildschirm-Karten ausblenden",
                     "youThereRenderer": "'Schaust du noch?' anzeigen",
-                    "paidPromoOverlay": "Enthält Overlay anzeigen",
+                    "paidPromoOverlay": "Enthält bezahlte Werbung Overlay anzeigen",
                     "whosWatching": {
                         "title": "„Wer schaut?“ Menü",
                         "options": {
