@@ -82,10 +82,10 @@ if (!window.__ttHideWatchedLocationTrackingInit) {
     try {
       const p = detectCurrentPage();
       if (p && p !== 'home' && p !== 'search') detectAndStorePage(p, 'nav');
-      const keys = Object.keys(_carryover);
+      const keys = [..._carryover.keys()];
       if (keys.length) {
         appendFileOnlyLog('consolidate.carryover.navClear', { cleared: keys, page: p });
-        keys.forEach(k => delete _carryover[k]);
+        _carryover.clear();
       }
     } catch (_) { }
   };
@@ -192,12 +192,12 @@ export function processTileArraysDeep(node, pageHint = null, path = 'root', dept
 
 const _seen = new WeakSet();
 
-const _carryover = {};
+const _carryover = new Map();
 
 export function clearCarryover() {
-  const keys = Object.keys(_carryover);
+  const keys = [..._carryover.keys()];
   if (keys.length) appendFileOnlyLog('consolidate.carryover.cleared', { cleared: keys });
-  keys.forEach(k => delete _carryover[k]);
+  _carryover.clear();
 }
 
 // Only subscriptions and watch benefit from consolidation.
@@ -234,15 +234,15 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
     // which is called whenever tvSurfaceContentContinuation fires (channel tab initial load).
     const isTabPath = path.startsWith('tab.');
     let carried = [];
-    if (pageName && _carryover[pageName]) {
-      const stored = _carryover[pageName];
+    if (pageName && _carryover.has(pageName)) {
+      const stored = _carryover.get(pageName);
       const isStale = isTabPath && stored.sourcePath !== path;
       if (isStale) {
-        delete _carryover[pageName];
+        _carryover.delete(pageName);
         appendFileOnlyLog('consolidate.carryover.tabSwitch', { path, pageName, discarded: stored.items.length, oldPath: stored.sourcePath });
       } else {
         carried = [...stored.items];
-        delete _carryover[pageName];
+        _carryover.delete(pageName);
         appendFileOnlyLog('consolidate.carryover.apply', { path, pageName, carried: carried.length });
       }
     }
@@ -307,7 +307,7 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
     if (remainder > 0) {
       const lastBatch = dedupedItems.slice(dedupedItems.length - remainder);
       if (hasContinuation && pageName) {
-        _carryover[pageName] = { items: lastBatch, sourcePath: path };
+        _carryover.set(pageName, { items: lastBatch, sourcePath: path });
         appendFileOnlyLog('consolidate.carryover.store', { path, pageName, stored: lastBatch.length, perRow });
       } else {
         const hlr = {

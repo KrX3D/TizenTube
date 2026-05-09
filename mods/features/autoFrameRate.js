@@ -1,7 +1,5 @@
 import { configRead } from "../config.js";
 
-let currentVideo = '';
-
 function attachToVideoPlayer() {
     const player = document.querySelector('.html5-video-player');
     const video = document.querySelector('video');
