@@ -948,6 +948,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         const base = shelve?.richSectionRenderer?.content || shelve;
         if (Array.isArray(base?.shelfRenderer?.content?.horizontalListRenderer?.items)) {
           base.shelfRenderer.content.horizontalListRenderer.items = filterShortsFromItems(base.shelfRenderer.content.horizontalListRenderer.items, activePage);
+          base.shelfRenderer.content.horizontalListRenderer.items = base.shelfRenderer.content.horizontalListRenderer.items.filter(item => !item.tileRenderer?.onSelectCommand?.reelWatchEndpoint);
           normalizeHorizontalListRenderer(base.shelfRenderer.content.horizontalListRenderer, `shelf:${activePage}:${i}:shorts`);
         }
         if (Array.isArray(base?.shelfRenderer?.content?.verticalListRenderer?.items)) base.shelfRenderer.content.verticalListRenderer.items = filterShortsFromItems(base.shelfRenderer.content.verticalListRenderer.items, activePage);
