@@ -253,7 +253,7 @@ export default function modernUI(update, parameters) {
                     value: 'enableYouThereRenderer'
                 },
                 {
-                    name: ('TEST'),
+                    name: t('settings.options.misc.options.youThereRenderer'),
                     icon: 'MONEY_HAND',
                     value: 'enablePaidPromotionOverlay'
                 },
