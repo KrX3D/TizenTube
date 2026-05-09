@@ -2,7 +2,7 @@
 // @name         TizenTube Loader
 // @namespace    https://github.com/KrX3D/TizenTube
 // @version      0.4
-// @description  Load TizenTube userscript bundle for local /tv debugging
+// @description  Load TizenTube userscript bundle for local /tv debugging (TizenTube v1.14.660)
 // @match        https://www.youtube.com/tv*
 // @match        https://youtube.com/tv*
 // @run-at       document-start
