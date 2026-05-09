@@ -253,10 +253,44 @@ export default function modernUI(update, parameters) {
                     value: 'enableYouThereRenderer'
                 },
                 {
+                    name: t('settings.options.misc.options.whosWatching.title'),
+                    icon: 'ACCOUNT_CIRCLE',
+                    menuId: 'tt-whos-watching-menu-settings',
+                    value: null,
+                    options: [
+                        {
+                            name: t('settings.options.misc.options.whosWatching.options.enableWW'),
+                            value: 'enableWhoIsWatchingMenu'
+                        },
+                        {
+                            name: t('settings.options.misc.options.whosWatching.options.permaEnableWW'),
+                            value: 'permanentlyEnableWhoIsWatchingMenu'
+                        },
+                        {
+                            name: t('settings.options.misc.options.whosWatching.options.enableWWOnExit'),
+                            value: 'enableWhosWatchingMenuOnAppExit'
+                        }
+                    ]
+                },
+                {
                     name: t('settings.options.misc.options.fixUI'),
                     icon: 'STAR',
                     value: 'enableFixedUI'
                 },
+                {
+                    name: t('settings.options.misc.options.hqThumbnails'),
+                    icon: 'VIDEO_QUALITY',
+                    value: 'enableHqThumbnails'
+                },
+                /*{
+                    name: 'Chapters',
+                    icon: 'BOOKMARK_BORDER',
+                    value: 'enableChapters'
+                },*/
+                {
+                    name: t('settings.options.misc.options.longPress'),
+                    value: 'enableLongPress'
+                }
             ]
         },
         {
