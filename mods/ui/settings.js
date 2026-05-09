@@ -317,48 +317,6 @@ export default function modernUI(update, parameters) {
                 {
                     name: t('settings.options.misc.options.reloadHomeOnStartup'),
                     value: 'reloadHomeOnStartup'
-                },
-                {
-                    name: t('settings.options.misc.options.debugConsole.title'),
-                    icon: 'BUG_REPORT',
-                    value: null,
-                    menuId: 'tt-debug-console-settings',
-                    options: [
-                        {
-                            name: t('settings.options.misc.options.debugConsole.enable'),
-                            icon: 'BUG_REPORT',
-                            value: 'enableDebugConsole'
-                        },
-                        {
-                            name: t('settings.options.misc.options.debugConsole.enableLogging'),
-                            icon: 'ARTICLE',
-                            value: 'enableDebugLogging'
-                        },
-                        {
-                            name: t('settings.options.misc.options.debugConsole.position'),
-                            value: null,
-                            menuId: 'tt-debug-console-position',
-                            options: [
-                                { name: t('settings.options.misc.options.debugConsole.positions.topLeft'), key: 'debugConsolePosition', value: 'top-left' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.topRight'), key: 'debugConsolePosition', value: 'top-right' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.bottomLeft'), key: 'debugConsolePosition', value: 'bottom-left' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.bottomRight'), key: 'debugConsolePosition', value: 'bottom-right' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.center'), key: 'debugConsolePosition', value: 'center' }
-                            ]
-                        },
-                        {
-                            name: t('settings.options.misc.options.debugConsole.height'),
-                            value: null,
-                            menuId: 'tt-debug-console-height',
-                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
-                                return {
-                                    name: `${height}px`,
-                                    key: 'debugConsoleHeight',
-                                    value: height
-                                }
-                            })
-                        }
-                    ]
                 }
             ]
         },
