@@ -253,6 +253,9 @@ export default function modernUI(update, parameters) {
                     value: 'enableYouThereRenderer'
                 },
                 {
+                    name: t('settings.options.misc.options.paidPromoOverlay'),
+                },
+                {
                     name: t('settings.options.misc.options.whosWatching.title'),
                     icon: 'ACCOUNT_CIRCLE',
                     menuId: 'tt-whos-watching-menu-settings',
