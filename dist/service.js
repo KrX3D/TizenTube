@@ -35569,7 +35569,7 @@ function requireSideChannelList() {
           };
         }
         // eslint-disable-next-line no-extra-parens
-        listSet( /** @type {NonNullable<typeof $o>} */$o, key, value);
+        listSet(/** @type {NonNullable<typeof $o>} */$o, key, value);
       }
     };
     // @ts-expect-error TODO: figure out why this is erroring
@@ -36507,7 +36507,7 @@ function requireCallBound() {
 
     var intrinsic = /** @type {(this: unknown, ...args: unknown[]) => unknown} */GetIntrinsic(name, !!allowMissing);
     if (typeof intrinsic === 'function' && $indexOf(name, '.prototype.') > -1) {
-      return callBindBasic( /** @type {const} */[intrinsic]);
+      return callBindBasic(/** @type {const} */[intrinsic]);
     }
     return intrinsic;
   };
