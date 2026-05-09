@@ -163,15 +163,6 @@ function getPlaylistTileNodes() {
   return Array.from(listRoot.querySelectorAll('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer'));
 }
 
-function parseTranslateYRem(transformValue, fallbackRem = 0) {
-  const text = String(transformValue || '');
-  const remMatch = text.match(/translateY\(([-\d.]+)rem\)/i);
-  if (remMatch) { const v = Number(remMatch[1]); return Number.isFinite(v) ? v : fallbackRem; }
-  const pxMatch = text.match(/translateY\(([-\d.]+)px\)/i);
-  if (pxMatch) { const v = Number(pxMatch[1]); return Number.isFinite(v) ? (v / 16) : fallbackRem; }
-  return fallbackRem;
-}
-
 function isHelperLikePlaylistNode(rowNode, tileNode) {
   const rowClass = String(rowNode?.className || '');
   const tileClass = String(tileNode?.className || '');
@@ -179,25 +170,7 @@ function isHelperLikePlaylistNode(rowNode, tileNode) {
     rowClass.includes('tt-helper-soft-hidden') || tileClass.includes('HTybHf') || tileClass.includes('IYlICe');
 }
 
-function restoreSoftHiddenPlaylistRow(rowNode, tileNode) {
-  if (!rowNode) return;
-  rowNode.classList?.remove('tt-helper-soft-hidden');
-  rowNode.style.removeProperty('visibility');
-  rowNode.style.removeProperty('pointer-events');
-  if (rowNode.getAttribute('aria-hidden') === 'true') rowNode.removeAttribute('aria-hidden');
-  if (rowNode.getAttribute('tabindex') === '-1') rowNode.removeAttribute('tabindex');
-  if (tileNode) {
-    tileNode.style.removeProperty('display');
-    if (tileNode.getAttribute('tabindex') === '-1') tileNode.removeAttribute('tabindex');
-  }
-}
 
-function isPlaylistDetailView() {
-  if (typeof location === 'undefined') return false;
-  const hash = String(location.hash || '').toLowerCase();
-  if (hash.includes('c=feplaylist_aggregation')) return false;
-  return detectCurrentPage() === 'playlist';
-}
 
 function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   if (window.__ttRemovingHelperTiles) return { scannedTiles: 0, removed: 0, matchedIds: [] };
