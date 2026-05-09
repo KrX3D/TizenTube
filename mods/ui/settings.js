@@ -239,43 +239,12 @@ export default function modernUI(update, parameters) {
             name: t('settings.options.misc.title'),
             icon: 'SETTINGS',
             value: null,
-            menuId: 'tt-misc-settings',
             options: [
                 {
                     name: t('settings.options.misc.options.endScreenCards'),
 
                     icon: 'VISIBILITY_OFF',
                     value: 'enableHideEndScreenCards'
-                },
-                {
-                    name: t('settings.options.misc.options.youThereRenderer'),
-                    icon: 'HELP',
-                    value: 'enableYouThereRenderer'
-                },
-                {
-                    name: t('settings.options.misc.options.paidPromoOverlay'),
-                    icon: 'MONEY_HAND',
-                    value: 'enablePaidPromotionOverlay'
-                },
-                {
-                    name: t('settings.options.misc.options.whosWatching.title'),
-                    icon: 'ACCOUNT_CIRCLE',
-                    menuId: 'tt-whos-watching-menu-settings',
-                    value: null,
-                    options: [
-                        {
-                            name: t('settings.options.misc.options.whosWatching.options.enableWW'),
-                            value: 'enableWhoIsWatchingMenu'
-                        },
-                        {
-                            name: t('settings.options.misc.options.whosWatching.options.permaEnableWW'),
-                            value: 'permanentlyEnableWhoIsWatchingMenu'
-                        },
-                        {
-                            name: t('settings.options.misc.options.whosWatching.options.enableWWOnExit'),
-                            value: 'enableWhosWatchingMenuOnAppExit'
-                        }
-                    ]
                 }
             ]
         },
