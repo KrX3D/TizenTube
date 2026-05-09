@@ -199,44 +199,6 @@ function isPlaylistDetailView() {
   return detectCurrentPage() === 'playlist';
 }
 
-function compactPlaylistVirtualRows(reason = 'playlist.row_compact') {
-  if (!isPlaylistDetailView()) return { rows: 0, removedPlaceholders: 0, adjusted: 0 };
-  const roots = Array.from(document.querySelectorAll('.NUDen'));
-  let rows = 0, removedPlaceholders = 0, removedHiddenShells = 0, skippedScrolledRoots = 0;
-  for (const root of roots) {
-    const rootOffset = parseTranslateYRem(root?.style?.transform, 0);
-    const rowNodes = Array.from(root.querySelectorAll(':scope > .TXB27d'));
-    if (!rowNodes.length) continue;
-    rows += rowNodes.length;
-    for (const row of rowNodes) {
-      const hasTile = !!row.querySelector('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer');
-      const hasButtonRow = !!row.querySelector('ytlr-button-renderer, ytlr-button');
-      const classText = String(row.className || '');
-      const softHidden = classText.includes('tt-helper-soft-hidden');
-      const tileNode = row.querySelector('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer');
-      const rowHtml = String(row.innerHTML || '').trim();
-      const childCount = Number(row.children?.length || 0);
-      const noRenderableContent = !hasTile && !hasButtonRow && !rowHtml;
-      const explicitPlaceholderShell = !hasTile && !hasButtonRow && (classText.includes('fitbrf') || classText.includes('B3hoEd') || childCount === 0);
-      const isHardHiddenShell = row.getAttribute('aria-hidden') === 'true' && String(row.style?.visibility || '').toLowerCase() === 'hidden';
-      if (softHidden) restoreSoftHiddenPlaylistRow(row, tileNode);
-      if (noRenderableContent || explicitPlaceholderShell) { row.remove(); removedHiddenShells++; continue; }
-      if (isHardHiddenShell) {
-        if (Math.abs(rootOffset) <= 0.1) { row.remove(); removedHiddenShells++; }
-        else skippedScrolledRoots++;
-        continue;
-      }
-      if (Math.abs(rootOffset) > 0.1) continue;
-      const focused = classText.includes('lxpVI') || classText.includes('zylon-focus') || !!row.querySelector('.zylon-focus');
-      const isPlaceholder = softHidden || (!hasButtonRow && (!hasTile || classText.includes('fitbrf') || classText.includes('B3hoEd')));
-      if ((isPlaceholder && !focused) || softHidden) { row.remove(); removedPlaceholders++; }
-    }
-    if (Math.abs(rootOffset) > 0.1) skippedScrolledRoots++;
-  }
-  appendFileOnlyLog('playlist.row_compact', { reason, rows, removedPlaceholders, removedHiddenShells, skippedScrolledRoots });
-  return { rows, removedPlaceholders, adjusted: 0 };
-}
-
 function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   if (window.__ttRemovingHelperTiles) return { scannedTiles: 0, removed: 0, matchedIds: [] };
   const retiredIds = Array.from(getRetiredPlaylistHelperVideoIdSet());
@@ -286,7 +248,7 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
         break;
       }
     }
-    // Do NOT call compactPlaylistVirtualRows or schedulePlaylistAutoLoad after removal.
+    // Do NOT call schedulePlaylistAutoLoad after removal.
     // schedulePlaylistAutoLoad on an empty virtual list causes YouTube TV to reload the
     // whole page. YouTube TV's own continuation mechanism handles loading more content.
   } finally {

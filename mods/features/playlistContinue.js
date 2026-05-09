@@ -1,4 +1,3 @@
-import { configRead } from '../config.js';
 import { appendFileOnlyLog, hideVideo, getPlaylistButtons, injectPlaylistButton } from './hideWatched.js';
 import { t } from 'i18next';
 
