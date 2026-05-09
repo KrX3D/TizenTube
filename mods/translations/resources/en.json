@@ -41,7 +41,7 @@
                 "options": {
                     "endScreenCards": "Hide End Screen Cards",
                     "youThereRenderer": "Enable 'Are you still watching?' Renderer",
-                    "paidPromoOverlay": "Enable 'Includes paid promotion' Overlay",
+                    "paidPromoOverlay": "Enable Paid Promotion Overlay",
                     "whosWatching": {
                         "title": "Who's Watching Menu",
                         "options": {
