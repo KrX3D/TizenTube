@@ -277,46 +277,6 @@ export default function modernUI(update, parameters) {
                             value: 'enableWhosWatchingMenuOnAppExit'
                         }
                     ]
-                },
-                {
-                    name: t('settings.options.misc.options.fixUI'),
-                    icon: 'STAR',
-                    value: 'enableFixedUI'
-                },
-                {
-                    name: t('settings.options.misc.options.hqThumbnails'),
-                    icon: 'VIDEO_QUALITY',
-                    value: 'enableHqThumbnails'
-                },
-                /*{
-                    name: 'Chapters',
-                    icon: 'BOOKMARK_BORDER',
-                    value: 'enableChapters'
-                },*/
-                {
-                    name: t('settings.options.misc.options.longPress'),
-                    value: 'enableLongPress'
-                },
-                {
-                    name: t('settings.options.misc.options.shorts'),
-                    icon: 'YOUTUBE_SHORTS_FILL_24',
-                    value: 'enableShorts'
-                },
-                {
-                    name: t('settings.options.misc.options.videoPreviews'),
-                    value: 'enablePreviews'
-                },
-                {
-                    name: t('settings.options.misc.options.ttWelcomeMsg'),
-                    value: 'showWelcomeToast',
-                },
-                {
-                    name: t('settings.options.misc.options.guestSignInReminder'),
-                    value: 'enableSigninReminder'
-                },
-                {
-                    name: t('settings.options.misc.options.reloadHomeOnStartup'),
-                    value: 'reloadHomeOnStartup'
                 }
             ]
         },
