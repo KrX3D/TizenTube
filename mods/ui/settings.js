@@ -251,7 +251,12 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.misc.options.youThereRenderer'),
                     icon: 'HELP',
                     value: 'enableYouThereRenderer'
-                }
+                },
+                {
+                    name: t('settings.options.misc.options.fixUI'),
+                    icon: 'STAR',
+                    value: 'enableFixedUI'
+                },
             ]
         },
         {
