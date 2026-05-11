@@ -566,7 +566,7 @@ JSON.parse = function () {
           if (window?.sponsorblock?.segments) {
             for (const segment of window.sponsorblock.segments) {
               if (manualSkippedSegments.includes(segment.category)) {
-                timelyActions.push(timelyAction(t('sponsorblock.toasts.skip', { segment: segment.category }), 'SKIP_NEXT', { clickTrackingParams: null, showEngagementPanelEndpoint: { customAction: { action: 'SKIP', parameters: { time: segment.segment[1] } } } }, segment.segment[0] * 1000, segment.segment[1] * 1000 - segment.segment[0] * 1000));
+                timelyActions.push(timelyAction(t('sponsorblock.toasts.skip', { segment: t(`sponsorblock.segments.${segment.category}`) }), 'SKIP_NEXT', { clickTrackingParams: null, showEngagementPanelEndpoint: { customAction: { action: 'SKIP', parameters: { time: segment.segment[1] } } } }, segment.segment[0] * 1000, segment.segment[1] * 1000 - segment.segment[0] * 1000));
               }
             }
             r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = timelyActions;
