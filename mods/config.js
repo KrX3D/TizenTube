@@ -35,6 +35,8 @@ const defaultConfig = {
   enableSuperThanksButton: false,
   enableSpeedControlsButton: true,
   enablePatchingVideoPlayer: true,
+  enableMPButton: true,
+  enableSwapMPWithPIP: false,
   enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,

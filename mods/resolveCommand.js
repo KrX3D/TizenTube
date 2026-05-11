@@ -117,6 +117,11 @@ export function patchResolveCommand() {
                                     customAction: {
                                         action: 'ENTER_PIP'
                                     }
+                                },
+                                {
+                                    signalAction: {
+                                        signal: 'POPUP_BACK'
+                                    }
                                 }
                             ])
                         );
