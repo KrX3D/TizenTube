@@ -34603,10 +34603,7 @@ function requireJson() {
     var index = str.indexOf(_char);
     var partial = '';
     if (index !== -1) {
-      partial = str.substring(0, index) + JSON_SYNTAX_CHAR;
-      for (var i = index + 1; i < str.length; i++) {
-        partial += JSON_SYNTAX_CHAR;
-      }
+      partial = str.substring(0, index) + new Array(str.length - index + 1).join(JSON_SYNTAX_CHAR);
     }
     try {
       JSON.parse(partial); /* istanbul ignore next */
@@ -35548,9 +35545,8 @@ function requireSideChannelList() {
         }
       },
       'delete': function _delete(key) {
-        var root = $o && $o.next;
         var deletedNode = listDelete($o, key);
-        if (deletedNode && root && root === deletedNode) {
+        if (deletedNode && $o && !$o.next) {
           $o = void undefined;
         }
         return !!deletedNode;
@@ -35572,7 +35568,6 @@ function requireSideChannelList() {
         listSet(/** @type {NonNullable<typeof $o>} */$o, key, value);
       }
     };
-    // @ts-expect-error TODO: figure out why this is erroring
     return channel;
   };
   return sideChannelList;
@@ -36828,6 +36823,8 @@ function requireUtils() {
           var newIndex = getMaxIndex(target) + 1;
           target[newIndex] = source;
           setMaxIndex(target, newIndex);
+        } else if (options && options.strictMerge) {
+          return [target, source];
         } else if (options && (options.plainObjects || options.allowPrototypes) || !has.call(Object.prototype, source)) {
           target[source] = true;
         }
@@ -37143,7 +37140,7 @@ function requireStringify() {
     }
     if (obj === null) {
       if (strictNullHandling) {
-        return encoder && !encodeValuesOnly ? encoder(prefix, defaults.encoder, charset, 'key', format) : prefix;
+        return formatter(encoder && !encodeValuesOnly ? encoder(prefix, defaults.encoder, charset, 'key', format) : prefix);
       }
       obj = '';
     }
@@ -37162,7 +37159,9 @@ function requireStringify() {
     if (generateArrayPrefix === 'comma' && isArray(obj)) {
       // we need to join elements in
       if (encodeValuesOnly && encoder) {
-        obj = utils.maybeMap(obj, encoder);
+        obj = utils.maybeMap(obj, function (v) {
+          return v == null ? v : encoder(v);
+        });
       }
       objKeys = [{
         value: obj.length > 0 ? obj.join(',') || null : void undefined
@@ -37283,6 +37282,9 @@ function requireStringify() {
     var sideChannel = getSideChannel();
     for (var i = 0; i < objKeys.length; ++i) {
       var key = objKeys[i];
+      if (typeof key === 'undefined' || key === null) {
+        continue;
+      }
       var value = obj[key];
       if (options.skipNulls && value === null) {
         continue;
@@ -37294,10 +37296,10 @@ function requireStringify() {
     if (options.charsetSentinel) {
       if (options.charset === 'iso-8859-1') {
         // encodeURIComponent('&#10003;'), the "numeric entity" representation of a checkmark
-        prefix += 'utf8=%26%2310003%3B&';
+        prefix += 'utf8=%26%2310003%3B' + options.delimiter;
       } else {
         // encodeURIComponent('✓')
-        prefix += 'utf8=%E2%9C%93&';
+        prefix += 'utf8=%E2%9C%93' + options.delimiter;
       }
     }
     return joined.length > 0 ? prefix + joined : '';
@@ -37333,6 +37335,7 @@ function requireParse() {
     parseArrays: true,
     plainObjects: false,
     strictDepth: false,
+    strictMerge: true,
     strictNullHandling: false,
     throwOnLimitExceeded: false
   };
@@ -37368,8 +37371,8 @@ function requireParse() {
     var cleanStr = options.ignoreQueryPrefix ? str.replace(/^\?/, '') : str;
     cleanStr = cleanStr.replace(/%5B/gi, '[').replace(/%5D/gi, ']');
     var limit = options.parameterLimit === Infinity ? void undefined : options.parameterLimit;
-    var parts = cleanStr.split(options.delimiter, options.throwOnLimitExceeded ? limit + 1 : limit);
-    if (options.throwOnLimitExceeded && parts.length > limit) {
+    var parts = cleanStr.split(options.delimiter, options.throwOnLimitExceeded && typeof limit !== 'undefined' ? limit + 1 : limit);
+    if (options.throwOnLimitExceeded && typeof limit !== 'undefined' && parts.length > limit) {
       throw new RangeError('Parameter limit exceeded. Only ' + limit + ' parameter' + (limit === 1 ? '' : 's') + ' allowed.');
     }
     var skipIndex = -1; // Keep track of where the utf8 sentinel was found
@@ -37422,7 +37425,7 @@ function requireParse() {
       }
       if (key !== null) {
         var existing = has.call(obj, key);
-        if (existing && options.duplicates === 'combine') {
+        if (existing && (options.duplicates === 'combine' || part.indexOf('[]=') > -1)) {
           obj[key] = utils.combine(obj[key], val, options.arrayLimit, options.plainObjects);
         } else if (!existing || options.duplicates === 'last') {
           obj[key] = val;
@@ -37476,8 +37479,13 @@ function requireParse() {
     }
     return leaf;
   };
-  var splitKeyIntoSegments = function splitKeyIntoSegments(givenKey, options) {
-    var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, '[$1]') : givenKey;
+
+  // Split a key like "a[b][c[]]" into ['a', '[b]', '[c[]]'] while preserving
+  // qs parse semantics for depth/prototype guards.
+  var splitKeyIntoSegments = function splitKeyIntoSegments(originalKey, options) {
+    var key = options.allowDots ? originalKey.replace(/\.([^.[]+)/g, '[$1]') : originalKey;
+
+    // depth <= 0 keeps the whole key as one segment
     if (options.depth <= 0) {
       if (!options.plainObjects && has.call(Object.prototype, key)) {
         if (!options.allowPrototypes) {
@@ -37486,37 +37494,67 @@ function requireParse() {
       }
       return [key];
     }
-    var brackets = /(\[[^[\]]*])/;
-    var child = /(\[[^[\]]*])/g;
-    var segment = brackets.exec(key);
-    var parent = segment ? key.slice(0, segment.index) : key;
-    var keys = [];
+    var segments = [];
+
+    // parent before the first '[' (may be empty if key starts with '[')
+    var first = key.indexOf('[');
+    var parent = first >= 0 ? key.slice(0, first) : key;
     if (parent) {
       if (!options.plainObjects && has.call(Object.prototype, parent)) {
         if (!options.allowPrototypes) {
           return;
         }
       }
-      keys[keys.length] = parent;
+      segments[segments.length] = parent;
     }
-    var i = 0;
-    while ((segment = child.exec(key)) !== null && i < options.depth) {
-      i += 1;
-      var segmentContent = segment[1].slice(1, -1);
-      if (!options.plainObjects && has.call(Object.prototype, segmentContent)) {
-        if (!options.allowPrototypes) {
-          return;
+    var n = key.length;
+    var open = first;
+    var collected = 0;
+    while (open >= 0 && collected < options.depth) {
+      var level = 1;
+      var i = open + 1;
+      var close = -1;
+
+      // balance nested '[' and ']' inside this bracket group using a nesting level counter
+      while (i < n && close < 0) {
+        var cu = key.charCodeAt(i);
+        if (cu === 0x5B) {
+          // '['
+          level += 1;
+        } else if (cu === 0x5D) {
+          // ']'
+          level -= 1;
+          if (level === 0) {
+            close = i; // found matching close; loop will exit by condition
+          }
         }
+        i += 1;
       }
-      keys[keys.length] = segment[1];
+      if (close < 0) {
+        // Unterminated group: wrap the raw remainder in one bracket pair so it stays
+        // a single literal segment (e.g. "[[]b" -> "[[]b]"); we do not infer missing ']'.
+        segments[segments.length] = '[' + key.slice(open) + ']';
+        return segments;
+      }
+      var seg = key.slice(open, close + 1);
+      // prototype guard for the content of this group
+      var content = seg.slice(1, -1);
+      if (!options.plainObjects && has.call(Object.prototype, content) && !options.allowPrototypes) {
+        return;
+      }
+      segments[segments.length] = seg;
+      collected += 1;
+
+      // find the next '[' after this balanced group
+      open = key.indexOf('[', close + 1);
     }
-    if (segment) {
+    if (open >= 0) {
       if (options.strictDepth === true) {
         throw new RangeError('Input depth exceeded depth option of ' + options.depth + ' and strictDepth is true');
       }
-      keys[keys.length] = '[' + key.slice(segment.index) + ']';
+      segments[segments.length] = '[' + key.slice(open) + ']';
     }
-    return keys;
+    return segments;
   };
   var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
     if (!givenKey) {
@@ -37574,6 +37612,7 @@ function requireParse() {
       parseArrays: opts.parseArrays !== false,
       plainObjects: typeof opts.plainObjects === 'boolean' ? opts.plainObjects : defaults.plainObjects,
       strictDepth: typeof opts.strictDepth === 'boolean' ? !!opts.strictDepth : defaults.strictDepth,
+      strictMerge: typeof opts.strictMerge === 'boolean' ? !!opts.strictMerge : defaults.strictMerge,
       strictNullHandling: typeof opts.strictNullHandling === 'boolean' ? opts.strictNullHandling : defaults.strictNullHandling,
       throwOnLimitExceeded: typeof opts.throwOnLimitExceeded === 'boolean' ? opts.throwOnLimitExceeded : false
     };
@@ -37810,14 +37849,14 @@ function requireUrlencoded() {
 
   function parameterCount(body, limit) {
     var count = 0;
-    var index = 0;
-    while ((index = body.indexOf('&', index)) !== -1) {
+    var index = -1;
+    do {
       count++;
-      index++;
-      if (count === limit) {
+      if (count > limit) {
         return undefined;
       }
-    }
+      index = body.indexOf('&', index + 1);
+    } while (index !== -1);
     return count;
   }
 
@@ -46335,7 +46374,8 @@ var proxyAddrExports = proxyAddr.exports;
 
   function parseExtendedQueryString(str) {
     return qs.parse(str, {
-      plainObjects: true
+      allowPrototypes: true,
+      arrayLimit: 1000
     });
   }
 
