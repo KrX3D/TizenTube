@@ -78,7 +78,10 @@ const defaultConfig = {
   debugConsoleHeight: 1054,
   logServerEnabled: false,
   enablePlaylistBatchCollect: false,
-  playlistBatchCollectMaxBatches: 50
+  playlistBatchCollectMaxBatches: 50,
+  enableClock: false,
+  isClock12HourFormat: false,
+  clockShowSeconds: false,
 };
 
 let localConfig;
