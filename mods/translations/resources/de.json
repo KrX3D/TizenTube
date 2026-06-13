@@ -52,7 +52,7 @@
                     },
                     "fixUI": "UI korrigieren",
                     "hqThumbnails": "Hochqualitative Thumbnails aktivieren",
-                    "longPress": "Gedrückthalten-Aktionen aktivieren",
+                    "longPress": "Aktionen bei langem Drücken aktivieren",
                     "shorts": "Shorts aktivieren",
                     "videoPreviews": "Videovorschauen aktivieren",
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",
@@ -221,6 +221,15 @@
                         "subscriptions": "Abonnements",
                         "library": "Bibliothek",
                         "more": "Mehr"
+                    },
+                    "clock": {
+                        "title": "Uhr",
+                        "subtitle": "Uhr auf dem Bildschirm anzeigen",
+                        "options": {
+                            "enableClock": "Uhr aktivieren",
+                            "isClock12HourFormat": "12-Stunden-Format für Uhr verwenden",
+                            "clockShowSeconds": "Sekunden auf der Uhr anzeigen"
+                        }
                     }
                 }
             },

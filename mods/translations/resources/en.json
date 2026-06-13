@@ -221,6 +221,15 @@
                         "subscriptions": "Subscriptions",
                         "library": "Library",
                         "more": "More"
+                    },
+                    "clock": {
+                        "title": "Clock",
+                        "subtitle": "Display a clock on the screen",
+                        "options": {
+                            "enableClock": "Enable Clock",
+                            "isClock12HourFormat": "Use 12-Hour Format for Clock",
+                            "clockShowSeconds": "Show Seconds on Clock"
+                        }
                     }
                 }
             },
