@@ -83,20 +83,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      # No explicit ref: default checkout behavior is already correct for every
+      # trigger — workflow_run checks out the default branch's current tip,
+      # push (tag) checks out the tag, workflow_dispatch checks out the branch
+      # it was run from. Pinning to github.event.workflow_run.head_sha (as an
+      # earlier version of this workflow did) is wrong: that's the commit that
+      # *triggered* build-publish-cleanup.yml, not the version-bump commit it
+      # produces partway through its own run — checking that out meant this
+      # workflow read package.json *before* the bump, one version behind.
       - name: Clone repo with full history and tags
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Record the commit this build is actually based on
-        run: echo "RELEASE_SHA=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> $GITHUB_ENV
+        run: echo "RELEASE_SHA=$(git rev-parse HEAD)" >> $GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Determine release version (sync with userscript's package.json)
         run: |

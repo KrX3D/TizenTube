@@ -35,7 +35,7 @@ The build workflow needs a Tizen author certificate to sign the package. This is
    - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("author.p12"))`
 5. In this repo, go to **Settings → Secrets and variables → Actions → New repository secret** and add:
    - `TIZEN_AUTHOR_KEY` — the base64 string from step 4
-   - `TIZEN_AUTHOR_KEY_PW` — the certificate password from step 3
+   - `TIZEN_AUTHOR_KEY_PW` — **the plain-text certificate password from step 3, not base64-encoded.** Only the `.p12` file itself needs base64 (it's binary); the password is already text. Pasting a base64-encoded password here fails the build with `PKCS#12 MAC could not be verified. Invalid password?`.
 
 Once both secrets are set, the workflow builds automatically after every successful npm publish — no further action needed. To trigger an ad-hoc build without publishing first, either push a version tag:
 
