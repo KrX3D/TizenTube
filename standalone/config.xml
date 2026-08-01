@@ -23,9 +23,6 @@
     <tizen:privilege name="http://tizen.org/privilege/internet"/>
     <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
     <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
-    <tizen:privilege name="http://tizen.org/privilege/recorder"/>
-    <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
-    <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
     <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
     <tizen:profile name="tv-samsung"/>
     <tizen:service id="krx3dTtSt1.StandaloneService">
