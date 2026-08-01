@@ -267,6 +267,24 @@ what's still live, so the next session doesn't repeat dead ends:
    Certificate Manager, since that's guaranteed cipher-compatible with
    Tizen Studio's own signing tool).
 
+**Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
+(compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
+feature that rewrites the standalone proxy's outgoing HTTP User-Agent to a
+Cobalt 20+ living-room-client string, which unlocks YouTube's multichannel
+audio streams (E-AC-3/AC-3/AAC 5.1 — itags 328/380/258/327) that it
+otherwise only ever serves stereo to Tizen's web engine. It's standalone-
+mode-only structurally: the injected-userscript path can only override
+`navigator.userAgent` (what JS reads), not the actual HTTP header YouTube's
+server keys off — only the proxy can rewrite that. Needs a
+`mods/features/surroundAudio.js` codec-support module (`MediaSource.
+isTypeSupported`/`canPlayType` for AC-3/E-AC-3/AC-4, careful never to claim
+a codec the platform doesn't actually support), a settings toggle with 3
+UA profiles, and a diagnostics panel (~600 lines total). Not yet ported —
+deferred until the standalone signing issue above is fixed (can't test an
+install-blocked mode), and the user's hardware is an unconfirmed fit (has
+a Samsung soundbar, not confirmed Q-Symphony-compatible). Ask before
+implementing if this comes back up.
+
 ## Conventions this repo has established (follow these)
 
 - New app identities (Tizen `package`/app id) must be unique, not reused
