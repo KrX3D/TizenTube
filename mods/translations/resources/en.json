@@ -110,6 +110,11 @@
                         "title": "Preferred Video Quality",
                         "subtitle": "Choose the preferred or next best video quality applied when playback starts"
                     },
+                    "spoofViewport": {
+                        "title": "Spoof Viewport Resolution",
+                        "subtitle": "Report a different screen resolution to YouTube. App restart required. Useful if the TV reports a lower resolution to the browser than it can actually decode.",
+                        "disabled": "Disabled"
+                    },
                     "speedSettings": {
                         "title": "Speed Settings Increments",
                         "subtitle": "Set the speed increments for video playback speed adjustments"

@@ -469,6 +469,22 @@ export default function modernUI(update, parameters) {
 
                 },
                 {
+                    name: t('settings.options.videoPlayer.options.spoofViewport.title'),
+                    icon: 'VIDEO_QUALITY',
+                    value: null,
+                    menuId: 'tt-spoof-viewport',
+                    menuHeader: {
+                        title: t('settings.options.videoPlayer.options.spoofViewport.title'),
+                        subtitle: t('settings.options.videoPlayer.options.spoofViewport.subtitle')
+                    },
+                    options: [
+                        { name: t('settings.options.videoPlayer.options.spoofViewport.disabled'), key: 'spoofViewport', value: 'disabled' },
+                        { name: '2160p (4K)', key: 'spoofViewport', value: '2160p' },
+                        { name: '1440p (2K)', key: 'spoofViewport', value: '1440p' },
+                        { name: '1080p', key: 'spoofViewport', value: '1080p' }
+                    ]
+                },
+                {
                     name: t('settings.options.videoPlayer.options.speedSettings.title'),
                     icon: 'SLOW_MOTION_VIDEO',
                     value: null,
