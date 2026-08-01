@@ -2,7 +2,7 @@ function redirectUrl(originalUrl) {
     if (!originalUrl) return originalUrl;
 
     try {
-        if (typeof originalUrl === 'string' && originalUrl.startsWith('//')) originalUrl = originalUrl.replace('//', 'https://')
+        if (typeof originalUrl === 'string' && originalUrl.startsWith('//')) originalUrl = originalUrl.replace('//', 'https://');
         const url = new URL(originalUrl, window.location.origin);
         const hostname = url.hostname;
 
@@ -12,10 +12,11 @@ function redirectUrl(originalUrl) {
             return url.toString();
         }
 
-        if (hostname.endsWith('googlevideo.com') || hostname.endsWith('youtube.com')
-            || hostname.endsWith('gstatic.com') || hostname.endsWith('.google.com')
-            || hostname.endsWith('.googleapis.com') || hostname.endsWith('googleusercontent.com')
-            || hostname.endsWith('.ggpht.com')) {
+        const isProxiedHost = (name) => hostname === name || hostname.endsWith(`.${name}`);
+        if (isProxiedHost('googlevideo.com') || isProxiedHost('youtube.com')
+            || isProxiedHost('gstatic.com') || isProxiedHost('google.com')
+            || isProxiedHost('googleapis.com') || isProxiedHost('googleusercontent.com')
+            || isProxiedHost('ggpht.com')) {
             return 'http://localhost:8099/cors-bypass/' + url.toString();
         }
     } catch (e) {
@@ -52,7 +53,6 @@ export default function () {
                     };
 
                     if (input.body && !input.bodyUsed) {
-                        const requestClone = input.clone();
                         return input.clone().arrayBuffer().then(function (buffer) {
                             modifiedOptions.body = buffer;
 
@@ -62,8 +62,6 @@ export default function () {
 
                     return originalFetch(targetUrl, modifiedOptions);
                 }
-
-                input = new Request(targetUrl, input);
             }
 
             return originalFetch.apply(this, [targetUrl, init]);

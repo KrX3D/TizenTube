@@ -6,8 +6,6 @@ const express = require('express');
 const app = express();
 const PORT = 8099;
 const fetch = require('node-fetch');
-const http = require('http');
-const https = require('https');
 const URL = require('url');
 const injector = require('./injector.js');
 
@@ -61,7 +59,7 @@ app.all('*', (req, res) => {
                     .replace(/__LocalHost-/g, '__Host-');
                 continue;
             }
-            headers[key] = req.headers[key]
+            headers[key] = req.headers[key];
         }
     }
 
@@ -164,9 +162,9 @@ app.all('*', (req, res) => {
                     text = text.replace(/:document\.location\.toString\(\)/g, ':document.location.toString().replace("http://localhost:8099", "https://www.youtube.com")');
                     text = text.replace(/euri:[^,]+,/g, 'euri:document.location.toString().replace("http://localhost:8099", "https://www.youtube.com"),')
                     text = text.replace(/https:\/\/s\.youtube\.com/g, `${proxyPrefix}https://s.youtube.com`);
-                    text = text.replace(/redirector.googlevideo.com/g, `${proxyPrefix}https://redirector.googlevideo.com`);
+                    text = text.replace(/redirector\.googlevideo\.com/g, `${proxyPrefix}https://redirector.googlevideo.com`);
                     text = text.replace(/this.scheme="https"/, 'this.scheme="http"');
-                    text = text.replace(/https\:\/\/jnn-pa.googleapis.com/g, `${proxyPrefix}https://jnn-pa.googleapis.com`);
+                    text = text.replace(/https:\/\/jnn-pa\.googleapis\.com/g, `${proxyPrefix}https://jnn-pa.googleapis.com`);
                     text = text.replace(/https:\/\/yt3\.googleusercontent\.com/g, `${proxyPrefix}https://yt3.googleusercontent.com`);
                     text = text.replace(/"\/\/yt3\.googleusercontent\.com/g, `"${proxyPrefix}https://yt3.googleusercontent.com`);
 
@@ -185,8 +183,8 @@ app.all('*', (req, res) => {
             }
         })
         .catch((error) => {
-            console.error(`Proxy Error for [${targetUrl}]: ${error}`);
-            console.error(error.stack)
+            console.error(`Proxy Error for [${String(targetUrl).replace(/[\r\n]/g, '')}]: ${error}`);
+            console.error(error.stack);
             if (!res.headersSent) {
                 res.status(500).send('Proxy Connection Broken');
             }

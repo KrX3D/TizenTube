@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function build() {
-    const { code, assets } = await ncc(path.join(__dirname, 'index.js'), {
+    const { code } = await ncc(path.join(__dirname, 'index.js'), {
         minify: false
     });
 
