@@ -7,6 +7,9 @@
     "node_modules/@vercel/ncc/",
     "node_modules/@nicolo-ribaudo/",
     "node_modules/webpack/",
-    "node_modules/terser/"
+    "node_modules/terser/",
+    "**/test/**",
+    "**/tests/**",
+    "**/__tests__/**"
   ]
 }

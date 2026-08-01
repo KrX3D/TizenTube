@@ -92,7 +92,7 @@ jobs:
       # produces partway through its own run — checking that out meant this
       # workflow read package.json *before* the bump, one version behind.
       - name: Clone repo with full history and tags
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -193,7 +193,7 @@ jobs:
           tizenjs build . -t wgt -o release/TizenTube.wgt --author "${GITHUB_WORKSPACE}/tizentube-author.p12" --authorPwd '${{ secrets.TIZEN_AUTHOR_KEY_PW }}' -p public --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
 
       - name: Upload TizenTube Standalone artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: TizenTube-Standalone-${{ env.RELEASE_SHA }}.wgt
           path: standalone/release/TizenTube.wgt
