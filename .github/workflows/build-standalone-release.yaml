@@ -7,6 +7,21 @@
 # service), then the standalone service itself, then packages and signs
 # standalone/ into a .wgt using tizenjs, and publishes it as a GitHub Release.
 #
+# Signing note: tizenjs's own fallback (used when no --distributor is given)
+# downloads Samsung's public sample distributor certificate from
+# download.tizen.org — but that specific package (certificate-generator
+# 0.1.4) has been stuck on a certificate that expired 2022-10-27 for years,
+# with no newer standalone version published. Tizen's package manager
+# accepts it for *updating* an already-installed app, but rejects it on a
+# *first* install with "invalid certificate chain". TizenBrew's own build
+# hit the same wall and works around it by installing full Tizen Studio,
+# which bundles a refreshed "-new" variant of the same free sample cert
+# that tizenjs's narrow download doesn't have. This workflow does the same:
+# installs Tizen Studio just to pull that cert file, then hands it to
+# tizenjs via --distributor/--distributorPwd instead of tizenjs's stale
+# auto-fallback. Still Samsung's free public sample certificate — no
+# interactive Samsung account sign-in needed, fully automated.
+#
 # This is entirely separate from build-publish-cleanup.yml (which builds and
 # npm-publishes the regular mod on push to main) — different trigger, no
 # shared state, so it doesn't affect that workflow.
@@ -177,10 +192,22 @@ jobs:
       # ----------------------------
       # Sign and package the standalone app
       # ----------------------------
-      - name: Prepare Tizen certificate
+      - name: Prepare Tizen author certificate
         run: |
           set -euo pipefail
           echo "${{ secrets.TIZEN_AUTHOR_KEY }}" | base64 -d > "${GITHUB_WORKSPACE}/tizentube-author.p12"
+
+      # Only used to obtain the refreshed "-new" sample distributor
+      # certificate (see the signing note above) — not used for packaging.
+      - name: Download and install Tizen Studio (for a non-expired sample distributor cert)
+        env:
+          TIZEN_STUDIO_VER: 5.6
+        run: |
+          set -euo pipefail
+          curl -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          chmod +x tizen-installer
+          ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
+          rm ./tizen-installer
 
       - name: Install tizenjs
         run: npm install -g https://github.com/reisxd/tizen.js/tarball/main
@@ -190,7 +217,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          tizenjs build . -t wgt -o release/TizenTube.wgt --author "${GITHUB_WORKSPACE}/tizentube-author.p12" --authorPwd '${{ secrets.TIZEN_AUTHOR_KEY_PW }}' -p public --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
+          DISTRIBUTOR_P12="${GITHUB_WORKSPACE}/tizen-studio/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-signer-new.p12"
+          test -f "$DISTRIBUTOR_P12"
+          tizenjs build . -t wgt -o release/TizenTube.wgt --author "${GITHUB_WORKSPACE}/tizentube-author.p12" --authorPwd '${{ secrets.TIZEN_AUTHOR_KEY_PW }}' --distributor "$DISTRIBUTOR_P12" --distributorPwd 'tizenpkcs12passfordsigner' --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
 
       - name: Upload TizenTube Standalone artifact
         uses: actions/upload-artifact@v6
