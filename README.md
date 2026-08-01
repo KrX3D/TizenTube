@@ -12,7 +12,38 @@ Looking for an app for Android TVs? Check out [TizenTube Cobalt](https://github.
 
 1. Install TizenBrew from [here](https://github.com/reisxd/TizenBrew) and follow the instructions.
 
-2. TizenTube is installed to TizenBrew by default. It should be in the home screen. If not, add `@foxreis/tizentube` as a NPM module in TizenBrew module manager.
+2. TizenTube is installed to TizenBrew by default. It should be in the home screen. If not, add `@krx3d/tizentube2` as a NPM module in TizenBrew module manager.
+
+# Standalone Mode
+
+TizenTube can also run as its own installable Tizen app, without needing TizenBrew at all. It bundles a small local proxy service that loads YouTube TV through `http://localhost:8099`, injecting TizenTube automatically.
+
+- The `.wgt` is built and signed by the [`Build TizenTube Standalone and Release`](.github/workflows/build-standalone-release.yaml) GitHub Actions workflow — see below for setting it up.
+- Once built, install the `.wgt` the same way you'd install any other Tizen app (e.g. via [TizenBrewInstaller](https://github.com/KrX3D/TizenBrewInstaller)'s "Install from GitHub"/"Select file to install", or sideloaded directly).
+- The standalone app always loads TizenTube from `https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js`, so it stays in sync with whatever this repo last published to npm — no separate rebuild needed when only the mod itself changes.
+
+## Building a signed Standalone `.wgt` (GitHub Actions)
+
+The build workflow needs a Tizen author certificate to sign the package. This is a one-time setup:
+
+1. Install [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download) (or just the Certificate Manager tool from it).
+2. Open **Certificate Manager** (Tizen Studio → Tools → Certificate Manager).
+3. **Author** tab → **+** → create a new author certificate. Fill in a name, organization/email, and a password — remember the password, you'll need it below. This produces an `author.p12` file.
+4. Base64-encode the `.p12` with no line wrapping:
+   - Linux/macOS: `base64 -w0 author.p12`
+   - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("author.p12"))`
+5. In this repo, go to **Settings → Secrets and variables → Actions → New repository secret** and add:
+   - `TIZEN_AUTHOR_KEY` — the base64 string from step 4
+   - `TIZEN_AUTHOR_KEY_PW` — the certificate password from step 3
+
+Once both secrets are set, trigger a build by pushing a version tag:
+
+```
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+or run the workflow manually from the **Actions** tab (`Build TizenTube Standalone and Release` → **Run workflow**). The signed `.wgt` is attached to the resulting GitHub Release.
 
 # Features
 

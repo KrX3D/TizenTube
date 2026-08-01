@@ -1,0 +1,164 @@
+# -----------------------------------------------------------------------------
+# Build and release the TizenTube Standalone app (standalone/)
+#
+# WHAT THIS DOES
+# ---------------
+# Builds the userscript + regular DIAL service (needed by the standalone
+# service), then the standalone service itself, then packages and signs
+# standalone/ into a .wgt using tizenjs, and publishes it as a GitHub Release.
+#
+# This is entirely separate from build-publish-cleanup.yml (which builds and
+# npm-publishes the regular mod on push to main) — different trigger, no
+# shared state, so it doesn't affect that workflow.
+#
+# WHEN IT RUNS
+# ------------
+# - On pushing a tag matching v*.*.* (e.g. v1.0.0)
+# - Manually via "Run workflow" (workflow_dispatch)
+#
+# PREREQUISITES (REQUIRED) — Tizen author certificate
+# -----------------------------------------------------
+# The build needs a Tizen author certificate to sign the .wgt.
+#
+# 1) Install Tizen Studio (or just the Certificate Manager) from
+#    https://developer.tizen.org/development/tizen-studio/download
+#
+# 2) Open Certificate Manager (Tizen Studio → Tools → Certificate Manager,
+#    or run `certificate-manager` directly from the Tizen Studio tools dir).
+#
+# 3) Author tab → "+" → "Create a new author certificate". Fill in a name,
+#    organization/email, and a password — remember this password. This
+#    produces an author.p12 file (Certificate Manager will tell you where
+#    it saved it).
+#
+# 4) Base64-encode the .p12 with NO line wrapping:
+#      Linux/macOS:  base64 -w0 author.p12
+#      Windows (PowerShell):
+#        [Convert]::ToBase64String([IO.File]::ReadAllBytes("author.p12"))
+#
+# 5) Add two repository secrets (GitHub repo → Settings → Secrets and
+#    variables → Actions → New repository secret):
+#      TIZEN_AUTHOR_KEY     = the base64 string from step 4
+#      TIZEN_AUTHOR_KEY_PW  = the certificate password from step 3
+#
+# HOW TO TRIGGER A BUILD
+# -----------------------
+# git tag v1.0.0 && git push origin v1.0.0
+# (or use "Run workflow" in the Actions tab for an ad-hoc build)
+# -----------------------------------------------------------------------------
+
+name: Build TizenTube Standalone and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version/tag name (e.g. v1.0.0)'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Clone repo with full history and tags
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine release tag
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.release_version }}" ]; then
+            RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            CFG_VER=$(sed -n 's/.*<widget[^>]*version="\([^"]*\)".*/\1/p' standalone/config.xml | head -n1)
+            RELEASE_VERSION="${CFG_VER:+v$CFG_VER}"
+            RELEASE_VERSION="${RELEASE_VERSION:-v0.0.0-${GITHUB_SHA:0:7}}"
+          fi
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+
+      - name: Determine app metadata for release notes
+        run: |
+          set -euo pipefail
+          APP_ID=$(sed -n 's/.*<tizen:application[^>]*id="\([^"]*\)".*/\1/p' standalone/config.xml | head -n1)
+          APP_NAME=$(echo "$APP_ID" | sed -n 's/^[^.]*\.\(.*\)$/\1/p')
+          echo "APP_ID=${APP_ID:-unknown}" >> $GITHUB_ENV
+          echo "APP_NAME=${APP_NAME:-unknown}" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      # ----------------------------
+      # Build the regular mod + DIAL service — the standalone service wraps
+      # dist/service.js, so it must exist before the standalone service builds.
+      # ----------------------------
+      - name: Build mods (userScript.js)
+        working-directory: mods
+        run: |
+          set -euo pipefail
+          npm ci
+          npx rollup -c
+
+      - name: Build service (service.js)
+        working-directory: service
+        run: |
+          set -euo pipefail
+          npm ci
+          npx rollup -c
+
+      # ----------------------------
+      # Build the standalone service
+      # ----------------------------
+      - name: Build standalone service
+        working-directory: standalone/service
+        run: |
+          set -euo pipefail
+          npm install
+          npm install -g @vercel/ncc
+          npm run build
+          rm -rf node_modules
+
+      # ----------------------------
+      # Sign and package the standalone app
+      # ----------------------------
+      - name: Prepare Tizen certificate
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.TIZEN_AUTHOR_KEY }}" | base64 -d > "${GITHUB_WORKSPACE}/tizentube-author.p12"
+
+      - name: Install tizenjs
+        run: npm install -g https://github.com/reisxd/tizen.js/tarball/main
+
+      - name: Build TizenTube Standalone
+        working-directory: standalone
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          tizenjs build . -t wgt -o release/TizenTube.wgt --author "${GITHUB_WORKSPACE}/tizentube-author.p12" --authorPwd '${{ secrets.TIZEN_AUTHOR_KEY_PW }}' -p public --ignore node_modules,/.*\.wgt$/,/userwidget/,/release/
+
+      - name: Upload TizenTube Standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TizenTube-Standalone-${{ github.sha }}.wgt
+          path: standalone/release/TizenTube.wgt
+
+      - name: Release TizenTube Standalone
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            TizenTube Standalone build from commit `${{ github.sha }}`.
+            TBI_METADATA: {"appId":"${{ env.APP_ID }}","appName":"${{ env.APP_NAME }}"}
+          files: |
+            standalone/release/*
