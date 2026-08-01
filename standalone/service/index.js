@@ -9,6 +9,9 @@ const fetch = require('node-fetch');
 const URL = require('url');
 const injector = require('./injector.js');
 
+const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
+const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
+
 // This proxy exists to bypass CORS for YouTube/Google resources only — never
 // forward it to an arbitrary host, or it becomes an open proxy for anything
 // running on the device.
@@ -154,9 +157,19 @@ app.all('*', (req, res) => {
                 contentType.indexOf('text/css') !== -1) {
 
                 return response.text().then((text) => {
-                    if (req.url.indexOf('/tv') === 0 && req.url.indexOf('/tv_config') === -1) {
-                        // Insert the userscript for TizenTube
-                        text += `<script src="https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js?ver=${Date.now()}"></script>`;
+                    if (contentType.indexOf('text/html') !== -1 && req.path === '/tv') {
+                        // Must run before YouTube parses its initial player data — the ad
+                        // blocker patches JSON.parse to strip ad placements from it. Appending
+                        // the script at the end of the document (the previous approach) ran it
+                        // too late; inserting right after <body> opens ensures it executes
+                        // before YouTube's own scripts do. Falls back to a second CDN if the
+                        // primary one is unreachable.
+                        const userScript = `<script src="${TIZENTUBE_CDN_URL}?ver=${Date.now()}" onerror="this.onerror=null;this.src='${TIZENTUBE_CDN_FALLBACK_URL}'"></script>`;
+                        if (/<body[^>]*>/i.test(text)) {
+                            text = text.replace(/<body[^>]*>/i, (bodyTag) => `${bodyTag}${userScript}`);
+                        } else {
+                            text = userScript + text;
+                        }
                     }
 
                     const proxyPrefix = `http://localhost:${PORT}/cors-bypass/`;
