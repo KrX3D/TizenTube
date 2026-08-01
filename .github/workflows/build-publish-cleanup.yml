@@ -117,6 +117,7 @@ on:
       - '.gitignore'
       - '.npmignore'
       - 'LICENSE'
+      - 'AGENTS.md'
       - 'README.md'
       - 'package.json'
       - 'tizen.log'
