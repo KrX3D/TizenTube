@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "啟用影片播放器介面修正",
                             "previousNextBtns": "啟用上一個／下一個按鈕",
                             "showSuperThxBtn": "顯示超級感謝按鈕",
+                            "showAIAskBtn": "顯示詢問按鈕",
                             "showSpeedCtrlBtn": "顯示速度控制按鈕"
                         }
                     },

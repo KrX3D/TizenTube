@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Bật vá giao diện trình phát video",
                             "previousNextBtns": "Bật nút Trước và Tiếp theo",
                             "showSuperThxBtn": "Hiển thị nút Super Thanks",
+                            "showAIAskBtn": "Hiển thị nút Hỏi",
                             "showSpeedCtrlBtn": "Hiển thị nút Điều khiển tốc độ",
                             "addMPBtn": "Hiện nút trình phát nhỏ",
                             "swapMPWithPIP": "Đổi nút trình phát nhỏ thành Picture-In-Picture"

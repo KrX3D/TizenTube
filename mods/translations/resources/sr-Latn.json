@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Omogući zakrpe za UI plejera",
                             "previousNextBtns": "Omogući dugmad Prethodno i Sledeće",
                             "showSuperThxBtn": "Prikaži dugme 'Super Thanks'",
+                            "showAIAskBtn": "Prikaži dugme 'Pitaj'",
                             "showSpeedCtrlBtn": "Prikaži kontrole brzine",
                             "addMPBtn": "Prikaži dugme za mini plejer",
                             "swapMPWithPIP": "Zameni dugme mini plejera sa PiP dugmetom"

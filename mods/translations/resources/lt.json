@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Įjungti vaizdo grotuvo vartotojo sąsajos pataisas",
                             "previousNextBtns": "Įjungti mygtukus „Ankstesnis“ ir „Kitas“",
                             "showSuperThxBtn": "Rodyti mygtuką „Super padėka“",
+                            "showAIAskBtn": "Rodyti mygtuką „Klausti“",
                             "showSpeedCtrlBtn": "Rodyti greičio valdymo mygtuką"
                         }
                     },
