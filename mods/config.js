@@ -83,6 +83,7 @@ const defaultConfig = {
   enableClock: false,
   isClock12HourFormat: false,
   clockShowSeconds: false,
+  spoofViewport: 'disabled',
 };
 
 let localConfig;

@@ -110,6 +110,11 @@
                         "title": "Bevorzugte Videoqualität",
                         "subtitle": "Wähle die bevorzugte oder nächstbeste Videoqualität, die beim Start der Wiedergabe verwendet wird"
                     },
+                    "spoofViewport": {
+                        "title": "Bildschirmauflösung vortäuschen",
+                        "subtitle": "Meldet YouTube eine andere Bildschirmauflösung. App-Neustart erforderlich. Nützlich, wenn der Fernseher dem Browser eine niedrigere Auflösung meldet, als er tatsächlich dekodieren kann.",
+                        "disabled": "Deaktiviert"
+                    },
                     "speedSettings": {
                         "title": "Geschwindigkeitsstufen",
                         "subtitle": "Lege die Schritte für Anpassungen der Wiedergabegeschwindigkeit fest"

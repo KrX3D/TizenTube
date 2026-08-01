@@ -3,6 +3,7 @@ if (window.location.hostname === 'localhost') {
     initStandalonePatches();
 }
 import "./features/userAgentSpoofing.js";
+import "./features/viewportSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';
 
