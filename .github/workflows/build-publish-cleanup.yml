@@ -96,7 +96,7 @@
 # CONFIGURATION
 # -------------
 # - PACKAGE_NAME: Set to your npm package name (e.g., '@krx3d/tizentube')
-# - NODE_VERSION: Node.js version to use (default: '20')
+# - NODE_VERSION: Node.js version to use (default: '24', Active LTS)
 # - UNPUBLISH_WINDOW_HOURS: How long versions can be unpublished (default: '72')
 #
 # -----------------------------------------------------------------------------
@@ -131,7 +131,7 @@ permissions:
 env:
   PACKAGE_NAME: '@krx3d/tizentube2'
   PACKAGE_NAME_GH: 'KrX3D/TizenTube'
-  NODE_VERSION: '20'
+  NODE_VERSION: '24'
   UNPUBLISH_WINDOW_HOURS: '72'
 
 jobs:
