@@ -13,6 +13,13 @@
 #
 # WHEN IT RUNS
 # ------------
+# - Automatically, right after "Build, publish and cleanup old npm versions"
+#   (build-publish-cleanup.yml) finishes successfully on main — i.e. once the
+#   userscript's new version has actually been bumped and published to npm.
+#   This keeps the standalone app's version in lockstep with the userscript:
+#   it reads the version build-publish-cleanup.yml just bumped in package.json
+#   and writes that same number into standalone/config.xml before packaging,
+#   rather than tracking its own separate version.
 # - On pushing a tag matching v*.*.* (e.g. v1.0.0)
 # - Manually via "Run workflow" (workflow_dispatch)
 #
@@ -50,6 +57,9 @@
 name: Build TizenTube Standalone and Release
 
 on:
+  workflow_run:
+    workflows: ['Build, publish and cleanup old npm versions']
+    types: [completed]
   push:
     tags:
       - 'v*.*.*'
@@ -62,6 +72,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Only proceed on a successful npm-publish run that was itself triggered by
+    # a push to main (build-publish-cleanup.yml's job is skipped entirely for
+    # pull_request runs, which can still report an overall "success" — checking
+    # .workflow_run.event too avoids firing off of those). Tag pushes and
+    # manual dispatch always proceed.
+    if: >
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     permissions:
       contents: write
     steps:
@@ -70,20 +88,46 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Determine release tag
+      - name: Record the commit this build is actually based on
+        run: echo "RELEASE_SHA=${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+
+      - name: Determine release version (sync with userscript's package.json)
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.release_version }}" ]; then
             RELEASE_VERSION="${{ github.event.inputs.release_version }}"
           elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
-          else
+          elif [ -f package.json ]; then
+            PKG_VER=$(node -p "require('./package.json').version")
+            RELEASE_VERSION="${PKG_VER:+v$PKG_VER}"
+          fi
+
+          if [ -z "${RELEASE_VERSION:-}" ]; then
             CFG_VER=$(sed -n 's/.*<widget[^>]*version="\([^"]*\)".*/\1/p' standalone/config.xml | head -n1)
             RELEASE_VERSION="${CFG_VER:+v$CFG_VER}"
             RELEASE_VERSION="${RELEASE_VERSION:-v0.0.0-${GITHUB_SHA:0:7}}"
           fi
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+
+      - name: Sync standalone/config.xml version with the userscript's version
+        run: |
+          set -euo pipefail
+          NEW_VER="${RELEASE_VERSION#v}"
+          CUR_VER=$(sed -n 's/.*<widget[^>]*version="\([^"]*\)".*/\1/p' standalone/config.xml | head -n1)
+          if [ -n "$NEW_VER" ] && [ "$NEW_VER" != "$CUR_VER" ]; then
+            sed -i "0,/<widget /s/version=\"${CUR_VER}\"/version=\"${NEW_VER}\"/" standalone/config.xml
+            echo "standalone/config.xml version: ${CUR_VER} -> ${NEW_VER}"
+          else
+            echo "standalone/config.xml version already ${CUR_VER}, nothing to sync"
+          fi
 
       - name: Determine app metadata for release notes
         run: |
@@ -92,11 +136,6 @@ jobs:
           APP_NAME=$(echo "$APP_ID" | sed -n 's/^[^.]*\.\(.*\)$/\1/p')
           echo "APP_ID=${APP_ID:-unknown}" >> $GITHUB_ENV
           echo "APP_NAME=${APP_NAME:-unknown}" >> $GITHUB_ENV
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '20'
 
       # ----------------------------
       # Build the regular mod + DIAL service — the standalone service wraps
@@ -149,16 +188,16 @@ jobs:
       - name: Upload TizenTube Standalone artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TizenTube-Standalone-${{ github.sha }}.wgt
+          name: TizenTube-Standalone-${{ env.RELEASE_SHA }}.wgt
           path: standalone/release/TizenTube.wgt
 
       - name: Release TizenTube Standalone
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ env.RELEASE_SHA }}
           body: |
-            TizenTube Standalone build from commit `${{ github.sha }}`.
+            TizenTube Standalone build from commit `${{ env.RELEASE_SHA }}`, version-synced with the userscript.
             TBI_METADATA: {"appId":"${{ env.APP_ID }}","appName":"${{ env.APP_NAME }}"}
           files: |
             standalone/release/*
