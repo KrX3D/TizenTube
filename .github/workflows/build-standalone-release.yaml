@@ -225,6 +225,24 @@ jobs:
           mkdir -p "${GITHUB_WORKSPACE}/tizen-data/profile"
           echo "$AUTHOR_P12_B64" | base64 -d > "${GITHUB_WORKSPACE}/tizen-data/keystore/author/author.p12"
 
+          echo "Author cert encryption before conversion:"
+          openssl pkcs12 -info -in "${GITHUB_WORKSPACE}/tizen-data/keystore/author/author.p12" -passin env:AUTHOR_P12_PASSWORD -noout 2>&1 | grep -i "pbe\|cipher\|mac" || true
+
+          # Tizen Studio's bundled Java signing tool is old and can fail to read a
+          # PKCS#12 file encrypted with the modern AES-256 cipher OpenSSL 3.x (the
+          # default everywhere since ~2021) uses by default — throwing a generic,
+          # misleading "Invalid password" even when the password is correct. Both
+          # node-forge (what tizenjs used) and modern OpenSSL read AES-256 p12s
+          # fine, so this wouldn't have surfaced until switching to Tizen Studio's
+          # own tooling. Re-encrypt with the older, broadly-compatible cipher
+          # in-place — same password, same cert/key contents, just an older wrapper.
+          openssl pkcs12 -in "${GITHUB_WORKSPACE}/tizen-data/keystore/author/author.p12" -out /tmp/author-intermediate.pem -nodes -passin env:AUTHOR_P12_PASSWORD
+          openssl pkcs12 -export -legacy -in /tmp/author-intermediate.pem -passout env:AUTHOR_P12_PASSWORD -out "${GITHUB_WORKSPACE}/tizen-data/keystore/author/author.p12" -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+          rm -f /tmp/author-intermediate.pem
+
+          echo "Author cert encryption after conversion:"
+          openssl pkcs12 -info -in "${GITHUB_WORKSPACE}/tizen-data/keystore/author/author.p12" -passin env:AUTHOR_P12_PASSWORD -noout 2>&1 | grep -i "pbe\|cipher\|mac" || true
+
           cp .github/assets/profiles.xml "${GITHUB_WORKSPACE}/tizen-data/profile/profiles.xml"
           python3 -c "from pathlib import Path; import os; from xml.sax.saxutils import escape; p=Path(os.environ['GITHUB_WORKSPACE'])/'tizen-data/profile/profiles.xml'; t=p.read_text(); t=t.replace('\$GITHUB_WORKSPACE', os.environ['GITHUB_WORKSPACE']).replace('\$KEY_PW', escape(os.environ['AUTHOR_P12_PASSWORD'], {'\"':'&quot;'})); p.write_text(t)"
 
