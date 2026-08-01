@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<profiles active="TizenTubeStandalone" version="3.1">
+  <profile name="TizenTubeStandalone">
+    <profileitem
+      ca="$GITHUB_WORKSPACE/tizen-studio/tools/certificate-generator/certificates/developer/tizen-developer-ca.cer"
+      distributor="0"
+      key="$GITHUB_WORKSPACE/tizen-data/keystore/author/author.p12"
+      password="$KEY_PW"
+      rootca=""/>
+    <profileitem
+      ca="$GITHUB_WORKSPACE/tizen-studio/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-ca.cer"
+      distributor="1"
+      key="$GITHUB_WORKSPACE/tizen-studio/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-signer.p12"
+      password="tizenpkcs12passfordsigner"
+      rootca=""/>
+    <profileitem ca="" distributor="2" key="" password="" rootca=""/>
+  </profile>
+</profiles>
