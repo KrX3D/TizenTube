@@ -100,6 +100,7 @@
                             "enableVPUIPatching": "Videoplayer-UI-Patching aktivieren",
                             "previousNextBtns": "Vorheriger-/Nächster-Buttons aktivieren",
                             "showSuperThxBtn": "Super-Thanks-Button anzeigen",
+                            "showAIAskBtn": "Frage-Button anzeigen",
                             "showSpeedCtrlBtn": "Geschwindigkeitssteuerungs-Button anzeigen",
                             "addMPBtn": "Mini-Player-Schaltfläche anzeigen",
                             "swapMPWithPIP": "Mini-Player-Schaltfläche mit PiP-Schaltfläche tauschen"
@@ -220,7 +221,8 @@
                         "gaming": "Gaming",
                         "subscriptions": "Abonnements",
                         "library": "Bibliothek",
-                        "more": "Mehr"
+                        "more": "Mehr",
+                        "shorts": "Shorts"
                     },
                     "clock": {
                         "title": "Uhr",

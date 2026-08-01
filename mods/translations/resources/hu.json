@@ -75,6 +75,7 @@
                             "enableVPUIPatching": "Videólejátszó kezelőfelület javításának bekapcsolása",
                             "previousNextBtns": "Előző és Következő gombok bekapcsolása",
                             "showSuperThxBtn": "Szuperköszönet gomb megjelenítése",
+                            "showAIAskBtn": "Kérdezés gomb megjelenítése",
                             "showSpeedCtrlBtn": "Lejátszási sebesség megjelenítése"
                         }
                     },

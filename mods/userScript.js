@@ -1,3 +1,7 @@
+import initStandalonePatches from "./features/standaloneUserscript.js";
+if (window.location.hostname === 'localhost') {
+    initStandalonePatches();
+}
 import "./features/userAgentSpoofing.js";
 import "whatwg-fetch";
 import 'core-js/proposals/object-getownpropertydescriptors';

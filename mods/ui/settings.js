@@ -428,6 +428,11 @@ export default function modernUI(update, parameters) {
                             value: 'enableSuperThanksButton'
                         },
                         {
+                            name: t('settings.options.videoPlayer.options.patching.options.showAIAskBtn'),
+                            icon: 'HELP',
+                            value: 'enableAIAskButton'
+                        },
+                        {
                             name: t('settings.options.videoPlayer.options.patching.options.showSpeedCtrlBtn'),
                             icon: 'SLOW_MOTION_VIDEO',
                             value: 'enableSpeedControlsButton'
@@ -713,7 +718,8 @@ export default function modernUI(update, parameters) {
                         { name: t('settings.options.uiSettings.options.nav.gaming'), icon: 'GAMING', value: 'GAMING' },
                         { name: t('settings.options.uiSettings.options.nav.subscriptions'), icon: 'SUBSCRIPTIONS', value: 'SUBSCRIPTIONS' },
                         { name: t('settings.options.uiSettings.options.nav.library'), icon: 'TAB_LIBRARY', value: 'TAB_LIBRARY' },
-                        { name: t('settings.options.uiSettings.options.nav.more'), icon: 'TAB_MORE', value: 'TAB_MORE' }
+                        { name: t('settings.options.uiSettings.options.nav.more'), icon: 'TAB_MORE', value: 'TAB_MORE' },
+                        { name: t('settings.options.uiSettings.options.nav.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'YOUTUBE_SHORTS_FILL_24' }
                     ]
                 },
                 {

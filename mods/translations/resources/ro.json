@@ -79,6 +79,7 @@
                             "enableVPUIPatching": "Activează corectarea interfeței player-ului video",
                             "previousNextBtns": "Activează butoanele Anterior și Următor",
                             "showSuperThxBtn": "Afișează butonul Super Thanks",
+                            "showAIAskBtn": "Afișează butonul Întreabă",
                             "showSpeedCtrlBtn": "Afișează butonul de control al vitezei",
                             "addMPBtn": "Afișează butonul pentru Mini Player",
                             "swapMPWithPIP": "Schimbă butonul Mini Player cu butonul PiP"

@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Ativar modificação da interface do reprodutor",
                             "previousNextBtns": "Ativar botões Anterior e Seguinte",
                             "showSuperThxBtn": "Mostrar botão 'Super Thanks'",
+                            "showAIAskBtn": "Mostrar botão 'Perguntar'",
                             "showSpeedCtrlBtn": "Mostrar botão de controlo de velocidade"
                         }
                     },

@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Омогући закрпе за УИ плејера",
                             "previousNextBtns": "Омогући дугмад Претходно и Следеће",
                             "showSuperThxBtn": "Прикажи дугме 'Super Thanks'",
+                            "showAIAskBtn": "Прикажи дугме 'Питај'",
                             "showSpeedCtrlBtn": "Прикажи контроле брзине",
                             "addMPBtn": "Прикажи дугме за мини плејер",
                             "swapMPWithPIP": "Замени дугме мини плејера са ПиП дугметом"

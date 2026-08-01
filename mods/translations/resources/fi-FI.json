@@ -75,6 +75,7 @@
                             "enableVPUIPatching": "Ota videosoittimen käyttöliittymän muokkaus käyttöön",
                             "previousNextBtns": "Ota Edellinen- ja Seuraava-painikkeet käyttöön",
                             "showSuperThxBtn": "Näytä Super Thanks -painike",
+                            "showAIAskBtn": "Näytä Kysy-painike",
                             "showSpeedCtrlBtn": "Näytä nopeudensäätöpainike"
                         }
                     },

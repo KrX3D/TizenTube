@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Omogući zakrpe za UI plejera",
                             "previousNextBtns": "Omogući tipke Prethodno i Sljedeće",
                             "showSuperThxBtn": "Prikaži tipku 'Super Thanks'",
+                            "showAIAskBtn": "Prikaži dugme 'Pitaj'",
                             "showSpeedCtrlBtn": "Prikaži kontrole brzine",
                             "addMPBtn": "Prikaži tipku za mini plejer",
                             "swapMPWithPIP": "Zamijeni tipku mini plejera sa PiP tipkom"

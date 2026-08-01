@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Omogući zakrpe za UI playera",
                             "previousNextBtns": "Omogući tipke Prethodno i Sljedeće",
                             "showSuperThxBtn": "Prikaži tipku 'Super hvala'",
+                            "showAIAskBtn": "Prikaži tipku 'Pitaj'",
                             "showSpeedCtrlBtn": "Prikaži kontrole brzine",
                             "addMPBtn": "Prikaži tipku za mini player",
                             "swapMPWithPIP": "Zamijeni tipku mini playera s PiP tipkom"

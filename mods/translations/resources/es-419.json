@@ -77,6 +77,7 @@
                             "enableVPUIPatching": "Habilitar Parcheo de la UI del Reproductor de Video",
                             "previousNextBtns": "Habilitar Botones Anterior y Siguiente",
                             "showSuperThxBtn": "Mostrar Botón de Super Gracias",
+                            "showAIAskBtn": "Mostrar Botón de Preguntar",
                             "showSpeedCtrlBtn": "Mostrar Botón de Control de Velocidad"
                         }
                     },
