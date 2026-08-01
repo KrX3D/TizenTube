@@ -3,6 +3,10 @@
   "ignore": [
     "node_modules/@babel/",
     "node_modules/adbhost/",
-    "node_modules/node-fetch/"
+    "node_modules/node-fetch/",
+    "node_modules/@vercel/ncc/",
+    "node_modules/@nicolo-ribaudo/",
+    "node_modules/webpack/",
+    "node_modules/terser/"
   ]
 }
