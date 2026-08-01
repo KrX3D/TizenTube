@@ -172,7 +172,7 @@ jobs:
           npm install
           npm install -g @vercel/ncc
           npm run build
-          rm -rf node_modules
+          rm -rf node_modules transpiled
 
       # ----------------------------
       # Sign and package the standalone app
