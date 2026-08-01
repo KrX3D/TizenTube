@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "node build-service.js"
+    "build": "babel . --out-dir transpiled --copy-files && node build-service.js"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +17,9 @@
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
+    "@babel/cli": "^7.26.4",
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
     "@vercel/ncc": "^0.44.1"
   }
 }

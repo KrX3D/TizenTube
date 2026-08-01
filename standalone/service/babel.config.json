@@ -1,0 +1,8 @@
+{
+  "presets": ["@babel/preset-env"],
+  "ignore": [
+    "node_modules/@babel/",
+    "node_modules/adbhost/",
+    "node_modules/node-fetch/"
+  ]
+}
