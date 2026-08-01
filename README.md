@@ -21,6 +21,7 @@ TizenTube can also run as its own installable Tizen app, without needing TizenBr
 - The `.wgt` is built and signed by the [`Build TizenTube Standalone and Release`](.github/workflows/build-standalone-release.yaml) GitHub Actions workflow — see below for setting it up.
 - Once built, install the `.wgt` the same way you'd install any other Tizen app (e.g. via [TizenBrewInstaller](https://github.com/KrX3D/TizenBrewInstaller)'s "Install from GitHub"/"Select file to install", or sideloaded directly).
 - The standalone app always loads TizenTube from `https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js`, so it stays in sync with whatever this repo last published to npm — no separate rebuild needed when only the mod itself changes.
+- Its version is kept in lockstep with the userscript: once the build workflow above has the required secrets, it builds automatically right after every successful npm publish (triggered by `build-publish-cleanup.yml` completing), reading the just-bumped `package.json` version and writing it into `standalone/config.xml` before packaging — so "installed version" always matches the userscript version, no matter which of the two you're running.
 
 ## Building a signed Standalone `.wgt` (GitHub Actions)
 
@@ -36,14 +37,14 @@ The build workflow needs a Tizen author certificate to sign the package. This is
    - `TIZEN_AUTHOR_KEY` — the base64 string from step 4
    - `TIZEN_AUTHOR_KEY_PW` — the certificate password from step 3
 
-Once both secrets are set, trigger a build by pushing a version tag:
+Once both secrets are set, the workflow builds automatically after every successful npm publish — no further action needed. To trigger an ad-hoc build without publishing first, either push a version tag:
 
 ```
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-or run the workflow manually from the **Actions** tab (`Build TizenTube Standalone and Release` → **Run workflow**). The signed `.wgt` is attached to the resulting GitHub Release.
+or run it manually from the **Actions** tab (`Build TizenTube Standalone and Release` → **Run workflow**). The signed `.wgt` is attached to the resulting GitHub Release either way.
 
 # Features
 
