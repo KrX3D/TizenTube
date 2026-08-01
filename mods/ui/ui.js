@@ -10,14 +10,15 @@ import { pipToFullscreen } from '../features/pictureInPicture.js';
 import getCommandExecutor from './customCommandExecution.js';
 import { t } from 'i18next';
 
-// It just works, okay?
+// Initialize as soon as the app DOM exists — don't wait for a <video> element,
+// since browse/home pages have none and color keys/theme UI/debug console
+// would otherwise stay dead until the first video plays.
 const interval = setInterval(() => {
-  const videoElement = document.querySelector('video');
-  if (videoElement) {
-    execute_once_dom_loaded();
-    patchResolveCommand();
-    clearInterval(interval);
-  }
+  if (!document.body || window.__ttUiInitialized) return;
+  window.__ttUiInitialized = true;
+  execute_once_dom_loaded();
+  patchResolveCommand();
+  clearInterval(interval);
 }, 250);
 
 let keyTimeout = null;
@@ -26,6 +27,7 @@ let keyTimeout = null;
 function mapDesktopColorKey(evt) {
   const code = evt.code || '';
   const key = (evt.key || '').toLowerCase();
+  const keyIdentifier = (evt.keyIdentifier || '').toLowerCase();
 
   // Desktop fallbacks for TV remote color keys when testing on Windows.
   if (code === 'KeyR' || key === 'r' || code === 'F1' || code === 'Digit1') return 403; // RED
@@ -33,10 +35,36 @@ function mapDesktopColorKey(evt) {
   if (code === 'KeyY' || key === 'y' || code === 'F3' || code === 'Digit3') return 405; // YELLOW
   if (code === 'KeyB' || key === 'b' || code === 'F4' || code === 'Digit4') return 406; // BLUE
 
+  // Some remotes (universal/aftermarket) report color keys via key/keyIdentifier
+  // strings instead of Samsung's own numeric keyCodes.
+  if (key.includes('colorf0') || keyIdentifier.includes('colorf0')) return 403;
+  if (key.includes('colorf1') || keyIdentifier.includes('colorf1')) return 404;
+  if (key.includes('colorf2') || keyIdentifier.includes('colorf2')) return 405;
+  if (key.includes('colorf3') || keyIdentifier.includes('colorf3')) return 406;
+
   return evt.keyCode;
 }
 
+function registerRemoteColorKeys() {
+  try {
+    if (!window.tizen?.tvinputdevice?.registerKey) return;
+    window.tizen.tvinputdevice.registerKey('ColorF0Red');
+    window.tizen.tvinputdevice.registerKey('ColorF1Green');
+    window.tizen.tvinputdevice.registerKey('ColorF2Yellow');
+    window.tizen.tvinputdevice.registerKey('ColorF3Blue');
+  } catch (e) { }
+}
+
+function setSpatialNavigationKeyMode() {
+  if (window.__spatialNavigation__) {
+    window.__spatialNavigation__.keyMode = 'NONE';
+    return true;
+  }
+  return false;
+}
+
 function execute_once_dom_loaded() {
+  registerRemoteColorKeys();
 
   // Add CSS to head.
 
@@ -61,8 +89,15 @@ function execute_once_dom_loaded() {
     } catch (e) { }
   }
 
-  // We handle key events ourselves.
-  window.__spatialNavigation__.keyMode = 'NONE';
+  // We handle key events ourselves. __spatialNavigation__ may not exist yet
+  // this early (we no longer wait for a <video> element), so retry until it does.
+  if (!setSpatialNavigationKeyMode()) {
+    const navInterval = setInterval(() => {
+      if (setSpatialNavigationKeyMode()) {
+        clearInterval(navInterval);
+      }
+    }, 250);
+  }
 
   var ARROW_KEY_CODE = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' };
 

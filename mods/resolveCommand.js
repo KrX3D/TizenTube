@@ -81,6 +81,25 @@ export function patchResolveCommand() {
                 } else if (cmd?.openPopupAction?.uniqueId === 'playback-settings') {
                     // Patch the playback settings popup to use TizenTube speed settings
                     const items = cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items;
+                    const hasTizenTubeSettings = items.some(item =>
+                        item?.compactLinkRenderer?.serviceEndpoint?.commandExecutorCommand?.commands?.some(
+                            c => c?.customAction?.action === 'TT_SETTINGS_SHOW'
+                        )
+                    );
+                    if (!hasTizenTubeSettings) {
+                        // Fallback entry point for settings on remotes without color keys.
+                        items.splice(0, 0,
+                            buttonItem(
+                                { title: 'TizenTube Settings' },
+                                { icon: 'SETTINGS' }, [
+                                {
+                                    customAction: {
+                                        action: 'TT_SETTINGS_SHOW'
+                                    }
+                                }
+                            ])
+                        );
+                    }
                     for (const item of items) {
                         if (item?.compactLinkRenderer?.icon?.iconType === 'SLOW_MOTION_VIDEO') {
                             item.compactLinkRenderer.subtitle && (item.compactLinkRenderer.subtitle.simpleText = 'with TizenTube');

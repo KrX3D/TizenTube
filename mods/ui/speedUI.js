@@ -1,21 +1,44 @@
 import { configRead } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer } from './ytUI.js';
 
+const BLUE_KEY_CODES = new Set([406, 191, 115]);
+
+function isBlueKey(evt) {
+    if (BLUE_KEY_CODES.has(evt?.keyCode)) return true;
+    const key = (evt?.key || '').toLowerCase();
+    const keyIdentifier = (evt?.keyIdentifier || '').toLowerCase();
+    const code = (evt?.code || '').toLowerCase();
+    return key.includes('colorf3') || keyIdentifier.includes('colorf3') || key.includes('blue') ||
+        code === 'f4' || code === 'keyb' || code === 'digit4';
+}
+
+// Initialize as soon as the app DOM exists, not once a <video> element
+// appears, so the setting is wired up before the first video starts.
 const interval = setInterval(() => {
-    const videoElement = document.querySelector('video');
-    if (videoElement) {
-        execute_once_dom_loaded_speed();
-        clearInterval(interval);
-    }
-}, 1000);
+    if (!document.body || window.__ttSpeedUiInitialized) return;
+    window.__ttSpeedUiInitialized = true;
+    execute_once_dom_loaded_speed();
+    clearInterval(interval);
+}, 250);
 
 function execute_once_dom_loaded_speed() {
-    document.querySelector('video').addEventListener('canplay', () => {
-        document.getElementsByTagName('video')[0].playbackRate = configRead('videoSpeed');;
-    });
+    const applyConfiguredSpeed = () => {
+        const video = document.querySelector('video');
+        if (!video) return;
+        video.playbackRate = configRead('videoSpeed');
+    };
+
+    // Delegated + capture so this keeps working across video-element swaps
+    // (a new <video> is created per playback session).
+    document.addEventListener('canplay', (evt) => {
+        if (evt?.target?.tagName === 'VIDEO') {
+            applyConfiguredSpeed();
+        }
+    }, true);
+    applyConfiguredSpeed();
 
     const eventHandler = (evt) => {
-        if (evt.keyCode == 406 || evt.keyCode == 191) {
+        if (isBlueKey(evt)) {
             evt.preventDefault();
             evt.stopPropagation();
             if (evt.type === 'keydown') {
