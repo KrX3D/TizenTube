@@ -9,6 +9,15 @@ const fetch = require('node-fetch');
 const URL = require('url');
 const injector = require('./injector.js');
 
+// This proxy exists to bypass CORS for YouTube/Google resources only — never
+// forward it to an arbitrary host, or it becomes an open proxy for anything
+// running on the device.
+const ALLOWED_PROXY_HOSTS = ['googlevideo.com', 'youtube.com', 'gstatic.com', 'google.com', 'googleapis.com', 'googleusercontent.com', 'ggpht.com'];
+function isAllowedProxyHost(hostname) {
+    if (!hostname) return false;
+    return ALLOWED_PROXY_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+}
+
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
@@ -48,6 +57,16 @@ app.all('*', (req, res) => {
         targetUrl = rawTarget.indexOf('http') === 0 ? rawTarget : `https://${rawTarget}`;
     } else {
         targetUrl = `https://www.youtube.com${req.url}`;
+    }
+
+    let targetHostname;
+    try {
+        targetHostname = URL.parse(targetUrl).hostname;
+    } catch (e) {
+        targetHostname = null;
+    }
+    if (!isAllowedProxyHost(targetHostname)) {
+        return res.status(403).send('Blocked: target host not allowed');
     }
 
     const headers = {};
