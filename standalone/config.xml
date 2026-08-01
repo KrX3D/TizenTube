@@ -17,7 +17,6 @@
     <tizen:metadata key="multiview_support" value="true"/>
     <tizen:metadata key="multiview_min_resource" value="FHD+"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/html5.4k.support" value="true"/>
-    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/microphone.support" value="1"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/microphone.area" value="open"/>
     <name>TizenTube</name>
