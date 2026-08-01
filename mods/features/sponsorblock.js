@@ -202,7 +202,8 @@ class SponsorBlockHandler {
       const videoDuration = this.video.duration;
       const slider = document.querySelector('div[idomkey="slider"]');
       if (!slider) {
-        console.warn('[SponsorBlock] buildOverlay: slider element not found');
+        console.info('[SponsorBlock] buildOverlay: slider not ready yet, retrying...');
+        this.buildOverlayTimeout = setTimeout(() => this.buildOverlay(), 100);
         return;
       }
 
@@ -381,6 +382,7 @@ class SponsorBlockHandler {
 
     if (this.nextSkipTimeout)    { clearTimeout(this.nextSkipTimeout); this.nextSkipTimeout = null; }
     if (this.attachVideoTimeout) { clearTimeout(this.attachVideoTimeout); this.attachVideoTimeout = null; }
+    if (this.buildOverlayTimeout) { clearTimeout(this.buildOverlayTimeout); this.buildOverlayTimeout = null; }
     if (this.sliderInterval)     { clearInterval(this.sliderInterval); this.sliderInterval = null; }
     if (this.observer)           { this.observer.disconnect(); this.observer = null; }
     if (this.segmentsoverlay)    { try { this.segmentsoverlay.remove(); } catch (_) {} this.segmentsoverlay = null; }
