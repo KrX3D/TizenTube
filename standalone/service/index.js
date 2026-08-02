@@ -53,23 +53,51 @@ process.on('unhandledRejection', (reason) => {
 logServiceEvent('INFO', `Standalone service process starting (node ${process.version})`);
 
 // ── Now the requires that previously ran before any of the above existed ──
-function safeRequire(name, path) {
-    try {
-        const mod = require(path);
-        logServiceEvent('INFO', `require('${name}') OK`);
-        return mod;
-    } catch (err) {
-        logServiceEvent('ERROR', `require('${name}') FAILED: ${err && err.stack || err}`);
-        throw err;
-    }
-}
+// Each require() below MUST keep a literal string argument, not a variable —
+// ncc (and bundlers generally) can only statically analyze and inline a
+// literal require('x'); a dynamic require(path) can't be bundled, and falls
+// through to real Node module resolution at runtime, which fails since
+// there's no node_modules deployed on-device (a mistake made here once
+// already: it briefly broke every launch on Tizen 6.5 with "Cannot find
+// module 'express'").
 
-const express = safeRequire('express', 'express');
+let express;
+try {
+    express = require('express');
+    logServiceEvent('INFO', "require('express') OK");
+} catch (err) {
+    logServiceEvent('ERROR', `require('express') FAILED: ${err && err.stack || err}`);
+    throw err;
+}
 const app = express();
 const PORT = 8099;
-const fetch = safeRequire('node-fetch', 'node-fetch');
-const URL = safeRequire('url', 'url');
-const injector = safeRequire('./injector.js', './injector.js');
+
+let fetch;
+try {
+    fetch = require('node-fetch');
+    logServiceEvent('INFO', "require('node-fetch') OK");
+} catch (err) {
+    logServiceEvent('ERROR', `require('node-fetch') FAILED: ${err && err.stack || err}`);
+    throw err;
+}
+
+let URL;
+try {
+    URL = require('url');
+    logServiceEvent('INFO', "require('url') OK");
+} catch (err) {
+    logServiceEvent('ERROR', `require('url') FAILED: ${err && err.stack || err}`);
+    throw err;
+}
+
+let injector;
+try {
+    injector = require('./injector.js');
+    logServiceEvent('INFO', "require('./injector.js') OK");
+} catch (err) {
+    logServiceEvent('ERROR', `require('./injector.js') FAILED: ${err && err.stack || err}`);
+    throw err;
+}
 
 const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
 const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
