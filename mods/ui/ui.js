@@ -118,11 +118,18 @@ function execute_once_dom_loaded() {
     true
   );
 
+  const isStandalone = window.location.hostname === 'localhost';
+
   try {
     uiContainer.innerHTML = `
 <h1>TizenTube Theme Configuration</h1>
 <label for="__barColor">Navigation Bar Color: <input type="text" id="__barColor"/></label>
 <label for="__routeColor">Main Content Color: <input type="text" id="__routeColor"/></label>
+${isStandalone ? `
+<h1>Remote Log Server (Standalone)</h1>
+<label for="__logServerHost">Receiver PC IP: <input type="text" id="__logServerHost"/></label>
+<label for="__logServerPort">Receiver Port: <input type="text" id="__logServerPort"/></label>
+` : ''}
 <div><small>Sponsor segments skipping - https://sponsor.ajay.app</small></div>
 `;
     document.querySelector('body').appendChild(uiContainer);
@@ -138,6 +145,20 @@ function execute_once_dom_loaded() {
       configWrite('routeColor', evt.target.value);
       updateStyle();
     });
+
+    if (isStandalone) {
+      uiContainer.querySelector('#__logServerHost').value = configRead('logServerHost');
+      uiContainer.querySelector('#__logServerHost').addEventListener('change', (evt) => {
+        configWrite('logServerHost', evt.target.value.trim());
+      });
+
+      uiContainer.querySelector('#__logServerPort').value = configRead('logServerPort');
+      uiContainer.querySelector('#__logServerPort').addEventListener('change', (evt) => {
+        const port = Number(evt.target.value) || 3030;
+        evt.target.value = port;
+        configWrite('logServerPort', port);
+      });
+    }
   } catch (e) { }
 
   var eventHandler = (evt) => {

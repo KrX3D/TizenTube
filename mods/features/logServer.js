@@ -27,10 +27,30 @@ function pushToQueue(entry) {
 
 export function sendRemotePayload(_url, entry) {
     if (!isEnabled()) return false;
-    // Try HTTP POST to the TizenBrew relay first (works when TizenTube runs in
-    // a plain HTTP context, e.g. Tizen 5.5 proxy path where Cobalt doesn't block
-    // localhost XHR). Falls back to __ttLogQueue which is drained by TizenBrew's
-    // CDP poll (the only path that works in the HTTPS Cobalt context on 6.5+).
+
+    if (window.location.hostname === 'localhost') {
+        // Standalone mode: no TizenBrew present. Relay through the local
+        // standalone service instead — same origin as this page, so no
+        // Cobalt/CORS restrictions to work around, unlike the TizenBrew path
+        // below. The service forwards to the PC receiver configured here.
+        const host = configRead('logServerHost');
+        const port = configRead('logServerPort');
+        if (!host) return false;
+        try {
+            fetch('http://localhost:8099/tizentube/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host, port, entry }),
+            }).catch(function () { });
+        } catch (_) { }
+        return true;
+    }
+
+    // TizenBrew-injected mode: try HTTP POST to the TizenBrew relay first (works
+    // when TizenTube runs in a plain HTTP context, e.g. Tizen 5.5 proxy path where
+    // Cobalt doesn't block localhost XHR). Falls back to __ttLogQueue which is
+    // drained by TizenBrew's CDP poll (the only path that works in the HTTPS
+    // Cobalt context on 6.5+).
     try {
         fetch('http://127.0.0.1:8081/tv-log', {
             method: 'POST',

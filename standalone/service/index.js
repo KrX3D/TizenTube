@@ -6,11 +6,60 @@ const express = require('express');
 const app = express();
 const PORT = 8099;
 const fetch = require('node-fetch');
+const http = require('http');
 const URL = require('url');
 const injector = require('./injector.js');
 
 const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
 const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
+
+// Fallback log receiver target, used when the page never got far enough to
+// send its own configured host/port (e.g. a crash before the userscript
+// loads) and for this service's own lifecycle logging below, which has no
+// page/localStorage config to read from in the first place.
+const DEFAULT_LOG_HOST = '192.168.50.57';
+const DEFAULT_LOG_PORT = 3030;
+
+// Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
+// (same /tv-log path and JSON shape), so the existing PS1 receiver script
+// needs no changes.
+function relayLog(entry, host, port) {
+    try {
+        const body = JSON.stringify({
+            _formatted: entry._formatted || `[${entry.ts}] [${entry.level || 'INFO'}] [${entry.context || 'TizenTube'}] ${entry.message || ''}`,
+            app: 'TizenTube Standalone',
+            ts: entry.ts,
+            level: entry.level,
+            context: entry.context,
+            message: entry.message,
+        });
+        const req = http.request({
+            hostname: host || DEFAULT_LOG_HOST,
+            port: Number(port) || DEFAULT_LOG_PORT,
+            path: '/tv-log',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        }, () => { });
+        req.on('error', () => { });
+        req.write(body);
+        req.end();
+    } catch (e) { }
+}
+
+function logServiceEvent(level, message) {
+    relayLog({ ts: new Date().toISOString(), level, context: 'StandaloneService', message });
+}
+
+// Self-logging: unconditional, hardcoded target, no dependency on the page
+// ever loading or having any config — this is the only way to see what
+// happens when the app crashes before the userscript runs at all.
+process.on('uncaughtException', (err) => {
+    logServiceEvent('ERROR', `Uncaught exception: ${err && err.stack || err}`);
+});
+process.on('unhandledRejection', (reason) => {
+    logServiceEvent('ERROR', `Unhandled rejection: ${reason && reason.stack || reason}`);
+});
+logServiceEvent('INFO', 'Standalone service process starting');
 
 // This proxy exists to bypass CORS for YouTube/Google resources only — never
 // forward it to an arbitrary host, or it becomes an open proxy for anything
@@ -33,7 +82,11 @@ app.use((req, res, next) => {
 
 app.get('/tizentube/getState', (req, res) => {
     injector.canConnectToDaemon().then(r => {
+        logServiceEvent('INFO', `getState → ${JSON.stringify(r)}`);
         res.json(r);
+    }).catch((err) => {
+        logServiceEvent('ERROR', `getState failed: ${err && err.stack || err}`);
+        res.status(500).json({ error: String(err) });
     });
 });
 
@@ -51,7 +104,20 @@ app.get('/tizentube/debugger', (req, res) => {
     }, 50);
 });
 
+// host/port come from the request body when the page has them configured;
+// falls back to DEFAULT_LOG_HOST/PORT otherwise (see relayLog above).
+app.post('/tizentube/log', express.json(), (req, res) => {
+    const { host, port, entry } = req.body || {};
+    if (!entry) return res.status(400).end();
+    relayLog(entry, host, port);
+    res.status(204).end();
+});
+
 app.all('*', (req, res) => {
+    if (req.path === '/tv') {
+        logServiceEvent('INFO', `Received ${req.method} ${req.path} — page is reaching the proxy`);
+    }
+
     const isCorsBypass = req.path.indexOf('/cors-bypass/') === 0;
 
     let targetUrl;
@@ -215,16 +281,28 @@ app.all('*', (req, res) => {
             }
         })
         .catch((error) => {
-            console.error(`Proxy Error for [${String(targetUrl).replace(/[\r\n]/g, '')}]: ${error}`);
+            const safeUrl = String(targetUrl).replace(/[\r\n]/g, '');
+            console.error(`Proxy Error for [${safeUrl}]: ${error}`);
             console.error(error.stack);
+            logServiceEvent('ERROR', `Proxy error for [${safeUrl}]: ${error && error.stack || error}`);
             if (!res.headersSent) {
                 res.status(500).send('Proxy Connection Broken');
             }
         });
 });
 
-app.listen(PORT, "127.0.0.1");
+const server = app.listen(PORT, "127.0.0.1", () => {
+    logServiceEvent('INFO', `Standalone service listening on 127.0.0.1:${PORT}`);
+});
+server.on('error', (err) => {
+    logServiceEvent('ERROR', `app.listen failed: ${err && err.stack || err}`);
+});
 
 // Start the DIAL server
 global.isTizenTube = true;
-require('../../dist/service.js');
+try {
+    require('../../dist/service.js');
+    logServiceEvent('INFO', 'DIAL service (dist/service.js) loaded');
+} catch (err) {
+    logServiceEvent('ERROR', `DIAL service (dist/service.js) failed to load: ${err && err.stack || err}`);
+}
