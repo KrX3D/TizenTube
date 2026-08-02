@@ -91,6 +91,7 @@ standalone/                  # standalone installable app — see "Standalone mo
     profiles.xml                 # Tizen Studio signing profile for standalone (see Known issues)
 
 scripts/tampermonkey/         # local Chrome-based dev/test loader — see README.md
+scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote logging (see Feature map)
 ```
 
 ## Configuration system (`mods/config.js`)
@@ -128,7 +129,7 @@ scripts/tampermonkey/         # local Chrome-based dev/test loader — see READM
 | `shorts.js` | Shorts-related behavior (`enableShorts`). |
 | `videoQueuing.js` | Manual video queue feature. |
 | `playlistBatchCollect.js` | Batch-collects playlist items (`enablePlaylistBatchCollect`). |
-| `logServer.js` | Optional remote log server (`logServerEnabled`) for on-device debugging. In TizenBrew mode, relays via TizenBrew's own `127.0.0.1:8081` service + CDP-queue fallback. In standalone mode (`window.location.hostname === 'localhost'`), instead POSTs to the standalone service's own `POST /tizentube/log` (see `standalone/service/index.js`), which relays to the PC receiver at `logServerHost`:`logServerPort` (same `/tv-log` path/JSON shape as TizenBrew's `remoteLogger.js`, so the same PS1 receiver script works for both). Host/port are set via the RED-key theme overlay (`mods/ui/ui.js`), standalone-only fields — there's no free-text entry in the native TV settings menu. The standalone *service itself* also self-logs its own lifecycle (startup, uncaught exceptions, DIAL service load, proxy errors) unconditionally to a hardcoded `DEFAULT_LOG_HOST`/`DEFAULT_LOG_PORT` in `standalone/service/index.js`, independent of any page config — added specifically because the service can crash before the page/userscript ever loads, at which point page-driven config never gets read. |
+| `logServer.js` | Optional remote log server (`logServerEnabled`) for on-device debugging. In TizenBrew mode, relays via TizenBrew's own `127.0.0.1:8081` service + CDP-queue fallback. In standalone mode (`window.location.hostname === 'localhost'`), instead POSTs to the standalone service's own `POST /tizentube/log` (see `standalone/service/index.js`), which relays to the PC receiver at `logServerHost`:`logServerPort` (same `/tv-log` path/JSON shape as TizenBrew's `remoteLogger.js`, so the receiver script at `scripts/log-receiver/receiver.ps1` works for both). Host/port are set via the RED-key theme overlay (`mods/ui/ui.js`), standalone-only fields — there's no free-text entry in the native TV settings menu. The standalone *service itself* also self-logs its own lifecycle (startup, uncaught exceptions, DIAL service load, proxy errors) unconditionally to a hardcoded `DEFAULT_LOG_HOST`/`DEFAULT_LOG_PORT` in `standalone/service/index.js`, independent of any page config — added specifically because the service can crash before the page/userscript ever loads, at which point page-driven config never gets read. |
 | `visualConsole.js` | On-screen debug console (`enableDebugConsole`) — shows version via `../../package.json`, executes commands via `resolveCommand`. |
 
 ## UI map (`mods/ui/*.js`)
