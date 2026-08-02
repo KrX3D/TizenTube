@@ -427,3 +427,14 @@ implementing if this comes back up.
   `JSON.parse` patch and `sponsorblock.js`'s scheduled-skip handler — both
   exist because an uncaught error there previously broke playback/parsing
   page-wide, not out of general caution.
+- In `standalone/service/` (bundled by `ncc`, no `node_modules` deployed
+  on-device — everything must end up inlined into the single
+  `dist/index.js`): every `require(...)` call must keep a literal string
+  argument, never a variable. `require(path)` with `path` as a variable
+  can't be statically analyzed/inlined by `ncc`, so it falls through to
+  real Node module resolution at runtime and fails with "Cannot find
+  module" — this actually broke every launch on Tizen 6.5 once already
+  (a `safeRequire(name, path)` diagnostic helper introduced this exact
+  mistake). If you need a per-dependency try/catch wrapper for
+  diagnostics, wrap each literal `require('x')` call individually rather
+  than passing the module name through a shared helper function.
