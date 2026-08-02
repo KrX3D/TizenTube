@@ -298,6 +298,28 @@ server.on('error', (err) => {
     logServiceEvent('ERROR', `app.listen failed: ${err && err.stack || err}`);
 });
 
+// dist/service.js's DIAL server generates UUIDs via the 'uuid' package, and
+// on-device logs showed it resolving to uuid's browser-targeted rng (needs
+// Web Crypto's crypto.getRandomValues, which Tizen's old Node service
+// runtime doesn't have) instead of the Node-targeted one (crypto.randomBytes)
+// — throwing "crypto.getRandomValues() not supported" during DIALServer
+// construction. That left the module never finishing its setup, so Tizen's
+// own service runner then called app.onRequest on every incoming message
+// and got "app.onRequest is not a function", repeatedly — the likely actual
+// cause of the crash-loop, since each of those was an uncaught exception.
+// Polyfilling getRandomValues with Node's own crypto.randomBytes covers this
+// regardless of which rng implementation actually got bundled.
+if (!global.crypto || typeof global.crypto.getRandomValues !== 'function') {
+    const nodeCrypto = require('crypto');
+    global.crypto = Object.assign({}, global.crypto, {
+        getRandomValues: function (typedArray) {
+            const bytes = nodeCrypto.randomBytes(typedArray.length);
+            typedArray.set(bytes);
+            return typedArray;
+        }
+    });
+}
+
 // Start the DIAL server
 global.isTizenTube = true;
 try {
