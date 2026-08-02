@@ -377,12 +377,39 @@ Reported 2026-08-02 after the install issue above was fixed:
   listening on `127.0.0.1:8081` in pure standalone, and silently
   queued/dropped). Fixed by having `injector.js` set `window.__ttStandalone
   = true` before evaluating the userscript, and checking that in addition
-  to the hostname in both places. **Unconfirmed on-device**: the relay
-  fetch from this path is `https://youtube.com` (page origin) →
-  `http://localhost:8099` (target) — cross-origin *and* HTTPS-page-to-HTTP-
-  target, which some engines block as mixed content. If host/port now show
-  correctly in settings but page-level log entries still never arrive
-  specifically from this path, that's the first thing to check.
+  to the hostname in both places.
+
+  **Confirmed on-device (2026-08-02): the mixed-content risk was real.**
+  Host/port showed correctly and a manual test log appeared in
+  TizenTube's own on-screen debug console (unrelated to network delivery),
+  but nothing reached the PC receiver — the direct fetch from
+  `https://youtube.com` (page origin) to `http://localhost:8099` (target)
+  is cross-origin *and* HTTPS-page-to-HTTP-target, which Cobalt blocks
+  silently. Fixed by not attempting that fetch on this path at all:
+  `logServer.js` now pushes into `window.__ttLogQueue` instead (tagged
+  with `__ttLogHost`/`__ttLogPort`), and `injector.js` drains it once a
+  second over the same CDP connection already open for injection
+  (`pollLogQueue`, threaded through `startDebugger`/`connectToDebugger`) —
+  same technique TizenBrew's own service uses for the equivalent problem.
+  The proxy path (`hostname === 'localhost'`) is unaffected — same-origin
+  plain HTTP, no restrictions — and still uses the direct fetch.
+  **Not yet retested on-device.**
+
+  **Also added: earlier diagnostics for Tizen 5.5's still-total
+  blackout.** All service-level self-logging lives inside
+  `standalone/service/index.js`, which only runs once the service
+  actually starts — if the *service* itself never starts on 5.5 (or
+  `launchAppControl`'s callback never fires at all), none of that logging
+  ever gets a chance to run. `standalone/index.html` now has its own
+  minimal `sendLog()` (plain `fetch`, hardcoded to the same default
+  receiver, no dependency on the service) logging at the earliest
+  possible points: script start, right before `launchAppControl`, inside
+  both its success and error callbacks, and at each branch of
+  `useInjectorOrProxy()`'s `getState` resolution. This is diagnostic only
+  — **not a fix**, since we still don't know why 5.5 doesn't progress; the
+  next session should see whether *any* of these new log lines arrive
+  from 5.5, which narrows down whether the problem is in `index.html`
+  itself, `launchAppControl`, or the service.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
