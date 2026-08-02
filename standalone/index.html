@@ -40,6 +40,33 @@
     </style>
     <script>
         "use strict";
+
+        // Earliest possible diagnostic hook — runs before the service is even
+        // launched, so it can catch failures the service's own self-logging
+        // never gets a chance to (e.g. launchAppControl's callback never
+        // firing at all). Same /tv-log target and payload shape as the
+        // service's own relayLog, so scripts/log-receiver/receiver.ps1 needs
+        // no changes.
+        function sendLog(level, message) {
+            try {
+                var ts = new Date().toISOString();
+                fetch('http://192.168.50.57:3030/tv-log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        _formatted: '[' + ts + '] [' + level + '] [StandaloneIndexHtml] ' + message,
+                        app: 'TizenTube Standalone',
+                        ts: ts,
+                        level: level,
+                        context: 'StandaloneIndexHtml',
+                        message: message
+                    })
+                }).catch(function () { });
+            } catch (e) { }
+        }
+
+        sendLog('INFO', 'index.html script started');
+
         tizen.tvinputdevice.registerKey("ColorF0Red");
         tizen.tvinputdevice.registerKey("ColorF1Green");
         tizen.tvinputdevice.registerKey("ColorF2Yellow");
@@ -65,6 +92,7 @@
         const serviceId = pkgId + ".StandaloneService";
 
         function useInjectorOrProxy() {
+            sendLog('INFO', 'useInjectorOrProxy() called, fetching getState');
             const data = tizen.application.getCurrentApplication().getRequestedAppControl().appControl.data;
             let args;
             try {
@@ -76,20 +104,31 @@
             fetch('http://localhost:8099/tizentube/getState')
                 .then(r => r.json())
                 .then(res => {
+                    sendLog('INFO', 'getState resolved: ' + JSON.stringify(res));
                     if (res.canConnectToDaemon && !res.isConnecting) {
+                        sendLog('INFO', 'Taking CDP-injection path, launching debugger and exiting');
                         fetch(`http://localhost:8099/tizentube/debugger${args ? `?${args}` : ''}`);
                         tizen.application.getCurrentApplication().exit();
-                    } else if (!res.canConnectToDaemon) location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
-                }).catch(() => window.location.reload());
+                    } else if (!res.canConnectToDaemon) {
+                        sendLog('INFO', 'Taking proxy path, navigating to localhost:8099/tv');
+                        location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
+                    }
+                }).catch((err) => {
+                    sendLog('ERROR', 'getState fetch failed, reloading: ' + (err && err.message || err));
+                    window.location.reload();
+                });
         }
 
+        sendLog('INFO', 'Launching StandaloneService via launchAppControl');
         tizen.application.launchAppControl(
             new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
             serviceId,
             function () {
+                sendLog('INFO', 'launchAppControl success callback fired');
                 useInjectorOrProxy();
             },
             function (e) {
+                sendLog('ERROR', 'launchAppControl failed: ' + e.message);
                 alert("Launch Service failed: " + e.message);
             }
         );
