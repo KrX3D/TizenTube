@@ -123,6 +123,7 @@ on:
       - 'tizen.log'
       - 'dist/**'
       - 'scripts/**'
+      - 'scripts/**'
   workflow_dispatch:
 
 # Allow this workflow to push back changes to the repo
