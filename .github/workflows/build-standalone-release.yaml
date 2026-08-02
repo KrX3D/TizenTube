@@ -255,11 +255,9 @@ jobs:
           -e "service/index.js"
           -e "service/injector.js"
           -e "service/build-service.js"
-          -e "service/babel.config.json"
           -e "service/package.json"
           -e "service/package-lock.json"
           -e "service/node_modules"
-          -e "service/transpiled"
           -e "release"
 
       - name: Package WGT

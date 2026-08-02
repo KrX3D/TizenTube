@@ -78,8 +78,7 @@ standalone/                  # standalone installable app — see "Standalone mo
   service/                    # standalone's own local proxy + CDP injector (NOT mods/'s service/)
     index.js                  # Express proxy: rewrites youtube.com/tv, injects userscript <script> tag
     injector.js               # CDP-based injector (same technique TizenBrew itself uses)
-    babel.config.json         # transpiles for Tizen's old JS service engine (Node v4.4.3 on ~Tizen 5.5-)
-    build-service.js          # babel → ncc bundle → service/dist/index.js
+    build-service.js          # ncc-bundles index.js directly → service/dist/index.js (see Known unresolved issues re: a past Babel transpile attempt here, reverted)
     package.json
 
 .github/
@@ -193,7 +192,7 @@ upstream's package; several forks that copy-paste from upstream get this
 wrong and end up running unmodified upstream code inside "their" fork).
 
 `standalone/service/`'s own source files (`index.js`, `injector.js`,
-`build-service.js`, `babel.config.json`, `package.json`) are **not** the
+`build-service.js`, `package.json`) are **not** the
 same thing as top-level `service/` (the DIAL service) — the standalone
 build step builds top-level `service/` first because
 `standalone/service/index.js` wraps and `require()`s its output
@@ -280,21 +279,35 @@ the history, since it took several disproven theories to get there:
      will *not* pick up a workflow fix merged afterward. Use **Run
      workflow** (`workflow_dispatch`) or a new tag to actually test a fix.
 
-**Standalone runtime issues on-device — open, not yet investigated.**
+**Standalone runtime issues on-device — open, one fix attempted.**
 Reported 2026-08-02 after the install issue above was fixed:
 - **Tizen 5.5:** app shows the TizenTube splash + loading bar, then hangs
   indefinitely — never finishes loading. Also reproduces with upstream's
   own published build, so this isn't a regression from anything in this
   fork; likely an old-WebKit-engine incompatibility somewhere in the
-  proxy/injection path.
+  proxy/injection path. Not yet root-caused.
 - **Tizen 6.5:** regression specific to this fork's standalone build —
   upstream's `.wgt` works fine on the same TV, but this fork's build
   crash-loops: after a TV reboot the app opens then immediately closes;
   on subsequent launches it loads then restarts, repeating; sometimes it
-  fails to open at all. Not yet root-caused — likely worth bisecting
-  against what upstream's standalone build does differently (Node
-  version, Babel transpile target, the CDN version-sync/injector changes,
-  or something in `standalone/service/`).
+  fails to open at all.
+
+  **Prime suspect, now reverted pending retest:** this fork's
+  `standalone/service/` had a Babel transpile step (PR #607) that ran
+  over the *entire* `standalone/service/` directory including
+  `node_modules` (minus a handful of excluded packages), transpiling
+  `express` and its ~30 transitive dependencies — code never written or
+  tested with that in mind. Two things pointed at this: (1) it was added
+  specifically to fix the Tizen 5.5 hang above, but that hang still
+  happens, so it wasn't achieving its purpose; (2) it's the single
+  biggest behavioral difference vs. upstream's confirmed-working (on this
+  same 6.5 TV) build, which doesn't transpile at all. Reverted back to
+  upstream's approach (`ncc`-bundle `index.js` directly, no Babel) to
+  test whether that's actually the 6.5 cause. **Needs on-device retest
+  results before considering this closed** — if 6.5 comes back working,
+  the 5.5 hang still needs a separate, more targeted fix (find the
+  specific incompatible syntax/dependency rather than blanket-transpiling
+  everything).
 
 **Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
 (compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
