@@ -118,7 +118,10 @@ function execute_once_dom_loaded() {
     true
   );
 
-  const isStandalone = window.location.hostname === 'localhost';
+  // window.__ttStandalone is set by injector.js on the CDP-injection path,
+  // where this page is real youtube.com, not localhost — see logServer.js
+  // for the same detection.
+  const isStandalone = window.location.hostname === 'localhost' || window.__ttStandalone === true;
 
   try {
     uiContainer.innerHTML = `

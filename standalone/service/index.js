@@ -2,21 +2,15 @@
 
 // TizenTube Standalone service
 
-const express = require('express');
-const app = express();
-const PORT = 8099;
-const fetch = require('node-fetch');
+// ── Logging infrastructure comes first, before anything that might throw ───
+// On Tizen 5.5 nothing ever reached the PC receiver at all — which is
+// consistent with one of the require()s below throwing synchronously before
+// any logging existed to catch it. http is a Node core module (always safe),
+// so everything logging-related is set up before requiring anything else,
+// and each require below is wrapped individually so we can see exactly which
+// one fails, if any.
 const http = require('http');
-const URL = require('url');
-const injector = require('./injector.js');
 
-const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
-const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
-
-// Fallback log receiver target, used when the page never got far enough to
-// send its own configured host/port (e.g. a crash before the userscript
-// loads) and for this service's own lifecycle logging below, which has no
-// page/localStorage config to read from in the first place.
 const DEFAULT_LOG_HOST = '192.168.50.57';
 const DEFAULT_LOG_PORT = 3030;
 
@@ -50,16 +44,35 @@ function logServiceEvent(level, message) {
     relayLog({ ts: new Date().toISOString(), level, context: 'StandaloneService', message });
 }
 
-// Self-logging: unconditional, hardcoded target, no dependency on the page
-// ever loading or having any config — this is the only way to see what
-// happens when the app crashes before the userscript runs at all.
 process.on('uncaughtException', (err) => {
     logServiceEvent('ERROR', `Uncaught exception: ${err && err.stack || err}`);
 });
 process.on('unhandledRejection', (reason) => {
     logServiceEvent('ERROR', `Unhandled rejection: ${reason && reason.stack || reason}`);
 });
-logServiceEvent('INFO', 'Standalone service process starting');
+logServiceEvent('INFO', `Standalone service process starting (node ${process.version})`);
+
+// ── Now the requires that previously ran before any of the above existed ──
+function safeRequire(name, path) {
+    try {
+        const mod = require(path);
+        logServiceEvent('INFO', `require('${name}') OK`);
+        return mod;
+    } catch (err) {
+        logServiceEvent('ERROR', `require('${name}') FAILED: ${err && err.stack || err}`);
+        throw err;
+    }
+}
+
+const express = safeRequire('express', 'express');
+const app = express();
+const PORT = 8099;
+const fetch = safeRequire('node-fetch', 'node-fetch');
+const URL = safeRequire('url', 'url');
+const injector = safeRequire('./injector.js', './injector.js');
+
+const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
+const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
 
 // This proxy exists to bypass CORS for YouTube/Google resources only — never
 // forward it to an arbitrary host, or it becomes an open proxy for anything

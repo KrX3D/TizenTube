@@ -28,11 +28,22 @@ function pushToQueue(entry) {
 export function sendRemotePayload(_url, entry) {
     if (!isEnabled()) return false;
 
-    if (window.location.hostname === 'localhost') {
+    if (window.location.hostname === 'localhost' || window.__ttStandalone === true) {
         // Standalone mode: no TizenBrew present. Relay through the local
-        // standalone service instead — same origin as this page, so no
-        // Cobalt/CORS restrictions to work around, unlike the TizenBrew path
-        // below. The service forwards to the PC receiver configured here.
+        // standalone service instead. The service forwards to the PC
+        // receiver configured here.
+        //
+        // Two sub-paths, detected differently since only one of them is
+        // actually same-origin with this fetch:
+        // - proxy path: page is served from localhost:8099 itself (same
+        //   origin, plain HTTP → plain HTTP, no restrictions).
+        // - CDP-injection path (injector.js): page is real https://youtube.com
+        //   — window.__ttStandalone is set there since hostname isn't
+        //   'localhost'. This fetch to http://localhost:8099 is cross-origin
+        //   *and* HTTPS-page-to-HTTP-target, which some engines block as
+        //   mixed content. Unconfirmed on-device whether Cobalt enforces
+        //   that; if entries never arrive from this path specifically, that's
+        //   the first thing to check.
         const host = configRead('logServerHost');
         const port = configRead('logServerPort');
         if (!host) return false;

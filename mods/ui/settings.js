@@ -364,6 +364,10 @@ export default function modernUI(update, parameters) {
                     icon: 'SEND',
                     value: null,
                     menuId: 'tt-log-server-settings',
+                    subtitle: t('settings.options.misc.options.logServer.receiverSubtitle', {
+                        host: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                        port: configRead('logServerPort')
+                    }),
                     options: [
                         {
                             name: t('settings.options.misc.options.logServer.enable'),

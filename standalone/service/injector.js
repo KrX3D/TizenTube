@@ -17,7 +17,11 @@ function connectToDebugger(host, port, args) {
 
             client.on('Runtime.executionContextCreated', m => {
                 fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text()).then(modFile => {
-                    client.Runtime.evaluate({ expression: modFile, contextId: m.context.id });
+                    // Marker so the userscript can tell it's running under this
+                    // standalone app even though this path loads real youtube.com
+                    // directly (window.location.hostname isn't 'localhost' here,
+                    // unlike the proxy path).
+                    client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
                 }).catch(e => {
                     client.Runtime.evaluate({ expression: 'alert("Failed to request to JSDelivr CDN.")', contextId: m.context.id });
                 });
