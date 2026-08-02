@@ -123,8 +123,17 @@ on:
       - 'tizen.log'
       - 'dist/**'
       - 'scripts/**'
-      - 'scripts/**'
   workflow_dispatch:
+
+# Serialize runs so two pushes to main in quick succession can't both read
+# package.json's version before either has committed its own bump — that
+# race produces two runs computing the same "+10" version and the second
+# npm publish failing with "Cannot publish over previously published
+# version". Queue rather than cancel: a bump/publish already in progress
+# must finish (and land its commit) before the next one reads the version.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 # Allow this workflow to push back changes to the repo
 permissions:
