@@ -138,7 +138,7 @@ app.get('/tizentube/debugger', (req, res) => {
             const packageId = tizen.application.getAppInfo().packageId;
             const app = appsContext.find(app => app.appId === `${packageId}.TizenTubeStandalone`);
             if (!app) {
-                injector.startDebugger(args);
+                injector.startDebugger(args, relayLog);
                 clearInterval(interval)
             }
         });

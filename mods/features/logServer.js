@@ -29,31 +29,34 @@ export function sendRemotePayload(_url, entry) {
     if (!isEnabled()) return false;
 
     if (window.location.hostname === 'localhost' || window.__ttStandalone === true) {
-        // Standalone mode: no TizenBrew present. Relay through the local
-        // standalone service instead. The service forwards to the PC
-        // receiver configured here.
-        //
-        // Two sub-paths, detected differently since only one of them is
-        // actually same-origin with this fetch:
-        // - proxy path: page is served from localhost:8099 itself (same
-        //   origin, plain HTTP → plain HTTP, no restrictions).
-        // - CDP-injection path (injector.js): page is real https://youtube.com
-        //   — window.__ttStandalone is set there since hostname isn't
-        //   'localhost'. This fetch to http://localhost:8099 is cross-origin
-        //   *and* HTTPS-page-to-HTTP-target, which some engines block as
-        //   mixed content. Unconfirmed on-device whether Cobalt enforces
-        //   that; if entries never arrive from this path specifically, that's
-        //   the first thing to check.
+        // Standalone mode: no TizenBrew present. Two sub-paths, delivered
+        // differently since only one is actually same-origin with a fetch:
         const host = configRead('logServerHost');
         const port = configRead('logServerPort');
         if (!host) return false;
-        try {
-            fetch('http://localhost:8099/tizentube/log', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ host, port, entry }),
-            }).catch(function () { });
-        } catch (_) { }
+
+        if (window.location.hostname === 'localhost') {
+            // Proxy path: page is served from localhost:8099 itself — same
+            // origin, plain HTTP → plain HTTP, no restrictions. Relay
+            // directly through the local standalone service, which
+            // forwards to the PC receiver.
+            try {
+                fetch('http://localhost:8099/tizentube/log', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ host, port, entry }),
+                }).catch(function () { });
+            } catch (_) { }
+        } else {
+            // CDP-injection path (injector.js): page is real
+            // https://youtube.com — a fetch to http://localhost:8099 from
+            // here is cross-origin *and* HTTPS-page-to-HTTP-target, which
+            // Cobalt blocks as mixed content (confirmed on-device: entries
+            // never arrived). Queue instead; injector.js drains this over
+            // the same CDP connection already open for injection, so
+            // delivery doesn't depend on page-side networking at all.
+            pushToQueue(Object.assign({}, entry, { __ttLogHost: host, __ttLogPort: port }));
+        }
         return true;
     }
 
