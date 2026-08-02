@@ -27,9 +27,9 @@ TizenTube can also run as its own installable Tizen app, without needing TizenBr
 
 The build workflow needs a Tizen author certificate to sign the package. This is a one-time setup:
 
-1. Install [Tizen Studio](https://developer.tizen.org/development/tizen-studio/download) (or just the Certificate Manager tool from it).
-2. Open **Certificate Manager** (Tizen Studio → Tools → Certificate Manager).
-3. **Author** tab → **+** → create a new author certificate. Fill in a name, organization/email, and a password — remember the password, you'll need it below. This produces an `author.p12` file.
+1. Install the **baseline** Tizen Studio installer from [download.tizen.org/sdk/Installer/tizen-studio_6.1](https://download.tizen.org/sdk/Installer/tizen-studio_6.1/) — the newer Web CLI/IDE package-manager-based installer doesn't include Certificate Manager, so it has to be the baseline one.
+2. Open Certificate Manager directly: `C:\tizen-studio\tools\certificate-manager\certificate-manager.exe`.
+3. **Author** tab → **+** → create a new author certificate. Fill in a name, organization/email, and a password — remember the password, you'll need it below. This produces a `.p12` and `.pwd` file under `C:\tizen-studio-data\keystore\author\`.
 4. Base64-encode the `.p12` with no line wrapping:
    - Linux/macOS: `base64 -w0 author.p12`
    - Windows (PowerShell): `[Convert]::ToBase64String([IO.File]::ReadAllBytes("author.p12"))`
