@@ -128,7 +128,7 @@ scripts/tampermonkey/         # local Chrome-based dev/test loader — see READM
 | `shorts.js` | Shorts-related behavior (`enableShorts`). |
 | `videoQueuing.js` | Manual video queue feature. |
 | `playlistBatchCollect.js` | Batch-collects playlist items (`enablePlaylistBatchCollect`). |
-| `logServer.js` | Optional remote log server (`logServerEnabled`) for on-device debugging. |
+| `logServer.js` | Optional remote log server (`logServerEnabled`) for on-device debugging. In TizenBrew mode, relays via TizenBrew's own `127.0.0.1:8081` service + CDP-queue fallback. In standalone mode (`window.location.hostname === 'localhost'`), instead POSTs to the standalone service's own `POST /tizentube/log` (see `standalone/service/index.js`), which relays to the PC receiver at `logServerHost`:`logServerPort` (same `/tv-log` path/JSON shape as TizenBrew's `remoteLogger.js`, so the same PS1 receiver script works for both). Host/port are set via the RED-key theme overlay (`mods/ui/ui.js`), standalone-only fields — there's no free-text entry in the native TV settings menu. The standalone *service itself* also self-logs its own lifecycle (startup, uncaught exceptions, DIAL service load, proxy errors) unconditionally to a hardcoded `DEFAULT_LOG_HOST`/`DEFAULT_LOG_PORT` in `standalone/service/index.js`, independent of any page config — added specifically because the service can crash before the page/userscript ever loads, at which point page-driven config never gets read. |
 | `visualConsole.js` | On-screen debug console (`enableDebugConsole`) — shows version via `../../package.json`, executes commands via `resolveCommand`. |
 
 ## UI map (`mods/ui/*.js`)
@@ -292,22 +292,33 @@ Reported 2026-08-02 after the install issue above was fixed:
   on subsequent launches it loads then restarts, repeating; sometimes it
   fails to open at all.
 
-  **Prime suspect, now reverted pending retest:** this fork's
-  `standalone/service/` had a Babel transpile step (PR #607) that ran
-  over the *entire* `standalone/service/` directory including
-  `node_modules` (minus a handful of excluded packages), transpiling
-  `express` and its ~30 transitive dependencies — code never written or
-  tested with that in mind. Two things pointed at this: (1) it was added
-  specifically to fix the Tizen 5.5 hang above, but that hang still
-  happens, so it wasn't achieving its purpose; (2) it's the single
-  biggest behavioral difference vs. upstream's confirmed-working (on this
-  same 6.5 TV) build, which doesn't transpile at all. Reverted back to
-  upstream's approach (`ncc`-bundle `index.js` directly, no Babel) to
-  test whether that's actually the 6.5 cause. **Needs on-device retest
-  results before considering this closed** — if 6.5 comes back working,
-  the 5.5 hang still needs a separate, more targeted fix (find the
-  specific incompatible syntax/dependency rather than blanket-transpiling
-  everything).
+  **Babel transpilation ruled out.** This fork's `standalone/service/` had
+  a Babel transpile step (PR #607) that ran over the *entire*
+  `standalone/service/` directory including `node_modules` (minus a
+  handful of excluded packages), transpiling `express` and its ~30
+  transitive dependencies — code never written or tested with that in
+  mind, and it never actually fixed the Tizen 5.5 hang it was added for.
+  Reverted back to upstream's approach (`ncc`-bundle `index.js` directly,
+  no Babel) and retested on-device — **no change on either TV**, so Babel
+  was not the (or not the only) cause of either issue. Both problems are
+  still fully open.
+
+  **Next step: remote logging added for standalone mode** (2026-08-02),
+  specifically to stop guessing blind. `standalone/service/index.js` now
+  self-logs its own lifecycle (process start, `app.listen`
+  success/error, DIAL service `require()` success/error, `uncaughtException`/
+  `unhandledRejection`, proxy errors, first `/tv` request received) to a
+  hardcoded `DEFAULT_LOG_HOST`/`DEFAULT_LOG_PORT` (currently
+  `192.168.50.57:3030`) — unconditional, no reliance on the page/userscript
+  ever loading, since the 6.5 crash happens before that point. The
+  userscript's existing `logServer.js` also gained a standalone-mode path
+  (`POST /tizentube/log` on the local service, which relays to
+  `logServerHost`:`logServerPort`, configurable via the RED-key theme
+  overlay) for once the page *does* load. Same `/tv-log` payload shape as
+  TizenBrew's `remoteLogger.js`, so the existing PS1 receiver script works
+  unmodified for both. **Not yet tested on-device** — next session should
+  install this build, watch the PC receiver during a reboot/launch on both
+  TVs, and read what actually happens instead of theorizing further.
 
 **Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
 (compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
