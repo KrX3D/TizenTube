@@ -316,10 +316,40 @@ Reported 2026-08-02 after the install issue above was fixed:
   (`POST /tizentube/log` on the local service, which relays to
   `logServerHost`:`logServerPort`, configurable via the RED-key theme
   overlay) for once the page *does* load. Same `/tv-log` payload shape as
-  TizenBrew's `remoteLogger.js`, so the existing PS1 receiver script works
-  unmodified for both. **Not yet tested on-device** — next session should
-  install this build, watch the PC receiver during a reboot/launch on both
-  TVs, and read what actually happens instead of theorizing further.
+  TizenBrew's `remoteLogger.js`, so the receiver script at
+  `scripts/log-receiver/receiver.ps1` works unmodified for both.
+
+  **Tizen 6.5: likely root cause found via the first real device log
+  (2026-08-02).** `dist/service.js`'s DIALServer constructor was throwing
+  `crypto.getRandomValues() not supported` — the bundled `uuid` package
+  resolved to its browser-targeted rng, which needs Web Crypto's
+  `getRandomValues`, not available on Tizen's old Node service runtime.
+  Before the logging PR (#622) added a `try`/`catch` around that
+  `require()`, this was an *uncaught* exception that crashed the whole
+  service process at startup — plausibly the actual crash-loop mechanism:
+  Tizen relaunches a service that dies again immediately, repeatedly. Fixed
+  by polyfilling `global.crypto.getRandomValues` with Node's own
+  `crypto.randomBytes` before the DIAL service loads. **Needs on-device
+  retest to confirm** — the log also showed secondary, likely-benign
+  noise (`app.onRequest is not a function` from Tizen's own service
+  runner — present in upstream's structure too, since neither exports an
+  `onRequest` handler, so probably pre-existing/harmless rather than
+  fatal; and one `Cannot find context with specified id` from the CDP
+  injector, a normal timing race that seems to resolve on retry) that
+  isn't yet proven unrelated — re-check the log after this fix lands
+  before assuming 6.5 is fully closed.
+
+  **Tizen 5.5: still a total blackout, no log entries arrive at all.**
+  Since `logServiceEvent('INFO', 'Standalone service process starting')`
+  is the first thing that runs after the require()s, and nothing reaches
+  the receiver, either the service never starts running on 5.5 at all
+  (packaging/manifest/privilege issue specific to that Tizen version), or
+  outbound HTTP from the service to the PC receiver fails silently there.
+  Not yet root-caused — worth checking via SDB shell (if reachable) whether
+  the service process is even running, and confirming TizenBrew (already
+  confirmed working on this same 5.5 TV, per 2026-08-02 testing) can reach
+  the same `192.168.50.57:3030` receiver to rule out a network-reachability
+  difference between the two.
 
 **Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
 (compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
