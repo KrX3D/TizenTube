@@ -254,6 +254,7 @@ jobs:
           tizen build-web
           -e "service/index.js"
           -e "service/injector.js"
+          -e "service/bootstrap.js"
           -e "service/build-service.js"
           -e "service/package.json"
           -e "service/package-lock.json"

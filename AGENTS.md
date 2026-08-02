@@ -78,7 +78,15 @@ standalone/                  # standalone installable app — see "Standalone mo
   service/                    # standalone's own local proxy + CDP injector (NOT mods/'s service/)
     index.js                  # Express proxy: rewrites youtube.com/tv, injects userscript <script> tag
     injector.js               # CDP-based injector (same technique TizenBrew itself uses)
-    build-service.js          # ncc-bundles index.js directly → service/dist/index.js (see Known unresolved issues re: a past Babel transpile attempt here, reverted)
+    bootstrap.js               # plain ES5 (no ncc/bundling) — copied through as-is to dist/index.js,
+                                # the actual tizen:service entry point. require()s dist/bundle.js
+                                # (the real ncc bundle of index.js/injector.js/express/etc, output
+                                # to a *different* filename on purpose) inside a try/catch, so a
+                                # SyntaxError while Node parses that huge bundle — which can't be
+                                # caught from inside the bundle itself, since parse errors happen
+                                # before any of that file's own code runs — is at least catchable
+                                # and loggable here. See "Known unresolved issues" re: Tizen 5.5.
+    build-service.js          # ncc-bundles index.js → service/dist/bundle.js, copies bootstrap.js → dist/index.js
     package.json
 
 .github/
@@ -405,11 +413,42 @@ Reported 2026-08-02 after the install issue above was fixed:
   receiver, no dependency on the service) logging at the earliest
   possible points: script start, right before `launchAppControl`, inside
   both its success and error callbacks, and at each branch of
-  `useInjectorOrProxy()`'s `getState` resolution. This is diagnostic only
-  — **not a fix**, since we still don't know why 5.5 doesn't progress; the
-  next session should see whether *any* of these new log lines arrive
-  from 5.5, which narrows down whether the problem is in `index.html`
-  itself, `launchAppControl`, or the service.
+  `useInjectorOrProxy()`'s `getState` resolution.
+
+  **This diagnostic paid off (2026-08-02): on Tizen 5.5, all of
+  `index.html`'s own log lines arrive fine — script start,
+  `launchAppControl` success, `useInjectorOrProxy()` called — but
+  `getState` fails every single time with `Failed to fetch`, across many
+  rapid retries (the "progress bar keeps resetting" the user described
+  is `index.html`'s own `window.location.reload()` firing every ~1.5s).
+  Critically, not one single `[StandaloneService]` log line ever
+  appeared — not even the very first one, which is the first statement
+  after `require('http')`. Since that's wrapped in nothing but plain
+  top-level code, the only way for it to never fire is if
+  `service/dist/index.js` never got that far — most plausibly, Node
+  failed to *parse* the file at all. A parse-time `SyntaxError` happens
+  before any code in that file runs, including its own try/catch, so it
+  can't self-report — and the huge `ncc` bundle includes not just this
+  app's own code but all of `express`/`node-fetch`/`adbhost`/
+  `chrome-remote-interface`'s code too, none of which was written with
+  Tizen 5.5's older Node in mind.**
+
+  Fix attempt: split the service entry into two files.
+  `standalone/service/bootstrap.js` is deliberately plain ES5 (`var`/
+  `function`, no arrow functions/template literals/const/destructuring)
+  and is copied through to `dist/index.js` *unmodified* — no `ncc`
+  processing, so it can't itself be the thing that fails to parse. It
+  `require()`s the real bundle (now built to `dist/bundle.js` instead of
+  `dist/index.js`) inside a try/catch. A `SyntaxError` while parsing a
+  *required* file **is** catchable by the requiring file, unlike a parse
+  error in the top-level file being executed — so if the bundle still
+  fails to parse on 5.5, this should now at least produce one loggable
+  line (`require('./bundle.js') FAILED: ...`) instead of total silence.
+  **Not yet tested on-device.** If 5.5 still produces zero logs even
+  from `bootstrap.js` itself (which would be very surprising, since it's
+  about as syntactically minimal as JS gets), the failure is likely even
+  earlier than JS execution entirely — e.g. the service not launching at
+  the Tizen platform level — and would need SDB-level inspection instead.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
