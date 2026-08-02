@@ -75,6 +75,8 @@
                     "logServer": {
                         "title": "Fernprotokoll-Server",
                         "enable": "Protokollierung aktivieren",
+                        "receiverSubtitle": "Empfänger: {{host}}:{{port}}",
+                        "receiverNotSet": "nicht festgelegt",
                         "test": "Server-Verbindung testen",
                         "testSubtitle": "Sendet einen Testeintrag über TizenBrew, um die Verbindung zu prüfen",
                         "testQueued": "Testeintrag eingereiht — TizenBrew-Log prüfen",

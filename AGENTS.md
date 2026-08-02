@@ -319,37 +319,76 @@ Reported 2026-08-02 after the install issue above was fixed:
   TizenBrew's `remoteLogger.js`, so the receiver script at
   `scripts/log-receiver/receiver.ps1` works unmodified for both.
 
-  **Tizen 6.5: likely root cause found via the first real device log
-  (2026-08-02).** `dist/service.js`'s DIALServer constructor was throwing
-  `crypto.getRandomValues() not supported` — the bundled `uuid` package
-  resolved to its browser-targeted rng, which needs Web Crypto's
-  `getRandomValues`, not available on Tizen's old Node service runtime.
-  Before the logging PR (#622) added a `try`/`catch` around that
-  `require()`, this was an *uncaught* exception that crashed the whole
-  service process at startup — plausibly the actual crash-loop mechanism:
-  Tizen relaunches a service that dies again immediately, repeatedly. Fixed
-  by polyfilling `global.crypto.getRandomValues` with Node's own
-  `crypto.randomBytes` before the DIAL service loads. **Needs on-device
-  retest to confirm** — the log also showed secondary, likely-benign
-  noise (`app.onRequest is not a function` from Tizen's own service
-  runner — present in upstream's structure too, since neither exports an
-  `onRequest` handler, so probably pre-existing/harmless rather than
-  fatal; and one `Cannot find context with specified id` from the CDP
-  injector, a normal timing race that seems to resolve on retry) that
-  isn't yet proven unrelated — re-check the log after this fix lands
-  before assuming 6.5 is fully closed.
+  **Tizen 6.5: DIAL service crash fixed, but that wasn't the whole story.**
+  `dist/service.js`'s DIALServer constructor was throwing
+  `crypto.getRandomValues() not supported` (uuid's browser-targeted rng,
+  no Web Crypto on Tizen's old Node service runtime) — fixed by
+  polyfilling `global.crypto.getRandomValues` with Node's own
+  `crypto.randomBytes`. Confirmed via a real device log: `dist/service.js`
+  now loads cleanly. But the user then clarified the actual observed
+  pattern more precisely: **both TVs fail to send any logs (or reach the
+  service) on the very first launch, and only work after the app
+  auto-relaunches once** — 6.5 reliably gets through that one retry, 5.5
+  never does (matches the original bug report: the splash/progress bar
+  just hangs forever on 5.5). So this looks like a **first-launch
+  service-startup timing race**, not (only) the DIAL crash.
 
-  **Tizen 5.5: still a total blackout, no log entries arrive at all.**
-  Since `logServiceEvent('INFO', 'Standalone service process starting')`
-  is the first thing that runs after the require()s, and nothing reaches
-  the receiver, either the service never starts running on 5.5 at all
-  (packaging/manifest/privilege issue specific to that Tizen version), or
-  outbound HTTP from the service to the PC receiver fails silently there.
-  Not yet root-caused — worth checking via SDB shell (if reachable) whether
-  the service process is even running, and confirming TizenBrew (already
-  confirmed working on this same 5.5 TV, per 2026-08-02 testing) can reach
-  the same `192.168.50.57:3030` receiver to rule out a network-reachability
-  difference between the two.
+  Comparing `standalone/config.xml` against `TizenBrew`'s own config.xml
+  — TizenBrew reliably starts its service on *both* TVs, no retry needed —
+  found it has a `<tizen:app-control>` block with Samsung's
+  `eden_resume` operation and `reload="disable"` that ours was completely
+  missing, plus `recorder`/`mediacapture`/`unlimitedstorage` privileges
+  that PR #608 had removed as "unused" (present in both TizenBrew's and
+  upstream's TizenTube's config.xml — removing them may have affected
+  more than privilege gating). Added the `app-control`/`eden_resume` block
+  and restored those three privileges to match. Also restructured
+  `standalone/service/index.js` so logging infrastructure (which only
+  needs Node's core `http` module) is set up *before* requiring
+  `express`/`node-fetch`/`./injector.js`, with each of those requires
+  wrapped individually (`safeRequire`) — previously, if any of those threw
+  synchronously (plausible on 5.5's much older Node, since these packages
+  likely assume newer Node APIs no amount of transpilation can add), it
+  would happen before any logging existed to catch it, which is
+  consistent with 5.5's total blackout. **None of this is confirmed
+  on-device yet** — next session needs a real retest on both TVs to see
+  whether first-launch startup is now reliable, and if 5.5 still produces
+  zero logs, whether `safeRequire`'s per-require logging finally shows
+  which one fails there.
+
+  Also found, still unresolved/unconfirmed either way: `app.onRequest is
+  not a function` fires repeatedly every launch (from Tizen's own service
+  runner) but doesn't crash the process — likely benign, since neither
+  our nor upstream's `standalone/service/index.js` implements that
+  handler and upstream still works; and one `Cannot find context with
+  specified id` from the CDP injector, a normal context-invalidation race
+  that seems to resolve itself once a fresh execution context appears.
+  Neither is proven unrelated to the retry-need — worth re-reading the
+  log after the startup-timing fixes above land, not assumed irrelevant.
+
+  **Standalone-mode detection was also wrong for the CDP-injection path.**
+  `window.location.hostname === 'localhost'` (used by `logServer.js` and
+  the RED-key theme overlay in `mods/ui/ui.js` to decide whether to show/
+  use the standalone log relay) only covers the *proxy* path. The
+  CDP-injection path (`injector.js`) navigates Cobalt directly to real
+  `https://youtube.com/tv` — this TV has debug mode reachable, so it
+  always uses that path — meaning `hostname` is never `'localhost'`
+  there, so the host/port fields never showed and page-level logs never
+  sent (they fell through to the TizenBrew-only branch, which has nothing
+  listening on `127.0.0.1:8081` in pure standalone, and silently
+  queued/dropped). Fixed by having `injector.js` set `window.__ttStandalone
+  = true` before evaluating the userscript, and checking that in addition
+  to the hostname in both places. **Unconfirmed on-device**: the relay
+  fetch from this path is `https://youtube.com` (page origin) →
+  `http://localhost:8099` (target) — cross-origin *and* HTTPS-page-to-HTTP-
+  target, which some engines block as mixed content. If host/port now show
+  correctly in settings but page-level log entries still never arrive
+  specifically from this path, that's the first thing to check.
+
+  Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
+  subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
+  settings.js`, `en.json`/`de.json`), since the native TV settings menu has
+  no free-text entry — editing the actual host/port still only happens via
+  the RED-key theme overlay.
 
 **Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
 (compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
