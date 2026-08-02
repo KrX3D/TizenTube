@@ -233,39 +233,68 @@ CI owns that file's committed state.
 
 ## Known unresolved issues (as of writing)
 
-**Standalone `.wgt` install failure — still open, multiple fix attempts,
-paused pending more information.** Summary of what's been ruled out and
-what's still live, so the next session doesn't repeat dead ends:
+**Standalone `.wgt` install failure — RESOLVED (2026-08-02).** Kept here for
+the history, since it took several disproven theories to get there:
 
 1. Signing with `tizenjs` (unofficial community packaging tool) + its
    auto-downloaded distributor cert → installed fine as an *update* but
    was rejected on a fresh install (`invalid certificate chain`). Root
    cause was assumed to be the cert's expiration (Samsung's public sample
-   cert, expired 2022) — **this was later disproven**: a sibling project
-   in this same author's ecosystem (`TizenYouTube`) installs fine fresh
-   using that *exact same expired cert*, just packaged with official
-   Tizen Studio instead of `tizenjs`.
+   cert, expired 2022) — **disproven**: a sibling project in this same
+   author's ecosystem (`TizenYouTube`) installs fine fresh using that
+   *exact same expired cert*, just packaged with official Tizen Studio
+   instead of `tizenjs`.
 2. Switched to Samsung's official Tizen Studio CLI (`tizen build-web` +
-   `tizen package`), matching the working sibling projects exactly
-   (`TizenBrew`, `TizenBrewInstaller`, `TizenYouTube` all use it). This is
-   very likely the structurally correct fix — but packaging then hit a
-   *different* failure: `CertificationException: Invaild password` from
-   Tizen Studio's own signing tool while loading the author certificate,
-   even though the same password/cert work fine via `tizenjs`.
-3. Attempted fix: re-encrypt the author `.p12` to an older, more
-   broadly-Java-compatible PKCS#12 cipher (`PBE-SHA1-3DES`) before Tizen
-   Studio reads it, on the theory that Tizen Studio's old bundled Java
-   crypto can't read modern OpenSSL 3.x's default AES-256 PKCS#12
-   encryption. **Did not resolve it** — still failing with the same error
-   as of the last test.
-4. **Paused here at the user's request.** Next step, if resumed: the
-   workflow logs the PBE algorithm before/after the re-encryption attempt
-   (`Configure certificate profile` step) — read that log output first
-   rather than guessing again blind. Also worth directly diffing this
-   repo's actual `author.p12` (openssl `pkcs12 -info`) against one that's
-   confirmed working (e.g. regenerate a fresh cert via Tizen Studio's own
-   Certificate Manager, since that's guaranteed cipher-compatible with
-   Tizen Studio's own signing tool).
+   `tizen package`), matching the working sibling projects
+   (`TizenBrew`, `TizenBrewInstaller`, `TizenYouTube` all use it) — the
+   structurally correct approach. Packaging then hit
+   `CertificationException: Invaild password` while loading the author
+   certificate, even though the same password/cert worked fine via
+   `tizenjs`.
+3. Attempted fix: re-encrypt the author `.p12` to an older,
+   Java-compatible PKCS#12 cipher (`PBE-SHA1-3DES`) before Tizen Studio
+   reads it, since Tizen Studio's bundled Java crypto can't read modern
+   OpenSSL 3.x's default AES-256 PKCS#12 encryption. Didn't resolve it on
+   its own — the `-legacy` flag needed for that re-encrypt/export step
+   was missing from the *earlier* decrypt-to-PEM step too, so the
+   pipeline still failed reading the incoming cert before it ever got to
+   re-encrypting it.
+4. **Actual fix, two parts:**
+   - Build-side: add `-legacy` to *both* `openssl pkcs12` invocations
+     (decrypt-to-PEM and re-encrypt-to-export), not just the export one —
+     some freshly-generated certs' PKCS7 "Encrypted data" bag uses
+     `RC2-40-CBC`, which OpenSSL 3.x's default provider can't even read
+     without `-legacy`, independent of the AES-256/3DES issue above.
+   - Cert-side: the specific `.p12` reused from the `TizenYouTube` sibling
+     project (see point 1) never actually worked *as an install*, even
+     after the build-side fix — a **fresh, dedicated** author certificate
+     (never used to install a different app on the same TV) was required.
+     Reusing a cert across different installed apps on one TV appears to
+     cause on-device install problems distinct from any build/signing
+     error — consistent with this repo's existing convention of never
+     reusing app identities/certs across projects (see "Conventions"
+     below). Generate a new cert per app, don't reuse one from another
+     project even if it builds/signs without error.
+   - Also worth knowing: GitHub's **Re-run failed jobs** stays pinned to
+     the workflow file as it existed at that run's original commit — it
+     will *not* pick up a workflow fix merged afterward. Use **Run
+     workflow** (`workflow_dispatch`) or a new tag to actually test a fix.
+
+**Standalone runtime issues on-device — open, not yet investigated.**
+Reported 2026-08-02 after the install issue above was fixed:
+- **Tizen 5.5:** app shows the TizenTube splash + loading bar, then hangs
+  indefinitely — never finishes loading. Also reproduces with upstream's
+  own published build, so this isn't a regression from anything in this
+  fork; likely an old-WebKit-engine incompatibility somewhere in the
+  proxy/injection path.
+- **Tizen 6.5:** regression specific to this fork's standalone build —
+  upstream's `.wgt` works fine on the same TV, but this fork's build
+  crash-loops: after a TV reboot the app opens then immediately closes;
+  on subsequent launches it loads then restarts, repeating; sometimes it
+  fails to open at all. Not yet root-caused — likely worth bisecting
+  against what upstream's standalone build does differently (Node
+  version, Babel transpile target, the CDN version-sync/injector changes,
+  or something in `standalone/service/`).
 
 **Deferred feature: Q-Symphony 5.1 audio.** `pilvepank/TizenTube`'s fork
 (compare: `reisxd/TizenTube...pilvepank:TizenTube:main`) has a well-built
