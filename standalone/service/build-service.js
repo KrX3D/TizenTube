@@ -3,12 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 async function build() {
-    // index.js is transpiled to transpiled/index.js by the "babel" step in
-    // npm run build (see package.json) before this runs, so older Tizen TVs
-    // (Tizen ~5.5 and below run Node v4.4.3 for the JS service engine) get
-    // syntax their runtime can actually parse instead of failing to load the
-    // service entirely.
-    const { code } = await ncc(path.join(__dirname, 'transpiled', 'index.js'), {
+    const { code } = await ncc(path.join(__dirname, 'index.js'), {
         minify: false
     });
 
