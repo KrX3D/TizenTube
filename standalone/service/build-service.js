@@ -13,6 +13,17 @@ async function build() {
     ).replace(
         /(method:\s*request\.method,)/,
         "$1 maxHeaderSize: 5*1024*1024,"
+    ).replace(
+        // adbhost's own AdbHostClient.prototype._onPacket assigns
+        // `packet = this._packet;` with no declaration — a genuine bug in
+        // that package, harmless in sloppy mode (silently creates an
+        // implicit global) but a ReferenceError in strict mode. Confirmed
+        // on-device: this crashed the ADB connection handling right after
+        // the CDP-injection handoff began once the whole bundle was forced
+        // strict (see the "use strict" prepend below), breaking every
+        // standalone launch on Tizen 6.5.
+        /\bpacket = this\._packet;/,
+        'var packet = this._packet;'
     );
 
     // Node 4.4.3 (Tizen ~5.5's service engine) rejects block-scoped let/const/
