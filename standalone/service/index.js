@@ -154,13 +154,25 @@ app.get('/tizentube/getState', (req, res) => {
 
 app.get('/tizentube/debugger', (req, res) => {
     const args = req.originalUrl.split('?')[1] || '';
+    // setInterval fires every 50ms regardless of whether the previous
+    // getAppsContext callback has returned yet — if that call ever takes
+    // longer than 50ms (plausible under load), multiple overlapping calls
+    // can all see the app already gone and each call injector.startDebugger,
+    // since clearInterval only stops *future* ticks, not callbacks already
+    // in flight. Confirmed on-device: bursts of near-simultaneous "ADB
+    // connected" attempts and ECONNRESET errors on the ADB connection,
+    // consistent with several concurrent shell:0 debug sessions stepping on
+    // each other. Guard with a flag so only the first caller can proceed.
+    let started = false;
     const interval = setInterval(() => {
         tizen.application.getAppsContext((appsContext) => {
+            if (started) return;
             const packageId = tizen.application.getAppInfo().packageId;
             const app = appsContext.find(app => app.appId === `${packageId}.TizenTubeStandalone`);
-            if (!app) {
+            if (!app && !started) {
+                started = true;
+                clearInterval(interval);
                 injector.startDebugger(args, relayLog);
-                clearInterval(interval)
             }
         });
     }, 50);
