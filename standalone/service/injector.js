@@ -58,23 +58,43 @@ function connectToDebugger(host, port, args, relayLog) {
             client.Runtime.enable();
             client.Page.enable();
 
+            function logNonFatal(label) {
+                return e => {
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `${label} FAILED (non-fatal): ${e && e.stack || e}` });
+                    }
+                };
+            }
+
             // Confirmed on-device: standalone reliably works exactly once
             // after any cache clear, then breaks on every subsequent launch
-            // until the cache is cleared again — on the pure CDP-injection
-            // path (real youtube.com, no proxy/rewriting involved at all).
-            // That pattern points at Cobalt's WebView HTTP cache serving
-            // something stale/broken for YouTube TV's own resources on a
-            // second load, not anything in this app's own code. Disable the
-            // cache for this navigation so every launch gets a cold load —
-            // non-fatal if unsupported (Page.setBypassCSP already turned out
-            // not to exist on this Cobalt CDP implementation; Network.* may
-            // be similarly incomplete).
-            client.Network.enable().catch(() => { });
-            client.Network.setCacheDisabled({ cacheDisabled: true }).catch(e => {
-                if (typeof relayLog === 'function') {
-                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Network.setCacheDisabled FAILED (non-fatal): ${e && e.stack || e}` });
-                }
-            });
+            // until the cache/data is cleared again (on Tizen 5.5, cache
+            // alone sometimes wasn't enough — data had to be cleared too) —
+            // on the pure CDP-injection path (real youtube.com, no proxy/
+            // rewriting involved at all), reproduced repeatedly on both TVs.
+            // A TV reboot alone did not fix it (rules out in-memory state).
+            // Network.setCacheDisabled alone (a prior attempt at this fix)
+            // only stops *new* caching for this session — it doesn't clear
+            // what's already cached/stored from the previous run, and
+            // didn't resolve the issue on retest. Actively clear cache,
+            // cookies, and per-origin storage before navigating instead —
+            // replicating what the user's manual Clear Cache/Clear Data
+            // TV settings action does, programmatically, on every launch.
+            // Each call is independently non-fatal (Page.setBypassCSP
+            // already turned out not to exist on this Cobalt CDP
+            // implementation; other domains may be similarly incomplete)
+            // and all proceed to Page.navigate() regardless of outcome.
+            const preNavigateCleanup = client.Network.enable()
+                .then(() => client.Network.setCacheDisabled({ cacheDisabled: true }).catch(logNonFatal('Network.setCacheDisabled')))
+                .then(() => client.Network.clearBrowserCache().catch(logNonFatal('Network.clearBrowserCache')))
+                .then(() => client.Network.clearBrowserCookies().catch(logNonFatal('Network.clearBrowserCookies')))
+                .then(() => client.Storage && client.Storage.clearDataForOrigin
+                    ? client.Storage.clearDataForOrigin({
+                        origin: 'https://www.youtube.com',
+                        storageTypes: 'cookies,local_storage,indexeddb,cache_storage,service_workers,websql'
+                    }).catch(logNonFatal('Storage.clearDataForOrigin'))
+                    : null)
+                .catch(logNonFatal('pre-navigate cleanup chain'));
 
             // Only start log-polling after injection has actually succeeded
             // once, not immediately alongside Page.navigate() — keeps it
@@ -110,7 +130,11 @@ function connectToDebugger(host, port, args, relayLog) {
                 });
             });
 
-            client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` }).catch(e => {
+            // Wait for the cleanup attempts above so the clear actually takes
+            // effect before this navigation, rather than racing it.
+            preNavigateCleanup.then(() => {
+                return client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` });
+            }).catch(e => {
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Page.navigate FAILED: ${e && e.stack || e}` });
                 }
