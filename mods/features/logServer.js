@@ -14,7 +14,14 @@
 
 import { configRead } from '../config.js';
 
-const MAX_QUEUE = 300;
+// Lowered from 300 — this queue gets JSON.stringify'd in-page, on the same
+// thread as YouTube's own rendering, once per poll (injector.js
+// pollLogQueue). Confirmed on-device: with regular console.* output now
+// also flowing through this queue (not just the sparser file-only
+// stream), the larger the worst-case backlog, the more that poll competes
+// with real page work — observed as hangs during navigation specifically
+// when remote logging was enabled.
+const MAX_QUEUE = 100;
 
 export function isEnabled() {
     try { return !!configRead('logServerEnabled'); } catch { return false; }
