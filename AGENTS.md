@@ -102,6 +102,9 @@ standalone/                  # standalone installable app — see "Standalone mo
 
 scripts/tampermonkey/         # local Chrome-based dev/test loader — see README.md
 scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote logging (see Feature map)
+scripts/pc-installer/         # PC-side install/update script (SDB from the PC, no on-device installer app
+                                # needed) — workaround for the Host PC IP 127.0.0.1 conflict with standalone's
+                                # proxy path; in progress, see AGENTS.md "Known unresolved issues"
 ```
 
 ## Configuration system (`mods/config.js`)
@@ -696,32 +699,61 @@ Reported 2026-08-02 after the install issue above was fixed:
     should also reduce how often TizenBrew needs multiple relaunches
     during the same broken window, not just this app.
 
-  **Resolved (2026-08-03) — not by fixing the CDP path, but by confirming
-  the proxy path doesn't need it.** Tested on-device: with the TV's
-  Developer Mode "Host PC IP" set to anything other than `127.0.0.1`
-  (a real PC IP, or unset), `canConnectToDaemon()` correctly returns
-  `false`, `useInjectorOrProxy()` takes the proxy path instead of CDP,
-  and it has been **reliable on both Tizen 5.5 and 6.5** — clean
-  `getState` → `Taking proxy path` → `Received GET /tv` every single
-  time, no errors, no retries needed, repeated launches all succeeding.
-  This is a stronger result than any of the CDP-path fixes above
-  achieved. **README.md now explicitly documents not setting Host PC
-  IP to `127.0.0.1`** for this reason. The CDP path and all the fixes
-  above are still there (harmless, and useful if `127.0.0.1` is ever
-  set for other reasons) but the proxy path is what actually works
-  reliably — this isn't a "pick one" architectural decision so much as
-  an operational finding: don't configure the TV in the way that
-  triggers the unreliable path.
+  **Not resolved — reframed (2026-08-03), twice.** First finding: tested
+  on-device, with Host PC IP set to anything other than `127.0.0.1`, the
+  proxy path connects reliably on both Tizen 5.5 and 6.5 — clean
+  `getState` → `Taking proxy path` → `Received GET /tv` every time, no
+  connection errors, no retries needed. This looked like a strictly
+  better result than any CDP-path fix achieved and was initially
+  documented as "the fix" (prefer proxy, avoid `127.0.0.1`).
 
-  Trade-off surfaced immediately: TizenBrew and TizenBrewInstaller
-  (separate repos, separate apps) apparently *also* require Host PC IP
-  `127.0.0.1` for their own local SDB-based mechanisms (TizenBrewInstaller
-  needs it to install/update packages) — so a TV configured for
-  standalone's reliable proxy path can no longer install updates via
-  those tools without switching Host PC IP back and forth. Whether
-  those tools can be given an equivalent non-CDP path is a separate,
-  cross-repo question the user raised — see those repos' own
-  documentation/AGENTS.md if that work happens, not this one.
+  **That guidance was wrong, or at least incomplete — corrected the same
+  day.** The user then hit video playback stopping entirely on the
+  proxy path, with a YouTube verification QR code matching
+  upstream reisxd/TizenTube#561 ("Standalone: unable to play any
+  video" — worked the first day, broke the next, TizenBrew's own
+  unproxied path unaffected throughout). Checked the actual upstream
+  commit that's supposed to have addressed this
+  (`c497c0590800e0474b198bbfcde77dcfc37f8ad0`) — it turns out to be the
+  commit that *introduced* `injector.js` in the first place (added
+  fresh, 70 lines, nothing in the proxy code touched at all), with the
+  commit message: *"Since fixing #555 and #561 would be starting a cat
+  and mouse game between me and YT, I think it's better to do it the
+  old way, aka the TizenBrew way."* In other words: upstream didn't fix
+  the proxy path's YouTube-detection problem, they built an entirely
+  separate path (CDP injection, real direct connection, no rewritten
+  traffic) specifically to avoid needing to. The proxy path's
+  reliability finding above is real (connection-level), but it doesn't
+  mean the proxy path is actually the better choice — it has a
+  separate, YouTube-server-side, likely structurally unfixable failure
+  mode (breaks *already-working* video playback, not just launch) that
+  the CDP path doesn't have at all.
+
+  **Net effect: neither path is simply "the answer."** CDP is
+  connection-unreliable (this session's whole investigation, several
+  genuine fixes landed, not fully solved). Proxy connects reliably but
+  can silently stop video playback via YouTube's own bot detection,
+  which isn't something fixable by patching our own code — it's why
+  upstream moved away from it. README.md now documents both failure
+  modes explicitly instead of recommending one path over the other.
+  Continuing to harden the CDP path (matching upstream's own direction)
+  is probably the more sustainable direction than trying to out-guess
+  YouTube's detection on the proxy path — but that's not yet a settled
+  decision, just the more defensible one given upstream's own
+  experience.
+
+  Trade-off surfaced along the way, independent of which path "wins":
+  TizenBrew and TizenBrewInstaller (separate repos, separate apps)
+  apparently *also* require Host PC IP `127.0.0.1` for their own local
+  SDB-based mechanisms (TizenBrewInstaller needs it to install/update
+  packages) — so a TV configured for standalone's proxy path can't use
+  those without switching Host PC IP back and forth. A PC-side
+  installer script (`scripts/pc-installer/`, this repo) is being built
+  as a workaround specifically for the install/update case, since SDB
+  installs work the same over network as USB and don't need
+  `127.0.0.1` — see that script's own docs. TizenBrew's own CDP
+  injection has no equivalent workaround; whether it needs one is a
+  separate, cross-repo question, not resolved here.
 
   Also fixed while investigating: `standalone/index.html`'s
   `launchAppControl` error callback previously only showed an `alert()`
