@@ -143,22 +143,23 @@ function initVisualConsole() {
     const wantsRemote = isLogServerEnabled();
     if (!wantsVisual && !wantsRemote) return;
 
-    const MAX_MSG_LENGTH = 500;
-    let msg = args.map((a) => {
+    const msg = args.map((a) => {
       if (typeof a === 'string') return a;
       try { return JSON.stringify(a); } catch (_) { return String(a); }
     }).join(' ');
-    // Uncapped before this — a single large object argument (e.g. a full
-    // page-state dump) would get fully JSON.stringify'd and stored/sent as
-    // one entry, every time. Cheap defensive cap, same idea already used
-    // for error stack traces elsewhere in this codebase.
-    if (msg.length > MAX_MSG_LENGTH) msg = msg.slice(0, MAX_MSG_LENGTH) + '…[truncated]';
 
     if (wantsVisual) {
+      // Capped for on-screen display only — a giant wall of text in the
+      // fixed-size overlay is genuinely bad UX. The remote-relay path below
+      // sends the full, uncapped message; logServer.js's sendRemotePayload
+      // splits anything long into multiple sent parts rather than losing
+      // content, so this cap has no bearing on what reaches the PC.
+      const MAX_VISUAL_LENGTH = 500;
+      const visualMsg = msg.length > MAX_VISUAL_LENGTH ? msg.slice(0, MAX_VISUAL_LENGTH) + '…[truncated on-screen]' : msg;
       const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
       logs.unshift({
         color,
-        msg,
+        msg: visualMsg,
         time: new Date().toLocaleTimeString()
       });
       if (logs.length > 600) logs.pop();

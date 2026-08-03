@@ -13,7 +13,11 @@ export function appendFileOnlyLog(label, payload) {
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
   try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
-  if (msg.length > 500) msg = msg.slice(0, 500) + '…[truncated]';
+  // No longer truncated here — logServer.js's sendRemotePayload now splits
+  // long messages into multiple sent parts instead of the previous cutoff
+  // silently discarding everything past 500 chars. This array also feeds
+  // the downloadable log file (downloadTizenTubeLogs()), which has no
+  // reason to lose content either.
   window.__ttFileOnlyLogs.push(`[${new Date().toISOString()}] [TT_ADBLOCK_FILE] ${label} ${msg}`);
   if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
 }

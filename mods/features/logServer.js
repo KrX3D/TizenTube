@@ -32,9 +32,24 @@ function pushToQueue(entry) {
     if (window.__ttLogQueue.length < MAX_QUEUE) window.__ttLogQueue.push(entry);
 }
 
-export function sendRemotePayload(_url, entry) {
-    if (!isEnabled()) return false;
+// Long messages are split into multiple sent parts rather than truncated —
+// previously a message over the length cap was cut off and the remainder
+// silently discarded. Each part is sent as its own log entry, tagged
+// "[i/N]", so nothing is lost — the PC receiver just sees consecutive
+// lines instead of one long one. Chunk size is generous (not the old
+// display-oriented 500) since this only bounds a single queue/HTTP
+// payload, not on-screen readability (that's handled separately in
+// visualConsole.js for the visual console specifically).
+const MAX_MSG_CHUNK = 1000;
 
+function buildFormatted(entry, message) {
+    const ts = entry.ts || new Date().toISOString();
+    const level = entry.level || 'INFO';
+    const context = entry.context || 'TizenTube';
+    return `[${ts}] [${level}] [${context}] ${message}`;
+}
+
+function sendOne(_url, entry) {
     if (window.location.hostname === 'localhost' || window.__ttStandalone === true) {
         // Standalone mode: no TizenBrew present. Two sub-paths, delivered
         // differently since only one is actually same-origin with a fetch:
@@ -86,6 +101,25 @@ export function sendRemotePayload(_url, entry) {
     return true;
 }
 
+export function sendRemotePayload(_url, entry) {
+    if (!isEnabled()) return false;
+
+    const fullMessage = (entry && entry.message) || '';
+    if (fullMessage.length <= MAX_MSG_CHUNK) return sendOne(_url, entry);
+
+    const totalParts = Math.ceil(fullMessage.length / MAX_MSG_CHUNK);
+    let anySent = false;
+    for (let i = 0; i < totalParts; i++) {
+        const chunkMsg = `[${i + 1}/${totalParts}] ` + fullMessage.slice(i * MAX_MSG_CHUNK, (i + 1) * MAX_MSG_CHUNK);
+        const chunkedEntry = Object.assign({}, entry, {
+            message: chunkMsg,
+            _formatted: buildFormatted(entry, chunkMsg),
+        });
+        if (sendOne(_url, chunkedEntry)) anySent = true;
+    }
+    return anySent;
+}
+
 // ── Install ───────────────────────────────────────────────────────────────────
 
 function install() {
@@ -130,7 +164,11 @@ function install() {
                         message:    raw,
                     };
                 }
-                pushToQueue(entry);
+                // Routed through sendRemotePayload (not pushToQueue directly)
+                // so long file-only entries (e.g. parse.error stack traces)
+                // get the same chunked-send treatment as everything else —
+                // split into multiple sent parts instead of lost entirely.
+                sendRemotePayload(null, entry);
             } catch (_) {}
         }
         return result;
