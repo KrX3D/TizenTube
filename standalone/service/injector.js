@@ -8,6 +8,24 @@ const fetch = require('node-fetch');
 var isConnecting = false;
 const isTizen3 = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').startsWith('3.0');
 
+// Confirmed on-device: TizenBrew — a completely separate app/service, not
+// sharing any code path with this one — hits the exact same "closes itself,
+// needs several relaunches before it works" pattern. That rules out
+// anything specific to this app's own code as the sole cause; it points at
+// something systemic in how the SDB debug daemon / Cobalt's CDP session
+// handling behaves across successive debug-session requests. TizenBrew's
+// own debugger.js retries internally (up to 15 attempts) without the user
+// needing to do anything — the difference is index.html here calls
+// tizen.application.getCurrentApplication().exit() immediately after
+// *triggering* the debugger, with no confirmation it actually succeeded; if
+// that attempt then fails, there's nothing left alive to retry from, so the
+// user has to manually relaunch the whole app every time (what they were
+// doing by reopening ~5 times). This makes the service retry automatically
+// instead, the way TizenBrew does.
+let _activeSessionId = 0;
+const MAX_RETRY_ATTEMPTS = 10;
+const RETRY_DELAY_MS = 750;
+
 // On this path the page is real https://youtube.com, so a page-initiated
 // fetch to http://localhost:8099 (logServer.js's normal standalone relay) is
 // cross-origin *and* HTTPS-page-to-HTTP-target — Cobalt blocks that as mixed
@@ -51,12 +69,54 @@ function pollLogQueue(client, relayLog) {
     client.on('disconnect', () => clearInterval(interval));
 }
 
-function connectToDebugger(host, port, args, relayLog) {
+function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
+    if (sessionId !== _activeSessionId) return; // superseded by a newer attempt, abort silently
+    if (attempt >= MAX_RETRY_ATTEMPTS) {
+        isConnecting = false;
+        if (typeof relayLog === 'function') {
+            relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Giving up after ${MAX_RETRY_ATTEMPTS} attempts (${reason})` });
+        }
+        return;
+    }
+    if (typeof relayLog === 'function') {
+        relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `Retrying (attempt ${attempt + 1}/${MAX_RETRY_ATTEMPTS}) after: ${reason}` });
+    }
+    setTimeout(() => startDebugger(args, relayLog, sessionId, attempt + 1), RETRY_DELAY_MS);
+}
+
+function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
     fetch(`http://${host}:${port}`).then(_ => {
         CDP({ host, port, local: true }, client => {
+            if (sessionId !== _activeSessionId) {
+                // A newer top-level call superseded this one while we were
+                // still connecting — close this stale client, don't inject.
+                try { client.close(); } catch (e) { }
+                return;
+            }
             isConnecting = false;
+            let injected = false;
+
+            // Explicitly close the client on any failure path before
+            // retrying, rather than only relying on the natural 'disconnect'
+            // event — an evaluate() call can reject without the underlying
+            // connection actually dropping, which would otherwise leave this
+            // CDP client (and whatever device-side debug session it holds
+            // open) dangling while a retry spins up an entirely new one.
+            // Suspected of being why TizenBrew — a separate app entirely —
+            // also needed several relaunches during the same broken window:
+            // if debug sessions are a limited, shared, per-device resource,
+            // leaked ones here would starve everyone, not just this app.
+            function failAndRetry(reason) {
+                try { client.close(); } catch (e) { }
+                retryOrGiveUp(sessionId, attempt, args, relayLog, reason);
+            }
+
             client.Runtime.enable();
             client.Page.enable();
+
+            client.on('disconnect', () => {
+                if (!injected) retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
+            });
 
             function logNonFatal(label) {
                 return e => {
@@ -109,6 +169,7 @@ function connectToDebugger(host, port, args, relayLog) {
                     // unlike the proxy path).
                     return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
                 }).then(() => {
+                    injected = true;
                     if (typeof relayLog === 'function') {
                         relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `Injection evaluate() succeeded for contextId=${m.context.id}` });
                     }
@@ -117,16 +178,10 @@ function connectToDebugger(host, port, args, relayLog) {
                         pollLogQueue(client, relayLog);
                     }
                 }).catch(e => {
-                    // This used to try showing an alert() via a second
-                    // evaluate() call with no error handling of its own — if
-                    // the connection was already the reason the first
-                    // evaluate() failed, that second call failed too, and
-                    // *that* unhandled rejection was what showed up in logs,
-                    // masking the real underlying error below.
                     if (typeof relayLog === 'function') {
                         relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Injection evaluate() FAILED for contextId=${m.context.id}: ${e && e.stack || e}` });
                     }
-                    client.Runtime.evaluate({ expression: 'alert("Failed to request to JSDelivr CDN.")', contextId: m.context.id }).catch(() => { });
+                    failAndRetry(`injection evaluate() failed: ${e && e.message || e}`);
                 });
             });
 
@@ -138,6 +193,7 @@ function connectToDebugger(host, port, args, relayLog) {
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Page.navigate FAILED: ${e && e.stack || e}` });
                 }
+                failAndRetry(`Page.navigate failed: ${e && e.message || e}`);
             });
 
             // Confirmed on-device (Tizen 5.5): Cobalt's CDP implementation
@@ -156,7 +212,8 @@ function connectToDebugger(host, port, args, relayLog) {
             });
         })
     }).catch(e => {
-        return setTimeout(() => connectToDebugger(host, port, args, relayLog), 100);
+        if (sessionId !== _activeSessionId) return; // superseded, stop waiting
+        return setTimeout(() => connectToDebugger(host, port, args, relayLog, sessionId, attempt), 100);
     })
 }
 
@@ -169,34 +226,67 @@ function canConnectToDaemon() {
         });
 }
 
-function startDebugger(args, relayLog) {
+function startDebugger(args, relayLog, sessionId, attempt) {
+    if (sessionId === undefined) {
+        // Fresh top-level call (not a retry) — starts a new session,
+        // superseding any retry loop still in flight from a previous one.
+        _activeSessionId++;
+        sessionId = _activeSessionId;
+    } else if (sessionId !== _activeSessionId) {
+        return Promise.resolve(false); // superseded, abort silently
+    }
+    if (attempt === undefined) attempt = 0;
+
     return canConnectToDaemon().then(res => {
         if (!res.canConnectToDaemon) return false;
+        if (sessionId !== _activeSessionId) return false; // superseded while checking
         const client = adbhost.createConnection({ host: '127.0.0.1', port: 26101 });
 
         client._stream.on('connect', () => {
+            if (sessionId !== _activeSessionId) {
+                try { client._stream.end(); } catch (e) { }
+                return;
+            }
             const packageId = tizen.application.getAppInfo().packageId;
             isConnecting = true;
-            // Safety net: if this attempt never completes — the shell command
-            // never produces a 'debug' line, or connectToDebugger's own CDP
-            // connection never succeeds and keeps retrying — isConnecting
-            // would otherwise stay stuck true forever, since only a
-            // successful CDP() connection resets it. Confirmed on-device:
-            // because this service is long-running in the background, that
-            // stuck state persisted across every subsequent app launch
-            // (useInjectorOrProxy's getState kept returning isConnecting:
-            // true, a state it didn't even have a branch for) until a full
-            // TV reboot killed the service process. Bound the worst case to
-            // a timeout instead of a permanent hang; harmless no-op if a
-            // connection already succeeded by the time this fires.
-            setTimeout(() => { isConnecting = false; }, 20000);
+
+            // Safety net: if this attempt never completes, isConnecting
+            // would otherwise stay stuck true forever, since it's only ever
+            // reset on a successful injection. Confirmed on-device: because
+            // the service is long-running in the background, that stuck
+            // state persisted across every subsequent app launch until a
+            // full TV reboot killed the service process. Re-armed on every
+            // retry attempt (not just the first) so the whole retry budget
+            // (up to MAX_RETRY_ATTEMPTS) is covered, not just one attempt's
+            // worth — harmless no-op if a connection already succeeded by
+            // the time this fires.
+            setTimeout(() => {
+                if (sessionId === _activeSessionId) isConnecting = false;
+            }, 20000);
+
+            // Always end this ADB stream, whether or not the debug line
+            // ever appears — previously only happened inside the
+            // dataString.includes('debug') branch, leaving the stream open
+            // indefinitely on any attempt where that never matched. An ADB
+            // host connection never released is exactly the kind of leak
+            // that could starve later debug-session attempts, from this
+            // app or (if it's a shared, per-device resource) any other.
+            let streamEnded = false;
+            const endStreamOnce = () => {
+                if (streamEnded) return;
+                streamEnded = true;
+                try { client._stream.end(); } catch (e) { }
+            };
+            const streamEndFallback = setTimeout(endStreamOnce, 5000);
+
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
             shellCmd.on('data', (data) => {
                 const dataString = data.toString();
                 if (dataString.includes('debug')) {
                     const port = Number(dataString.substr(dataString.indexOf(':') + 1, 6).replace(' ', ''));
-                    connectToDebugger(res.ip, port, args, relayLog);
-                    setTimeout(() => client._stream.end(), 1000);
+                    connectToDebugger(res.ip, port, args, relayLog, sessionId, attempt);
+                    clearTimeout(streamEndFallback);
+                    setTimeout(endStreamOnce, 1000);
                 }
             });
         });

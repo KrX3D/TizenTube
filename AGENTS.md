@@ -639,11 +639,64 @@ Reported 2026-08-02 after the install issue above was fixed:
   service_workers,websql' })` (only attempted if the `Storage` domain
   exists on this client at all) → then `Page.navigate()`, which now
   waits for this whole chain rather than firing immediately alongside
-  it. **Not yet tested on-device.** If this still doesn't resolve it,
-  the next step is probably restructuring `injector.js` to be
-  structurally more like TizenBrew's approach (attach to a separately,
-  normally-launched instance rather than navigate this app's own
-  WebView) rather than another storage-clearing variant.
+  it. **Confirmed on-device: did not resolve it either** — same
+  "works once, breaks on reopen" pattern reproduced again on retest.
+
+  **Reframing (2026-08-03), from a genuinely new piece of evidence: the
+  user reported TizenBrew — a completely separate app/service, sharing
+  no code with this one — hits the identical "closes itself, needs
+  several relaunches before it works" pattern when this is happening.**
+  That rules out anything specific to *this app's own code* as the sole
+  cause of the underlying flakiness; it points at something systemic in
+  how the SDB debug daemon / Cobalt's CDP session handling behaves
+  across successive debug-session requests, possibly a limited/shared
+  per-device resource (the user's own hypothesis, and a plausible one:
+  a debug session or port this app fails to release could starve
+  *any* app's next attempt, not just its own — clearing cache/data
+  likely force-kills this app's service process, releasing whatever it
+  was holding).
+
+  The architectural difference that actually matters, revisited:
+  TizenBrew's `debugger.js` retries internally (up to 15 attempts, with
+  a session-id-supersession scheme so old retry loops abort cleanly
+  once a newer one starts) entirely on its own — the user doesn't do
+  anything except keep the app open. This app's `index.html` instead
+  calls `tizen.application.getCurrentApplication().exit()` immediately
+  after *triggering* the debugger, with no confirmation it actually
+  succeeded — if that attempt then fails, there's nothing left alive to
+  retry from, so the user has to manually relaunch the whole app every
+  single time (the "reopen ~5 times" they were doing).
+
+  Fix: ported the same pattern into `injector.js`.
+  - `_activeSessionId` + a `sessionId` threaded through `startDebugger`/
+    `connectToDebugger`: a fresh top-level call supersedes any retry
+    loop still in flight from a previous one; superseded attempts abort
+    silently (checked before acting at every async boundary: after
+    `canConnectToDaemon()`, on ADB stream connect, on CDP connect, in
+    the connectivity-retry catch).
+  - Up to `MAX_RETRY_ATTEMPTS` (10) automatic retries at
+    `RETRY_DELAY_MS` (750ms) apart, triggered by `retryOrGiveUp()` from:
+    CDP disconnecting before injection succeeded, the injection
+    `evaluate()` call failing, or `Page.navigate()` failing. All of this
+    happens entirely service-side — the foreground app has already
+    exited by the time these fire, so no user action is needed for a
+    retry to happen at all.
+  - `isConnecting`'s 20s safety-timeout is now re-armed on every retry
+    attempt (not just the first), so the timeout window scales with the
+    actual retry budget instead of assuming one attempt is enough.
+  - Explicit cleanup on every failure path, not just relying on the
+    natural `'disconnect'` event (which doesn't fire if an `evaluate()`
+    call rejects without the connection itself dropping): the CDP
+    `client.close()`s before retrying, and the ADB stream now always
+    gets ended (a 5s fallback timeout in addition to the existing
+    success-path `.end()`) — previously it only ended inside the
+    `dataString.includes('debug')` branch, leaving it open indefinitely
+    on any attempt where that never matched. This is the part directly
+    responding to the user's leaked-resource hypothesis — if true, this
+    should also reduce how often TizenBrew needs multiple relaunches
+    during the same broken window, not just this app.
+
+  **Not yet tested on-device.**
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
