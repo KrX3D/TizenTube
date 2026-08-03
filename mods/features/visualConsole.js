@@ -1,6 +1,7 @@
 import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
+import { sendRemotePayload, isEnabled as isLogServerEnabled } from './logServer.js';
 
 const APP_VERSION_LABEL = 'TizenTube';
 const APP_VERSION = rootPkg.version;
@@ -128,21 +129,49 @@ function initVisualConsole() {
   };
 
   const addLog = (type, args) => {
-    if (!configRead('enableDebugConsole') && !configRead('enableDebugLogging')) return;
-    const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
+    // Previously gated entirely on enableDebugConsole/enableDebugLogging —
+    // meaning logServerEnabled (Remote Log Server) alone did nothing for
+    // regular console.* output, even though it's a completely separate
+    // setting. That left two disconnected log pipelines: console.* calls
+    // (visible on-screen, but never reached the PC) and the file-only
+    // stream used for things like parse.begin (reached the PC, but never
+    // shown on-screen) — user-reported confusion: the PC receiver showed
+    // different entries than the visual console. logServerEnabled now
+    // relays this exact same stream, independent of the visual flags below
+    // (which still control only the on-screen accumulation/rendering).
+    const wantsVisual = !!configRead('enableDebugConsole') || !!configRead('enableDebugLogging');
+    const wantsRemote = isLogServerEnabled();
+    if (!wantsVisual && !wantsRemote) return;
+
     const msg = args.map((a) => {
       if (typeof a === 'string') return a;
       try { return JSON.stringify(a); } catch (_) { return String(a); }
     }).join(' ');
-    logs.unshift({
-      color,
-      msg,
-      time: new Date().toLocaleTimeString()
-    });
-    if (logs.length > 600) logs.pop();
-    if (consoleDiv.style.display !== 'none') {
-      renderLogs();
-      consoleDiv.scrollTop = 0;
+
+    if (wantsVisual) {
+      const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
+      logs.unshift({
+        color,
+        msg,
+        time: new Date().toLocaleTimeString()
+      });
+      if (logs.length > 600) logs.pop();
+      if (consoleDiv.style.display !== 'none') {
+        renderLogs();
+        consoleDiv.scrollTop = 0;
+      }
+    }
+
+    if (wantsRemote) {
+      const ts = new Date().toISOString();
+      const level = type === 'error' ? 'ERROR' : type === 'warn' ? 'WARN' : 'INFO';
+      sendRemotePayload(null, {
+        ts,
+        level,
+        context: 'TizenTube',
+        message: msg,
+        _formatted: `[${ts}] [${level}] [TizenTube] ${msg}`,
+      });
     }
   };
 

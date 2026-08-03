@@ -259,12 +259,40 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
     })
 }
 
-function canConnectToDaemon() {
+const CAN_CONNECT_MAX_ATTEMPTS = 10;
+const CAN_CONNECT_RETRY_DELAY_MS = 500;
+
+// getState (index.js) polls this every ~1s during normal operation, so it
+// must always resolve quickly — never reject, never hang indefinitely.
+// Previously any failure (network hiccup, JSON parse error, anything) just
+// called canConnectToDaemon() again immediately, recursively, with no
+// delay, no attempt limit, and no logging — a silent, unbounded tight loop
+// if the local Tizen debug-info endpoint ever started failing. Confirmed
+// on-device: a session got stuck with isConnecting true for minutes, with
+// zero [Injector] log lines the entire time — consistent with being stuck
+// somewhere before the ADB-connect stage (which does have its own
+// timeout/logging), and this was the one remaining unbounded, unlogged
+// retry in that path. Bounded here with backoff and (when a relayLog is
+// given, i.e. only the startDebugger call site, not every getState poll)
+// logging on each failure — after exhausting attempts, resolves with
+// canConnectToDaemon:false rather than hanging forever.
+function canConnectToDaemon(relayLog, attempt) {
+    if (attempt === undefined) attempt = 0;
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
             return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }
         }).catch(e => {
-            return canConnectToDaemon();
+            if (attempt >= CAN_CONNECT_MAX_ATTEMPTS) {
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `canConnectToDaemon giving up after ${CAN_CONNECT_MAX_ATTEMPTS} attempts: ${e && e.message || e}` });
+                }
+                return { canConnectToDaemon: false, ip: null, isConnecting };
+            }
+            if (typeof relayLog === 'function') {
+                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `canConnectToDaemon attempt ${attempt + 1}/${CAN_CONNECT_MAX_ATTEMPTS} failed, retrying: ${e && e.message || e}` });
+            }
+            return new Promise(resolve => setTimeout(resolve, CAN_CONNECT_RETRY_DELAY_MS))
+                .then(() => canConnectToDaemon(relayLog, attempt + 1));
         });
 }
 
@@ -297,8 +325,17 @@ function startDebugger(args, relayLog, sessionId, attempt) {
     }
     if (attempt === undefined) attempt = 0;
 
-    return canConnectToDaemon().then(res => {
-        if (!res.canConnectToDaemon) return false;
+    return canConnectToDaemon(relayLog).then(res => {
+        if (!res.canConnectToDaemon) {
+            // Previously a silent `return false` here — isConnecting was
+            // already set true for this session and nothing on this path
+            // ever reset it, so a genuine (not just transiently-failing)
+            // canConnectToDaemon:false result left the session stuck
+            // forever with zero logging. Route it through the same
+            // retry/give-up machinery as every other failure path instead.
+            retryOrGiveUp(sessionId, attempt, args, relayLog, 'canConnectToDaemon returned false (developer mode / Host PC IP not set to 127.0.0.1?)');
+            return false;
+        }
         if (sessionId !== _activeSessionId) return false; // superseded while checking
         const client = adbhost.createConnection({ host: '127.0.0.1', port: 26101 });
 
