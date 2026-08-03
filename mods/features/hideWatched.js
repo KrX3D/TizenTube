@@ -3,7 +3,13 @@ import { configRead } from '../config.js';
 // ── Logging ───────────────────────────────────────────────────────────────────
 
 export function appendFileOnlyLog(label, payload) {
-  if (!configRead('enableDebugLogging')) return;
+  // Previously gated on enableDebugLogging alone, so entries never got
+  // created (and thus never relayed) unless that was also turned on —
+  // confirmed by user report: logServerEnabled alone wasn't enough to get
+  // these onto the PC log receiver, needing enableDebugLogging too, even
+  // though these never show in the on-screen visual console either way.
+  // logServerEnabled alone is now sufficient for the PC relay path.
+  if (!configRead('enableDebugLogging') && !configRead('logServerEnabled')) return;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
   try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
