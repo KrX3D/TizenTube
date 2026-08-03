@@ -143,10 +143,16 @@ function initVisualConsole() {
     const wantsRemote = isLogServerEnabled();
     if (!wantsVisual && !wantsRemote) return;
 
-    const msg = args.map((a) => {
+    const MAX_MSG_LENGTH = 500;
+    let msg = args.map((a) => {
       if (typeof a === 'string') return a;
       try { return JSON.stringify(a); } catch (_) { return String(a); }
     }).join(' ');
+    // Uncapped before this — a single large object argument (e.g. a full
+    // page-state dump) would get fully JSON.stringify'd and stored/sent as
+    // one entry, every time. Cheap defensive cap, same idea already used
+    // for error stack traces elsewhere in this codebase.
+    if (msg.length > MAX_MSG_LENGTH) msg = msg.slice(0, MAX_MSG_LENGTH) + '…[truncated]';
 
     if (wantsVisual) {
       const color = type === 'error' ? '#f55' : type === 'warn' ? '#ff0' : '#0f0';
