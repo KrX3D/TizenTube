@@ -242,13 +242,42 @@ function startDebugger(args, relayLog, sessionId, attempt) {
         if (sessionId !== _activeSessionId) return false; // superseded while checking
         const client = adbhost.createConnection({ host: '127.0.0.1', port: 26101 });
 
+        // No 'error' listener previously existed on this stream at all — in
+        // Node, an EventEmitter that emits 'error' with zero listeners
+        // throws, which can crash the whole service process uncaught. That
+        // would explain a service that silently disappears mid-attempt with
+        // no log line at all (relayLog itself needs the process alive).
+        client._stream.on('error', (err) => {
+            if (sessionId !== _activeSessionId) return;
+            if (typeof relayLog === 'function') {
+                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `ADB stream error before shell command: ${err && err.stack || err}` });
+            }
+            retryOrGiveUp(sessionId, attempt, args, relayLog, `ADB stream error: ${err && err.message || err}`);
+        });
+
+        // 'connect' never firing at all (daemon busy/unreachable) was
+        // previously an indefinite, silent hang — nothing else in this
+        // function would ever run, and no timeout existed to notice.
+        const connectTimeout = setTimeout(() => {
+            if (sessionId !== _activeSessionId) return;
+            if (typeof relayLog === 'function') {
+                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'ADB stream never connected within 5s' });
+            }
+            try { client._stream.end(); } catch (e) { }
+            retryOrGiveUp(sessionId, attempt, args, relayLog, 'ADB stream connect timeout');
+        }, 5000);
+
         client._stream.on('connect', () => {
+            clearTimeout(connectTimeout);
             if (sessionId !== _activeSessionId) {
                 try { client._stream.end(); } catch (e) { }
                 return;
             }
             const packageId = tizen.application.getAppInfo().packageId;
             isConnecting = true;
+            if (typeof relayLog === 'function') {
+                relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `ADB connected, requesting shell:0 debug ${packageId}.TizenTubeStandalone` });
+            }
 
             // Safety net: if this attempt never completes, isConnecting
             // would otherwise stay stuck true forever, since it's only ever
@@ -259,9 +288,18 @@ function startDebugger(args, relayLog, sessionId, attempt) {
             // retry attempt (not just the first) so the whole retry budget
             // (up to MAX_RETRY_ATTEMPTS) is covered, not just one attempt's
             // worth — harmless no-op if a connection already succeeded by
-            // the time this fires.
-            setTimeout(() => {
-                if (sessionId === _activeSessionId) isConnecting = false;
+            // the time this fires. Previously silent when it fired — that
+            // silence is exactly what made this indistinguishable from
+            // "still working" in the logs; now it says so explicitly, and
+            // actually retries instead of just leaving isConnecting=false
+            // for index.html to blindly re-trigger a whole new attempt.
+            const safetyTimeout = setTimeout(() => {
+                if (sessionId !== _activeSessionId) return;
+                isConnecting = false;
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'Safety-net timeout: no debug shell response or CDP connection within 20s' });
+                }
+                retryOrGiveUp(sessionId, attempt, args, relayLog, 'safety-net 20s timeout');
             }, 20000);
 
             // Always end this ADB stream, whether or not the debug line
@@ -280,10 +318,28 @@ function startDebugger(args, relayLog, sessionId, attempt) {
             const streamEndFallback = setTimeout(endStreamOnce, 5000);
 
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
+            shellCmd.on('error', (err) => {
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `shell:0 debug stream error: ${err && err.stack || err}` });
+                }
+                clearTimeout(safetyTimeout);
+                endStreamOnce();
+                isConnecting = false;
+                retryOrGiveUp(sessionId, attempt, args, relayLog, `shell stream error: ${err && err.message || err}`);
+            });
             shellCmd.on('data', (data) => {
                 const dataString = data.toString();
+                // Always log the raw response — previously only logged (and
+                // acted on) when it contained 'debug'; anything else (an
+                // error from the device's wascmd dispatcher, an empty/
+                // unexpected reply, a package-id mismatch after a reinstall)
+                // was silently dropped, with no way to ever see it.
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `shell:0 debug raw response: ${JSON.stringify(dataString.slice(0, 500))}` });
+                }
                 if (dataString.includes('debug')) {
                     const port = Number(dataString.substr(dataString.indexOf(':') + 1, 6).replace(' ', ''));
+                    clearTimeout(safetyTimeout);
                     connectToDebugger(res.ip, port, args, relayLog, sessionId, attempt);
                     clearTimeout(streamEndFallback);
                     setTimeout(endStreamOnce, 1000);
