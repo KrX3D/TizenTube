@@ -403,6 +403,27 @@ Reported 2026-08-02 after the install issue above was fixed:
   plain HTTP, no restrictions — and still uses the direct fetch.
   **Not yet retested on-device.**
 
+  **Separately found, on Tizen 6.5 (2026-08-03): a real dead-end bug in
+  `useInjectorOrProxy()`, unrelated to anything above.** A device log
+  showed `getState` returning `{"canConnectToDaemon":true,"isConnecting":
+  true}` — a state `standalone/index.html`'s `if (canConnectToDaemon &&
+  !isConnecting) {...} else if (!canConnectToDaemon) {...}` had no branch
+  for at all, so it silently did nothing. `isConnecting` is a
+  module-level variable in `injector.js`, only ever reset to `false`
+  inside a *successful* CDP connection callback — if an attempt stalls
+  (the ADB shell command never produces a `debug` line, or
+  `connectToDebugger`'s own connection retry loop never succeeds), it
+  stays `true` forever, and since the service is a long-running
+  background process that survives the foreground app closing/reopening,
+  this stuck state persisted across every subsequent launch until a full
+  TV reboot killed the service process — matching exactly what was
+  reported (hangs after `getState`, only clears on TV reboot). Fixed two
+  ways: `index.html` now retries (`setTimeout(useInjectorOrProxy, 1000)`)
+  instead of silently doing nothing on `canConnectToDaemon && isConnecting`;
+  `injector.js` now sets a 20s safety timeout when `isConnecting` is set
+  `true` that force-resets it, bounding the worst case instead of a
+  permanent hang. **Not yet retested on-device.**
+
   **Also added: earlier diagnostics for Tizen 5.5's still-total
   blackout.** All service-level self-logging lives inside
   `standalone/service/index.js`, which only runs once the service
@@ -444,11 +465,21 @@ Reported 2026-08-02 after the install issue above was fixed:
   error in the top-level file being executed — so if the bundle still
   fails to parse on 5.5, this should now at least produce one loggable
   line (`require('./bundle.js') FAILED: ...`) instead of total silence.
-  **Not yet tested on-device.** If 5.5 still produces zero logs even
-  from `bootstrap.js` itself (which would be very surprising, since it's
-  about as syntactically minimal as JS gets), the failure is likely even
-  earlier than JS execution entirely — e.g. the service not launching at
-  the Tizen platform level — and would need SDB-level inspection instead.
+  **Confirmed on-device (2026-08-02) — the bootstrap paid off immediately.**
+  `bootstrap.js starting, node v4.4.3` logged successfully, then:
+  `require('./bundle.js') FAILED: SyntaxError: Block-scoped declarations
+  (let, const, function, class) not yet supported outside strict mode`.
+  A well-known Node 4.x V8 limitation: block-scoped `let`/`const`/
+  `function`/`class` only work inside strict-mode code on that engine.
+  `ncc` wraps each bundled module in its own function, so one module's
+  own `"use strict"` (e.g. this app's `index.js`) doesn't cover sibling
+  modules like `express`/`node-fetch`/`adbhost`/`chrome-remote-interface`,
+  most of which don't declare it themselves. Fixed by prepending
+  `"use strict";` as the literal first line of the *entire* bundled
+  output in `build-service.js` — nested functions lexically inherit
+  strict mode from their enclosing scope, so one directive at the true
+  top of the file covers every bundled module. **Not yet retested
+  on-device.**
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/

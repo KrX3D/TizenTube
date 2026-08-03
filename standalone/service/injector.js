@@ -81,6 +81,19 @@ function startDebugger(args, relayLog) {
         client._stream.on('connect', () => {
             const packageId = tizen.application.getAppInfo().packageId;
             isConnecting = true;
+            // Safety net: if this attempt never completes — the shell command
+            // never produces a 'debug' line, or connectToDebugger's own CDP
+            // connection never succeeds and keeps retrying — isConnecting
+            // would otherwise stay stuck true forever, since only a
+            // successful CDP() connection resets it. Confirmed on-device:
+            // because this service is long-running in the background, that
+            // stuck state persisted across every subsequent app launch
+            // (useInjectorOrProxy's getState kept returning isConnecting:
+            // true, a state it didn't even have a branch for) until a full
+            // TV reboot killed the service process. Bound the worst case to
+            // a timeout instead of a permanent hang; harmless no-op if a
+            // connection already succeeded by the time this fires.
+            setTimeout(() => { isConnecting = false; }, 20000);
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
             shellCmd.on('data', (data) => {
                 const dataString = data.toString();
