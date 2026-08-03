@@ -116,6 +116,12 @@ if (!localConfig || typeof localConfig !== 'object') {
 // exactly as before — it just won't carry over to the next app start.
 localConfig.enableDebugConsole = false;
 localConfig.enableDebugLogging = false;
+// Same reasoning applies to logServerEnabled: now that it alone triggers
+// console.* interception work (see visualConsole.js addLog), leaving it on
+// from a previous session means every console call pays that cost right
+// during YouTube's own page bootstrap — the highest-load moment — without
+// the user having deliberately turned it on for this session.
+localConfig.logServerEnabled = false;
 
 export function configRead(key) {
   if (localConfig[key] === undefined) {

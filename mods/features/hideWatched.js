@@ -13,6 +13,7 @@ export function appendFileOnlyLog(label, payload) {
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
   try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
+  if (msg.length > 500) msg = msg.slice(0, 500) + '…[truncated]';
   window.__ttFileOnlyLogs.push(`[${new Date().toISOString()}] [TT_ADBLOCK_FILE] ${label} ${msg}`);
   if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
 }
