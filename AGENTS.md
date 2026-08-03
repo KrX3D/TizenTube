@@ -696,7 +696,41 @@ Reported 2026-08-02 after the install issue above was fixed:
     should also reduce how often TizenBrew needs multiple relaunches
     during the same broken window, not just this app.
 
-  **Not yet tested on-device.**
+  **Resolved (2026-08-03) — not by fixing the CDP path, but by confirming
+  the proxy path doesn't need it.** Tested on-device: with the TV's
+  Developer Mode "Host PC IP" set to anything other than `127.0.0.1`
+  (a real PC IP, or unset), `canConnectToDaemon()` correctly returns
+  `false`, `useInjectorOrProxy()` takes the proxy path instead of CDP,
+  and it has been **reliable on both Tizen 5.5 and 6.5** — clean
+  `getState` → `Taking proxy path` → `Received GET /tv` every single
+  time, no errors, no retries needed, repeated launches all succeeding.
+  This is a stronger result than any of the CDP-path fixes above
+  achieved. **README.md now explicitly documents not setting Host PC
+  IP to `127.0.0.1`** for this reason. The CDP path and all the fixes
+  above are still there (harmless, and useful if `127.0.0.1` is ever
+  set for other reasons) but the proxy path is what actually works
+  reliably — this isn't a "pick one" architectural decision so much as
+  an operational finding: don't configure the TV in the way that
+  triggers the unreliable path.
+
+  Trade-off surfaced immediately: TizenBrew and TizenBrewInstaller
+  (separate repos, separate apps) apparently *also* require Host PC IP
+  `127.0.0.1` for their own local SDB-based mechanisms (TizenBrewInstaller
+  needs it to install/update packages) — so a TV configured for
+  standalone's reliable proxy path can no longer install updates via
+  those tools without switching Host PC IP back and forth. Whether
+  those tools can be given an equivalent non-CDP path is a separate,
+  cross-repo question the user raised — see those repos' own
+  documentation/AGENTS.md if that work happens, not this one.
+
+  Also fixed while investigating: `standalone/index.html`'s
+  `launchAppControl` error callback previously only showed an `alert()`
+  and stopped — confirmed on-device, right after a TV reboot,
+  `launchAppControl` can genuinely fail once (Tizen's own service-launch
+  subsystem still warming up; took ~5s to succeed vs. the usual <1s in
+  every other observed launch) and require a manual close/reopen to get
+  past. Now retries automatically after 1s, matching the pattern the
+  `getState`-fetch-failure path already used.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/

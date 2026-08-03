@@ -129,19 +129,29 @@
                 });
         }
 
-        sendLog('INFO', 'Launching StandaloneService via launchAppControl');
-        tizen.application.launchAppControl(
-            new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
-            serviceId,
-            function () {
-                sendLog('INFO', 'launchAppControl success callback fired');
-                useInjectorOrProxy();
-            },
-            function (e) {
-                sendLog('ERROR', 'launchAppControl failed: ' + e.message);
-                alert("Launch Service failed: " + e.message);
-            }
-        );
+        function launchService() {
+            sendLog('INFO', 'Launching StandaloneService via launchAppControl');
+            tizen.application.launchAppControl(
+                new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
+                serviceId,
+                function () {
+                    sendLog('INFO', 'launchAppControl success callback fired');
+                    useInjectorOrProxy();
+                },
+                function (e) {
+                    // Confirmed on-device: right after a TV reboot, this can
+                    // genuinely fail (Tizen's own service-launch subsystem
+                    // still warming up) — previously just showed an alert
+                    // and stopped, unlike the getState-fetch-failure path
+                    // below which already retries automatically. User had
+                    // to manually close/reopen the app to get past it.
+                    // Retry the same way instead.
+                    sendLog('ERROR', 'launchAppControl failed, retrying in 1s: ' + e.message);
+                    setTimeout(launchService, 1000);
+                }
+            );
+        }
+        launchService();
     </script>
 </head>
 
