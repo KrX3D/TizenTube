@@ -1,4 +1,5 @@
 const ncc = require('@vercel/ncc');
+const babel = require('@babel/core');
 const fs = require('fs');
 const path = require('path');
 
@@ -26,15 +27,37 @@ async function build() {
         'var packet = this._packet;'
     );
 
-    // Node 4.4.3 (Tizen ~5.5's service engine) rejects block-scoped let/const/
-    // function/class declarations *outside* strict mode with a SyntaxError —
-    // confirmed on-device. Only some bundled dependencies declare their own
-    // "use strict" (ncc wraps each one in its own function, so one module's
-    // directive doesn't cover another's), so force it for the whole bundle by
-    // prepending it as the file's very first line: nested functions lexically
-    // inherit strict mode from their enclosing scope, so this one directive
-    // covers every bundled module, not just this app's own code.
-    const strictFixedCode = '"use strict";\n' + fixedCode;
+    // Node 4.4.3 (Tizen ~5.5's service engine) can't parse a lot of ES6+
+    // syntax at all — confirmed on-device across two different SyntaxErrors
+    // (block-scoped let/const/function/class outside strict mode, then a
+    // second "Unexpected token {" once that was fixed) scattered somewhere
+    // across express + its ~30 transitive deps + node-fetch/adbhost/
+    // chrome-remote-interface, none of which were written with that engine
+    // in mind. Rather than keep hunting individual constructs one at a time,
+    // transpile the *already-bundled* single output file with Babel,
+    // targeting Node 4.4.3 specifically. This is deliberately different from
+    // the previous attempt at this (reverted — see "Known unresolved
+    // issues"), which ran Babel over the whole standalone/service/ source
+    // tree (including node_modules) *before* bundling: that transpiled
+    // ncc's own huge internals (very slow) and crash-parsed unrelated test
+    // fixtures elsewhere in node_modules. Transpiling only the final bundle
+    // avoids both — it contains neither ncc's own tooling nor any test
+    // fixtures, only the actual runtime code paths ncc already tree-shook
+    // down to.
+    const babelOutput = babel.transformSync(fixedCode, {
+        presets: [['@babel/preset-env', { targets: { node: '4.4.3' } }]],
+        babelrc: false,
+        configFile: false,
+        compact: false
+    });
+
+    // Belt and suspenders: Babel's Node-4-targeted output uses var instead
+    // of let/const, so this shouldn't be load-bearing anymore, but keep it
+    // — harmless, and it already caught one real bug (adbhost's own
+    // undeclared `packet` assignment, patched above) by turning a silent
+    // implicit-global footgun into a loud, fixable error instead of quietly
+    // misbehaving.
+    const strictFixedCode = '"use strict";\n' + babelOutput.code;
 
     const outDir = path.join(__dirname, 'dist');
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir);

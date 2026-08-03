@@ -86,7 +86,9 @@ standalone/                  # standalone installable app — see "Standalone mo
                                 # caught from inside the bundle itself, since parse errors happen
                                 # before any of that file's own code runs — is at least catchable
                                 # and loggable here. See "Known unresolved issues" re: Tizen 5.5.
-    build-service.js          # ncc-bundles index.js → service/dist/bundle.js, copies bootstrap.js → dist/index.js
+    build-service.js          # ncc-bundles index.js, regex-patches known bundled-dep bugs, Babel-
+                                # transpiles the bundle for Node 4.4.3, → dist/bundle.js; copies
+                                # bootstrap.js → dist/index.js unmodified
     package.json
 
 .github/
@@ -401,7 +403,28 @@ Reported 2026-08-02 after the install issue above was fixed:
   same technique TizenBrew's own service uses for the equivalent problem.
   The proxy path (`hostname === 'localhost'`) is unaffected — same-origin
   plain HTTP, no restrictions — and still uses the direct fetch.
-  **Not yet retested on-device.**
+
+  **Found a bug in `pollLogQueue` itself (2026-08-03), via a #631 retest
+  on Tizen 6.5 that still hung after "Taking CDP-injection path."** The
+  `setInterval` had no lifecycle tied to the CDP connection it depends
+  on — once that connection closed (page navigation, app exit, etc.),
+  every subsequent tick threw an unhandled `WebSocket.send... not
+  opened` rejection on the *same* `Chrome.send`/`enqueueCommand` path
+  the real userscript-injection `evaluate()` call uses. Timing lined up
+  exactly with the poll's first tick, not the injection call itself.
+  Fixed two ways: the interval now clears itself on the client's
+  `'disconnect'` event, and as a defensive fallback (in case that event
+  doesn't fire reliably) after 3 consecutive failures; it also no longer
+  starts immediately alongside `Page.navigate()` — only after the first
+  successful injection `evaluate()`, so it can't interfere with that
+  critical early window at all, by construction rather than just cleanup.
+  **Not yet retested on-device — for either this fix or the CDP delivery
+  mechanism itself.** Note: the pre-existing `Cannot find context with
+  specified id` / `not opened` timing races in the injection handshake
+  itself (separate from this polling bug) were already known and
+  unresolved before any of this logging work existed — this fix removes
+  one source of instability but may not be the whole story for why 6.5's
+  CDP handoff still isn't fully reliable.
 
   **Separately found, on Tizen 6.5 (2026-08-03): a real dead-end bug in
   `useInjectorOrProxy()`, unrelated to anything above.** A device log
@@ -507,27 +530,31 @@ Reported 2026-08-02 after the install issue above was fixed:
   6.5 — see the `adbhost` `packet` bug fix above; forcing strict mode
   turns other packages' latent sloppy-mode-only bugs into hard failures.
 
-  **This is a fork in the road, not yet resolved either way:**
-  1. Keep patching individual constructs as they're found (like the
-     `adbhost` fix above) — lower risk per change, but potentially many
-     more iterations of "rebuild, retest, find the next one" before 5.5
-     fully works, and each strict-mode-adjacent fix risks a new 6.5
-     regression the way the `adbhost` one did.
-  2. Reintroduce Babel transpilation (reverted in the fix that preceded
-     all of this — see above), which exists specifically to handle "lots
-     of ES6+ syntax scattered across third-party code, targeting an old
-     runtime" as a class of problem rather than one construct at a time.
-     It was blamed for the Tizen 6.5 crash-loop back then, but every
-     concrete 6.5 cause found since (the `crypto.getRandomValues`
-     failure, the dynamic-`require` bundling bug, the stuck
-     `isConnecting` hang, and now this `adbhost` bug) has turned out to
-     be unrelated to Babel — it's possible that revert was premature,
-     and now there's much better on-device diagnostics (this whole
-     logging chain) to actually verify whether it causes problems this
-     time instead of reverting on correlation alone.
-
-  Ask the user which direction before proceeding — this is a real
-  scope/risk tradeoff, not a clear-cut fix.
+  **Resolved (2026-08-03): user chose to reintroduce Babel, deliberately
+  differently from the previous attempt.** The original Babel step
+  (reverted earlier — see above) ran Babel over the *whole*
+  `standalone/service/` source tree, including `node_modules`, *before*
+  bundling — that transpiled `ncc`'s own huge internals (~25 minute
+  builds) and crash-parsed unrelated test fixtures elsewhere in
+  `node_modules`. This time, `build-service.js` runs Babel on the
+  *already-bundled* single output file instead, targeting `node: '4.4.3'`
+  specifically via `@babel/preset-env`. The final bundle contains
+  neither `ncc`'s own tooling nor any test fixtures — only the runtime
+  code paths `ncc` already tree-shook down to — so neither previous
+  problem applies. Verified locally: build completes in seconds, output
+  has zero `regeneratorRuntime` references (no reachable async/await
+  needing it), and manual inspection confirmed no real `let`/`const`/
+  arrow-function syntax survives (only false-positive substring matches
+  inside comments/JSDoc/embedded JSON documentation strings, e.g.
+  `chrome-remote-interface`'s bundled protocol definitions). The earlier
+  "use strict" prepend and `adbhost` patch are both kept (order:
+  regex fixups → Babel → "use strict" prepend on Babel's output) — Babel
+  should make the strict-mode prepend largely redundant now (its
+  Node-4-targeted output uses `var`, not `let`/`const`), but it's
+  harmless to keep, and it already caught one real latent bug
+  (`adbhost`'s own undeclared `packet` assignment) by turning a silent
+  sloppy-mode footgun into a loud, fixable error. **Not yet tested
+  on-device.**
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/

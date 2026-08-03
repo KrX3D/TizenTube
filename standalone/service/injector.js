@@ -18,11 +18,23 @@ const isTizen3 = tizen.systeminfo.getCapability('http://tizen.org/feature/platfo
 // networking at all.
 function pollLogQueue(client, relayLog) {
     if (typeof relayLog !== 'function') return;
-    setInterval(() => {
+
+    // The interval below has no lifecycle tied to the CDP connection it
+    // depends on. Confirmed on-device: once that connection closes (page
+    // navigation, app exit, etc.), every subsequent tick threw an unhandled
+    // "WebSocket.send... not opened" rejection on the exact same
+    // Chrome.send/enqueueCommand path the real userscript-injection
+    // evaluate() call uses — noisy at best, and plausibly contributing
+    // instability right when injection is trying to happen. Stop on
+    // disconnect, and as a defensive fallback in case that event doesn't
+    // fire reliably, also stop after a few consecutive failures.
+    let consecutiveFailures = 0;
+    const interval = setInterval(() => {
         client.Runtime.evaluate({
             expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; return JSON.stringify(q); })()',
             returnByValue: true
         }).then(result => {
+            consecutiveFailures = 0;
             const value = result && result.result && result.result.value;
             if (!value) return;
             let entries;
@@ -30,8 +42,13 @@ function pollLogQueue(client, relayLog) {
             for (const entry of entries) {
                 relayLog(entry, entry.__ttLogHost, entry.__ttLogPort);
             }
-        }).catch(() => { });
+        }).catch(() => {
+            consecutiveFailures++;
+            if (consecutiveFailures >= 3) clearInterval(interval);
+        });
     }, 1000);
+
+    client.on('disconnect', () => clearInterval(interval));
 }
 
 function connectToDebugger(host, port, args, relayLog) {
@@ -41,13 +58,23 @@ function connectToDebugger(host, port, args, relayLog) {
             client.Runtime.enable();
             client.Page.enable();
 
+            // Only start log-polling after injection has actually succeeded
+            // once, not immediately alongside Page.navigate() — keeps it
+            // fully out of the way of the critical early injection window.
+            let logPollStarted = false;
+
             client.on('Runtime.executionContextCreated', m => {
                 fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text()).then(modFile => {
                     // Marker so the userscript can tell it's running under this
                     // standalone app even though this path loads real youtube.com
                     // directly (window.location.hostname isn't 'localhost' here,
                     // unlike the proxy path).
-                    client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
+                    return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
+                }).then(() => {
+                    if (!logPollStarted) {
+                        logPollStarted = true;
+                        pollLogQueue(client, relayLog);
+                    }
                 }).catch(e => {
                     client.Runtime.evaluate({ expression: 'alert("Failed to request to JSDelivr CDN.")', contextId: m.context.id });
                 });
@@ -56,8 +83,6 @@ function connectToDebugger(host, port, args, relayLog) {
             client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` });
 
             client.Page.setBypassCSP({ enabled: true });
-
-            pollLogQueue(client, relayLog);
         })
     }).catch(e => {
         return setTimeout(() => connectToDebugger(host, port, args, relayLog), 100);
