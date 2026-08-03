@@ -611,18 +611,39 @@ Reported 2026-08-02 after the install issue above was fixed:
   the previous run, and something about that warm cache breaks YouTube
   TV's own initialization.
 
-  Fix: `client.Network.enable()` + `client.Network.setCacheDisabled({
-  cacheDisabled: true })` before `Page.navigate()`, forcing every
-  navigation to bypass the WebView HTTP cache regardless of why it's
-  shared across launches — non-fatal if unsupported (`Page.setBypassCSP`
-  already turned out not to exist on this Cobalt CDP implementation;
-  `Network.*` may be similarly incomplete). **Not yet tested on-device**
-  — this is the current leading theory for the root cause of the
-  connection instability seen throughout this whole investigation, not
-  just one contributing factor; if it doesn't fully resolve things,
-  restructuring `injector.js` to be structurally more like TizenBrew's
-  approach (attach to a separately, normally-launched instance rather
-  than navigate this app's own WebView) is the next thing to try.
+  First fix attempt: `client.Network.setCacheDisabled({ cacheDisabled:
+  true })` before `Page.navigate()`. **Confirmed on-device: did not
+  resolve it** — a genuinely fresh app update ("worked once, broke
+  again on reopen, cache-clear fixes it") reproduced the exact same
+  pattern. Root cause of why: `setCacheDisabled` only stops *new*
+  caching for the current session going forward — it does nothing about
+  what's already cached/stored from the previous run, which is exactly
+  what a stale second load would be reading. Also, the user separately
+  found that on Tizen 5.5, clearing cache alone sometimes wasn't
+  enough — clearing *data* (not just cache) was sometimes required —
+  meaning this may not be HTTP-cache-only, and could involve
+  localStorage/cookies/IndexedDB/service workers too, none of which
+  `Network.setCacheDisabled` touches.
+
+  Second fix attempt (2026-08-03): actively **clear** cache/cookies/
+  storage before navigating, rather than just disabling new caching —
+  replicating what the user's manual Clear Cache/Clear Data TV action
+  does, programmatically, on every single launch. Chain (each step
+  independently non-fatal, all proceed to `Page.navigate()` regardless
+  of outcome — `Page.setBypassCSP` already turned out not to exist on
+  this Cobalt CDP implementation, other domains may be similarly
+  incomplete): `Network.enable()` → `Network.setCacheDisabled()` →
+  `Network.clearBrowserCache()` → `Network.clearBrowserCookies()` →
+  `Storage.clearDataForOrigin({ origin: 'https://www.youtube.com',
+  storageTypes: 'cookies,local_storage,indexeddb,cache_storage,
+  service_workers,websql' })` (only attempted if the `Storage` domain
+  exists on this client at all) → then `Page.navigate()`, which now
+  waits for this whole chain rather than firing immediately alongside
+  it. **Not yet tested on-device.** If this still doesn't resolve it,
+  the next step is probably restructuring `injector.js` to be
+  structurally more like TizenBrew's approach (attach to a separately,
+  normally-launched instance rather than navigate this app's own
+  WebView) rather than another storage-clearing variant.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
