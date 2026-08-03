@@ -58,6 +58,24 @@ function connectToDebugger(host, port, args, relayLog) {
             client.Runtime.enable();
             client.Page.enable();
 
+            // Confirmed on-device: standalone reliably works exactly once
+            // after any cache clear, then breaks on every subsequent launch
+            // until the cache is cleared again — on the pure CDP-injection
+            // path (real youtube.com, no proxy/rewriting involved at all).
+            // That pattern points at Cobalt's WebView HTTP cache serving
+            // something stale/broken for YouTube TV's own resources on a
+            // second load, not anything in this app's own code. Disable the
+            // cache for this navigation so every launch gets a cold load —
+            // non-fatal if unsupported (Page.setBypassCSP already turned out
+            // not to exist on this Cobalt CDP implementation; Network.* may
+            // be similarly incomplete).
+            client.Network.enable().catch(() => { });
+            client.Network.setCacheDisabled({ cacheDisabled: true }).catch(e => {
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Network.setCacheDisabled FAILED (non-fatal): ${e && e.stack || e}` });
+                }
+            });
+
             // Only start log-polling after injection has actually succeeded
             // once, not immediately alongside Page.navigate() — keeps it
             // fully out of the way of the critical early injection window.
