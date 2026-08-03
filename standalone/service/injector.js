@@ -93,7 +93,10 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                 try { client.close(); } catch (e) { }
                 return;
             }
-            isConnecting = false;
+            // isConnecting deliberately NOT reset here — see the comment on
+            // the isConnecting=true assignment in startDebugger for why it
+            // now stays true for the whole session (all retries), not just
+            // until a CDP socket opens.
             let injected = false;
 
             // Explicitly close the client on any failure path before
@@ -170,6 +173,10 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                     return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
+                    // The one true success point for the whole session (all
+                    // retries) — see startDebugger's isConnecting=true
+                    // comment for why nothing before this point touches it.
+                    isConnecting = false;
                     if (typeof relayLog === 'function') {
                         relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `Injection evaluate() succeeded for contextId=${m.context.id}` });
                     }
@@ -232,6 +239,24 @@ function startDebugger(args, relayLog, sessionId, attempt) {
         // superseding any retry loop still in flight from a previous one.
         _activeSessionId++;
         sessionId = _activeSessionId;
+        // Set for the ENTIRE session up front, not just once an ADB/CDP
+        // socket happens to be open. Confirmed on-device: every retry-path
+        // handler below used to reset this back to false right before
+        // scheduling its retry, leaving a real window (the 750ms
+        // RETRY_DELAY_MS gap, or longer) where a freshly (re)launched
+        // index.html could poll getState, see isConnecting:false, and
+        // conclude "ready" — triggering its OWN brand-new top-level
+        // /tizentube/debugger call. That call resets _activeSessionId's
+        // attempt counter back to 0, which silently defeats
+        // MAX_RETRY_ATTEMPTS forever: every hijack is itself a real
+        // shell:0 debug launch (it steals the foreground, matching "closes
+        // itself / reopens itself even from another app"), and each one
+        // re-arms a fresh 10-attempt budget instead of ever reaching it.
+        // Only a TV reboot (wiping this module's in-memory state) broke
+        // the cycle. isConnecting now only goes false at the two true
+        // terminal points: a successful injection, or actually giving up
+        // after MAX_RETRY_ATTEMPTS.
+        isConnecting = true;
     } else if (sessionId !== _activeSessionId) {
         return Promise.resolve(false); // superseded, abort silently
     }
@@ -274,28 +299,25 @@ function startDebugger(args, relayLog, sessionId, attempt) {
                 return;
             }
             const packageId = tizen.application.getAppInfo().packageId;
-            isConnecting = true;
             if (typeof relayLog === 'function') {
                 relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `ADB connected, requesting shell:0 debug ${packageId}.TizenTubeStandalone` });
             }
 
-            // Safety net: if this attempt never completes, isConnecting
-            // would otherwise stay stuck true forever, since it's only ever
-            // reset on a successful injection. Confirmed on-device: because
-            // the service is long-running in the background, that stuck
-            // state persisted across every subsequent app launch until a
-            // full TV reboot killed the service process. Re-armed on every
-            // retry attempt (not just the first) so the whole retry budget
-            // (up to MAX_RETRY_ATTEMPTS) is covered, not just one attempt's
-            // worth — harmless no-op if a connection already succeeded by
-            // the time this fires. Previously silent when it fired — that
-            // silence is exactly what made this indistinguishable from
-            // "still working" in the logs; now it says so explicitly, and
-            // actually retries instead of just leaving isConnecting=false
-            // for index.html to blindly re-trigger a whole new attempt.
+            // Safety net: without this, a stuck attempt (no debug shell
+            // response, no CDP connection) would hang until something else
+            // intervened. Confirmed on-device: because the service is
+            // long-running in the background, that stuck state persisted
+            // across every subsequent app launch until a full TV reboot
+            // killed the service process. Re-armed on every retry attempt
+            // (not just the first) so the whole retry budget (up to
+            // MAX_RETRY_ATTEMPTS) is covered, not just one attempt's worth —
+            // harmless no-op if a connection already succeeded by the time
+            // this fires. Does NOT touch isConnecting — see the comment on
+            // isConnecting=true in startDebugger for why it stays true
+            // across every retry in this session, only going false at the
+            // two true terminal points (success, or actually giving up).
             const safetyTimeout = setTimeout(() => {
                 if (sessionId !== _activeSessionId) return;
-                isConnecting = false;
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'Safety-net timeout: no debug shell response or CDP connection within 20s' });
                 }
@@ -324,7 +346,6 @@ function startDebugger(args, relayLog, sessionId, attempt) {
                 }
                 clearTimeout(safetyTimeout);
                 endStreamOnce();
-                isConnecting = false;
                 retryOrGiveUp(sessionId, attempt, args, relayLog, `shell stream error: ${err && err.message || err}`);
             });
             shellCmd.on('data', (data) => {
