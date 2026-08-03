@@ -107,6 +107,16 @@ if (!localConfig || typeof localConfig !== 'object') {
   localConfig = { ...defaultConfig };
 }
 
+// The visual debug console (and the logging that feeds it) must always
+// start off/hidden, regardless of what was last saved — confirmed
+// on-device: leaving it enabled across a restart (e.g. after being turned
+// on once to diagnose something) is suspected of contributing to the app
+// hanging on startup. Overridden in memory only (not written back to
+// storage), so re-enabling it from Settings during a session still works
+// exactly as before — it just won't carry over to the next app start.
+localConfig.enableDebugConsole = false;
+localConfig.enableDebugLogging = false;
+
 export function configRead(key) {
   if (localConfig[key] === undefined) {
     const hasDefault = Object.prototype.hasOwnProperty.call(defaultConfig, key);
