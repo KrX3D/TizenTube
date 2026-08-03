@@ -112,6 +112,16 @@
                     } else if (!res.canConnectToDaemon) {
                         sendLog('INFO', 'Taking proxy path, navigating to localhost:8099/tv');
                         location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
+                    } else {
+                        // canConnectToDaemon && isConnecting: a connection attempt is
+                        // (or was) already in progress. Neither branch above matched,
+                        // so previously this silently did nothing — a permanent hang
+                        // whenever isConnecting got stuck true (e.g. a previous CDP
+                        // attempt that never completed or failed, confirmed on-device).
+                        // Poll instead of giving up; injector.js also now times out a
+                        // stuck attempt so this isn't an infinite wait in practice.
+                        sendLog('INFO', 'canConnectToDaemon but isConnecting, retrying in 1s');
+                        setTimeout(useInjectorOrProxy, 1000);
                     }
                 }).catch((err) => {
                     sendLog('ERROR', 'getState fetch failed, reloading: ' + (err && err.message || err));
