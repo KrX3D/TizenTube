@@ -118,7 +118,16 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             client.Page.enable();
 
             client.on('disconnect', () => {
-                if (!injected) retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
+                if (!injected) {
+                    retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
+                } else if (sessionId === _activeSessionId) {
+                    // The session's CDP connection has now genuinely ended
+                    // (the injected youtube.com/tv session is over) — only
+                    // now is it safe to clear isConnecting. See the comment
+                    // below on why it must NOT clear the moment injection
+                    // succeeds.
+                    isConnecting = false;
+                }
             });
 
             function logNonFatal(label) {
@@ -129,34 +138,31 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                 };
             }
 
-            // Confirmed on-device: standalone reliably works exactly once
-            // after any cache clear, then breaks on every subsequent launch
-            // until the cache/data is cleared again (on Tizen 5.5, cache
-            // alone sometimes wasn't enough — data had to be cleared too) —
-            // on the pure CDP-injection path (real youtube.com, no proxy/
-            // rewriting involved at all), reproduced repeatedly on both TVs.
-            // A TV reboot alone did not fix it (rules out in-memory state).
-            // Network.setCacheDisabled alone (a prior attempt at this fix)
-            // only stops *new* caching for this session — it doesn't clear
-            // what's already cached/stored from the previous run, and
-            // didn't resolve the issue on retest. Actively clear cache,
-            // cookies, and per-origin storage before navigating instead —
-            // replicating what the user's manual Clear Cache/Clear Data
-            // TV settings action does, programmatically, on every launch.
-            // Each call is independently non-fatal (Page.setBypassCSP
-            // already turned out not to exist on this Cobalt CDP
-            // implementation; other domains may be similarly incomplete)
-            // and all proceed to Page.navigate() regardless of outcome.
+            // Confirmed on-device (earlier investigation): standalone
+            // reliably worked exactly once after any cache clear, then
+            // broke on every subsequent launch until cache/data was cleared
+            // again — believed at the time to be genuinely stale
+            // cache/cookies/storage, so this cleared all of it (including
+            // cookies and localStorage, where the login session lives)
+            // before every single navigation.
+            //
+            // Now believed to have actually been the isConnecting/self-
+            // relaunch races fixed elsewhere in this file: confirmed
+            // on-device that the app was relaunching itself every ~3-4s
+            // continuously (48 "index.html script started" cycles logged
+            // for what looked like a handful of app opens), which called
+            // this cleanup — and wiped cookies — every single cycle, not
+            // just once per real app open. That's why login never
+            // persisted. With the self-relaunch loop fixed, clearing the
+            // actual login session on every launch is no longer worth the
+            // cost of forcing re-login every time. Only the HTTP resource
+            // cache is cleared now — cookies/localStorage/IndexedDB (where
+            // the login session lives) are left alone. If stale-cache
+            // symptoms reappear on retest, that'll need its own targeted
+            // fix rather than reinstating a full wipe.
             const preNavigateCleanup = client.Network.enable()
                 .then(() => client.Network.setCacheDisabled({ cacheDisabled: true }).catch(logNonFatal('Network.setCacheDisabled')))
                 .then(() => client.Network.clearBrowserCache().catch(logNonFatal('Network.clearBrowserCache')))
-                .then(() => client.Network.clearBrowserCookies().catch(logNonFatal('Network.clearBrowserCookies')))
-                .then(() => client.Storage && client.Storage.clearDataForOrigin
-                    ? client.Storage.clearDataForOrigin({
-                        origin: 'https://www.youtube.com',
-                        storageTypes: 'cookies,local_storage,indexeddb,cache_storage,service_workers,websql'
-                    }).catch(logNonFatal('Storage.clearDataForOrigin'))
-                    : null)
                 .catch(logNonFatal('pre-navigate cleanup chain'));
 
             // Only start log-polling after injection has actually succeeded
@@ -164,8 +170,21 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             // fully out of the way of the critical early injection window.
             let logPollStarted = false;
 
+            // Fetched once per session and reused for every
+            // executionContextCreated event, not re-fetched from the CDN
+            // each time. YouTube's own page can create several execution
+            // contexts in quick succession while it settles (login
+            // redirects, SPA transitions) — re-fetching the whole userscript
+            // over the network for each one meant the injection attempt was
+            // frequently still fetching by the time that particular context
+            // was already replaced ("Cannot find context with specified
+            // id"), losing the race — worse on slower hardware (5.5).
+            // Started immediately (not lazily on first context) so it's
+            // already in flight/cached by the time any context appears.
+            const modFilePromise = fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text());
+
             client.on('Runtime.executionContextCreated', m => {
-                fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text()).then(modFile => {
+                modFilePromise.then(modFile => {
                     // Marker so the userscript can tell it's running under this
                     // standalone app even though this path loads real youtube.com
                     // directly (window.location.hostname isn't 'localhost' here,
@@ -173,10 +192,26 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                     return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
-                    // The one true success point for the whole session (all
-                    // retries) — see startDebugger's isConnecting=true
-                    // comment for why nothing before this point touches it.
-                    isConnecting = false;
+                    // isConnecting deliberately stays true here, not false —
+                    // confirmed on-device: the debug-launched app instance's
+                    // OWN index.html script keeps running in the background
+                    // even after Page.navigate() has already moved the
+                    // visible page to youtube.com/tv (its pending
+                    // launchAppControl success callback fires regardless).
+                    // That stale callback calls useInjectorOrProxy() again,
+                    // and previously — since isConnecting had just gone
+                    // false right here — it would see "no session in
+                    // progress" and start a whole NEW debug-launch cycle,
+                    // tearing down the session that had just started working.
+                    // Confirmed on-device: 48 "index.html script started"
+                    // cycles logged for what looked like a handful of app
+                    // opens, continuously wiping cookies (preNavigateCleanup
+                    // runs every cycle) and occasionally losing the injection
+                    // race against YouTube's own login-flow navigations.
+                    // isConnecting now only clears once the CDP connection
+                    // for this successful session actually disconnects (see
+                    // the 'disconnect' handler above) — i.e. once the
+                    // injected session has genuinely ended.
                     if (typeof relayLog === 'function') {
                         relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `Injection evaluate() succeeded for contextId=${m.context.id}` });
                     }
