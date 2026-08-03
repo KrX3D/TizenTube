@@ -46,6 +46,16 @@ function pollLogQueue(client, relayLog) {
     // instability right when injection is trying to happen. Stop on
     // disconnect, and as a defensive fallback in case that event doesn't
     // fire reliably, also stop after a few consecutive failures.
+    // Runs in-page, on the same thread as YouTube's own rendering/JS —
+    // confirmed on-device: with only the visual console on (no remote
+    // relay), logging is fast with no hangs; with remote relay on, page
+    // navigation (e.g. Settings -> Library) hangs. The difference is this
+    // poll: it now drains more volume than before (console.* output is
+    // unified into the same queue, not just the sparser file-only stream),
+    // and JSON.stringify-ing a queue of entries once a second, in-page,
+    // competes for CPU right when navigation is also doing real work.
+    // Lower frequency (2s) and a smaller worst-case payload (logServer.js's
+    // MAX_QUEUE) both reduce that per-poll cost.
     let consecutiveFailures = 0;
     const interval = setInterval(() => {
         client.Runtime.evaluate({
@@ -64,7 +74,7 @@ function pollLogQueue(client, relayLog) {
             consecutiveFailures++;
             if (consecutiveFailures >= 3) clearInterval(interval);
         });
-    }, 1000);
+    }, 2000);
 
     client.on('disconnect', () => clearInterval(interval));
 }
@@ -169,6 +179,12 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             // once, not immediately alongside Page.navigate() — keeps it
             // fully out of the way of the critical early injection window.
             let logPollStarted = false;
+            // Bounds the "Cannot find context" tolerance below — if this
+            // connection never lands a single successful injection after
+            // several tries, fall back to a real retry instead of waiting
+            // forever with isConnecting stuck true and no mod ever injected.
+            let contextRaceMisses = 0;
+            const MAX_CONTEXT_RACE_MISSES = 5;
 
             // Fetched once per session and reused for every
             // executionContextCreated event, not re-fetched from the CDN
@@ -220,10 +236,34 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                         pollLogQueue(client, relayLog);
                     }
                 }).catch(e => {
+                    const msg = e && e.message || String(e);
                     if (typeof relayLog === 'function') {
                         relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Injection evaluate() FAILED for contextId=${m.context.id}: ${e && e.stack || e}` });
                     }
-                    failAndRetry(`injection evaluate() failed: ${e && e.message || e}`);
+                    // "Cannot find context with specified id" means the page
+                    // itself already moved on (e.g. YouTube's own SPA
+                    // creating/replacing contexts during its own bootstrap)
+                    // before our evaluate() call landed — a transient race,
+                    // not a real connection failure. Page.navigate() already
+                    // succeeded independently of this, so the page is often
+                    // already loading/working fine. Confirmed on-device:
+                    // treating this like every other failure and calling
+                    // failAndRetry issued a brand new shell:0 debug command
+                    // against an app that was already running — which,
+                    // observed repeatedly, gets no response at all (Tizen
+                    // silently ignores a redundant debug-launch on an
+                    // already-debugging app) — burning the full 20s
+                    // safety-net timeout on every one of the 10 retry
+                    // attempts for nothing, while YouTube sat there already
+                    // loaded. The 'Runtime.executionContextCreated' listener
+                    // above is persistent, not one-shot, so it already gets
+                    // another shot at the next context on this same
+                    // connection without needing a whole new session.
+                    if (msg.indexOf('Cannot find context') !== -1) {
+                        contextRaceMisses++;
+                        if (contextRaceMisses < MAX_CONTEXT_RACE_MISSES) return;
+                    }
+                    failAndRetry(`injection evaluate() failed: ${msg}`);
                 });
             });
 
