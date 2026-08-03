@@ -125,7 +125,13 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             }
 
             client.Runtime.enable();
-            client.Page.enable();
+            // Page.enable() deliberately NOT called — nothing here listens
+            // for any Page.* events, and Page.navigate()/setBypassCSP() are
+            // commands that don't require the domain enabled to issue.
+            // TizenBrew's own debugger.js (same CDP-injection job, doesn't
+            // hang after long sessions) never enables it either. Enabling a
+            // domain you don't need means CDP tracks its events for the
+            // entire session for nothing.
 
             client.on('disconnect', () => {
                 if (!injected) {
@@ -170,9 +176,20 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             // the login session lives) are left alone. If stale-cache
             // symptoms reappear on retest, that'll need its own targeted
             // fix rather than reinstating a full wipe.
+            // Network.enable() is only needed transiently, to issue the two
+            // calls below — it's disabled again immediately after, not left
+            // on for the rest of the session. Confirmed by comparison with
+            // TizenBrew's own debugger.js (same CDP-injection job, same mod,
+            // does not hang on long sessions): it never enables the Network
+            // domain at all. Left enabled, CDP tracks every single network
+            // request for the whole session — every video segment fetch
+            // during playback — which plausibly explains a standalone-only
+            // hang after ~15 minutes of video that doesn't happen under
+            // TizenBrew with the identical mod version.
             const preNavigateCleanup = client.Network.enable()
                 .then(() => client.Network.setCacheDisabled({ cacheDisabled: true }).catch(logNonFatal('Network.setCacheDisabled')))
                 .then(() => client.Network.clearBrowserCache().catch(logNonFatal('Network.clearBrowserCache')))
+                .then(() => client.Network.disable().catch(logNonFatal('Network.disable')))
                 .catch(logNonFatal('pre-navigate cleanup chain'));
 
             // Only start log-polling after injection has actually succeeded
@@ -200,6 +217,15 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
             const modFilePromise = fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text());
 
             client.on('Runtime.executionContextCreated', m => {
+                // Matches TizenBrew's own debugger.js: only inject into the
+                // main-frame/default context, not workers, iframes, or
+                // isolated worlds. Previously every context creation
+                // triggered a full injection attempt regardless of type —
+                // plausibly contributing to the "Cannot find context" races
+                // (non-default contexts tend to be shorter-lived) and to
+                // wasted work over a long session as more of them appear.
+                const auxData = (m.context && m.context.auxData) || {};
+                if (!auxData.isDefault) return;
                 modFilePromise.then(modFile => {
                     // Marker so the userscript can tell it's running under this
                     // standalone app even though this path loads real youtube.com
