@@ -553,8 +553,42 @@ Reported 2026-08-02 after the install issue above was fixed:
   Node-4-targeted output uses `var`, not `let`/`const`), but it's
   harmless to keep, and it already caught one real latent bug
   (`adbhost`'s own undeclared `packet` assignment) by turning a silent
-  sloppy-mode footgun into a loud, fixable error. **Not yet tested
-  on-device.**
+  sloppy-mode footgun into a loud, fixable error.
+
+  **Confirmed on-device (2026-08-03): this fully solved Tizen 5.5's
+  parsing problem.** `bootstrap.js starting, node v4.4.3` →
+  `bundle.js required successfully` → `Standalone service listening on
+  127.0.0.1:8099` — no more SyntaxErrors of any kind. 5.5's standalone
+  service now starts reliably.
+
+  It surfaced the *next* problem in the chain, though, common to both
+  TVs: once `getState` resolves and the CDP-injection handoff begins,
+  a device log showed `Unhandled rejection: Error: 'Page.setBypassCSP'
+  wasn't found` — Cobalt's CDP implementation on this device doesn't
+  support that protocol method at all — immediately followed by the
+  same `not opened` / `ECONNRESET` pattern seen on 6.5 in every log so
+  far, even ones from before any of this session's logging/fixes
+  existed. Compared against TizenBrew's own `debugger.js` (reliably
+  works on both TVs): it **never calls `Page.navigate()` or
+  `Page.setBypassCSP()` at all** — it attaches to a YouTube TV instance
+  already launched through normal means and injects via a script tag
+  (with an eval-based fallback for Trusted Types), whereas
+  `injector.js` spawns a *fresh* debug-mode instance via ADB and
+  immediately drives its navigation via CDP — a structurally different,
+  more timing-sensitive sequence TizenBrew's architecture sidesteps
+  entirely. Fixed the immediate bug (both `Page.navigate()` and
+  `Page.setBypassCSP()` had no error handling, so either failing
+  produced an unhandled rejection) and made `setBypassCSP` explicitly
+  non-fatal — injection here is `Runtime.evaluate()` of the userscript
+  text directly, not a page-loaded `<script src>` that CSP would
+  actually block, so that call was likely never load-bearing for this
+  approach in the first place. **Not yet confirmed whether this (or the
+  `Page.setBypassCSP` failure itself) is the root cause of the
+  remaining connection instability, or just one contributing factor —
+  needs on-device retest.** If it persists, the next step is probably
+  making `injector.js`'s CDP handshake structurally more like
+  TizenBrew's (attach after launch rather than drive navigation via
+  CDP), not another isolated error-handling patch.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/

@@ -71,18 +71,47 @@ function connectToDebugger(host, port, args, relayLog) {
                     // unlike the proxy path).
                     return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
                 }).then(() => {
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `Injection evaluate() succeeded for contextId=${m.context.id}` });
+                    }
                     if (!logPollStarted) {
                         logPollStarted = true;
                         pollLogQueue(client, relayLog);
                     }
                 }).catch(e => {
-                    client.Runtime.evaluate({ expression: 'alert("Failed to request to JSDelivr CDN.")', contextId: m.context.id });
+                    // This used to try showing an alert() via a second
+                    // evaluate() call with no error handling of its own — if
+                    // the connection was already the reason the first
+                    // evaluate() failed, that second call failed too, and
+                    // *that* unhandled rejection was what showed up in logs,
+                    // masking the real underlying error below.
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Injection evaluate() FAILED for contextId=${m.context.id}: ${e && e.stack || e}` });
+                    }
+                    client.Runtime.evaluate({ expression: 'alert("Failed to request to JSDelivr CDN.")', contextId: m.context.id }).catch(() => { });
                 });
             });
 
-            client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` });
+            client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` }).catch(e => {
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Page.navigate FAILED: ${e && e.stack || e}` });
+                }
+            });
 
-            client.Page.setBypassCSP({ enabled: true });
+            // Confirmed on-device (Tizen 5.5): Cobalt's CDP implementation
+            // doesn't support this method at all ('Page.setBypassCSP' wasn't
+            // found) — an unhandled rejection right alongside Page.navigate().
+            // Injection here is via Runtime.evaluate() of the userscript text
+            // directly, not a page-loaded <script src> that CSP would block,
+            // so this call was never actually load-bearing for injection to
+            // work; catch it so an unsupported protocol method can't produce
+            // an unhandled rejection here regardless of whether it's also
+            // contributing to the connection instability seen on both TVs.
+            client.Page.setBypassCSP({ enabled: true }).catch(e => {
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Page.setBypassCSP FAILED (non-fatal, not required for eval-based injection): ${e && e.stack || e}` });
+                }
+            });
         })
     }).catch(e => {
         return setTimeout(() => connectToDebugger(host, port, args, relayLog), 100);
