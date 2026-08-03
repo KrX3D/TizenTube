@@ -422,7 +422,23 @@ Reported 2026-08-02 after the install issue above was fixed:
   instead of silently doing nothing on `canConnectToDaemon && isConnecting`;
   `injector.js` now sets a 20s safety timeout when `isConnecting` is set
   `true` that force-resets it, bounding the worst case instead of a
-  permanent hang. **Not yet retested on-device.**
+  permanent hang.
+
+  **Confirmed on-device (2026-08-03) that this retry logic works** — a
+  6.5 log showed the retry loop firing every second and correctly
+  recovering once the 20s timeout reset `isConnecting`. But the *next*
+  debug-launch attempt then hit `Uncaught exception: ReferenceError:
+  packet is not defined` in `AdbHostClient._onPacket`, followed by
+  `ECONNRESET`, and the app never actually opened — a **regression from
+  the blanket `"use strict"` prepend above**. `adbhost`'s own bundled
+  code does `packet = this._packet;` with no declaration at
+  `_onPacket`'s first line — a genuine pre-existing bug in that package,
+  harmless in sloppy mode (silently creates an implicit global) but a
+  `ReferenceError` in strict mode. Patched via a build-time regex in
+  `build-service.js` (`packet = this._packet;` → `var packet = ...`),
+  the same pattern already used there for two other bundle post-processing
+  fixups. **Not yet retested on-device — for either the isConnecting fix
+  or this one.**
 
   **Also added: earlier diagnostics for Tizen 5.5's still-total
   blackout.** All service-level self-logging lives inside
@@ -478,8 +494,40 @@ Reported 2026-08-02 after the install issue above was fixed:
   `"use strict";` as the literal first line of the *entire* bundled
   output in `build-service.js` — nested functions lexically inherit
   strict mode from their enclosing scope, so one directive at the true
-  top of the file covers every bundled module. **Not yet retested
-  on-device.**
+  top of the file covers every bundled module.
+
+  **Retested (2026-08-03): fixed that specific error, but not the whole
+  problem — a *different* parse error surfaced next:**
+  `SyntaxError: Unexpected token {`, no line number available (V8
+  doesn't attach one to a parse-time error thrown this way). Forcing
+  strict mode only fixed the one class of syntax it specifically
+  targets; there's evidently at least one more ES6+ construct somewhere
+  across the ~30 bundled dependencies that Node 4.4.3's parser rejects
+  outright, strict mode or not. Also caused a real regression on Tizen
+  6.5 — see the `adbhost` `packet` bug fix above; forcing strict mode
+  turns other packages' latent sloppy-mode-only bugs into hard failures.
+
+  **This is a fork in the road, not yet resolved either way:**
+  1. Keep patching individual constructs as they're found (like the
+     `adbhost` fix above) — lower risk per change, but potentially many
+     more iterations of "rebuild, retest, find the next one" before 5.5
+     fully works, and each strict-mode-adjacent fix risks a new 6.5
+     regression the way the `adbhost` one did.
+  2. Reintroduce Babel transpilation (reverted in the fix that preceded
+     all of this — see above), which exists specifically to handle "lots
+     of ES6+ syntax scattered across third-party code, targeting an old
+     runtime" as a class of problem rather than one construct at a time.
+     It was blamed for the Tizen 6.5 crash-loop back then, but every
+     concrete 6.5 cause found since (the `crypto.getRandomValues`
+     failure, the dynamic-`require` bundling bug, the stuck
+     `isConnecting` hang, and now this `adbhost` bug) has turned out to
+     be unrelated to Babel — it's possible that revert was premature,
+     and now there's much better on-device diagnostics (this whole
+     logging chain) to actually verify whether it causes problems this
+     time instead of reverting on correlation alone.
+
+  Ask the user which direction before proceeding — this is a real
+  scope/risk tradeoff, not a clear-cut fix.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
