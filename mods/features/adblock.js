@@ -506,13 +506,39 @@ function _deArrowEnqueue(taskFn) { _deArrowQueue.push(taskFn); _deArrowRunNext()
 // ===== JSON.parse Patch =====
 
 const origParse = JSON.parse;
+// JSON.parse is patched globally, so this line runs on every JSON.parse
+// call anywhere on the page — not just on navigation. YouTube TV's own
+// code parses JSON constantly (API responses, state polling, prefetching),
+// so logging unconditionally here produced ~800 near-identical entries in
+// a single session. window.__ttLastDetectedPage/__ttParseSeq still update
+// on every call (other code may depend on their being current) — only the
+// logging itself is now collapsed to fire once per actual page/hash change.
+let _lastLoggedParseKey = null;
+// Confirmed on-device: a "RangeError: Maximum call stack size exceeded"
+// right as video playback started, stack showing JSON.parse calling into
+// JSON.parse again through YouTube's own (minified) code — YouTube's API
+// responses can contain nested/escaped JSON strings that its own code
+// parses recursively, a legitimate pattern on its own. But since this
+// patch replaces the *global* JSON.parse, every one of those nested calls
+// also runs this entire function's ad-block/page-detection/progress-cache
+// processing on top of YouTube's own recursion, multiplying the stack
+// depth used per nesting level. Only the outermost call needs any of
+// that; nested calls now just return the parsed result untouched.
+let _parseDepth = 0;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
+  _parseDepth++;
+  if (_parseDepth > 1) { _parseDepth--; return r; }
   try {
     const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
     window.__ttLastDetectedPage = detectedPage;
     window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
-    appendFileOnlyLog('parse.begin', { detectedPage, hash: location.hash || '' });
+    const hash = location.hash || '';
+    const parseKey = detectedPage + '|' + hash;
+    if (parseKey !== _lastLoggedParseKey) {
+      _lastLoggedParseKey = parseKey;
+      appendFileOnlyLog('parse.begin', { detectedPage, hash });
+    }
 
     if (Array.isArray(r)) {
       for (let i = 0; i < r.length; i++) processResponsePayload(r[i], detectedPage);
@@ -826,6 +852,8 @@ JSON.parse = function () {
       console.warn('[TizenTube] adblock parser patch failed', error);
     }
     return r;
+  } finally {
+    _parseDepth--;
   }
 };
 
