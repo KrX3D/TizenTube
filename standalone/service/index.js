@@ -14,10 +14,26 @@ const http = require('http');
 const DEFAULT_LOG_HOST = '192.168.50.57';
 const DEFAULT_LOG_PORT = 3030;
 
+// A plain "connection refused" (nothing listening on that port) fails fast.
+// A genuinely unreachable host (receiver script not running and nothing
+// there to send a fast RST — routing/firewall dependent) can instead hang
+// for a long OS-level TCP connect timeout before failing, and this fires on
+// every single log call with no memory of prior failures. Once any target
+// fails, stop attempting it for the rest of this process — after the first
+// failed call (typically the "process starting" one), every subsequent log
+// call for that same host:port is skipped immediately instead of opening a
+// new connection and waiting to find out again.
+const unavailableTargets = {};
+
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
 // (same /tv-log path and JSON shape), so the existing PS1 receiver script
 // needs no changes.
 function relayLog(entry, host, port) {
+    const targetHost = host || DEFAULT_LOG_HOST;
+    const targetPort = Number(port) || DEFAULT_LOG_PORT;
+    const targetKey = `${targetHost}:${targetPort}`;
+    if (unavailableTargets[targetKey]) return;
+
     try {
         const body = JSON.stringify({
             _formatted: entry._formatted || `[${entry.ts}] [${entry.level || 'INFO'}] [${entry.context || 'TizenTube'}] ${entry.message || ''}`,
@@ -28,13 +44,18 @@ function relayLog(entry, host, port) {
             message: entry.message,
         });
         const req = http.request({
-            hostname: host || DEFAULT_LOG_HOST,
-            port: Number(port) || DEFAULT_LOG_PORT,
+            hostname: targetHost,
+            port: targetPort,
             path: '/tv-log',
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
         }, () => { });
-        req.on('error', () => { });
+        req.setTimeout(3000, () => {
+            // destroy() alone doesn't emit 'error', so mark unavailable here too
+            unavailableTargets[targetKey] = true;
+            req.destroy();
+        });
+        req.on('error', () => { unavailableTargets[targetKey] = true; });
         req.write(body);
         req.end();
     } catch (e) { }
