@@ -582,13 +582,47 @@ Reported 2026-08-02 after the install issue above was fixed:
   non-fatal — injection here is `Runtime.evaluate()` of the userscript
   text directly, not a page-loaded `<script src>` that CSP would
   actually block, so that call was likely never load-bearing for this
-  approach in the first place. **Not yet confirmed whether this (or the
-  `Page.setBypassCSP` failure itself) is the root cause of the
-  remaining connection instability, or just one contributing factor —
-  needs on-device retest.** If it persists, the next step is probably
-  making `injector.js`'s CDP handshake structurally more like
-  TizenBrew's (attach after launch rather than drive navigation via
-  CDP), not another isolated error-handling patch.
+  approach in the first place.
+
+  **Real breakthrough (2026-08-03), from a `Clear Cache`/`Clear Data`
+  experiment the user ran on-device.** Both TVs showed the exact same
+  pattern: standalone works *exactly once* after any cache clear, then
+  breaks on every subsequent launch until the cache is cleared again —
+  reproduced repeatedly on both. Critically, a full TV **reboot alone
+  did not fix it** (rules out anything in-memory — `isConnecting`, the
+  CDP connection, any Node process state — none of that survives a
+  reboot anyway), only clearing the app's cache did. This happens on
+  the pure CDP-injection path (real `youtube.com`, no proxy/URL-
+  rewriting involved at all), so it's not this app's own rewriting
+  logic either.
+
+  This explains *why TizenBrew doesn't hit this*: its `debugger.js`
+  never calls `Page.navigate()` — it attaches to the actual native
+  YouTube TV app, launched fresh each time through Tizen's own normal
+  app-launch mechanism, a completely separate Tizen application with
+  its own isolated WebView profile that the platform tears down and
+  recreates properly on each launch. This app's approach is
+  structurally different: `Page.navigate()` redirects the *same*
+  WebView instance belonging to this app's own package
+  (`krx3dTtSt1.TizenTubeStandalone`) to `youtube.com/tv` rather than
+  launching a genuinely separate app — every relaunch reuses the same
+  on-disk cache/profile tied to this app's package ID. First navigation
+  is a clean cold load (works); the second reuses a now-warm cache from
+  the previous run, and something about that warm cache breaks YouTube
+  TV's own initialization.
+
+  Fix: `client.Network.enable()` + `client.Network.setCacheDisabled({
+  cacheDisabled: true })` before `Page.navigate()`, forcing every
+  navigation to bypass the WebView HTTP cache regardless of why it's
+  shared across launches — non-fatal if unsupported (`Page.setBypassCSP`
+  already turned out not to exist on this Cobalt CDP implementation;
+  `Network.*` may be similarly incomplete). **Not yet tested on-device**
+  — this is the current leading theory for the root cause of the
+  connection instability seen throughout this whole investigation, not
+  just one contributing factor; if it doesn't fully resolve things,
+  restructuring `injector.js` to be structurally more like TizenBrew's
+  approach (attach to a separately, normally-launched instance rather
+  than navigate this app's own WebView) is the next thing to try.
 
   Also added, per user request: a read-only `Receiver: {{host}}:{{port}}`
   subtitle on the native "Remote Log Server" settings menu item (`mods/ui/
