@@ -129,8 +129,16 @@
                     "afrPauseDuration": {
                         "title": "Auto Frame Rate Pause Duration",
                         "subtitle": "Set the duration (in seconds) to pause video playback when adjusting frame rate"
-                    }
+                    },
+                    "codecAny": "Any",
+                    "qualityAuto": "Auto"
                 }
+            },
+            "time": {
+                "second": "{{count}} second",
+                "seconds": "{{count}} seconds",
+                "minute": "{{count}} minute",
+                "minutes": "{{count}} minutes"
             },
             "uiSettings": {
                 "title": "User Interface Settings",
@@ -297,5 +305,21 @@
             "skip": "Skip {{segment}}",
             "skipToHighlight": "Skip to highlight"
         }
+    },
+    "player": {
+        "playbackSpeed": {
+            "title": "Playback Speed",
+            "button": "Speed Controls"
+        },
+        "miniPlayer": "Mini Player",
+        "pictureInPicture": "Picture in Picture",
+        "previous": "Previous",
+        "next": "Next",
+        "withTizenTube": "with TizenTube"
+    },
+    "toasts": {
+        "downloadingUpdate": "Downloading update, please wait...",
+        "videoAddedToQueue": "Video added to queue.",
+        "videoQueueCleared": "Video queue cleared."
     }
 }

@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer } from './ytUI.js';
+import { t } from 'i18next';
 
 const interval = setInterval(() => {
     const videoElement = document.querySelector('video');
@@ -108,7 +109,7 @@ function speedSettings() {
         )
     );
 
-    showModal('Playback Speed', overlayPanelItemListRenderer(buttons, selectedIndex), 'tt-speed');
+    showModal(t('player.playbackSpeed.title'), overlayPanelItemListRenderer(buttons, selectedIndex), 'tt-speed');
 }
 
 export {
