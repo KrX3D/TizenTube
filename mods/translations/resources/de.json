@@ -129,8 +129,16 @@
                     "afrPauseDuration": {
                         "title": "Pause bei automatischer Bildrate",
                         "subtitle": "Lege fest, wie lange (in Sekunden) das Video pausiert wird, wenn die Bildrate angepasst wird"
-                    }
+                    },
+                    "codecAny": "Beliebig",
+                    "qualityAuto": "Automatisch"
                 }
+            },
+            "time": {
+                "second": "{{count}} Sekunde",
+                "seconds": "{{count}} Sekunden",
+                "minute": "{{count}} Minute",
+                "minutes": "{{count}} Minuten"
             },
             "uiSettings": {
                 "title": "Benutzeroberflächen-Einstellungen",
@@ -297,5 +305,21 @@
             "skip": "{{segment}} überspringen",
             "skipToHighlight": "Zum Highlight springen"
         }
+    },
+    "player": {
+        "playbackSpeed": {
+            "title": "Wiedergabegeschwindigkeit",
+            "button": "Geschwindigkeit"
+        },
+        "miniPlayer": "MiniPlayer",
+        "pictureInPicture": "Bild-in-Bild",
+        "previous": "Zurück",
+        "next": "Weiter",
+        "withTizenTube": "mit TizenTube"
+    },
+    "toasts": {
+        "downloadingUpdate": "Update wird heruntergeladen, bitte warten...",
+        "videoAddedToQueue": "Video wurde zur Warteschlange hinzugefügt",
+        "videoQueueCleared": "Die Warteschlange wurde geleert."
     }
 }

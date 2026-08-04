@@ -465,7 +465,7 @@ export default function modernUI(update, parameters) {
                     options:
                         ['Auto', '2160p', '1440p', '1080p', '720p', '480p', '360p', '240p', '144p'].map((quality) => {
                             return {
-                                name: quality,
+                                name: quality === 'Auto' ? t('settings.options.videoPlayer.options.qualityAuto') : quality,
                                 key: 'preferredVideoQuality',
                                 value: quality.toLowerCase()
                             }
@@ -516,7 +516,7 @@ export default function modernUI(update, parameters) {
                     },
                     options: ['any', 'vp9', 'av01', 'avc1'].map((codec) => {
                         return {
-                            name: codec === 'any' ? 'Any' : codec.toUpperCase(),
+                            name: codec === 'any' ? t('settings.options.videoPlayer.options.codecAny') : codec.toUpperCase(),
                             key: 'preferredVideoCodec',
                             value: codec
                         }
@@ -538,7 +538,7 @@ export default function modernUI(update, parameters) {
                     },
                     options: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((seconds) => {
                         return {
-                            name: `${seconds} seconds`,
+                            name: t(seconds === 1 ? 'settings.options.time.second' : 'settings.options.time.seconds', { count: seconds }),
                             key: 'autoFrameRatePauseVideoFor',
                             value: seconds * 1000
                         }
@@ -689,7 +689,7 @@ export default function modernUI(update, parameters) {
                                 subtitle: t('settings.options.uiSettings.options.screenDimming.options.dimmingTimeout.subtitle')
                             },
                             options: [10, 20, 30, 60, 120, 180, 240, 300].map((seconds) => {
-                                const title = seconds >= 60 ? `${seconds / 60} minute${seconds / 60 > 1 ? 's' : ''}` : `${seconds} seconds`;
+                                const title = seconds >= 60 ? t(`settings.options.time.minute${seconds / 60 > 1 ? 's' : ''}`, { count: seconds / 60 }) : t('settings.options.time.seconds', { count: seconds });
                                 return {
                                     name: title,
                                     key: 'dimmingTimeout',
@@ -1064,5 +1064,5 @@ export function optionShow(parameters, update) {
         }
     }
 
-    showModal(parameters.menuHeader ? parameters.menuHeader : 'TizenTube Settings', overlayPanelItemListRenderer(buttons, parameters.selectedIndex), parameters.menuId || 'tt-settings-options', update);
+    showModal(parameters.menuHeader ? parameters.menuHeader : t('settings.ttSettings.title'), overlayPanelItemListRenderer(buttons, parameters.selectedIndex), parameters.menuId || 'tt-settings-options', update);
 }
