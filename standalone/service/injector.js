@@ -7,6 +7,7 @@ const fetch = require('node-fetch');
 
 var isConnecting = false;
 const isTizen3 = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').startsWith('3.0');
+const standaloneVersion = tizen.application.getAppInfo().version;
 
 // Confirmed on-device: TizenBrew — a completely separate app/service, not
 // sharing any code path with this one — hits the exact same "closes itself,
@@ -231,7 +232,7 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
                     // standalone app even though this path loads real youtube.com
                     // directly (window.location.hostname isn't 'localhost' here,
                     // unlike the proxy path).
-                    return client.Runtime.evaluate({ expression: 'window.__ttStandalone = true;\n' + modFile, contextId: m.context.id });
+                    return client.Runtime.evaluate({ expression: `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\n` + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
                     // isConnecting deliberately stays true here, not false —

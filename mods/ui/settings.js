@@ -2,6 +2,7 @@ import { configRead } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer, scrollPaneRenderer, overlayMessageRenderer, QrCodeRenderer } from './ytUI.js';
 import qrcode from 'qrcode-npm';
 import { t } from 'i18next';
+import { getStandaloneVersion, moduleVersion } from '../version.js';
 
 const qrcodes = {};
 
@@ -17,6 +18,11 @@ const LIBRARY_TABS_DATA = [
 export const LIBRARY_TAB_IDS = LIBRARY_TABS_DATA.map(d => d.value);
 
 export default function modernUI(update, parameters) {
+    const standaloneVersion = getStandaloneVersion();
+    const versionText = standaloneVersion
+        ? t('settings.ttSettings.versionInfo.standalone', { standaloneVersion, moduleVersion })
+        : t('settings.ttSettings.versionInfo.module', { moduleVersion });
+
     const settings = [
         {
             name: t('settings.supportTT.title'),
@@ -893,7 +899,7 @@ export default function modernUI(update, parameters) {
     showModal(
         {
             title: t('settings.ttSettings.title'),
-            subtitle: t('settings.ttSettings.madeByText')
+            subtitle: `${versionText}\n${t('settings.ttSettings.madeByText')}`
         },
         overlayPanelItemListRenderer(buttons, parameters && parameters.length > 0 ? parameters[0] : 0),
         'tt-settings',
@@ -983,7 +989,7 @@ export function optionShow(parameters, update) {
                 continue;
             }
             const isRadioChoice = option.key !== null && option.key !== undefined;
-            const currentVal = configRead(isRadioChoice ? option.key : option.value);
+            const currentVal = option.value === null ? undefined : configRead(isRadioChoice ? option.key : option.value);
             buttons.push(
                 buttonItem(
                     { title: option.name, subtitle: option.subtitle },

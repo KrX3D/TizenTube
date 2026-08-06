@@ -437,6 +437,7 @@ function processResponsePayload(payload, detectedPage) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
     grid.items = hideVideo(grid.items, detectedPage);
     if (detectedPage === 'playlists') grid.items = filterHiddenSpecialPlaylistTiles(grid.items);
+    addLongPress(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
   }
   if (payload?.continuationContents?.sectionListContinuation?.contents) {
@@ -460,6 +461,7 @@ function processResponsePayload(payload, detectedPage) {
   }
   if (payload?.continuationContents?.gridContinuation?.items) {
     const gc = payload.continuationContents.gridContinuation;
+    addLongPress(gc.items);
     gc.items = filterContinuationItems(gc.items, detectedPage, !!gc?.continuations, 'arrayPayload.gridContinuation');
     normalizeGridRenderer(gc, 'arrayPayload.continuation.grid');
   }
@@ -688,6 +690,7 @@ JSON.parse = function () {
       let gridItems = hideVideo(grid.items, detectedPage);
       gridItems = filterShortsFromItems(gridItems, detectedPage);
       if (detectedPage === 'playlists') gridItems = filterHiddenSpecialPlaylistTiles(gridItems);
+      addLongPress(gridItems);
       grid.items = gridItems;
       normalizeGridRenderer(grid, 'contents.tvBrowseRenderer.grid');
     }
@@ -729,6 +732,7 @@ JSON.parse = function () {
 
     if (r?.continuationContents?.gridContinuation?.items) {
       const gc = r.continuationContents.gridContinuation;
+      addLongPress(gc.items);
       gc.items = filterContinuationItems(gc.items, detectedPage, !!gc?.continuations, 'gridContinuation');
       normalizeGridRenderer(gc, 'continuation.grid');
     }
@@ -787,6 +791,7 @@ JSON.parse = function () {
               let filteredTabGrid = hideVideo(tabGridItems, tabPage);
               filteredTabGrid = filterShortsFromItems(filteredTabGrid, tabPage);
               if (tabPage === 'playlists') filteredTabGrid = filterHiddenSpecialPlaylistTiles(filteredTabGrid);
+              addLongPress(filteredTabGrid);
               tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = filteredTabGrid;
               normalizeGridRenderer(tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer, 'tab.grid');
             }

@@ -122,6 +122,7 @@ try {
 
 const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
 const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
+const standaloneVersion = tizen.application.getAppInfo().version;
 
 // This proxy exists to bypass CORS for YouTube/Google resources only — never
 // forward it to an arbitrary host, or it becomes an open proxy for anything
@@ -304,7 +305,7 @@ app.all('*', (req, res) => {
                         // too late; inserting right after <body> opens ensures it executes
                         // before YouTube's own scripts do. Falls back to a second CDN if the
                         // primary one is unreachable.
-                        const userScript = `<script src="${TIZENTUBE_CDN_URL}?ver=${Date.now()}" onerror="this.onerror=null;this.src='${TIZENTUBE_CDN_FALLBACK_URL}'"></script>`;
+                        const userScript = `<script>window.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};</script><script src="${TIZENTUBE_CDN_URL}?ver=${Date.now()}" onerror="this.onerror=null;this.src='${TIZENTUBE_CDN_FALLBACK_URL}'"></script>`;
                         if (/<body[^>]*>/i.test(text)) {
                             text = text.replace(/<body[^>]*>/i, (bodyTag) => `${bodyTag}${userScript}`);
                         } else {
