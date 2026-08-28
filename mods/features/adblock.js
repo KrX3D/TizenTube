@@ -551,6 +551,7 @@ let _lastLoggedParseKey = null;
 // that; nested calls now just return the parsed result untouched.
 let _parseDepth = 0;
 let _lastLoggedHomeKeySet = null;
+let _lastLoggedNonTileKeySet = null;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   _parseDepth++;
@@ -1068,7 +1069,24 @@ function addLongPress(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     try {
-      if (!item?.tileRenderer) continue;
+      if (!item?.tileRenderer) {
+        // Diagnostic: the TILE_STYLE_YTLR_ROUND check found only channel
+        // avatar tiles, not the reported promoted/sponsored tile — it very
+        // likely uses a completely different top-level renderer key than
+        // tileRenderer entirely (would explain why it's invisible to every
+        // per-item function in this file, all of which only ever check
+        // item.tileRenderer). Deduped by the item's own top-level key set
+        // so it logs once per distinct renderer type seen, not once per
+        // item.
+        if (item && typeof item === 'object') {
+          const itemKeySet = Object.keys(item).sort().join(',');
+          if (itemKeySet !== _lastLoggedNonTileKeySet) {
+            _lastLoggedNonTileKeySet = itemKeySet;
+            appendFileOnlyLog('shelfItem.nonTileRenderer', { keys: Object.keys(item) });
+          }
+        }
+        continue;
+      }
       if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' && item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST') {
         // Diagnostic: reported promoted/sponsored video tiles (label +
         // Watch button + 3-dot "hide ad" menu) embedded inside normal
