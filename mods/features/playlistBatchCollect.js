@@ -31,7 +31,9 @@
  * the URL still matches; stale prefetch from another playlist is discarded.
  * Global state is also cleared on every navigation so a fresh collect starts.
  *
- * Only active when enablePlaylistBatchCollect is true (default: true).
+ * Only active when enablePlaylistBatchCollect is true — opt-in, default:
+ * false (config.js). Settings → User Interface Settings → Playlist Batch
+ * Load → "Load All at Once".
  */
 
 import { appendFileOnlyLog } from './hideWatched.js';
