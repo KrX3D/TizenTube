@@ -950,17 +950,25 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         const allText = collectAllText(shelve).join(' ').toLowerCase();
         if (/\bshorts?\b/i.test(allText)) { shelves.splice(i, 1); continue; }
       }
+      // Confirmed via a device photo + the diagnostic below: the reported
+      // "full page" ad is a masthead-style hero banner (Kia/Audi/Garnier/
+      // Valentino, with a Gesponsert label, Ansehen button, and 3-tot menu)
+      // delivered as a top-level adSlotRenderer entry in the section list,
+      // sitting alongside regular shelfRenderer entries — invisible to
+      // every check below, which only ever handles shelve.shelfRenderer.
+      // Unlike a regular tile that might mix ad-adjacent properties with
+      // real content, adSlotRenderer unambiguously means "this whole entry
+      // is an ad" — safe to remove outright, same as the existing
+      // shorts-shelf removal just above.
+      if (shelve?.adSlotRenderer && configRead('enableAdBlock')) {
+        appendFileOnlyLog('shelf.adSlotRenderer.removed', { pageHint: activePage });
+        shelves.splice(i, 1);
+        continue;
+      }
       if (!shelve.shelfRenderer) {
-        // Diagnostic: confirmed via a device photo — the reported "full
-        // page" ad is a masthead-style hero banner sitting above the
-        // first shelf (Kia/Audi/Garnier, with a Gesponsert label, Ansehen
-        // button, and 3-dot menu), not a tile embedded inside a shelf.
-        // This is the section-list level, one level up from where
-        // shelfItem.nonTileRenderer already logs — every check below this
-        // point only ever handles shelve.shelfRenderer, so a masthead
-        // using any other top-level renderer key here would be completely
-        // invisible to this function, matching what's been observed:
-        // fully unfiltered, working exactly as YouTube intends.
+        // Diagnostic: catches any other non-shelfRenderer entry that isn't
+        // the adSlotRenderer case above, in case there's more than one
+        // ad-delivery shape at this level. Deduped per distinct key set.
         if (shelve && typeof shelve === 'object') {
           const shelveKeySet = Object.keys(shelve).sort().join(',');
           if (shelveKeySet !== _lastLoggedNonShelfKeySet) {
