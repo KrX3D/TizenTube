@@ -550,6 +550,7 @@ let _lastLoggedParseKey = null;
 // depth used per nesting level. Only the outermost call needs any of
 // that; nested calls now just return the parsed result untouched.
 let _parseDepth = 0;
+let _lastLoggedHomeKeySet = null;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   _parseDepth++;
@@ -563,6 +564,22 @@ JSON.parse = function () {
     if (parseKey !== _lastLoggedParseKey) {
       _lastLoggedParseKey = parseKey;
       appendFileOnlyLog('parse.begin', { detectedPage, hash });
+    }
+
+    // Diagnostic: reported a large, near-full-page ad on the home page
+    // after a refresh — not explained by adPlacements/playerAds/adSlots
+    // (confirmed: zero hits for any of those across a full session with
+    // this logging active) or by the promoted-tile case logged above.
+    // Cheap (just top-level key names, not full content) and deduped per
+    // distinct key set so it only logs once per response shape, not once
+    // per parse — the actual field carrying this ad is still unknown, so
+    // logging broadly here beats guessing a specific path blind.
+    if (detectedPage === 'home' && !Array.isArray(r) && r && typeof r === 'object') {
+      const keySet = Object.keys(r).sort().join(',');
+      if (keySet !== _lastLoggedHomeKeySet) {
+        _lastLoggedHomeKeySet = keySet;
+        appendFileOnlyLog('home.responseShape', { keys: Object.keys(r) });
+      }
     }
 
     if (Array.isArray(r)) {
@@ -1052,7 +1069,21 @@ function addLongPress(items) {
   for (const item of items) {
     try {
       if (!item?.tileRenderer) continue;
-      if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' && item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST') continue;
+      if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' && item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST') {
+        // Diagnostic: reported promoted/sponsored video tiles (label +
+        // Watch button + 3-dot "hide ad" menu) embedded inside normal
+        // shelves aren't handled anywhere in this file. An unusual tile
+        // style here is a plausible signal for that — logging the shape
+        // (not the full tile, to stay cheap) so the actual structure can
+        // be seen on the next capture instead of guessing blind.
+        appendFileOnlyLog('tile.unknownStyle', {
+          style: item.tileRenderer.style,
+          hasMenu: !!item.tileRenderer.onLongPressCommand,
+          title: item.tileRenderer.metadata?.tileMetadataRenderer?.title?.simpleText || null,
+          keys: Object.keys(item.tileRenderer),
+        });
+        continue;
+      }
       if (item.tileRenderer.onLongPressCommand?.showMenuCommand) {
         item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
         continue;
