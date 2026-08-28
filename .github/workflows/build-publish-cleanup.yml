@@ -563,6 +563,15 @@ jobs:
 
       - name: Purge jsDelivr cache
         if: steps.publish_npm.outcome == 'success'
+        # jsDelivr rate-limits how often the same path can be re-purged
+        # ("Purging request ... was throttled") — expected on frequent
+        # releases, not an actual failure of the publish itself. The next
+        # step already exists specifically to handle this (runs on
+        # failure(), continue-on-error: true, purges each URL individually
+        # via curl) and has been confirmed working on-device. Without
+        # continue-on-error here, a benign throttle still failed the whole
+        # job even though that fallback ran and succeeded.
+        continue-on-error: true
         uses: egad13/purge-jsdelivr-cache@v1
         with:
           url: ${{ steps.cdn_urls.outputs.urls }}
