@@ -30,6 +30,14 @@ export function findFunction(funcName) {
 
 // Patch resolveCommand to be able to change TizenTube settings
 
+// NOTE: mods/features/captionStylePersistence.js also independently wraps
+// window._yttv[key].instance.resolveCommand (its own #patchResolveCommand,
+// polling until _yttv is populated, with its own isPatchedByCaptionPersistence
+// flag). Both wrappers currently compose correctly regardless of which one
+// patches first (each calls through to whatever it captured as "original"),
+// but there's no shared coordination between them — an early return added to
+// either wrapper in the future could silently swallow calls before the
+// other's logic ever runs. Keep that in mind before changing either one.
 export function patchResolveCommand() {
     for (const key in window._yttv) {
         if (window._yttv[key] && window._yttv[key].instance && window._yttv[key].instance.resolveCommand) {

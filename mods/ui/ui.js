@@ -157,7 +157,12 @@ ${isStandalone ? `
 
       uiContainer.querySelector('#__logServerPort').value = configRead('logServerPort');
       uiContainer.querySelector('#__logServerPort').addEventListener('change', (evt) => {
-        const port = Number(evt.target.value) || 3030;
+        // Number(x) || 3030 previously treated 0 the same as genuinely
+        // invalid input (empty string, non-numeric) — both are falsy, so
+        // clearing the field or typing "0" silently snapped back to 3030
+        // with no indication the entered value was rejected.
+        const parsed = Number(evt.target.value);
+        const port = Number.isFinite(parsed) && parsed > 0 ? parsed : 3030;
         evt.target.value = port;
         configWrite('logServerPort', port);
       });

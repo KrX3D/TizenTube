@@ -19,11 +19,16 @@ const DEFAULT_LOG_PORT = 3030;
 // there to send a fast RST — routing/firewall dependent) can instead hang
 // for a long OS-level TCP connect timeout before failing, and this fires on
 // every single log call with no memory of prior failures. Once any target
-// fails, stop attempting it for the rest of this process — after the first
-// failed call (typically the "process starting" one), every subsequent log
-// call for that same host:port is skipped immediately instead of opening a
-// new connection and waiting to find out again.
+// fails, stop attempting it for a cooldown period instead of every log
+// call — this service is long-running (persists across app launches until
+// a TV reboot), and the very first log call happens right at process start
+// ("Standalone service process starting..."), often before the user has
+// even started their PC's receiver script. Confirmed: that alone used to
+// blacklist the target permanently for the rest of the process's life —
+// starting the receiver moments later never recovered, since nothing ever
+// re-attempted or expired the block.
 const unavailableTargets = {};
+const UNAVAILABLE_COOLDOWN_MS = 15000;
 
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
 // (same /tv-log path and JSON shape), so the existing PS1 receiver script
@@ -32,7 +37,8 @@ function relayLog(entry, host, port) {
     const targetHost = host || DEFAULT_LOG_HOST;
     const targetPort = Number(port) || DEFAULT_LOG_PORT;
     const targetKey = `${targetHost}:${targetPort}`;
-    if (unavailableTargets[targetKey]) return;
+    const unavailableSince = unavailableTargets[targetKey];
+    if (unavailableSince && (Date.now() - unavailableSince) < UNAVAILABLE_COOLDOWN_MS) return;
 
     try {
         const body = JSON.stringify({
@@ -49,13 +55,13 @@ function relayLog(entry, host, port) {
             path: '/tv-log',
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-        }, () => { });
+        }, () => { delete unavailableTargets[targetKey]; });
         req.setTimeout(3000, () => {
             // destroy() alone doesn't emit 'error', so mark unavailable here too
-            unavailableTargets[targetKey] = true;
+            unavailableTargets[targetKey] = Date.now();
             req.destroy();
         });
-        req.on('error', () => { unavailableTargets[targetKey] = true; });
+        req.on('error', () => { unavailableTargets[targetKey] = Date.now(); });
         req.write(body);
         req.end();
     } catch (e) { }
