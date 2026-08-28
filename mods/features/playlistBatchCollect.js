@@ -192,6 +192,16 @@ async function _collectAll(url, plc, context) {
       allContents.push(...newItems);
       continuations = nextPlc.continuations || null;
       batchesLoaded++;
+      // Per-batch, not just the final aggregate — if the loop stops
+      // mid-collection on a long playlist, this shows exactly which batch
+      // and what the token looked like right before it happened, instead
+      // of only a totals summary with no visibility into the sequence.
+      _log('playlist.batch_collect.batch_fetched', {
+        batch: batchesLoaded,
+        newItems: newItems.length,
+        totalSoFar: allContents.length,
+        hasMore: !!continuations,
+      });
       _showProgress(`Playlist: loading batch ${batchesLoaded}…`);
     }
   } finally {
@@ -239,18 +249,39 @@ if (typeof XMLHttpRequest !== 'undefined') {
     // If background collect is running, let ALL XHRs through unchanged.
     // This covers _collectAll sub-requests (via _nativeFetch/polyfill) AND
     // YouTube TV's own continuation retries while collect is in progress.
-    if (window.__ttPrefetchStarted) return _origXHRSend.apply(this, arguments);
+    if (window.__ttPrefetchStarted) {
+      _log('playlist.batch_collect.xhr_skip_already_running', {});
+      return _origXHRSend.apply(this, arguments);
+    }
 
     // Must be a continuation request
     const reqBody = _parseBody({ body });
-    if (!reqBody?.continuation || !reqBody?.context) return _origXHRSend.apply(this, arguments);
+    if (!reqBody?.continuation || !reqBody?.context) {
+      // A browse-URL XHR that isn't a continuation request — expected for
+      // the initial playlist page load. Logged (not silent) since if this
+      // fires for what should have been a continuation request, it points
+      // at a request-body-shape mismatch as the actual cause.
+      _log('playlist.batch_collect.xhr_not_continuation', {
+        hasBody: !!reqBody,
+        bodyKeys: reqBody && typeof reqBody === 'object' ? Object.keys(reqBody) : null,
+      });
+      return _origXHRSend.apply(this, arguments);
+    }
 
     // Feature flag
     if (!configRead('enablePlaylistBatchCollect')) return _origXHRSend.apply(this, arguments);
 
     // Prefetch data already ready — let real XHR through; JSON.parse injection
     // in adblock.js will consume __ttPrefetchedBatch on the next response.
-    if (window.__ttPrefetchedBatch) return _origXHRSend.apply(this, arguments);
+    if (window.__ttPrefetchedBatch) {
+      _log('playlist.batch_collect.xhr_prefetch_already_ready', {
+        items: window.__ttPrefetchedBatch.allContents?.length ?? null,
+        hasMore: !!window.__ttPrefetchedBatch.continuations,
+      });
+      return _origXHRSend.apply(this, arguments);
+    }
+
+    _log('playlist.batch_collect.xhr_seed_triggered', { url: String(url) });
 
     // Let the real XHR through immediately so YouTube TV gets its response
     // within ~200ms and never hits the ~800ms timeout / page-reset.
@@ -295,12 +326,19 @@ if (typeof XMLHttpRequest !== 'undefined') {
       const plc = firstData?.continuationContents?.playlistVideoListContinuation;
       if (!plc || !Array.isArray(plc.contents) || !plc.continuations) {
         _log('playlist.batch_collect.xhr_no_plc', {
-          hasPlc:          !!plc,
-          hasContinuations: !!(plc?.continuations),
+          hasPlc:            !!plc,
+          hasContinuations:  !!(plc?.continuations),
+          responseTopKeys:   firstData && typeof firstData === 'object' ? Object.keys(firstData) : null,
+          continuationKeys:  firstData?.continuationContents && typeof firstData.continuationContents === 'object' ? Object.keys(firstData.continuationContents) : null,
         });
         window.__ttPrefetchStarted = false;
         return;
       }
+
+      _log('playlist.batch_collect.seed_fetched', {
+        seedItems: plc.contents.length,
+        continuationsShape: (() => { try { return JSON.stringify(plc.continuations).slice(0, 300); } catch (_) { return null; } })(),
+      });
 
       // __ttPrefetchStarted is already true — _collectAll sub-requests will go
       // through the _origXHRSend fast path in send().
@@ -342,9 +380,21 @@ if (typeof XMLHttpRequest !== 'undefined') {
 
 if (_nativeFetch) {
   window.fetch = async function playlistBatchCollectFetch(url, options) {
+    // Same decision points as the XHR path above, logged the same way for
+    // parity — this path is desktop dev/testing only per the comment
+    // below, but kept consistent in case it's ever hit unexpectedly.
     if (!_isBrowseUrl(url))              return _nativeFetch(url, options);
-    if (window.__ttPrefetchStarted)      return _nativeFetch(url, options);
-    if (window.__ttPrefetchedBatch)      return _nativeFetch(url, options);
+    if (window.__ttPrefetchStarted) {
+      _log('playlist.batch_collect.fetch_skip_already_running', {});
+      return _nativeFetch(url, options);
+    }
+    if (window.__ttPrefetchedBatch) {
+      _log('playlist.batch_collect.fetch_prefetch_already_ready', {
+        items: window.__ttPrefetchedBatch.allContents?.length ?? null,
+        hasMore: !!window.__ttPrefetchedBatch.continuations,
+      });
+      return _nativeFetch(url, options);
+    }
 
     const reqBody = _parseBody(options);
     if (!reqBody?.continuation || !reqBody?.context) return _nativeFetch(url, options);
