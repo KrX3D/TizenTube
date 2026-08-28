@@ -6,6 +6,34 @@
  * the result into the next playlist continuation JSON.parse — no XHR delivery,
  * no 614KB re-parse.
  *
+ * Two trigger paths feed the same background collector:
+ *  - autoStartCollect(): called by adblock.js right after the initial
+ *    playlist page's own continuation token is parsed, so collection starts
+ *    on page load without needing any scroll at all.
+ *  - The XHR send() seed path below: a fallback for when the auto-trigger's
+ *    captured context/url isn't available yet (e.g. very first browse of a
+ *    session) — starts from the first scroll-triggered continuation request.
+ *  Both converge on _collectAll(), which loops until no continuation token
+ *  is left or MAX is hit, writing every additional batch into
+ *  window.__ttPrefetchedBatch as it goes.
+ *
+ * Duplicate-request problem and solution (confirmed on-device)
+ * ────────────────────────────────────────────────────────────
+ * The XHR seed path used to fire its own independent _nativeFetch for the
+ * exact same URL+body as the real XHR it had just let through, purely to get
+ * an unfiltered copy of data the real request was already fetching. Sending
+ * that duplicate, plus _collectAll's own immediate next-batch fetch, meant
+ * up to three continuation requests landing within tens of milliseconds of
+ * each other. On-device logs showed the very first _collectAll fetch coming
+ * back as a bare `{"error":...}` in that situation — server-side throttling.
+ * Net effect: the "prefetched" batch was just a duplicate of data already
+ * delivered natively, and the background collector never got past batch 1.
+ *
+ * Fix: read the real XHR's own response (`this.responseText` on its `load`
+ * event) instead of firing a duplicate request. Only genuinely new batches
+ * (2+) require a real extra fetch, and those now happen one at a time after
+ * the previous one actually returns, instead of all bunched together.
+ *
  * Recursive-XHR problem and solution
  * ────────────────────────────────────
  * _nativeFetch is the whatwg-fetch polyfill, which creates a real XMLHttpRequest
@@ -20,7 +48,10 @@
  * ────────────────────────────────────
  * The polyfill's response.json() calls JSON.parse, which adblock.js has patched
  * to filter out watched items.  _collectAll would therefore collect only keep-one
- * items per batch instead of raw items.
+ * items per batch instead of raw items. Likewise, reading a real XHR's response
+ * via `.response`/`.responseText` is unaffected by that patch (it only intercepts
+ * calls to the global JSON.parse function), but we still parse it with the saved
+ * native JSON.parse for clarity and consistency with the rest of this file.
  *
  * Fix: save a reference to the native JSON.parse at module-init time (before
  * adblock.js patches it) and use that in all _collectAll response parsing.
@@ -54,9 +85,18 @@ const _nativeFetch = (typeof window.fetch === 'function')
   : null;
 
 // ── Navigation: clear stale state when entering a new page ───────────────────
+// _lastBrowseContext/_lastBrowseUrl back the auto-trigger (see autoStartCollect
+// below) — captured from whichever browse XHR fires most recently so the
+// initial page-load request's own context/url is available immediately,
+// without waiting for a scroll-triggered continuation request.
+let _lastBrowseContext = null;
+let _lastBrowseUrl     = null;
+
 function _clearState() {
   window.__ttPrefetchedBatch  = null;
   window.__ttPrefetchStarted  = false;
+  _lastBrowseContext = null;
+  _lastBrowseUrl     = null;
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
@@ -142,11 +182,6 @@ async function _collectAll(url, plc, context) {
     while (continuations && batchesLoaded < MAX && !abort.signal.aborted) {
       const token = _getToken(continuations);
       if (!token) {
-        // Confirmed on-device: batch_collect.done reported batches:1 with
-        // hasMore still true — the loop exited after only the seed batch,
-        // one batch short of the playlist's actual end. This break (and
-        // the !nextPlc one below) were previously completely silent, so
-        // there was no way to tell which of the two was the actual cause.
         _log('playlist.batch_collect.no_token', {
           batch: batchesLoaded,
           continuationsShape: (() => { try { return JSON.stringify(continuations).slice(0, 300); } catch (_) { return null; } })(),
@@ -221,6 +256,64 @@ async function _collectAll(url, plc, context) {
   return { allContents, continuations, aborted: abort.signal.aborted };
 }
 
+// ── Auto-trigger on playlist page load ────────────────────────────────────────
+// Called by adblock.js right after the initial playlist page's own
+// continuation token is parsed (topPlaylistRenderer.continuations) — starts
+// background collection immediately, instead of waiting for the user to
+// scroll down once to fire the old seed-triggering continuation request.
+// Uses the context/url captured from that same page-load request by the XHR
+// send() override above (browse requests always carry `context`, continuation
+// or not) — the InnerTube context is client/session info, not tied to any
+// one request, so reusing it here is the same assumption _collectAll already
+// makes when reusing one captured context across every batch it fetches.
+export function autoStartCollect(continuations) {
+  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
+
+  if (!_lastBrowseContext || !_lastBrowseUrl) {
+    _log('playlist.batch_collect.auto_skip_no_context', {});
+    return;
+  }
+
+  const token = _getToken(continuations);
+  if (!token) return;
+
+  _log('playlist.batch_collect.auto_triggered', {});
+
+  window.__ttPrefetchStarted = true;
+  const startHash = String(window.location?.hash || '');
+  const context    = _lastBrowseContext;
+  const url        = _lastBrowseUrl;
+
+  ;(async () => {
+    let collected = null;
+    try {
+      collected = await _collectAll(url, { contents: [], continuations }, context);
+    } catch (err) {
+      _log('playlist.batch_collect.auto_error', { err: String(err?.message || err) });
+    }
+
+    window.__ttPrefetchStarted = false;
+
+    if (!collected) return;
+
+    if (String(window.location?.hash || '') !== startHash) {
+      _log('playlist.batch_collect.stale_discard', { startHash, currentHash: String(window.location?.hash || '') });
+      return;
+    }
+
+    window.__ttPrefetchedBatch = {
+      allContents:   collected.allContents,
+      continuations: collected.continuations,
+    };
+    _log('playlist.batch_collect.prefetch_ready', {
+      items:   collected.allContents.length,
+      hasMore: !!collected.continuations,
+      auto:    true,
+    });
+  })();
+}
+
 // ── XHR interception ──────────────────────────────────────────────────────────
 
 if (typeof XMLHttpRequest !== 'undefined') {
@@ -254,8 +347,16 @@ if (typeof XMLHttpRequest !== 'undefined') {
       return _origXHRSend.apply(this, arguments);
     }
 
-    // Must be a continuation request
+    // Capture context/url from EVERY browse request (continuation or not) —
+    // this is what lets autoStartCollect() below fire from the initial
+    // playlist page load's own request, without waiting for a scroll.
     const reqBody = _parseBody({ body });
+    if (reqBody?.context) {
+      _lastBrowseContext = reqBody.context;
+      _lastBrowseUrl     = url;
+    }
+
+    // Must be a continuation request
     if (!reqBody?.continuation || !reqBody?.context) {
       // A browse-URL XHR that isn't a continuation request — expected for
       // the initial playlist page load. Logged (not silent) since if this
@@ -283,40 +384,29 @@ if (typeof XMLHttpRequest !== 'undefined') {
 
     _log('playlist.batch_collect.xhr_seed_triggered', { url: String(url) });
 
-    // Let the real XHR through immediately so YouTube TV gets its response
-    // within ~200ms and never hits the ~800ms timeout / page-reset.
-    _origXHRSend.apply(this, arguments);
-
-    // CRITICAL: set __ttPrefetchStarted SYNCHRONOUSLY before any await.
-    // The async block below calls _nativeFetch (the whatwg-fetch polyfill).
-    // That polyfill creates a new XMLHttpRequest and calls xhr.send().
-    // Our patched send() would run for that internal XHR — but since we set
-    // the flag HERE (sync, before the async block can yield), the polyfill's
-    // XHR hits the guard above and goes straight to _origXHRSend.
-    // Without this, the polyfill XHR would trigger another seed fetch,
-    // causing recursive/exponential XHR chains.
+    // CRITICAL: set __ttPrefetchStarted SYNCHRONOUSLY before send(), so that
+    // if _collectAll's own sub-fetches (via _nativeFetch's internal XHR) or
+    // any of YouTube TV's own retries hit our patched send() while we're
+    // reading this response, they fall straight through to _origXHRSend
+    // instead of starting a second seed.
     window.__ttPrefetchStarted = true;
 
-    const startHash  = String(window.location?.hash || '');
+    const startHash = String(window.location?.hash || '');
     const seedUrl    = url;
-    const seedMethod = this.__ttMethod || 'POST';
-    const seedHdrs   = Object.assign({ 'content-type': 'application/json' }, this.__ttReqHeaders || {});
-    const context    = reqBody.context;
+    const context     = reqBody.context;
 
-    ;(async () => {
-      // Fetch the seed batch to get the starting plc (continuation token + first batch).
-      // Use _nativeJSONParse so the raw unfiltered data is read.
+    // Read the REAL response instead of firing a duplicate request for data
+    // we're already fetching. this.responseText is the raw string XHR
+    // received — untouched by adblock.js's JSON.parse patch, which only
+    // intercepts calls to the global JSON.parse function, not XHR response
+    // properties — so parsing it with _nativeJSONParse gives the same
+    // unfiltered data a second fetch used to, without the extra request.
+    this.addEventListener('load', function onLoad() {
+      this.removeEventListener('load', onLoad);
+
       let firstData;
       try {
-        const resp = await _nativeFetch(seedUrl, {
-          method:      seedMethod,
-          headers:     seedHdrs,
-          body,
-          credentials: 'include',
-          mode:        'cors',
-        });
-        const text = await resp.text();
-        firstData = _nativeJSONParse(text);
+        firstData = _nativeJSONParse(this.responseText);
       } catch (err) {
         _log('playlist.batch_collect.seed_error', { err: String(err?.message || err) });
         window.__ttPrefetchStarted = false;
@@ -342,33 +432,36 @@ if (typeof XMLHttpRequest !== 'undefined') {
 
       // __ttPrefetchStarted is already true — _collectAll sub-requests will go
       // through the _origXHRSend fast path in send().
-      let collected = null;
-      try {
-        collected = await _collectAll(seedUrl, plc, context);
-      } catch (err) {
-        _log('playlist.batch_collect.collect_error', { err: String(err?.message || err) });
-      }
+      ;(async () => {
+        let collected = null;
+        try {
+          collected = await _collectAll(seedUrl, plc, context);
+        } catch (err) {
+          _log('playlist.batch_collect.collect_error', { err: String(err?.message || err) });
+        }
 
-      window.__ttPrefetchStarted = false;
+        window.__ttPrefetchStarted = false;
 
-      if (!collected) return;
+        if (!collected) return;
 
-      // Discard if the user navigated to a different page while collecting.
-      if (String(window.location?.hash || '') !== startHash) {
-        _log('playlist.batch_collect.stale_discard', { startHash, currentHash: String(window.location?.hash || '') });
-        return;
-      }
+        // Discard if the user navigated to a different page while collecting.
+        if (String(window.location?.hash || '') !== startHash) {
+          _log('playlist.batch_collect.stale_discard', { startHash, currentHash: String(window.location?.hash || '') });
+          return;
+        }
 
-      window.__ttPrefetchedBatch = {
-        allContents:   collected.allContents,
-        continuations: collected.continuations,
-      };
-      _log('playlist.batch_collect.prefetch_ready', {
-        items:   collected.allContents.length,
-        hasMore: !!collected.continuations,
-      });
-    })();
-    // Do NOT call _origXHRSend again — it was already called above.
+        window.__ttPrefetchedBatch = {
+          allContents:   collected.allContents,
+          continuations: collected.continuations,
+        };
+        _log('playlist.batch_collect.prefetch_ready', {
+          items:   collected.allContents.length,
+          hasMore: !!collected.continuations,
+        });
+      })();
+    });
+
+    return _origXHRSend.apply(this, arguments);
   };
 
   _log('playlist.batch_collect.xhr_installed', {});
@@ -397,6 +490,10 @@ if (_nativeFetch) {
     }
 
     const reqBody = _parseBody(options);
+    if (reqBody?.context) {
+      _lastBrowseContext = reqBody.context;
+      _lastBrowseUrl     = String(url);
+    }
     if (!reqBody?.continuation || !reqBody?.context) return _nativeFetch(url, options);
     if (!configRead('enablePlaylistBatchCollect'))   return _nativeFetch(url, options);
 

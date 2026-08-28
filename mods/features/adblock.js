@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import './playlistBatchCollect.js';
+import { autoStartCollect } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -749,6 +749,10 @@ JSON.parse = function () {
     const topPlaylistRenderer = r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.twoColumnRenderer?.rightColumn?.playlistVideoListRenderer;
     if (topPlaylistRenderer?.contents) {
       storePlaylistContinuationToken(topPlaylistRenderer.continuations, 'topPlaylist');
+      // Start collecting the rest of the playlist in the background right
+      // now, instead of waiting for the user to scroll down once to trigger
+      // it — see playlistBatchCollect.js's autoStartCollect() doc comment.
+      autoStartCollect(topPlaylistRenderer.continuations);
       filterPlaylistRendererContents(topPlaylistRenderer, detectedPage, 'playlist.renderer');
     }
 
