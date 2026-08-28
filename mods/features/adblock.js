@@ -423,6 +423,29 @@ function filterPlaylistRendererContents(playlistRenderer, pageName, label = 'pla
 
 function processResponsePayload(payload, detectedPage) {
   if (!payload || typeof payload !== 'object') return;
+
+  // Confirmed missing: this array-root path never stripped ad-carrying
+  // fields at all — only the object-root JSON.parse patch below did. Any
+  // response that happens to arrive as an array root (observed: a manual
+  // home-page refresh) went through this function instead, so ads/banners
+  // in it were never blocked regardless of enableAdBlock. Same class of gap
+  // already found and fixed for addLongPress in this function.
+  const arrayAdBlockEnabled = configRead('enableAdBlock');
+  if (arrayAdBlockEnabled) {
+    if (payload.adPlacements) {
+      appendFileOnlyLog('adblock.stripped', { path: 'arrayPayload.adPlacements', detectedPage });
+      payload.adPlacements = [];
+    }
+    if (payload.playerAds) {
+      appendFileOnlyLog('adblock.stripped', { path: 'arrayPayload.playerAds', detectedPage });
+      payload.playerAds = false;
+    }
+    if (payload.adSlots) {
+      appendFileOnlyLog('adblock.stripped', { path: 'arrayPayload.adSlots', detectedPage });
+      payload.adSlots = [];
+    }
+  }
+
   if (payload?.contents?.sectionListRenderer?.contents) {
     const slr = payload.contents.sectionListRenderer;
     processShelves(slr.contents, true, detectedPage);
@@ -548,9 +571,18 @@ JSON.parse = function () {
     }
 
     const adBlockEnabled = configRead('enableAdBlock');
-    if (r.adPlacements && adBlockEnabled) r.adPlacements = [];
-    if (r.playerAds && adBlockEnabled) r.playerAds = false;
-    if (r.adSlots && adBlockEnabled) r.adSlots = [];
+    if (r.adPlacements && adBlockEnabled) {
+      appendFileOnlyLog('adblock.stripped', { path: 'objectRoot.adPlacements', detectedPage });
+      r.adPlacements = [];
+    }
+    if (r.playerAds && adBlockEnabled) {
+      appendFileOnlyLog('adblock.stripped', { path: 'objectRoot.playerAds', detectedPage });
+      r.playerAds = false;
+    }
+    if (r.adSlots && adBlockEnabled) {
+      appendFileOnlyLog('adblock.stripped', { path: 'objectRoot.adSlots', detectedPage });
+      r.adSlots = [];
+    }
 
     const hiddenLibraryTabIds = configRead('hiddenLibraryTabIds');
     if (Array.isArray(hiddenLibraryTabIds) && hiddenLibraryTabIds.length > 0) {
