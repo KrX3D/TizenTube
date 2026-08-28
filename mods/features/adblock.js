@@ -552,6 +552,7 @@ let _lastLoggedParseKey = null;
 let _parseDepth = 0;
 let _lastLoggedHomeKeySet = null;
 let _lastLoggedNonTileKeySet = null;
+let _lastLoggedNonShelfKeySet = null;
 JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   _parseDepth++;
@@ -949,7 +950,26 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         const allText = collectAllText(shelve).join(' ').toLowerCase();
         if (/\bshorts?\b/i.test(allText)) { shelves.splice(i, 1); continue; }
       }
-      if (!shelve.shelfRenderer) continue;
+      if (!shelve.shelfRenderer) {
+        // Diagnostic: confirmed via a device photo — the reported "full
+        // page" ad is a masthead-style hero banner sitting above the
+        // first shelf (Kia/Audi/Garnier, with a Gesponsert label, Ansehen
+        // button, and 3-dot menu), not a tile embedded inside a shelf.
+        // This is the section-list level, one level up from where
+        // shelfItem.nonTileRenderer already logs — every check below this
+        // point only ever handles shelve.shelfRenderer, so a masthead
+        // using any other top-level renderer key here would be completely
+        // invisible to this function, matching what's been observed:
+        // fully unfiltered, working exactly as YouTube intends.
+        if (shelve && typeof shelve === 'object') {
+          const shelveKeySet = Object.keys(shelve).sort().join(',');
+          if (shelveKeySet !== _lastLoggedNonShelfKeySet) {
+            _lastLoggedNonShelfKeySet = shelveKeySet;
+            appendFileOnlyLog('shelf.nonShelfRenderer', { keys: Object.keys(shelve), pageHint: activePage });
+          }
+        }
+        continue;
+      }
       let shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
       shelfItems = filterHiddenSpecialPlaylistTiles(shelfItems);
