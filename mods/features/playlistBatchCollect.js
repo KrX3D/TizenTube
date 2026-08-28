@@ -141,7 +141,18 @@ async function _collectAll(url, plc, context) {
   try {
     while (continuations && batchesLoaded < MAX && !abort.signal.aborted) {
       const token = _getToken(continuations);
-      if (!token) break;
+      if (!token) {
+        // Confirmed on-device: batch_collect.done reported batches:1 with
+        // hasMore still true — the loop exited after only the seed batch,
+        // one batch short of the playlist's actual end. This break (and
+        // the !nextPlc one below) were previously completely silent, so
+        // there was no way to tell which of the two was the actual cause.
+        _log('playlist.batch_collect.no_token', {
+          batch: batchesLoaded,
+          continuationsShape: (() => { try { return JSON.stringify(continuations).slice(0, 300); } catch (_) { return null; } })(),
+        });
+        break;
+      }
 
       const fetchOpts = {
         method:      'POST',
@@ -169,7 +180,13 @@ async function _collectAll(url, plc, context) {
       }
 
       const nextPlc = nextData?.continuationContents?.playlistVideoListContinuation;
-      if (!nextPlc) break;
+      if (!nextPlc) {
+        _log('playlist.batch_collect.no_plc', {
+          batch: batchesLoaded,
+          responseKeys: nextData && typeof nextData === 'object' ? Object.keys(nextData) : null,
+        });
+        break;
+      }
 
       const newItems = Array.isArray(nextPlc.contents) ? nextPlc.contents : [];
       allContents.push(...newItems);
