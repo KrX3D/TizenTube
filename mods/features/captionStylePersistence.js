@@ -243,6 +243,15 @@ class CaptionStyleHandler {
 
         if (this.#captionsRestored || !configRead(CONFIG_KEYS.ENABLED)) return;
 
+        // NOTE: command is only ever stored as the exact { [key]: value }
+        // shape findCaptionCommand itself produces (the key already matched
+        // CAPTION_COMMAND_KEY when it was captured), so re-running
+        // findCaptionCommand on a validly-stored command always matches
+        // immediately and can never be falsy here — this only actually
+        // catches a genuinely malformed/corrupted stored value (e.g. from
+        // manual config editing or a future format change), not "the
+        // caption track this command refers to no longer exists on the
+        // current video" — that's a different, unimplemented check.
         const command = configRead(CONFIG_KEYS.CAPTIONS_ON_COMMAND);
         if (command && !findCaptionCommand(command)) {
             configWrite(CONFIG_KEYS.CAPTIONS_ON_COMMAND, null);

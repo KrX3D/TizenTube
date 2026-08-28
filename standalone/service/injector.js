@@ -95,7 +95,11 @@ function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     setTimeout(() => startDebugger(args, relayLog, sessionId, attempt + 1), RETRY_DELAY_MS);
 }
 
-function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
+const CONNECT_PROBE_MAX_ATTEMPTS = 20;
+const CONNECT_PROBE_RETRY_DELAY_MS = 100;
+
+function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probeAttempt) {
+    if (probeAttempt === undefined) probeAttempt = 0;
     fetch(`http://${host}:${port}`).then(_ => {
         CDP({ host, port, local: true }, client => {
             if (sessionId !== _activeSessionId) {
@@ -322,7 +326,22 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt) {
         })
     }).catch(e => {
         if (sessionId !== _activeSessionId) return; // superseded, stop waiting
-        return setTimeout(() => connectToDebugger(host, port, args, relayLog, sessionId, attempt), 100);
+        // Confirmed: safetyTimeout is already cleared right before
+        // connectToDebugger is called (once the debug shell responded), so
+        // this was the one remaining unbounded retry loop in this file —
+        // if the CDP port never actually comes up, this spun a fetch every
+        // 100ms forever with zero logging and no other safety net covering
+        // it. Bounded locally (2s total) before falling back to the
+        // existing session-level retry/give-up machinery, which re-issues
+        // a fresh shell:0 debug rather than continuing to probe a port
+        // that may never open.
+        if (probeAttempt >= CONNECT_PROBE_MAX_ATTEMPTS) {
+            if (typeof relayLog === 'function') {
+                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `CDP port ${port} never came up after ${CONNECT_PROBE_MAX_ATTEMPTS} probes: ${e && e.message || e}` });
+            }
+            return retryOrGiveUp(sessionId, attempt, args, relayLog, `CDP port never opened: ${e && e.message || e}`);
+        }
+        return setTimeout(() => connectToDebugger(host, port, args, relayLog, sessionId, attempt, probeAttempt + 1), CONNECT_PROBE_RETRY_DELAY_MS);
     })
 }
 
