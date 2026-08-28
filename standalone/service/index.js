@@ -195,23 +195,36 @@ app.all('*', (req, res) => {
 
     const isCorsBypass = req.path.indexOf('/cors-bypass/') === 0;
 
-    let targetUrl;
-    if (isCorsBypass) {
-        const rawTarget = req.url.substring('/cors-bypass/'.length);
-        targetUrl = rawTarget.indexOf('http') === 0 ? rawTarget : `https://${rawTarget}`;
-    } else {
-        targetUrl = `https://www.youtube.com${req.url}`;
+    let parsedTargetUrl;
+    try {
+        if (isCorsBypass) {
+            const rawTarget = req.url.substring('/cors-bypass/'.length);
+            const candidate = rawTarget.indexOf('http') === 0 ? rawTarget : `https://${rawTarget}`;
+            parsedTargetUrl = new URL(candidate);
+        } else {
+            parsedTargetUrl = new URL(req.url, 'https://www.youtube.com');
+        }
+    } catch (e) {
+        return res.status(403).send('Blocked: invalid target URL');
     }
 
-    let targetHostname;
-    try {
-        targetHostname = URL.parse(targetUrl).hostname;
-    } catch (e) {
-        targetHostname = null;
+    if (parsedTargetUrl.protocol !== 'https:' && parsedTargetUrl.protocol !== 'http:') {
+        return res.status(403).send('Blocked: unsupported target protocol');
     }
-    if (!isAllowedProxyHost(targetHostname)) {
+
+    if (parsedTargetUrl.username || parsedTargetUrl.password) {
+        return res.status(403).send('Blocked: credentials in URL are not allowed');
+    }
+
+    if (parsedTargetUrl.pathname.indexOf('..') !== -1) {
+        return res.status(403).send('Blocked: invalid target path');
+    }
+
+    if (!isAllowedProxyHost(parsedTargetUrl.hostname)) {
         return res.status(403).send('Blocked: target host not allowed');
     }
+
+    const targetUrl = parsedTargetUrl.toString();
 
     const headers = {};
     for (const key in req.headers) {
@@ -227,10 +240,9 @@ app.all('*', (req, res) => {
     }
 
     try {
-        const parsedUrl = URL.parse(targetUrl);
-        headers['host'] = parsedUrl.host;
+        headers['host'] = parsedTargetUrl.host;
     } catch (e) {
-        headers['host'] = isCorsBypass ? 'www.youtube.com' : 'www.youtube.com';
+        headers['host'] = 'www.youtube.com';
     }
 
     headers['origin'] = 'https://www.youtube.com';
