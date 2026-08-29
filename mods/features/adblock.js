@@ -45,16 +45,19 @@ function getRetiredPlaylistHelperVideoIdSet() {
   return window.__ttRetiredPlaylistHelperVideoIds;
 }
 
-// Updates the CSS hide rule to cover both active helpers AND retired helpers.
+// Updates the CSS hide rules covering active helpers AND retired helpers.
 // The virtual list re-renders retired tiles from its internal data model on every scroll,
 // so DOM removal alone causes a visible flash (tile appears → 50ms later removed → repeat).
-// CSS visibility:hidden persists across re-renders and eliminates the flash entirely.
+// CSS hiding persists across re-renders and eliminates the flash entirely.
+//
+// The two sets are passed separately rather than merged: the active helper must keep its
+// layout box to stay a valid continuation anchor, while retired helpers must NOT keep
+// theirs or they leave blank slots in the grid. See updateHelperHideStyle.
 function updateAllHelperHideStyles() {
-  const combined = new Set([
-    ...getPlaylistHelperVideoIdSet(),
-    ...getRetiredPlaylistHelperVideoIdSet(),
-  ]);
-  updateHelperHideStyle(combined);
+  updateHelperHideStyle(
+    getPlaylistHelperVideoIdSet(),
+    getRetiredPlaylistHelperVideoIdSet(),
+  );
 }
 
 function storePlaylistContinuationToken(continuations, label = '') {
