@@ -672,6 +672,15 @@ function processResponsePayload(payload, detectedPage) {
         hasMore: !!plc.continuations,
       });
     }
+    // Same accumulator hook as the object-root handler above. Confirmed
+    // necessary on-device: three continuations arrived through that path, all
+    // with hasContinuation:true, and the FINAL batch (8 of 68 items, the one
+    // carrying no continuation token) only ever came through here. Without
+    // this the accumulator never sees a completion and full_cache.from_native
+    // never fires, so the slow re-download stays on the critical path.
+    // Must run BEFORE filterContinuationItems, which reduces an all-watched
+    // batch to the single kept helper.
+    noteContinuationBatch(String(window.location?.hash || ''), plc.contents, !!plc?.continuations);
     plc.contents = filterContinuationItems(plc.contents, detectedPage, !!plc?.continuations, 'arrayPayload.playlist.continuation');
   }
   const arrayTopPlaylistRenderer = payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.twoColumnRenderer?.rightColumn?.playlistVideoListRenderer;

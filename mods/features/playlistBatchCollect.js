@@ -94,7 +94,7 @@
  * Load → "Load All at Once".
  */
 
-import { appendFileOnlyLog } from './hideWatched.js';
+import { appendFileOnlyLog, getItemVideoId } from './hideWatched.js';
 import { configRead } from '../config.js';
 
 function _log(label, payload) {
@@ -490,11 +490,20 @@ export function noteContinuationBatch(key, contents, hasMore) {
   if (!Array.isArray(contents) || !contents.length) return;
   if (getCachedFullPlaylist(key)) return; // already complete; this is the reloaded pass
 
+  // Dedupe by video id. Two handlers feed this (object-root and array-root),
+  // and a batch that reached both would otherwise be counted twice, putting
+  // duplicate tiles in the cached playlist.
+  if (!window.__ttContinuationAcc || window.__ttContinuationAcc.key !== key) {
+    window.__ttContinuationAcc = { key, contents: [], seen: {} };
+  }
   const acc = window.__ttContinuationAcc;
-  if (!acc || acc.key !== key) {
-    window.__ttContinuationAcc = { key, contents: contents.slice() };
-  } else {
-    acc.contents = acc.contents.concat(contents);
+  for (const item of contents) {
+    const id = getItemVideoId(item);
+    if (id) {
+      if (acc.seen[id]) continue;
+      acc.seen[id] = true;
+    }
+    acc.contents.push(item);
   }
 
   if (hasMore) return;
