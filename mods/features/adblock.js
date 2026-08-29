@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { autoStartCollect, getCachedFullPlaylist, noteInitialPlaylistContents } from './playlistBatchCollect.js';
+import { autoStartCollect, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -992,6 +992,11 @@ JSON.parse = function () {
       const hasContinuation = !!plc?.continuations;
       storePlaylistContinuationToken(plc.continuations, 'plc');
       appendFileOnlyLog('playlist.continuation.detected', { detectedPage, itemCount: Array.isArray(plc.contents) ? plc.contents.length : 0, hasContinuation });
+      // Feed the raw batch to the full-playlist accumulator BEFORE filtering,
+      // so it collects real items rather than the single kept helper. This is
+      // the same data the background collector would re-download, only it is
+      // already here and roughly ten seconds sooner.
+      noteContinuationBatch(String(window.location?.hash || ''), plc.contents, hasContinuation);
       plc.contents = filterContinuationItems(plc.contents, detectedPage, hasContinuation, 'playlist.continuation');
     }
 

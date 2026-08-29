@@ -134,6 +134,10 @@ let _lastBrowseHeaders = null;
 function _clearState() {
   window.__ttPrefetchedBatch  = null;
   window.__ttPrefetchStarted  = false;
+  // Must be cleared too, or one completed playlist would permanently block
+  // collection on every later one.
+  window.__ttCollectCancel    = false;
+  window.__ttContinuationAcc  = null;
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
@@ -264,6 +268,7 @@ async function _collectAll(url, plc, context, headers) {
 
   try {
     while (continuations && batchesLoaded < MAX && !abort.signal.aborted) {
+      if (window.__ttCollectCancel) { _log('playlist.batch_collect.cancelled', { batch: batchesLoaded }); break; }
       const token = _getToken(continuations);
       if (!token) {
         _log('playlist.batch_collect.no_token', {
@@ -467,6 +472,47 @@ function maybeReloadForFullPlaylist(key) {
   }
 }
 
+// Accumulate the playlist from YOUTUBE'S OWN continuation responses.
+//
+// The background collector re-downloads batches YouTube has usually already
+// fetched, and it is far slower doing it. Measured on a 68-video all-watched
+// playlist: YouTube delivered every batch between 19:50:42.395 and
+// 19:50:43.128 — 0.73s — while the collector, paced at 2.5s per fetch, ran
+// from 19:50:45.006 to 19:50:52.963 and only then triggered the reload. That
+// left roughly ten seconds of helper tiles on screen for data already in hand.
+//
+// adblock.js already sees every continuation response before it filters them,
+// so it can hand the raw items straight here. When a response arrives with no
+// continuation token the playlist is complete, and the reload can happen
+// immediately instead of waiting for a redundant re-download.
+export function noteContinuationBatch(key, contents, hasMore) {
+  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (!Array.isArray(contents) || !contents.length) return;
+  if (getCachedFullPlaylist(key)) return; // already complete; this is the reloaded pass
+
+  const acc = window.__ttContinuationAcc;
+  if (!acc || acc.key !== key) {
+    window.__ttContinuationAcc = { key, contents: contents.slice() };
+  } else {
+    acc.contents = acc.contents.concat(contents);
+  }
+
+  if (hasMore) return;
+
+  // No continuation token: this was the last batch, so initial + everything
+  // accumulated is the whole playlist.
+  const collected = window.__ttContinuationAcc.contents;
+  _log('playlist.full_cache.from_native', { key, collected: collected.length });
+  if (storeFullPlaylist(key, collected)) {
+    // YouTube already delivered the whole playlist, so the collector is now
+    // re-downloading data we hold. Cancel it rather than let it run on for
+    // several more seconds of pointless requests.
+    window.__ttCollectCancel = true;
+    window.__ttContinuationAcc = null;
+    maybeReloadForFullPlaylist(key);
+  }
+}
+
 // ── Auto-trigger on playlist page load ────────────────────────────────────────
 // Called by adblock.js right after the initial playlist page's own
 // continuation token is parsed (topPlaylistRenderer.continuations) — starts
@@ -489,6 +535,8 @@ export function autoStartCollect(continuations) {
   const token = _getToken(continuations);
   if (!token) return;
 
+  // Fresh run: clear any cancel left over from a previous playlist.
+  window.__ttCollectCancel = false;
   _log('playlist.batch_collect.auto_triggered', {
     headerKeys: _lastBrowseHeaders ? Object.keys(_lastBrowseHeaders) : null,
   });
