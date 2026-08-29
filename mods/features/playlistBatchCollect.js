@@ -89,14 +89,23 @@ const _nativeFetch = (typeof window.fetch === 'function')
 // below) — captured from whichever browse XHR fires most recently so the
 // initial page-load request's own context/url is available immediately,
 // without waiting for a scroll-triggered continuation request.
+//
+// IMPORTANT: these two are NOT cleared on navigation, unlike the prefetch
+// state below. Confirmed on-device: the hashchange for entering a playlist
+// fires WHILE that same playlist's own initial browse request is still in
+// flight — context gets captured when the request is sent, then the
+// hashchange fires and used to null it out again before the response even
+// comes back, so autoStartCollect always saw null and silently no-opped
+// (auto_skip_no_context) every single time. context/url aren't page-specific
+// anyway (InnerTube context is client/session info, and the endpoint URL is
+// the same browse endpoint regardless of page) — each new browse request
+// naturally overwrites the previous one, no reset needed.
 let _lastBrowseContext = null;
 let _lastBrowseUrl     = null;
 
 function _clearState() {
   window.__ttPrefetchedBatch  = null;
   window.__ttPrefetchStarted  = false;
-  _lastBrowseContext = null;
-  _lastBrowseUrl     = null;
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
