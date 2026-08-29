@@ -71,6 +71,18 @@
  * Fix: save a reference to the native JSON.parse at module-init time (before
  * adblock.js patches it) and use that in all _collectAll response parsing.
  *
+ * CAVEAT on _nativeJSONParse's name — verified from the built bundle's module
+ * order (playlistContinue 311408 < playlistBatchCollect 323762 < adblock
+ * 361069): playlistContinue.js patches JSON.parse BEFORE this module runs, so
+ * what we capture is playlistContinue.js's wrapper, not the true native
+ * function. The property this code actually depends on still holds — adblock.js
+ * patches later, so its watched-item filtering is genuinely bypassed. But
+ * playlistContinue.js's storePlItems DOES see every background-collected batch,
+ * so window.__ttCurrentPlaylistItems counts items that were fetched in the
+ * background and never rendered in the UI. Anything treating that array as
+ * "what the user can currently see" will be wrong by exactly the prefetched
+ * amount (see adblock.js's _verifyAutoLoadEffect).
+ *
  * Navigation safety
  * ──────────────────
  * _collectAll aborts on hashchange/popstate.  Before storing the result we check
@@ -486,9 +498,22 @@ if (typeof XMLHttpRequest !== 'undefined') {
     // actually calls send() when a real scroll works — is the most direct
     // way left to find out what that trigger actually is, instead of
     // guessing at more command shapes.
+    // The first capture came back truncated at exactly the frame that
+    // mattered: slice(0, 12) ended on "_.Me._.p.subscribe" — an observable
+    // subscription — with whatever initiated that subscription cut off just
+    // below it. Raise the frame count, and strip the ~150-char kabuki bundle
+    // URL that's repeated on every single frame (it's the same file
+    // throughout; only the line:col differs and that's what identifies the
+    // frame). Stripping it fits far more actual frames into the same log
+    // budget rather than spending it on identical URLs.
     try {
       const stack = new Error().stack || '';
-      _log('playlist.batch_collect.xhr_continuation_stack', { stack: stack.split('\n').slice(0, 12).join(' | ') });
+      const compact = stack
+        .split('\n')
+        .slice(0, 45)
+        .map(line => line.replace(/https:\/\/\S*?\/m=([^:)\s]+)/g, '$1').trim())
+        .join(' | ');
+      _log('playlist.batch_collect.xhr_continuation_stack', { stack: compact });
     } catch (_) {}
 
     // Feature flag

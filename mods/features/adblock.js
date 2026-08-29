@@ -76,11 +76,21 @@ function storePlaylistContinuationToken(continuations, label = '') {
 // circular ES import back to this file. This global is only ever called
 // from an async callback long after both modules have finished loading.
 // Fires ~1.2s after a trigger claims success, to say whether it actually
-// caused anything — window.__ttCurrentPlaylistItems (playlistContinue.js)
-// only grows when a real continuation response gets processed, regardless
-// of what triggered it. Previously we only knew a trigger *ran*, never
-// whether it *worked* — on-device logs showed method:"yt-continuation"
-// firing with no visible effect for up to 23 seconds afterward.
+// caused anything. Previously we only knew a trigger *ran*, never whether
+// it *worked* — on-device logs showed method:"yt-continuation" firing with
+// no visible effect for up to 23 seconds afterward.
+//
+// READ THE RESULT CAREFULLY — window.__ttCurrentPlaylistItems is NOT purely
+// "what the UI has". playlistBatchCollect.js's background fetches also flow
+// through playlistContinue.js's JSON.parse hook (confirmed from bundle module
+// order — see that file's _nativeJSONParse caveat), so this count includes
+// prefetched-but-never-rendered items. Consequences when reading logs:
+//   - worked:false is trustworthy (nothing moved at all).
+//   - worked:true is NOT proof our trigger did it — a big jump right after
+//     watched-item filtering emptied the visible list is more likely YouTube
+//     refilling the viewport on its own.
+//   - beforeCount can already include background-collected items, which is
+//     why one observed run started at 21 (15 real + 6 prefetched).
 function _verifyAutoLoadEffect(reason, attempt, method, beforeCount) {
   setTimeout(() => {
     const afterCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : null;
