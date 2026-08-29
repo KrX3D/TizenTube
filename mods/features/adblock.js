@@ -268,33 +268,25 @@ function dumpHelperTileStructure(tile, id) {
   }
 }
 
-// Collapse a playlist row that no longer holds any tile.
+// NOTE: do NOT try to hide or collapse .TXB27d rows here.
 //
-// Removing a helper TILE was never the missing piece — on-device logs show it
-// already works (tile_scan reports removed:1/2 via the outerHTML substring
-// match). What stays behind is the row element: the virtual list lays out one
-// .TXB27d row per data-model entry, and that row keeps its height whether or
-// not a tile is inside it. Those empty rows are the blank slots that push real
-// content down, and scrolling back over one makes the list re-render its tile
-// into it — which is exactly the reported "they appeared again".
+// This was attempted (collapse the row left behind after removing a helper
+// tile) and confirmed on-device not to work: rowsCollapsed reported 1 and 2 on
+// real runs, yet the blank slots stayed exactly where they were and the one
+// visible helper still sat in 4th position. yt-virtual-list positions rows by
+// transform from its own layout math over its data model, so the slot a row
+// occupies is reserved whether or not the row element is displayed.
 //
-// Only ever called on a row we've just emptied, so there is nothing left in it
-// to hide by mistake. Inline style + class are lost if the list rebuilds the
-// row from its data model; the MutationObserver re-runs the scan on that
-// mutation and re-applies. The class is the one isHelperLikePlaylistNode
-// already tested for but nothing ever set.
-function collapseEmptyHelperRow(row) {
-  try {
-    if (!row) return false;
-    if (row.querySelectorAll('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer').length > 0) return false;
-    if (row.classList?.contains('tt-helper-soft-hidden')) return false;
-    row.classList?.add('tt-helper-soft-hidden');
-    row.style?.setProperty('display', 'none', 'important');
-    return true;
-  } catch (_) { return false; }
-}
-
-
+// It is also actively unsafe. The virtual list RECYCLES .TXB27d nodes — it
+// repoints an existing row at different content rather than creating a new one
+// — so any inline style we leave behind rides along to whatever video reuses
+// that node. That exact pattern (opacity:0 on helper rows) was removed in
+// 6a340fc after it produced black gaps and navigation hangs while scrolling.
+// display:none would do the same, only worse: a real video silently missing.
+//
+// The data model is the only layer that would actually work, and it is out of
+// reach: 654577e removed clearStaleHelpersFromVListData after confirming every
+// Polymer API (set/splice/notifyPath/render) is undefined on Tizen 5.0.
 
 function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   if (window.__ttRemovingHelperTiles) return { scannedTiles: 0, removed: 0, matchedIds: [] };
@@ -303,7 +295,7 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   const tiles = getPlaylistTileNodes();
   if (!tiles.length) return { scannedTiles: 0, removed: 0, matchedIds: [] };
   window.__ttRemovingHelperTiles = true;
-  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0, rowsCollapsed = 0;
+  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0;
   const removedTiles = new Set(), matchedIds = new Set();
   try {
     for (const tile of tiles) {
@@ -343,9 +335,6 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
             removedTiles.add(tile);
             try { tile.remove(); } catch (_) {}
             removed++;
-            // The row survives the tile and keeps its height — that leftover
-            // row is the blank slot. Collapse it now that it's empty.
-            if (collapseEmptyHelperRow(rowNode)) rowsCollapsed++;
           }
         } catch (_) { }
         break;
@@ -357,8 +346,8 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   } finally {
     window.__ttRemovingHelperTiles = false;
   }
-  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, rowsCollapsed, matchedIds: Array.from(matchedIds) });
-  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles, rowsCollapsed };
+  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, matchedIds: Array.from(matchedIds) });
+  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles };
 }
 
 function ensurePlaylistHelperObserver() {
