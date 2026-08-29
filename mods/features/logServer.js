@@ -101,6 +101,25 @@ function sendOne(_url, entry) {
     return true;
 }
 
+// Shared by the "Test Log Server Connection" settings button and the blue
+// remote-key shortcut (speedUI.js) — both need the same send-a-ping-and-
+// report-the-outcome logic, so it lives here once instead of duplicated.
+// Returns a result object rather than showing a toast itself, since the two
+// callers use different toast/i18n setups and this module intentionally has
+// no UI dependencies.
+export function sendTestPing() {
+    if (!isEnabled()) return { enabled: false, queued: false };
+    const ts = new Date().toISOString();
+    const queued = sendRemotePayload(null, {
+        ts,
+        level: 'INFO',
+        context: 'TizenTube',
+        message: 'Manual test ping',
+        _formatted: `[${ts}] [INFO] [TizenTube] Manual test ping`,
+    });
+    return { enabled: true, queued };
+}
+
 export function sendRemotePayload(_url, entry) {
     if (!isEnabled()) return false;
 

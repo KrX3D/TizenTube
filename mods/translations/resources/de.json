@@ -81,7 +81,8 @@
                         "testSubtitle": "Sendet einen Testeintrag über TizenBrew, um die Verbindung zu prüfen",
                         "testQueued": "Testeintrag eingereiht — TizenBrew-Log prüfen",
                         "testDisabled": "Protokollierung zuerst aktivieren",
-                        "testFailed": "Log-Ping fehlgeschlagen"
+                        "testFailed": "Log-Ping fehlgeschlagen",
+                        "disabled": "Protokollierung deaktiviert"
                     }
                 }
             },

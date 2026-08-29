@@ -5,7 +5,7 @@ import { speedSettings } from './ui/speedUI.js';
 import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
-import { sendRemotePayload, isEnabled as isLogEnabled } from './features/logServer.js';
+import { sendTestPing } from './features/logServer.js';
 import { t } from 'i18next';
 
 
@@ -25,6 +25,19 @@ export function findFunction(funcName) {
         if (window._yttv[key] && window._yttv[key][funcName] && typeof window._yttv[key][funcName] === 'function') {
             return window._yttv[key][funcName];
         }
+    }
+}
+
+// Shared with speedUI.js's blue-button remote-log toggle, so both the
+// settings-menu "Test Log Server Connection" button and the shortcut show
+// the same wording for the same outcome.
+export function showLogServerTestToast(result) {
+    if (!result.enabled) {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testDisabled'));
+    } else if (result.queued) {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testQueued'));
+    } else {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
     }
 }
 
@@ -60,6 +73,14 @@ export function patchResolveCommand() {
                                     }
                                     configWrite(setting.clientSettingEnum.item, arr);
                                 } else configWrite(setting.clientSettingEnum.item, value);
+
+                                // Auto-verify the connection the moment Remote
+                                // Logging gets turned on from the settings menu,
+                                // instead of requiring a separate trip to the
+                                // "Test Log Server Connection" button.
+                                if (setting.clientSettingEnum.item === 'logServerEnabled' && value === true) {
+                                    showLogServerTestToast(sendTestPing());
+                                }
                             }
                         } else if (settings.clientSettingEnum.item === 'I18N_LANGUAGE') {
                             const lang = settings.stringValue;
@@ -236,23 +257,7 @@ function customAction(action, parameters) {
             playlistContinue(resolveCommand, showToast);
             break;
         case 'LOG_SERVER_TEST_PING': {
-            if (!isLogEnabled()) {
-                showToast('TizenTube', t('settings.options.misc.options.logServer.testDisabled'));
-                break;
-            }
-            const ts = new Date().toISOString();
-            const queued = sendRemotePayload(null, {
-                ts,
-                level: 'INFO',
-                context: 'TizenTube',
-                message: 'Manual test ping from settings',
-                _formatted: `[${ts}] [INFO] [TizenTube] Manual test ping from settings`,
-            });
-            if (queued) {
-                showToast('TizenTube', t('settings.options.misc.options.logServer.testQueued'));
-            } else {
-                showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
-            }
+            showLogServerTestToast(sendTestPing());
             break;
         }
     }

@@ -1,5 +1,7 @@
-import { configRead } from '../config.js';
-import { showModal, buttonItem, overlayPanelItemListRenderer } from './ytUI.js';
+import { configRead, configWrite } from '../config.js';
+import { showModal, buttonItem, overlayPanelItemListRenderer, showToast } from './ytUI.js';
+import { sendTestPing } from '../features/logServer.js';
+import { showLogServerTestToast } from '../resolveCommand.js';
 import { t } from 'i18next';
 
 const interval = setInterval(() => {
@@ -20,7 +22,7 @@ function execute_once_dom_loaded_speed() {
             evt.preventDefault();
             evt.stopPropagation();
             if (evt.type === 'keydown') {
-                speedSettings();
+                toggleLogServer();
                 return false;
             }
             return true;
@@ -31,6 +33,23 @@ function execute_once_dom_loaded_speed() {
     // 403, 404, 405, 406
     // ---, 172, 170, 191
     document.addEventListener('keydown', eventHandler, true);
+}
+
+// Blue used to open the playback-speed menu (speedSettings(), still defined
+// below and still reachable from the native playback-settings popup — see
+// resolveCommand.js's openPopupAction handling). Repurposed as a quick
+// Remote Log Server toggle, since that's a debug workflow reached far more
+// often than changing playback speed via the remote directly.
+function toggleLogServer() {
+    const next = !configRead('logServerEnabled');
+    configWrite('logServerEnabled', next);
+
+    if (!next) {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.disabled'));
+        return;
+    }
+
+    showLogServerTestToast(sendTestPing());
 }
 
 function speedSettings() {
