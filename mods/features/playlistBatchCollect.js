@@ -34,14 +34,20 @@
  * (2+) require a real extra fetch, and those now happen one at a time after
  * the previous one actually returns, instead of all bunched together.
  *
- * Even after removing the duplicate, on-device testing still hit the same
- * bare {"error":...} response on the very first extra-batch fetch — both for
- * the scroll-triggered path and later for autoStartCollect() firing right on
- * page load. Every request spaced by several seconds (i.e. every real,
- * manually-triggered scroll) succeeded; anything within ~50-300ms of another
- * request got rejected. See BATCH_FETCH_DELAY_MS below — _collectAll now
- * waits a human-scroll-like interval before each fetch instead of firing
- * back to back.
+ * Even after removing the duplicate, and after adding a multi-second pacing
+ * delay before each fetch (still kept — see BATCH_FETCH_DELAY_MS below, it's
+ * cheap insurance and matches real scroll timing), _collectAll's own fetch
+ * kept coming back as the same bare {"error":...} every time regardless of
+ * delay. The actual differentiator across every test, once compared: every
+ * request that succeeded (native pass-throughs, and the old duplicate seed
+ * fetch which copied this.__ttReqHeaders) carried the real request's full
+ * header set; _collectAll's own fetchOpts has only ever sent `content-type`.
+ * Missing headers (likely X-Goog-Visitor-Id / X-Youtube-Client-Name /
+ * X-Youtube-Client-Version or similar), not timing, is what the server was
+ * rejecting.
+ *
+ * Fix: capture the real request's headers (this.__ttReqHeaders) alongside
+ * context/url, and pass them through to every _collectAll fetch.
  *
  * Recursive-XHR problem and solution
  * ────────────────────────────────────
@@ -111,6 +117,7 @@ const _nativeFetch = (typeof window.fetch === 'function')
 // naturally overwrites the previous one, no reset needed.
 let _lastBrowseContext = null;
 let _lastBrowseUrl     = null;
+let _lastBrowseHeaders = null;
 
 function _clearState() {
   window.__ttPrefetchedBatch  = null;
@@ -192,7 +199,7 @@ function _delay(ms) {
 // IMPORTANT: uses _nativeJSONParse (not patched JSON.parse) so watched items
 // are NOT filtered out during collection — we need the raw batch data.
 
-async function _collectAll(url, plc, context) {
+async function _collectAll(url, plc, context, headers) {
   const MAX = Math.max(1, Math.min(500, Number(configRead('playlistBatchCollectMaxBatches') || 50)));
 
   if (!context || !_nativeFetch) return null;
@@ -228,36 +235,58 @@ async function _collectAll(url, plc, context) {
       await _delay(BATCH_FETCH_DELAY_MS);
       if (abort.signal.aborted) break;
 
+      // Carry the real request's headers (X-Goog-Visitor-Id, X-Youtube-Client-*,
+      // etc.) — without them the server rejects this with a bare {"error":...}
+      // regardless of pacing. See the header-vs-timing note at the top of the
+      // file for how this was confirmed.
+      const mergedHeaders = Object.assign({ 'content-type': 'application/json' }, headers || {});
       const fetchOpts = {
         method:      'POST',
-        headers:     { 'content-type': 'application/json' },
+        headers:     mergedHeaders,
         body:        JSON.stringify({ context, continuation: token }),
         credentials: 'include',
         mode:        'cors',
       };
       if (nativeAbort) fetchOpts.signal = abort.signal;
 
+      _log('playlist.batch_collect.fetching', {
+        batch: batchesLoaded,
+        headerKeys: Object.keys(mergedHeaders),
+        contextKeys: context && typeof context === 'object' ? Object.keys(context) : null,
+        tokenLen: token.length,
+      });
+
       let nextData;
+      let httpStatus, httpStatusText, rawText;
       try {
         const nextResp = await _nativeFetch(url, fetchOpts);
+        httpStatus     = nextResp.status;
+        httpStatusText = nextResp.statusText;
         // Use _nativeJSONParse — the polyfill's .json() calls the patched
         // JSON.parse which would filter out watched items, corrupting the data.
-        const text = await nextResp.text();
-        nextData = _nativeJSONParse(text);
+        rawText = await nextResp.text();
+        nextData = _nativeJSONParse(rawText);
       } catch (err) {
         _log('playlist.batch_collect.sub_error', {
           batch: batchesLoaded,
           aborted: abort.signal.aborted,
           err: String(err?.message || err),
+          httpStatus, httpStatusText,
         });
         break;
       }
 
       const nextPlc = nextData?.continuationContents?.playlistVideoListContinuation;
       if (!nextPlc) {
+        // Full body, uncapped — a bare {"error":...} response is small, and
+        // the status/body together are what actually explain the rejection
+        // (401/403/429/etc.), not just the top-level key names.
         _log('playlist.batch_collect.no_plc', {
           batch: batchesLoaded,
+          httpStatus, httpStatusText,
           responseKeys: nextData && typeof nextData === 'object' ? Object.keys(nextData) : null,
+          responseBody: rawText,
+          headerKeys: Object.keys(mergedHeaders),
         });
         break;
       }
@@ -317,17 +346,20 @@ export function autoStartCollect(continuations) {
   const token = _getToken(continuations);
   if (!token) return;
 
-  _log('playlist.batch_collect.auto_triggered', {});
+  _log('playlist.batch_collect.auto_triggered', {
+    headerKeys: _lastBrowseHeaders ? Object.keys(_lastBrowseHeaders) : null,
+  });
 
   window.__ttPrefetchStarted = true;
   const startHash = String(window.location?.hash || '');
   const context    = _lastBrowseContext;
   const url        = _lastBrowseUrl;
+  const headers    = _lastBrowseHeaders;
 
   ;(async () => {
     let collected = null;
     try {
-      collected = await _collectAll(url, { contents: [], continuations }, context);
+      collected = await _collectAll(url, { contents: [], continuations }, context, headers);
     } catch (err) {
       _log('playlist.batch_collect.auto_error', { err: String(err?.message || err) });
     }
@@ -386,13 +418,17 @@ if (typeof XMLHttpRequest !== 'undefined') {
       return _origXHRSend.apply(this, arguments);
     }
 
-    // Capture context/url from EVERY browse request (continuation or not) —
-    // this is what lets autoStartCollect() below fire from the initial
+    // Capture context/url/headers from EVERY browse request (continuation or
+    // not) — this is what lets autoStartCollect() below fire from the initial
     // playlist page load's own request, without waiting for a scroll.
     const reqBody = _parseBody({ body });
     if (reqBody?.context) {
       _lastBrowseContext = reqBody.context;
       _lastBrowseUrl     = url;
+      _lastBrowseHeaders = Object.assign({}, this.__ttReqHeaders || {});
+      // Key names only — never log header values, some of these carry auth/
+      // session tokens (e.g. Authorization, cookies-as-header equivalents).
+      _log('playlist.batch_collect.headers_captured', { keys: Object.keys(_lastBrowseHeaders) });
     }
 
     // Must be a continuation request
@@ -433,6 +469,12 @@ if (typeof XMLHttpRequest !== 'undefined') {
     const startHash = String(window.location?.hash || '');
     const seedUrl    = url;
     const context     = reqBody.context;
+    // Use this specific request's own headers (not the module-level
+    // _lastBrowseHeaders, which could theoretically have been overwritten by
+    // another concurrent browse request by the time this fires) — captured
+    // synchronously here, before any await.
+    const seedHeaders = Object.assign({}, this.__ttReqHeaders || {});
+    _log('playlist.batch_collect.seed_headers', { keys: Object.keys(seedHeaders) });
 
     // Read the REAL response instead of firing a duplicate request for data
     // we're already fetching. this.responseText is the raw string XHR
@@ -454,11 +496,18 @@ if (typeof XMLHttpRequest !== 'undefined') {
 
       const plc = firstData?.continuationContents?.playlistVideoListContinuation;
       if (!plc || !Array.isArray(plc.contents) || !plc.continuations) {
+        // !plc (no contents at all) is the actually-suspicious case worth a
+        // full body dump — plc-with-no-continuations just means this is
+        // legitimately the last batch (common, not an error), and its body
+        // is the real playlist page data, which can be large.
         _log('playlist.batch_collect.xhr_no_plc', {
+          httpStatus:        this.status,
+          httpStatusText:    this.statusText,
           hasPlc:            !!plc,
           hasContinuations:  !!(plc?.continuations),
           responseTopKeys:   firstData && typeof firstData === 'object' ? Object.keys(firstData) : null,
           continuationKeys:  firstData?.continuationContents && typeof firstData.continuationContents === 'object' ? Object.keys(firstData.continuationContents) : null,
+          responseBody:      plc ? undefined : this.responseText,
         });
         window.__ttPrefetchStarted = false;
         return;
@@ -474,7 +523,7 @@ if (typeof XMLHttpRequest !== 'undefined') {
       ;(async () => {
         let collected = null;
         try {
-          collected = await _collectAll(seedUrl, plc, context);
+          collected = await _collectAll(seedUrl, plc, context, seedHeaders);
         } catch (err) {
           _log('playlist.batch_collect.collect_error', { err: String(err?.message || err) });
         }
@@ -529,9 +578,23 @@ if (_nativeFetch) {
     }
 
     const reqBody = _parseBody(options);
+    // options.headers can be a plain object or a Headers instance — normalize
+    // to a plain object either way.
+    const optHeaders = (() => {
+      try {
+        if (!options?.headers) return {};
+        if (typeof options.headers.forEach === 'function' && typeof options.headers.entries === 'function') {
+          const out = {};
+          options.headers.forEach((v, k) => { out[k] = v; });
+          return out;
+        }
+        return Object.assign({}, options.headers);
+      } catch (_) { return {}; }
+    })();
     if (reqBody?.context) {
       _lastBrowseContext = reqBody.context;
       _lastBrowseUrl     = String(url);
+      _lastBrowseHeaders = optHeaders;
     }
     if (!reqBody?.continuation || !reqBody?.context) return _nativeFetch(url, options);
     if (!configRead('enablePlaylistBatchCollect'))   return _nativeFetch(url, options);
@@ -554,7 +617,7 @@ if (_nativeFetch) {
     ;(async () => {
       let collected = null;
       try {
-        collected = await _collectAll(String(url), plc, reqBody.context);
+        collected = await _collectAll(String(url), plc, reqBody.context, optHeaders);
       } catch (err) {
         _log('playlist.batch_collect.error', { err: String(err?.message || err) });
       }
