@@ -479,6 +479,18 @@ if (typeof XMLHttpRequest !== 'undefined') {
       return _origXHRSend.apply(this, arguments);
     }
 
+    // Diagnostic: every real continuation-loading trigger tried so far
+    // (resolveCommand's continuationCommand, the yt-continuation sentinel's
+    // .click()/.activate()) has failed on-device. Capturing the JS call
+    // stack for a genuine continuation request — whichever native function
+    // actually calls send() when a real scroll works — is the most direct
+    // way left to find out what that trigger actually is, instead of
+    // guessing at more command shapes.
+    try {
+      const stack = new Error().stack || '';
+      _log('playlist.batch_collect.xhr_continuation_stack', { stack: stack.split('\n').slice(0, 12).join(' | ') });
+    } catch (_) {}
+
     // Feature flag
     if (!configRead('enablePlaylistBatchCollect')) return _origXHRSend.apply(this, arguments);
 
