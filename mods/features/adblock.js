@@ -69,6 +69,12 @@ function storePlaylistContinuationToken(continuations, label = '') {
 }
 
 
+// Exposed on window (not exported) rather than imported directly by
+// playlistBatchCollect.js — that module must import-and-run BEFORE this
+// file (see its own top-of-file docstring: it captures native JSON.parse/
+// fetch before adblock.js patches them), so it can't safely have a
+// circular ES import back to this file. This global is only ever called
+// from an async callback long after both modules have finished loading.
 function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   if ((window.__ttLastDetectedPage || detectCurrentPage()) !== 'playlist') return;
 
@@ -107,6 +113,7 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   // All available triggers exhausted — nothing to do.
   appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'no_trigger' });
 }
+window.__ttAttemptPlaylistAutoLoad = attemptPlaylistAutoLoad;
 
 function schedulePlaylistAutoLoad(reason = 'playlist.auto_load') {
   if ((window.__ttLastDetectedPage || detectCurrentPage()) !== 'playlist') return;
