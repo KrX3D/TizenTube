@@ -34,6 +34,15 @@
  * (2+) require a real extra fetch, and those now happen one at a time after
  * the previous one actually returns, instead of all bunched together.
  *
+ * Even after removing the duplicate, on-device testing still hit the same
+ * bare {"error":...} response on the very first extra-batch fetch — both for
+ * the scroll-triggered path and later for autoStartCollect() firing right on
+ * page load. Every request spaced by several seconds (i.e. every real,
+ * manually-triggered scroll) succeeded; anything within ~50-300ms of another
+ * request got rejected. See BATCH_FETCH_DELAY_MS below — _collectAll now
+ * waits a human-scroll-like interval before each fetch instead of firing
+ * back to back.
+ *
  * Recursive-XHR problem and solution
  * ────────────────────────────────────
  * _nativeFetch is the whatwg-fetch polyfill, which creates a real XMLHttpRequest
@@ -166,6 +175,19 @@ function _makeAbort() {
   return { signal, abort() { signal.aborted = true; } };
 }
 
+// ── Pacing between background fetches ─────────────────────────────────────────
+// Confirmed on-device (twice): firing a continuation fetch within ~50-300ms
+// of the previous browse/continuation request gets rejected outright with a
+// bare {"error":...} — every request spaced by several seconds (i.e. every
+// real, manually-triggered scroll) succeeds. Looks like server-side
+// anti-automation throttling on the endpoint — a real scroll physically
+// can't happen that fast. So instead of firing every background fetch back
+// to back, wait a human-scroll-like interval before each one.
+const BATCH_FETCH_DELAY_MS = 2500;
+function _delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // ── Core: collect all remaining batches ───────────────────────────────────────
 // IMPORTANT: uses _nativeJSONParse (not patched JSON.parse) so watched items
 // are NOT filtered out during collection — we need the raw batch data.
@@ -197,6 +219,14 @@ async function _collectAll(url, plc, context) {
         });
         break;
       }
+
+      // Wait before firing the next fetch — see BATCH_FETCH_DELAY_MS above.
+      // Every iteration is already sequential (each fetch is awaited fully,
+      // parsed, and appended before the loop even reaches the next one), so
+      // this delay always lands strictly after the previous batch arrived
+      // and was processed, never overlapping it.
+      await _delay(BATCH_FETCH_DELAY_MS);
+      if (abort.signal.aborted) break;
 
       const fetchOpts = {
         method:      'POST',
