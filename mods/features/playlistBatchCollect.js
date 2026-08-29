@@ -209,6 +209,14 @@ function _delay(ms) {
 // module must load and capture native JSON.parse/fetch before adblock.js
 // patches them; a circular import risks breaking that ordering).
 function _triggerReveal(reason) {
+  // Reported on-device: the "Playlist: loading batch N…" overlay stayed
+  // stuck showing an old batch number even after collection had actually
+  // finished (done/prefetch_ready already fired). _collectAll's own
+  // _hideProgress() runs in a finally block and should always fire, but
+  // this is the one point we know FOR CERTAIN collection is done — clear
+  // it here too as a backstop, regardless of what else touched it.
+  _hideProgress();
+
   try {
     if (typeof window.__ttAttemptPlaylistAutoLoad === 'function') {
       window.__ttAttemptPlaylistAutoLoad(reason);
