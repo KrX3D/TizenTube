@@ -573,6 +573,10 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
 
   clearTimeout(window.__ttNativeSettleTimer);
   window.__ttNativeSettleTimer = setTimeout(() => {
+    // Clear the handle as the timer fires: the XHR seed path treats a set
+    // handle as "scheduler owns this" and would otherwise defer forever,
+    // losing its fallback role if the scheduled run cannot start.
+    window.__ttNativeSettleTimer = null;
     if (playlistKeyFromHash() !== key) return;
     const acc = window.__ttContinuationAcc;
     const seed = (acc && acc.key === key && Array.isArray(acc.contents)) ? acc.contents : [];
@@ -748,6 +752,18 @@ if (typeof XMLHttpRequest !== 'undefined') {
       return _origXHRSend.apply(this, arguments);
     }
 
+    // Stand down if the settle-scheduler is armed. This path fires on the
+    // FIRST continuation request (~400ms in), well before the settle timer,
+    // and it sets __ttPrefetchStarted — which then makes autoStartCollect
+    // bail at its own guard, so the seeded run never happens and collection
+    // restarts from batch 2 as if none of this existed. Confirmed on-device:
+    // xhr_seed_triggered present, native_settled absent, and the collector
+    // refetching batches YouTube had already delivered.
+    if (window.__ttNativeSettleTimer) {
+      _log('playlist.batch_collect.xhr_seed_deferred', { reason: 'settle_scheduled' });
+      return _origXHRSend.apply(this, arguments);
+    }
+
     _log('playlist.batch_collect.xhr_seed_triggered', { url: String(url) });
 
     // CRITICAL: set __ttPrefetchStarted SYNCHRONOUSLY before send(), so that
@@ -758,6 +774,7 @@ if (typeof XMLHttpRequest !== 'undefined') {
     window.__ttPrefetchStarted = true;
 
     const startHash = String(window.location?.hash || '');
+    const seedKey    = playlistKeyFromHash();
     const seedUrl    = url;
     const context     = reqBody.context;
     // Use this specific request's own headers (not the module-level
@@ -837,6 +854,17 @@ if (typeof XMLHttpRequest !== 'undefined') {
           items:   collected.allContents.length,
           hasMore: !!collected.continuations,
         });
+        // Same completion handling as the scheduled path. Without this the
+        // seed path could finish a full collection and still never reload,
+        // which is exactly what was observed: batches loaded, no reload, and
+        // the page only corrected itself once a manual scroll produced the
+        // final native batch.
+        if (!collected.continuations && !collected.aborted) {
+          if (storeFullPlaylist(seedKey, collected.allContents)) {
+            maybeReloadForFullPlaylist(seedKey);
+            return;
+          }
+        }
         _triggerReveal('playlist.batch_collect.seed_reveal');
       })();
     });
