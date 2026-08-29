@@ -221,6 +221,84 @@ function isHelperLikePlaylistNode(rowNode, tileNode) {
     rowClass.includes('tt-helper-soft-hidden') || tileClass.includes('HTybHf') || tileClass.includes('IYlICe');
 }
 
+// One-shot structural dump of a tile we KNOW is a helper (matched by the
+// outerHTML substring scan, the only identification that has ever worked).
+//
+// Why this exists: cleanupPlaylistHelpersFromDom looks tiles up by
+// [data-video-id] / [video-id] / [data-content-id] / [content-id], and every
+// on-device log shows it reporting matched:0 — never 1, never skippedUnsafe,
+// just nothing found. updateHelperHideStyle builds its CSS from those same
+// four selectors, so if they match nothing then the CSS hiding is a no-op too
+// and the only thing that has ever removed a helper is the substring scan.
+// This logs what the node ACTUALLY carries so a selector that works can be
+// written instead of guessed at. Capped at a few dumps — outerHTML is large
+// and the log is chunked at 1000 chars per entry.
+const _HELPER_DUMP_MAX = 3;
+function dumpHelperTileStructure(tile, id) {
+  if (Number(window.__ttHelperDumpCount || 0) >= _HELPER_DUMP_MAX) return;
+  window.__ttHelperDumpCount = Number(window.__ttHelperDumpCount || 0) + 1;
+  try {
+    const attrsOf = (el) => {
+      if (!el || !el.attributes) return [];
+      return Array.from(el.attributes).map(a => `${a.name}=${String(a.value).slice(0, 40)}`);
+    };
+    // Find which descendant actually carries the id, and how.
+    let carrier = null;
+    try {
+      for (const el of [tile, ...Array.from(tile.querySelectorAll('*')).slice(0, 60)]) {
+        const hasInAttr = Array.from(el.attributes || []).some(a => String(a.value).includes(id));
+        if (hasInAttr) { carrier = el; break; }
+      }
+    } catch (_) {}
+    appendFileOnlyLog('playlist.helper.tile_structure', {
+      id,
+      tileTag: tile?.tagName || null,
+      tileAttrs: attrsOf(tile),
+      tileClass: String(tile?.className || '').slice(0, 200),
+      rowTag: tile?.closest?.('.TXB27d')?.tagName || null,
+      rowClass: String(tile?.closest?.('.TXB27d')?.className || '').slice(0, 200),
+      // If carrier is null the id lives only in text content or a property,
+      // not in any attribute — which would explain matched:0 outright.
+      carrierTag: carrier?.tagName || null,
+      carrierAttrs: carrier ? attrsOf(carrier) : null,
+      carrierIsTile: carrier === tile,
+    });
+  } catch (err) {
+    appendFileOnlyLog('playlist.helper.tile_structure.error', { id, err: String(err?.message || err) });
+  }
+}
+
+// Hide a helper tile using the node reference we already have, rather than a
+// CSS selector that has to re-find it. Sets the class isHelperLikePlaylistNode
+// already looks for (it was previously checked but never set anywhere) plus an
+// inline display:none, so the tile stops occupying a grid slot even when its
+// removal is deferred or fails. Inline styles are lost if the virtual list
+// re-renders the node from its data model — the MutationObserver re-runs the
+// scan on that mutation and re-applies this.
+function softHideHelperTile(tile) {
+  try {
+    // Never collapse the tile that currently holds focus. In the deferred case
+    // this helper can be the ONLY rendered tile, so hiding it would leave the
+    // spatial-navigation cursor on a zero-size element with nowhere to go —
+    // worse than briefly showing a helper. A later scan gets it once focus has
+    // moved or real content has rendered.
+    const rowNode = tile.closest?.('.TXB27d');
+    const rowClass = String(rowNode?.className || '');
+    if (rowClass.includes('lxpVI') || rowClass.includes('zylon-focus') || tile.classList?.contains('zylon-focus')) return false;
+
+    tile.classList?.add('tt-helper-soft-hidden');
+    tile.style?.setProperty('display', 'none', 'important');
+    const row = tile.closest?.('.TXB27d');
+    if (row && row.querySelectorAll('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer').length === 1) {
+      // Only collapse the whole row when this helper is the sole tile in it,
+      // otherwise real neighbouring videos would be hidden too.
+      row.classList?.add('tt-helper-soft-hidden');
+      row.style?.setProperty('display', 'none', 'important');
+    }
+    return true;
+  } catch (_) { return false; }
+}
+
 
 
 function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
@@ -230,7 +308,7 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   const tiles = getPlaylistTileNodes();
   if (!tiles.length) return { scannedTiles: 0, removed: 0, matchedIds: [] };
   window.__ttRemovingHelperTiles = true;
-  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0;
+  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0, softHidden = 0;
   const removedTiles = new Set(), matchedIds = new Set();
   try {
     for (const tile of tiles) {
@@ -240,6 +318,9 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
         if (!id || !html.includes(id)) continue;
         matchedIds.add(id);
         matchedTiles++;
+        // This tile is confirmed to be a helper. Record what it actually
+        // looks like (capped) so the attribute-selector path can be fixed.
+        dumpHelperTileStructure(tile, id);
         try {
           // Only remove this helper tile if there are other non-retired tiles already in DOM.
           // If it's the only tile, keeping it is critical: the virtual list needs at least one
@@ -251,7 +332,16 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
             const h = String(t?.outerHTML || '');
             return h && !retiredIds.some(rid => rid && h.includes(rid));
           });
-          if (nonRetiredTiles.length === 0) { deferredNoContent++; break; }
+          if (nonRetiredTiles.length === 0) {
+            // Can't remove it — it's the only tile rendered, and emptying the
+            // virtual list makes YouTube TV reload the page. Previously we
+            // just gave up here and the helper stayed fully visible/occupying
+            // its slot until some later scan happened to catch it. Collapse it
+            // instead so it takes up no space in the meantime.
+            deferredNoContent++;
+            if (softHideHelperTile(tile)) softHidden++;
+            break;
+          }
           const rowNode = tile.closest('.TXB27d');
           const rowClass = String(rowNode?.className || '');
           const isFocused = rowClass.includes('lxpVI') || rowClass.includes('zylon-focus') || tile.classList?.contains('zylon-focus');
@@ -278,8 +368,8 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   } finally {
     window.__ttRemovingHelperTiles = false;
   }
-  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, matchedIds: Array.from(matchedIds) });
-  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles };
+  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, softHidden, matchedIds: Array.from(matchedIds) });
+  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles, softHidden };
 }
 
 function ensurePlaylistHelperObserver() {
