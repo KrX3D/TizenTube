@@ -488,6 +488,19 @@ export function injectPlaylistButton(buttons, actionName, label, iconType) {
 
 const _HELPER_STYLE_ID = 'tt-playlist-helper-hide';
 
+// WARNING — these selectors are known NOT to match playlist helper tiles.
+// An on-device structure dump (playlist.helper.tile_structure) showed a real
+// helper tile carries only: hybridnavfocusable, disablehybridnavdescendants-
+// ifblurred, role, id (ytlr-tile-renderer:d5), aria-labelledby, tabindex,
+// class, style. There is no data-video-id / video-id / data-content-id /
+// content-id anywhere on it. The video id appears only inside a descendant
+// <ytlr-thumbnail-details>'s inline background-image URL, which is why the
+// outerHTML substring scan in adblock.js finds these tiles and every
+// attribute-selector lookup reports matched:0.
+//
+// Kept because other renderers on other pages do carry these attributes, but
+// do not add helper-hiding logic here expecting it to work — hiding a helper
+// has to go through adblock.js's substring scan, which has a node reference.
 function _helperSelectors(ids) {
   return ids.flatMap(id => [
     `[data-video-id="${id}"]`,

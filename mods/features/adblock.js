@@ -268,33 +268,28 @@ function dumpHelperTileStructure(tile, id) {
   }
 }
 
-// Hide a helper tile using the node reference we already have, rather than a
-// CSS selector that has to re-find it. Sets the class isHelperLikePlaylistNode
-// already looks for (it was previously checked but never set anywhere) plus an
-// inline display:none, so the tile stops occupying a grid slot even when its
-// removal is deferred or fails. Inline styles are lost if the virtual list
-// re-renders the node from its data model — the MutationObserver re-runs the
-// scan on that mutation and re-applies this.
-function softHideHelperTile(tile) {
+// Collapse a playlist row that no longer holds any tile.
+//
+// Removing a helper TILE was never the missing piece — on-device logs show it
+// already works (tile_scan reports removed:1/2 via the outerHTML substring
+// match). What stays behind is the row element: the virtual list lays out one
+// .TXB27d row per data-model entry, and that row keeps its height whether or
+// not a tile is inside it. Those empty rows are the blank slots that push real
+// content down, and scrolling back over one makes the list re-render its tile
+// into it — which is exactly the reported "they appeared again".
+//
+// Only ever called on a row we've just emptied, so there is nothing left in it
+// to hide by mistake. Inline style + class are lost if the list rebuilds the
+// row from its data model; the MutationObserver re-runs the scan on that
+// mutation and re-applies. The class is the one isHelperLikePlaylistNode
+// already tested for but nothing ever set.
+function collapseEmptyHelperRow(row) {
   try {
-    // Never collapse the tile that currently holds focus. In the deferred case
-    // this helper can be the ONLY rendered tile, so hiding it would leave the
-    // spatial-navigation cursor on a zero-size element with nowhere to go —
-    // worse than briefly showing a helper. A later scan gets it once focus has
-    // moved or real content has rendered.
-    const rowNode = tile.closest?.('.TXB27d');
-    const rowClass = String(rowNode?.className || '');
-    if (rowClass.includes('lxpVI') || rowClass.includes('zylon-focus') || tile.classList?.contains('zylon-focus')) return false;
-
-    tile.classList?.add('tt-helper-soft-hidden');
-    tile.style?.setProperty('display', 'none', 'important');
-    const row = tile.closest?.('.TXB27d');
-    if (row && row.querySelectorAll('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer').length === 1) {
-      // Only collapse the whole row when this helper is the sole tile in it,
-      // otherwise real neighbouring videos would be hidden too.
-      row.classList?.add('tt-helper-soft-hidden');
-      row.style?.setProperty('display', 'none', 'important');
-    }
+    if (!row) return false;
+    if (row.querySelectorAll('ytlr-tile-renderer, ytlr-grid-tile, ytlr-rich-item-renderer').length > 0) return false;
+    if (row.classList?.contains('tt-helper-soft-hidden')) return false;
+    row.classList?.add('tt-helper-soft-hidden');
+    row.style?.setProperty('display', 'none', 'important');
     return true;
   } catch (_) { return false; }
 }
@@ -308,7 +303,7 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   const tiles = getPlaylistTileNodes();
   if (!tiles.length) return { scannedTiles: 0, removed: 0, matchedIds: [] };
   window.__ttRemovingHelperTiles = true;
-  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0, softHidden = 0;
+  let matchedTiles = 0, removed = 0, focusRedirected = 0, deferredNoContent = 0, rowsCollapsed = 0;
   const removedTiles = new Set(), matchedIds = new Set();
   try {
     for (const tile of tiles) {
@@ -332,16 +327,7 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
             const h = String(t?.outerHTML || '');
             return h && !retiredIds.some(rid => rid && h.includes(rid));
           });
-          if (nonRetiredTiles.length === 0) {
-            // Can't remove it — it's the only tile rendered, and emptying the
-            // virtual list makes YouTube TV reload the page. Previously we
-            // just gave up here and the helper stayed fully visible/occupying
-            // its slot until some later scan happened to catch it. Collapse it
-            // instead so it takes up no space in the meantime.
-            deferredNoContent++;
-            if (softHideHelperTile(tile)) softHidden++;
-            break;
-          }
+          if (nonRetiredTiles.length === 0) { deferredNoContent++; break; }
           const rowNode = tile.closest('.TXB27d');
           const rowClass = String(rowNode?.className || '');
           const isFocused = rowClass.includes('lxpVI') || rowClass.includes('zylon-focus') || tile.classList?.contains('zylon-focus');
@@ -357,6 +343,9 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
             removedTiles.add(tile);
             try { tile.remove(); } catch (_) {}
             removed++;
+            // The row survives the tile and keeps its height — that leftover
+            // row is the blank slot. Collapse it now that it's empty.
+            if (collapseEmptyHelperRow(rowNode)) rowsCollapsed++;
           }
         } catch (_) { }
         break;
@@ -368,8 +357,8 @@ function removeRetiredHelpersFromTiles(reason = 'playlist.helper.tile_scan') {
   } finally {
     window.__ttRemovingHelperTiles = false;
   }
-  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, softHidden, matchedIds: Array.from(matchedIds) });
-  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles, softHidden };
+  appendFileOnlyLog('playlist.helper.tile_scan', { reason, retiredCount: retiredIds.length, scannedTiles: tiles.length, removed, matchedTiles, focusRedirected, deferredNoContent, rowsCollapsed, matchedIds: Array.from(matchedIds) });
+  return { scannedTiles: tiles.length, removed, matchedIds: Array.from(matchedIds), matchedTiles, rowsCollapsed };
 }
 
 function ensurePlaylistHelperObserver() {
