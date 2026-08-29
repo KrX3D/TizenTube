@@ -7,9 +7,11 @@
  * no 614KB re-parse.
  *
  * Two trigger paths feed the same background collector:
- *  - autoStartCollect(): called by adblock.js right after the initial
- *    playlist page's own continuation token is parsed, so collection starts
- *    on page load without needing any scroll at all.
+ *  - scheduleCollectAfterNativeSettles(): called by adblock.js on playlist
+ *    page load and again for each continuation YouTube delivers itself. It
+ *    waits for that native loading to go quiet, then hands autoStartCollect()
+ *    the items already accumulated plus the newest token, so collection
+ *    resumes from where YouTube stopped rather than refetching from batch 2.
  *  - The XHR send() seed path below: a fallback for when the auto-trigger's
  *    captured context/url isn't available yet (e.g. very first browse of a
  *    session) — starts from the first scroll-triggered continuation request.
@@ -579,7 +581,7 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
   }, NATIVE_SETTLE_MS);
 }
 
-export function autoStartCollect(continuations, seedContents) {
+function autoStartCollect(continuations, seedContents) {
   if (!configRead('enablePlaylistBatchCollect')) return;
   if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
 

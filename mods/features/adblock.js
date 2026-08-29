@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { autoStartCollect, scheduleCollectAfterNativeSettles, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
+import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -951,9 +951,10 @@ JSON.parse = function () {
         noteInitialPlaylistContents(playlistKey, topPlaylistRenderer.contents);
       }
       storePlaylistContinuationToken(topPlaylistRenderer.continuations, 'topPlaylist');
-      // Start collecting the rest of the playlist in the background right
-      // now, instead of waiting for the user to scroll down once to trigger
-      // it — see playlistBatchCollect.js's autoStartCollect() doc comment.
+      // Queue background collection of whatever YouTube does not fetch
+      // itself — deferred until its own loading goes quiet, so the collector
+      // resumes from there instead of refetching. See
+      // scheduleCollectAfterNativeSettles() in playlistBatchCollect.js.
       // No-ops when serving from cache: continuations is null, so there is no
       // token to collect with.
       scheduleCollectAfterNativeSettles(topPlaylistRenderer.continuations, 'page_load');
