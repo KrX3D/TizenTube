@@ -370,6 +370,103 @@ async function _collectAll(url, plc, context, headers) {
   return { allContents, continuations, aborted: abort.signal.aborted };
 }
 
+// ── Full-playlist cache and one-shot reload ──────────────────────────────────
+// Goal: get the ENTIRE playlist into the INITIAL page response, because that
+// response is the only one where continuations can be nulled without starving
+// YouTube's refill loop — and with no continuation there is no keep-one branch,
+// so no helper tile is ever created. Helpers are what leave the permanently
+// stranded blank slots (the virtual list's data model is unreachable on Tizen
+// 5.0, 654577e), so removing the need for them is the only way to be rid of
+// them.
+//
+// The catch is ordering: on a first visit the full list only exists AFTER the
+// background collector finishes, which is well after the initial response has
+// already been rendered. Injecting into a later continuation cannot fix it
+// either — the initial batch has already kept its helper by then. So once
+// collection completes we cache the whole playlist and reload the page once;
+// the reloaded initial response is served from cache, complete, with
+// continuations nulled.
+//
+// Reloading per batch (rather than after collection) would not work: a reload
+// re-fetches the FIRST page, so it would loop on batch 1 forever.
+const FULL_CACHE_MAX_PLAYLISTS = 3;
+
+function playlistKeyFromHash() {
+  try { return String(window.location?.hash || ''); } catch (_) { return ''; }
+}
+
+function getFullCache() {
+  if (!window.__ttPlaylistFullCache) window.__ttPlaylistFullCache = {};
+  return window.__ttPlaylistFullCache;
+}
+
+export function getCachedFullPlaylist(key) {
+  const entry = getFullCache()[key];
+  return entry && Array.isArray(entry.contents) ? entry.contents : null;
+}
+
+// adblock.js hands us the raw, unfiltered contents of the initial response so
+// the cached list can start with batch 1 — _collectAll only ever returns the
+// CONTINUATION batches (53 of 68 on the measured playlist), never the first.
+export function noteInitialPlaylistContents(key, contents) {
+  if (!Array.isArray(contents) || !contents.length) return;
+  window.__ttInitialPlaylistContents = { key, contents: contents.slice() };
+}
+
+function storeFullPlaylist(key, collectedContents) {
+  const initial = window.__ttInitialPlaylistContents;
+  if (!initial || initial.key !== key || !Array.isArray(initial.contents)) {
+    _log('playlist.full_cache.skip_no_initial', { key });
+    return false;
+  }
+  const cache = getFullCache();
+  // Bound the cache: these are full renderer objects and this runs on a TV.
+  const keys = Object.keys(cache);
+  if (keys.length >= FULL_CACHE_MAX_PLAYLISTS && !cache[key]) {
+    const oldest = keys.reduce((a, b) => (cache[a].ts <= cache[b].ts ? a : b));
+    delete cache[oldest];
+  }
+  cache[key] = { contents: initial.contents.concat(collectedContents), ts: Date.now() };
+  _log('playlist.full_cache.stored', {
+    key,
+    initial: initial.contents.length,
+    collected: collectedContents.length,
+    total: cache[key].contents.length,
+  });
+  return true;
+}
+
+// Reload once per playlist, and only after a COMPLETE collection — a partial
+// list would render as a truncated playlist with no way to load the rest,
+// since the injected response carries no continuation token.
+function maybeReloadForFullPlaylist(key) {
+  if (!window.__ttFullReloadDone) window.__ttFullReloadDone = {};
+  if (window.__ttFullReloadDone[key]) {
+    _log('playlist.full_cache.reload_skipped', { key, reason: 'already_reloaded' });
+    return;
+  }
+  if (playlistKeyFromHash() !== key) {
+    _log('playlist.full_cache.reload_skipped', { key, reason: 'navigated_away' });
+    return;
+  }
+  window.__ttFullReloadDone[key] = true;
+  _log('playlist.full_cache.reloading', { key });
+  try {
+    // Reached through a window global rather than an ES import. This module
+    // must evaluate BEFORE adblock.js so it can capture JSON.parse ahead of
+    // adblock's patch; importing resolveCommand (which pulls in settings/UI)
+    // would risk reordering that. adblock.js publishes the global.
+    const rc = window.__ttResolveCommand;
+    if (typeof rc !== 'function') {
+      _log('playlist.full_cache.reload_error', { key, err: 'resolveCommand unavailable' });
+      return;
+    }
+    rc({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
+  } catch (err) {
+    _log('playlist.full_cache.reload_error', { key, err: String(err?.message || err) });
+  }
+}
+
 // ── Auto-trigger on playlist page load ────────────────────────────────────────
 // Called by adblock.js right after the initial playlist page's own
 // continuation token is parsed (topPlaylistRenderer.continuations) — starts
@@ -401,6 +498,7 @@ export function autoStartCollect(continuations) {
   const context    = _lastBrowseContext;
   const url        = _lastBrowseUrl;
   const headers    = _lastBrowseHeaders;
+  const startKey   = playlistKeyFromHash();
 
   ;(async () => {
     let collected = null;
@@ -428,6 +526,20 @@ export function autoStartCollect(continuations) {
       hasMore: !!collected.continuations,
       auto:    true,
     });
+
+    // Complete collection (no continuation token left) means we now hold the
+    // whole playlist. Cache it and reload once, so the initial response can be
+    // served complete with continuations nulled — and with no continuation
+    // there is no keep-one branch, hence no helper tile at all.
+    // A partial collection is deliberately NOT cached: the injected response
+    // carries no continuation token, so a truncated list would have no way to
+    // ever load its remainder.
+    if (!collected.continuations && !collected.aborted) {
+      if (storeFullPlaylist(startKey, collected.allContents)) {
+        maybeReloadForFullPlaylist(startKey);
+        return;
+      }
+    }
     _triggerReveal('playlist.batch_collect.auto_reveal');
   })();
 }
