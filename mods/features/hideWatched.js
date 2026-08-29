@@ -488,7 +488,36 @@ export function injectPlaylistButton(buttons, actionName, label, iconType) {
 
 const _HELPER_STYLE_ID = 'tt-playlist-helper-hide';
 
-export function updateHelperHideStyle(helperIds) {
+function _helperSelectors(ids) {
+  return ids.flatMap(id => [
+    `[data-video-id="${id}"]`,
+    `[video-id="${id}"]`,
+    `[data-content-id="${id}"]`,
+    `[content-id="${id}"]`,
+  ]).join(', ');
+}
+
+// Active and retired helpers are hidden DIFFERENTLY, on purpose:
+//
+//   active  — the one helper currently anchoring the next continuation.
+//             visibility:hidden, so it keeps its layout box and stays a valid
+//             scroll/continuation anchor for the virtual list. Removing it
+//             from layout risks emptying the list, which makes YouTube TV
+//             reload the whole page (see removeRetiredHelpersFromTiles).
+//
+//   retired — helpers from earlier batches, already superseded and awaiting
+//             DOM removal. These anchor nothing. They previously shared the
+//             active rule, so they also kept their layout boxes — and since
+//             their DOM removal frequently doesn't land (on-device logs show
+//             repeated dom.cleanup attempts with matched:0/removed:0, plus
+//             deferredNoContent when the helper is the only tile present),
+//             they linger as invisible-but-space-occupying tiles. That is
+//             exactly the reported symptom: several blank slots before the
+//             real content, with the visible tile pushed down a row.
+//             display:none removes the layout box entirely, so no gap — and
+//             if the virtual list re-renders one during scroll it stays
+//             collapsed instead of reappearing as another blank slot.
+export function updateHelperHideStyle(activeIds, retiredIds) {
   if (typeof document === 'undefined') return;
   let style = document.getElementById(_HELPER_STYLE_ID);
   if (!style) {
@@ -496,15 +525,20 @@ export function updateHelperHideStyle(helperIds) {
     style.id = _HELPER_STYLE_ID;
     (document.head || document.documentElement).appendChild(style);
   }
-  if (!helperIds || !helperIds.size) { style.textContent = ''; return; }
-  const ids = Array.from(helperIds);
-  const selectors = ids.flatMap(id => [
-    `[data-video-id="${id}"]`,
-    `[video-id="${id}"]`,
-    `[data-content-id="${id}"]`,
-    `[content-id="${id}"]`,
-  ]);
-  // visibility:hidden keeps the element in layout (virtual list can still
-  // navigate to it), pointer-events:none prevents accidental clicks.
-  style.textContent = `${selectors.join(', ')} { visibility: hidden !important; pointer-events: none !important; }`;
+
+  const active  = activeIds  ? Array.from(activeIds)  : [];
+  // An id that is somehow in both sets is treated as active — the anchor role
+  // is the one with the page-reload consequence if we get it wrong.
+  const retired = (retiredIds ? Array.from(retiredIds) : []).filter(id => !active.includes(id));
+
+  if (!active.length && !retired.length) { style.textContent = ''; return; }
+
+  const rules = [];
+  if (active.length) {
+    rules.push(`${_helperSelectors(active)} { visibility: hidden !important; pointer-events: none !important; }`);
+  }
+  if (retired.length) {
+    rules.push(`${_helperSelectors(retired)} { display: none !important; pointer-events: none !important; }`);
+  }
+  style.textContent = rules.join('\n');
 }
