@@ -170,32 +170,6 @@ function _getToken(continuations) {
       || null;
 }
 
-// ── Progress overlay ──────────────────────────────────────────────────────────
-function _showProgress(msg) {
-  if (typeof document === 'undefined') return;
-  const id = 'tt-batch-collect-notice';
-  let el = document.getElementById(id);
-  if (!el) {
-    el = document.createElement('div');
-    el.id = id;
-    Object.assign(el.style, {
-      position: 'fixed', left: '50%', bottom: '4%',
-      transform: 'translateX(-50%)',
-      background: 'rgba(0,0,0,0.88)', color: '#fff',
-      padding: '12px 22px', borderRadius: '10px',
-      zIndex: '999999', fontSize: '16px',
-      pointerEvents: 'none',
-    });
-    document.body?.appendChild(el);
-  }
-  el.textContent = msg;
-}
-
-function _hideProgress() {
-  if (typeof document === 'undefined') return;
-  document.getElementById('tt-batch-collect-notice')?.remove();
-}
-
 // ── AbortController shim for older WebKit ─────────────────────────────────────
 function _makeAbort() {
   if (typeof AbortController !== 'undefined') return new AbortController();
@@ -234,14 +208,6 @@ function _delay(ms) {
 // module must load and capture native JSON.parse/fetch before adblock.js
 // patches them; a circular import risks breaking that ordering).
 function _triggerReveal(reason) {
-  // Reported on-device: the "Playlist: loading batch N…" overlay stayed
-  // stuck showing an old batch number even after collection had actually
-  // finished (done/prefetch_ready already fired). _collectAll's own
-  // _hideProgress() runs in a finally block and should always fire, but
-  // this is the one point we know FOR CERTAIN collection is done — clear
-  // it here too as a backstop, regardless of what else touched it.
-  _hideProgress();
-
   try {
     if (typeof window.__ttAttemptPlaylistAutoLoad === 'function') {
       window.__ttAttemptPlaylistAutoLoad(reason);
@@ -266,6 +232,7 @@ async function _collectAll(url, plc, context, headers) {
   const allContents = Array.isArray(plc.contents) ? [...plc.contents] : [];
   let continuations = plc.continuations;
   let batchesLoaded = 1;
+  let fetchCount = 0;
   const abort = _makeAbort();
   const nativeAbort = typeof AbortController !== 'undefined';
 
@@ -273,7 +240,6 @@ async function _collectAll(url, plc, context, headers) {
   window.addEventListener('hashchange', onNav, { once: true });
   window.addEventListener('popstate',   onNav, { once: true });
 
-  _showProgress(`Playlist: loading batch ${batchesLoaded}…`);
 
   try {
     while (continuations && batchesLoaded < MAX && !abort.signal.aborted) {
@@ -287,12 +253,14 @@ async function _collectAll(url, plc, context, headers) {
         break;
       }
 
-      // Wait before firing the next fetch — see BATCH_FETCH_DELAY_MS above.
-      // Every iteration is already sequential (each fetch is awaited fully,
-      // parsed, and appended before the loop even reaches the next one), so
-      // this delay always lands strictly after the previous batch arrived
-      // and was processed, never overlapping it.
-      await _delay(BATCH_FETCH_DELAY_MS);
+      // Pace only BETWEEN our own fetches. The first one needs no delay:
+      // nothing of ours precedes it, and the scheduler has already waited out
+      // the native burst before we get here, so the gap is covered. Skipping
+      // it saves the full delay in the common case, where seeding leaves just
+      // one batch to fetch. Every iteration is sequential anyway — each fetch
+      // is awaited, parsed and appended before the loop reaches the next.
+      if (fetchCount > 0) await _delay(BATCH_FETCH_DELAY_MS);
+      fetchCount++;
       if (abort.signal.aborted) break;
 
       // Carry the real request's headers (X-Goog-Visitor-Id, X-Youtube-Client-*,
@@ -365,12 +333,10 @@ async function _collectAll(url, plc, context, headers) {
         totalSoFar: allContents.length,
         hasMore: !!continuations,
       });
-      _showProgress(`Playlist: loading batch ${batchesLoaded}…`);
     }
   } finally {
     window.removeEventListener('hashchange', onNav);
     window.removeEventListener('popstate',   onNav);
-    _hideProgress();
   }
 
   _log('playlist.batch_collect.done', {
@@ -559,7 +525,7 @@ export function noteContinuationBatch(key, contents, continuations) {
 // So: hold off until the native burst goes quiet, then hand the collector the
 // items already accumulated plus the newest continuation token. It fetches
 // only what is genuinely missing (one batch here instead of four).
-const NATIVE_SETTLE_MS = 1200;
+const NATIVE_SETTLE_MS = 700;
 
 export function scheduleCollectAfterNativeSettles(continuations, reason) {
   if (!configRead('enablePlaylistBatchCollect')) return;
@@ -713,31 +679,6 @@ if (typeof XMLHttpRequest !== 'undefined') {
       });
       return _origXHRSend.apply(this, arguments);
     }
-
-    // Diagnostic: every real continuation-loading trigger tried so far
-    // (resolveCommand's continuationCommand, the yt-continuation sentinel's
-    // .click()/.activate()) has failed on-device. Capturing the JS call
-    // stack for a genuine continuation request — whichever native function
-    // actually calls send() when a real scroll works — is the most direct
-    // way left to find out what that trigger actually is, instead of
-    // guessing at more command shapes.
-    // The first capture came back truncated at exactly the frame that
-    // mattered: slice(0, 12) ended on "_.Me._.p.subscribe" — an observable
-    // subscription — with whatever initiated that subscription cut off just
-    // below it. Raise the frame count, and strip the ~150-char kabuki bundle
-    // URL that's repeated on every single frame (it's the same file
-    // throughout; only the line:col differs and that's what identifies the
-    // frame). Stripping it fits far more actual frames into the same log
-    // budget rather than spending it on identical URLs.
-    try {
-      const stack = new Error().stack || '';
-      const compact = stack
-        .split('\n')
-        .slice(0, 45)
-        .map(line => line.replace(/https:\/\/\S*?\/m=([^:)\s]+)/g, '$1').trim())
-        .join(' | ');
-      _log('playlist.batch_collect.xhr_continuation_stack', { stack: compact });
-    } catch (_) {}
 
     // Feature flag
     if (!configRead('enablePlaylistBatchCollect')) return _origXHRSend.apply(this, arguments);
