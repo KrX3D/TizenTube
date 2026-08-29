@@ -534,10 +534,43 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
     const fallbackItem =
       reverseItems.find(item => item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.length) ||
       reverseItems.find(item => item?.tileRenderer) || items[items.length - 1];
+    // Cap the playlist at ONE helper for the whole visit.
+    //
+    // A helper exists so the list is never left empty, because an empty list
+    // is what makes YouTube TV reload the page. It does NOT need to be a fresh
+    // one per batch: an all-watched 68-video playlist was measured keeping one
+    // helper per response — four blank slots, each permanently stranded in the
+    // virtual list's data model, which is unreachable on Tizen 5.0 (654577e).
+    //
+    // Keeping the existing helper instead is safe because the list stays
+    // non-empty either way, and it is sufficient because YouTube drives the
+    // remaining batches itself. That was confirmed by disabling our own
+    // schedulePlaylistAutoLoad cascade entirely (autoload_skipped x3) and
+    // watching YouTube still pull the whole playlist in 780ms unaided
+    // — 18:44:01.022, .239, .455 — purely because filtering leaves the
+    // viewport starved. So dropping the extra helpers costs no loading.
+    // Scoped to this playlist. The helper sets live on window and are only
+    // wiped when a !hasContinuation response arrives, so navigating away
+    // mid-load leaves them populated — reusing one of those on the NEXT
+    // playlist would mean never keeping a helper there, leaving its list
+    // empty, which is the exact condition that makes YouTube TV reload the
+    // page. Tie the reuse to the hash the helper was created under.
+    const playlistKey = String(window.location?.hash || '');
+    const helperKeyMatches = window.__ttHelperPlaylistKey === playlistKey;
+    const existingHelper = helperKeyMatches &&
+      (getPlaylistHelperVideoIdSet().size > 0 || getRetiredPlaylistHelperVideoIdSet().size > 0);
+    if (existingHelper) {
+      appendFileOnlyLog(`${label}.keep-one.reused`, {
+        active: Array.from(getPlaylistHelperVideoIdSet()),
+        retired: getRetiredPlaylistHelperVideoIdSet().size,
+      });
+      return [];
+    }
     if (fallbackItem && typeof fallbackItem === 'object') {
       fallbackItem.__ttKeepOneForContinuation = true;
       fallbackItem.__ttKeepOneForContinuationLabel = `${label}.visible`;
       fallbackItem.__ttKeepOneForContinuationParseSeq = Number(window.__ttParseSeq || 0);
+      window.__ttHelperPlaylistKey = playlistKey;
       registerPlaylistHelperVideoId(getItemVideoId(fallbackItem), `${label}.keep-one`);
     }
     // All items in this batch are watched — auto-fetch the next batch without waiting
@@ -561,6 +594,21 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
 
 function filterPlaylistRendererContents(playlistRenderer, pageName, label = 'playlist.renderer') {
   if (!playlistRenderer || !Array.isArray(playlistRenderer.contents)) return;
+  if (pageName === 'playlist') {
+    // A page-level playlist response means a freshly rendered list, so no
+    // helper from an earlier visit can still be on screen. Reset the one-per-
+    // playlist cap here: the sets live on window and are otherwise only wiped
+    // by a !hasContinuation response, so leaving a playlist mid-load would
+    // strand them — and a stranded set would make the cap skip creating this
+    // playlist's own helper, leaving the list empty, which is what makes
+    // YouTube TV reload the page. Also covers the page "restart" 654577e
+    // documented, where stale retired ids caused the observer to strip
+    // freshly rendered tiles.
+    getPlaylistHelperVideoIdSet().clear();
+    getRetiredPlaylistHelperVideoIdSet().clear();
+    window.__ttHelperPlaylistKey = null;
+    updateAllHelperHideStyles();
+  }
   const hasContinuation = !!playlistRenderer?.continuations;
   const before = playlistRenderer.contents.length;
   playlistRenderer.contents = filterContinuationItems(playlistRenderer.contents, pageName, hasContinuation, label);
