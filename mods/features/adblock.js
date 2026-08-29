@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { autoStartCollect, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
+import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -680,7 +680,7 @@ function processResponsePayload(payload, detectedPage) {
     // never fires, so the slow re-download stays on the critical path.
     // Must run BEFORE filterContinuationItems, which reduces an all-watched
     // batch to the single kept helper.
-    noteContinuationBatch(String(window.location?.hash || ''), plc.contents, !!plc?.continuations);
+    noteContinuationBatch(String(window.location?.hash || ''), plc.contents, plc.continuations);
     plc.contents = filterContinuationItems(plc.contents, detectedPage, !!plc?.continuations, 'arrayPayload.playlist.continuation');
   }
   const arrayTopPlaylistRenderer = payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.twoColumnRenderer?.rightColumn?.playlistVideoListRenderer;
@@ -951,12 +951,13 @@ JSON.parse = function () {
         noteInitialPlaylistContents(playlistKey, topPlaylistRenderer.contents);
       }
       storePlaylistContinuationToken(topPlaylistRenderer.continuations, 'topPlaylist');
-      // Start collecting the rest of the playlist in the background right
-      // now, instead of waiting for the user to scroll down once to trigger
-      // it — see playlistBatchCollect.js's autoStartCollect() doc comment.
+      // Queue background collection of whatever YouTube does not fetch
+      // itself — deferred until its own loading goes quiet, so the collector
+      // resumes from there instead of refetching. See
+      // scheduleCollectAfterNativeSettles() in playlistBatchCollect.js.
       // No-ops when serving from cache: continuations is null, so there is no
       // token to collect with.
-      autoStartCollect(topPlaylistRenderer.continuations);
+      scheduleCollectAfterNativeSettles(topPlaylistRenderer.continuations, 'page_load');
       filterPlaylistRendererContents(topPlaylistRenderer, detectedPage, 'playlist.renderer');
     }
 
@@ -1005,7 +1006,7 @@ JSON.parse = function () {
       // so it collects real items rather than the single kept helper. This is
       // the same data the background collector would re-download, only it is
       // already here and roughly ten seconds sooner.
-      noteContinuationBatch(String(window.location?.hash || ''), plc.contents, hasContinuation);
+      noteContinuationBatch(String(window.location?.hash || ''), plc.contents, plc.continuations);
       plc.contents = filterContinuationItems(plc.contents, detectedPage, hasContinuation, 'playlist.continuation');
     }
 

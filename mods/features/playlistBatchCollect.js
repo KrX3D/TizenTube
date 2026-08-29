@@ -7,9 +7,11 @@
  * no 614KB re-parse.
  *
  * Two trigger paths feed the same background collector:
- *  - autoStartCollect(): called by adblock.js right after the initial
- *    playlist page's own continuation token is parsed, so collection starts
- *    on page load without needing any scroll at all.
+ *  - scheduleCollectAfterNativeSettles(): called by adblock.js on playlist
+ *    page load and again for each continuation YouTube delivers itself. It
+ *    waits for that native loading to go quiet, then hands autoStartCollect()
+ *    the items already accumulated plus the newest token, so collection
+ *    resumes from where YouTube stopped rather than refetching from batch 2.
  *  - The XHR send() seed path below: a fallback for when the auto-trigger's
  *    captured context/url isn't available yet (e.g. very first browse of a
  *    session) — starts from the first scroll-triggered continuation request.
@@ -138,6 +140,9 @@ function _clearState() {
   // collection on every later one.
   window.__ttCollectCancel    = false;
   window.__ttContinuationAcc  = null;
+  clearTimeout(window.__ttNativeSettleTimer);
+  window.__ttNativeSettleTimer = null;
+  window.__ttLatestContinuations = null;
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
@@ -206,7 +211,11 @@ function _makeAbort() {
 // anti-automation throttling on the endpoint — a real scroll physically
 // can't happen that fast. So instead of firing every background fetch back
 // to back, wait a human-scroll-like interval before each one.
-const BATCH_FETCH_DELAY_MS = 2500;
+// Lowered from 2500ms. That figure was chosen while timing was wrongly blamed
+// for the {"error":...} rejections; the real cause was missing request headers,
+// and no fetch has failed since those were added. It also costs real time now
+// that seeding means usually a single fetch — 2.5s of it was pure latency.
+const BATCH_FETCH_DELAY_MS = 400;
 function _delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -485,7 +494,7 @@ function maybeReloadForFullPlaylist(key) {
 // so it can hand the raw items straight here. When a response arrives with no
 // continuation token the playlist is complete, and the reload can happen
 // immediately instead of waiting for a redundant re-download.
-export function noteContinuationBatch(key, contents, hasMore) {
+export function noteContinuationBatch(key, contents, continuations) {
   if (!configRead('enablePlaylistBatchCollect')) return;
   if (!Array.isArray(contents) || !contents.length) return;
   if (getCachedFullPlaylist(key)) return; // already complete; this is the reloaded pass
@@ -506,7 +515,11 @@ export function noteContinuationBatch(key, contents, hasMore) {
     acc.contents.push(item);
   }
 
-  if (hasMore) return;
+  // Each native batch pushes the settle timer out and supersedes the token, so
+  // the collector resumes from the furthest point YouTube reached.
+  scheduleCollectAfterNativeSettles(continuations, 'native_batch');
+
+  if (continuations) return;
 
   // No continuation token: this was the last batch, so initial + everything
   // accumulated is the whole playlist.
@@ -532,7 +545,43 @@ export function noteContinuationBatch(key, contents, hasMore) {
 // or not) — the InnerTube context is client/session info, not tied to any
 // one request, so reusing it here is the same assumption _collectAll already
 // makes when reusing one captured context across every batch it fetches.
-export function autoStartCollect(continuations) {
+// Wait for YouTube to stop loading on its own, then resume from where it got
+// to — rather than re-downloading everything it already delivered.
+//
+// Measured on a 68-video all-watched playlist: YouTube fetches the initial 15
+// plus three continuations of 15 (60 of 68) in about 0.75s and then stops. All
+// three carry hasContinuation:true, so there is never a completion signal, and
+// the last 8 items are never fetched unless the user scrolls. Starting the
+// collector at page load meant it re-fetched batches 2-5 from scratch — 53
+// items, 45 of which were already on screen — taking ~10s, with helper tiles
+// visible the whole time.
+//
+// So: hold off until the native burst goes quiet, then hand the collector the
+// items already accumulated plus the newest continuation token. It fetches
+// only what is genuinely missing (one batch here instead of four).
+const NATIVE_SETTLE_MS = 1200;
+
+export function scheduleCollectAfterNativeSettles(continuations, reason) {
+  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
+
+  const key = playlistKeyFromHash();
+  if (getCachedFullPlaylist(key)) return; // reloaded pass: already complete
+
+  // Newest token wins — each native continuation supersedes the last.
+  if (_getToken(continuations)) window.__ttLatestContinuations = continuations;
+
+  clearTimeout(window.__ttNativeSettleTimer);
+  window.__ttNativeSettleTimer = setTimeout(() => {
+    if (playlistKeyFromHash() !== key) return;
+    const acc = window.__ttContinuationAcc;
+    const seed = (acc && acc.key === key && Array.isArray(acc.contents)) ? acc.contents : [];
+    _log('playlist.batch_collect.native_settled', { reason, seeded: seed.length });
+    autoStartCollect(window.__ttLatestContinuations, seed);
+  }, NATIVE_SETTLE_MS);
+}
+
+function autoStartCollect(continuations, seedContents) {
   if (!configRead('enablePlaylistBatchCollect')) return;
   if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
 
@@ -548,6 +597,7 @@ export function autoStartCollect(continuations) {
   window.__ttCollectCancel = false;
   _log('playlist.batch_collect.auto_triggered', {
     headerKeys: _lastBrowseHeaders ? Object.keys(_lastBrowseHeaders) : null,
+    seeded: Array.isArray(seedContents) ? seedContents.length : 0,
   });
 
   window.__ttPrefetchStarted = true;
@@ -560,7 +610,7 @@ export function autoStartCollect(continuations) {
   ;(async () => {
     let collected = null;
     try {
-      collected = await _collectAll(url, { contents: [], continuations }, context, headers);
+      collected = await _collectAll(url, { contents: Array.isArray(seedContents) ? seedContents : [], continuations }, context, headers);
     } catch (err) {
       _log('playlist.batch_collect.auto_error', { err: String(err?.message || err) });
     }
