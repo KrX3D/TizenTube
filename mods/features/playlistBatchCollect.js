@@ -252,30 +252,40 @@ async function _collectAll(url, plc, context, headers) {
       _log('playlist.batch_collect.fetching', {
         batch: batchesLoaded,
         headerKeys: Object.keys(mergedHeaders),
+        contextKeys: context && typeof context === 'object' ? Object.keys(context) : null,
+        tokenLen: token.length,
       });
 
       let nextData;
+      let httpStatus, httpStatusText, rawText;
       try {
         const nextResp = await _nativeFetch(url, fetchOpts);
+        httpStatus     = nextResp.status;
+        httpStatusText = nextResp.statusText;
         // Use _nativeJSONParse — the polyfill's .json() calls the patched
         // JSON.parse which would filter out watched items, corrupting the data.
-        const text = await nextResp.text();
-        nextData = _nativeJSONParse(text);
+        rawText = await nextResp.text();
+        nextData = _nativeJSONParse(rawText);
       } catch (err) {
         _log('playlist.batch_collect.sub_error', {
           batch: batchesLoaded,
           aborted: abort.signal.aborted,
           err: String(err?.message || err),
+          httpStatus, httpStatusText,
         });
         break;
       }
 
       const nextPlc = nextData?.continuationContents?.playlistVideoListContinuation;
       if (!nextPlc) {
+        // Full body, uncapped — a bare {"error":...} response is small, and
+        // the status/body together are what actually explain the rejection
+        // (401/403/429/etc.), not just the top-level key names.
         _log('playlist.batch_collect.no_plc', {
           batch: batchesLoaded,
+          httpStatus, httpStatusText,
           responseKeys: nextData && typeof nextData === 'object' ? Object.keys(nextData) : null,
-          responseSnippet: (() => { try { return JSON.stringify(nextData).slice(0, 300); } catch (_) { return null; } })(),
+          responseBody: rawText,
           headerKeys: Object.keys(mergedHeaders),
         });
         break;
@@ -486,11 +496,18 @@ if (typeof XMLHttpRequest !== 'undefined') {
 
       const plc = firstData?.continuationContents?.playlistVideoListContinuation;
       if (!plc || !Array.isArray(plc.contents) || !plc.continuations) {
+        // !plc (no contents at all) is the actually-suspicious case worth a
+        // full body dump — plc-with-no-continuations just means this is
+        // legitimately the last batch (common, not an error), and its body
+        // is the real playlist page data, which can be large.
         _log('playlist.batch_collect.xhr_no_plc', {
+          httpStatus:        this.status,
+          httpStatusText:    this.statusText,
           hasPlc:            !!plc,
           hasContinuations:  !!(plc?.continuations),
           responseTopKeys:   firstData && typeof firstData === 'object' ? Object.keys(firstData) : null,
           continuationKeys:  firstData?.continuationContents && typeof firstData.continuationContents === 'object' ? Object.keys(firstData.continuationContents) : null,
+          responseBody:      plc ? undefined : this.responseText,
         });
         window.__ttPrefetchStarted = false;
         return;
