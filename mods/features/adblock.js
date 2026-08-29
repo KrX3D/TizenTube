@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { autoStartCollect } from './playlistBatchCollect.js';
+import { autoStartCollect, getCachedFullPlaylist, noteInitialPlaylistContents } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -158,6 +158,7 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'no_trigger' });
 }
 window.__ttAttemptPlaylistAutoLoad = attemptPlaylistAutoLoad;
+window.__ttResolveCommand = resolveCommand;
 
 function schedulePlaylistAutoLoad(reason = 'playlist.auto_load') {
   if ((window.__ttLastDetectedPage || detectCurrentPage()) !== 'playlist') return;
@@ -917,10 +918,35 @@ JSON.parse = function () {
 
     const topPlaylistRenderer = r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.twoColumnRenderer?.rightColumn?.playlistVideoListRenderer;
     if (topPlaylistRenderer?.contents) {
+      // If a previous visit (or the pre-reload pass) already collected this
+      // playlist in full, serve it here instead. Nulling continuations is the
+      // whole point: with no continuation token there is no keep-one branch,
+      // so no helper tile is created and nothing gets stranded in the virtual
+      // list's data model. Starving YouTube's refill loop is safe here
+      // precisely because the list is already complete — nothing further
+      // needs loading.
+      const playlistKey = String(window.location?.hash || '');
+      const cachedFull = getCachedFullPlaylist(playlistKey);
+      if (cachedFull) {
+        appendFileOnlyLog('playlist.full_cache.injected', {
+          key: playlistKey,
+          items: cachedFull.length,
+          replaced: topPlaylistRenderer.contents.length,
+        });
+        topPlaylistRenderer.contents = cachedFull.slice();
+        topPlaylistRenderer.continuations = null;
+      } else {
+        // Hand the raw first batch to the collector: _collectAll only returns
+        // the CONTINUATION batches, so the cached full list needs this to be
+        // complete from item 1.
+        noteInitialPlaylistContents(playlistKey, topPlaylistRenderer.contents);
+      }
       storePlaylistContinuationToken(topPlaylistRenderer.continuations, 'topPlaylist');
       // Start collecting the rest of the playlist in the background right
       // now, instead of waiting for the user to scroll down once to trigger
       // it — see playlistBatchCollect.js's autoStartCollect() doc comment.
+      // No-ops when serving from cache: continuations is null, so there is no
+      // token to collect with.
       autoStartCollect(topPlaylistRenderer.continuations);
       filterPlaylistRendererContents(topPlaylistRenderer, detectedPage, 'playlist.renderer');
     }
