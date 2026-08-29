@@ -195,6 +195,32 @@ function _delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ── Auto-reveal: trigger display the moment prefetch is ready ────────────────
+// Confirmed on-device: window.__ttPrefetchedBatch being ready is not enough —
+// adblock.js only injects it into a continuation response when one actually
+// happens, and that has always required the user to scroll to trigger it. On
+// a playlist visited briefly (common when checking several playlists in a
+// row) the user can navigate away before ever scrolling, so a fully
+// collected batch (batches:N, hasMore:false) sometimes never gets shown at
+// all. adblock.js exposes window.__ttAttemptPlaylistAutoLoad — the same
+// resolveCommand-based "load more" trigger it already uses for its own
+// keep-one/empty-batch auto-load case — as a window global specifically so
+// this module can fire it without an ES import back to adblock.js (this
+// module must load and capture native JSON.parse/fetch before adblock.js
+// patches them; a circular import risks breaking that ordering).
+function _triggerReveal(reason) {
+  try {
+    if (typeof window.__ttAttemptPlaylistAutoLoad === 'function') {
+      window.__ttAttemptPlaylistAutoLoad(reason);
+      _log('playlist.batch_collect.reveal_triggered', { reason });
+    } else {
+      _log('playlist.batch_collect.reveal_unavailable', { reason });
+    }
+  } catch (err) {
+    _log('playlist.batch_collect.reveal_error', { reason, err: String(err?.message || err) });
+  }
+}
+
 // ── Core: collect all remaining batches ───────────────────────────────────────
 // IMPORTANT: uses _nativeJSONParse (not patched JSON.parse) so watched items
 // are NOT filtered out during collection — we need the raw batch data.
@@ -382,6 +408,7 @@ export function autoStartCollect(continuations) {
       hasMore: !!collected.continuations,
       auto:    true,
     });
+    _triggerReveal('playlist.batch_collect.auto_reveal');
   })();
 }
 
@@ -546,6 +573,7 @@ if (typeof XMLHttpRequest !== 'undefined') {
           items:   collected.allContents.length,
           hasMore: !!collected.continuations,
         });
+        _triggerReveal('playlist.batch_collect.seed_reveal');
       })();
     });
 
@@ -626,6 +654,7 @@ if (_nativeFetch) {
       if (String(window.location?.hash || '') !== startHash) return;
       window.__ttPrefetchedBatch = { allContents: collected.allContents, continuations: collected.continuations };
       _log('playlist.batch_collect.prefetch_ready', { items: collected.allContents.length, hasMore: !!collected.continuations });
+      _triggerReveal('playlist.batch_collect.fetch_reveal');
     })();
 
     return response;
