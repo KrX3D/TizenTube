@@ -486,6 +486,31 @@ function clearKeepOneMarkers(items, label = 'continuation') {
   return cleared;
 }
 
+// True while playlistBatchCollect.js is fetching (or has already fetched) the
+// rest of this playlist on its own.
+//
+// When it is, the keep-one auto-load cascade below must stay out of the way.
+// Timings from a 68-video all-watched playlist show why: our cascade drove
+// YouTube through its own continuations at 17:53:01.780, .02.060 and .02.265 —
+// three helpers inside half a second, one per response — while the background
+// collector was still working and only reached prefetch_ready at 17:53:12.375,
+// ten seconds later, with all 53 items nobody needed by then. Every one of
+// those helpers is permanently stuck in the virtual list's data model, which is
+// unreachable on Tizen 5.0 (654577e), so each is a blank slot for the rest of
+// the visit.
+//
+// Standing down lets the prefetched batches arrive as ONE merged continuation.
+// That response carries no further continuation token, so hasContinuation is
+// false and the keep-one branch never runs for it — leaving exactly one helper
+// (from the initial page load) instead of four, and that one gets retired and
+// removed when the merged batch lands.
+function isBatchCollectHandlingPlaylist() {
+  try {
+    if (!configRead('enablePlaylistBatchCollect')) return false;
+    return !!(window.__ttPrefetchStarted || window.__ttPrefetchedBatch);
+  } catch (_) { return false; }
+}
+
 function filterContinuationItems(items, pageName, hasContinuation = false, label = 'continuation') {
   if (pageName === 'playlist' && !hasContinuation) {
     clearPlaylistHelperVideoIdSet(label);
@@ -518,13 +543,18 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
     // All items in this batch are watched — auto-fetch the next batch without waiting
     // for the user to scroll. The continuation token is already stored at this point.
     // This cascades through all-watched batches automatically until unwatched content appears.
-    schedulePlaylistAutoLoad(`${label}.keep-one`);
+    if (isBatchCollectHandlingPlaylist()) {
+      appendFileOnlyLog(`${label}.keep-one.autoload_skipped`, { reason: 'batch_collect_active' });
+    } else {
+      schedulePlaylistAutoLoad(`${label}.keep-one`);
+    }
     return [fallbackItem];
   }
   if (pageName === 'playlist' && !hasContinuation && filteredItems.length === 0) showPlaylistAllHiddenNotice(`${label}.no_continuation_all_hidden`);
   if (pageName === 'playlist' && hasContinuation && filteredItems.length === 0) {
-    appendFileOnlyLog(`${label}.empty_batch.autoload`, { pageName, originalCount: Array.isArray(items) ? items.length : 0 });
-    schedulePlaylistAutoLoad(`${label}.empty_batch`);
+    const collecting = isBatchCollectHandlingPlaylist();
+    appendFileOnlyLog(`${label}.empty_batch.autoload`, { pageName, originalCount: Array.isArray(items) ? items.length : 0, skipped: collecting });
+    if (!collecting) schedulePlaylistAutoLoad(`${label}.empty_batch`);
   }
   return filteredItems;
 }
