@@ -75,8 +75,23 @@ function storePlaylistContinuationToken(continuations, label = '') {
 // fetch before adblock.js patches them), so it can't safely have a
 // circular ES import back to this file. This global is only ever called
 // from an async callback long after both modules have finished loading.
+// Fires ~1.2s after a trigger claims success, to say whether it actually
+// caused anything — window.__ttCurrentPlaylistItems (playlistContinue.js)
+// only grows when a real continuation response gets processed, regardless
+// of what triggered it. Previously we only knew a trigger *ran*, never
+// whether it *worked* — on-device logs showed method:"yt-continuation"
+// firing with no visible effect for up to 23 seconds afterward.
+function _verifyAutoLoadEffect(reason, attempt, method, beforeCount) {
+  setTimeout(() => {
+    const afterCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : null;
+    appendFileOnlyLog('playlist.auto_load.verify', { reason, attempt, method, beforeCount, afterCount, worked: afterCount !== null && afterCount > beforeCount });
+  }, 1200);
+}
+
 function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   if ((window.__ttLastDetectedPage || detectCurrentPage()) !== 'playlist') return;
+
+  const beforeCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : 0;
 
   // Primary: use YouTube TV's own resolveCommand with the stored continuation token.
   // This is the most reliable trigger since it goes through the same code path as
@@ -92,8 +107,16 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
         },
       });
       appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'resolveCommand', tokenLen: token.length });
+      _verifyAutoLoadEffect(reason, attempt, 'resolveCommand', beforeCount);
       return;
-    } catch (_) {}
+    } catch (err) {
+      // Previously silent — every on-device attempt logged method:"yt-continuation"
+      // with no way to tell whether that's because this threw or because token
+      // was falsy. Now it's visible either way.
+      appendFileOnlyLog('playlist.auto_load.resolveCommand_error', { reason, attempt, tokenLen: token.length, err: String(err?.message || err) });
+    }
+  } else {
+    appendFileOnlyLog('playlist.auto_load.no_token', { reason, attempt });
   }
 
   // Fallback 1: activate the <yt-continuation> sentinel element directly.
@@ -102,13 +125,21 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   try {
     const cont = document.querySelector('ytlr-playlist-video-list-renderer yt-continuation');
     if (cont) {
-      if (typeof cont.activate === 'function') cont.activate();
-      else if (typeof cont.click === 'function') cont.click();
+      const method = typeof cont.activate === 'function' ? 'activate'
+        : typeof cont.click === 'function' ? 'click'
+        : 'dispatchEvent';
+      if (method === 'activate') cont.activate();
+      else if (method === 'click') cont.click();
       else cont.dispatchEvent(new Event('activate', { bubbles: true }));
-      appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'yt-continuation' });
+      appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'yt-continuation', sentinelMethod: method });
+      _verifyAutoLoadEffect(reason, attempt, 'yt-continuation', beforeCount);
       return;
+    } else {
+      appendFileOnlyLog('playlist.auto_load.no_sentinel', { reason, attempt });
     }
-  } catch (_) {}
+  } catch (err) {
+    appendFileOnlyLog('playlist.auto_load.sentinel_error', { reason, attempt, err: String(err?.message || err) });
+  }
 
   // All available triggers exhausted — nothing to do.
   appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'no_trigger' });
