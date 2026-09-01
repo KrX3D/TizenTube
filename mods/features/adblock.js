@@ -5,7 +5,7 @@ import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, Ti
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
+import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -944,6 +944,12 @@ JSON.parse = function () {
         });
         topPlaylistRenderer.contents = cachedFull.slice();
         topPlaylistRenderer.continuations = null;
+        // One-shot: the cache exists only to carry the full list across the
+        // reload it triggered. Keeping it would serve these same renderers on
+        // every later visit, and their embedded watch-progress overlays are
+        // frozen at collection time — so anything watched since would come
+        // back looking unwatched.
+        consumeCachedFullPlaylist(playlistKey);
       } else {
         // Hand the raw first batch to the collector: _collectAll only returns
         // the CONTINUATION batches, so the cached full list needs this to be

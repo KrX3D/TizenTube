@@ -143,6 +143,11 @@ function _clearState() {
   clearTimeout(window.__ttNativeSettleTimer);
   window.__ttNativeSettleTimer = null;
   window.__ttLatestContinuations = null;
+  // Per-visit guards: cleared on real navigation so the next visit can run
+  // its own collect+reload, while staying set across a SOFT_RELOAD_PAGE
+  // (which does not navigate) so that reload cannot repeat.
+  window.__ttServedFromCache = null;
+  window.__ttFullReloadDone = new Set();
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
@@ -375,14 +380,44 @@ function playlistKeyFromHash() {
   try { return String(window.location?.hash || ''); } catch (_) { return ''; }
 }
 
+// Backed by a Map, not a plain object, because the key is the location hash.
+// That is attacker-influenceable via a crafted URL, and writing cache[key] on
+// a plain object would let a hash of #__proto__ reach Object.prototype
+// (flagged by CodeQL as remote property injection). A Map treats every key as
+// ordinary data, with no prototype chain to walk into.
 function getFullCache() {
-  if (!window.__ttPlaylistFullCache) window.__ttPlaylistFullCache = {};
+  if (!(window.__ttPlaylistFullCache instanceof Map)) window.__ttPlaylistFullCache = new Map();
   return window.__ttPlaylistFullCache;
 }
 
 export function getCachedFullPlaylist(key) {
-  const entry = getFullCache()[key];
+  const entry = getFullCache().get(key);
   return entry && Array.isArray(entry.contents) ? entry.contents : null;
+}
+
+// Drop a cached playlist once it has been injected. The cache is strictly a
+// hand-off from the pre-reload pass to the reloaded page, NOT a store to reuse
+// on later visits.
+//
+// It holds raw renderer objects captured at collection time, and
+// getWatchPercent() reads watched state primarily from data embedded in those
+// renderers (thumbnailOverlayResumePlaybackRenderer and friends), consulting
+// the live _ttVideoProgressCache only as a fallback. So a cached item keeps
+// whatever progress it had when it was captured: watch a video, come back, and
+// the injected copy still presents it as unwatched, which is exactly what was
+// reported. Serving a fresh response instead costs one more collect+reload
+// cycle per visit, which is worth it for correct watched state.
+export function consumeCachedFullPlaylist(key) {
+  const cache = getFullCache();
+  if (!cache.has(key)) return;
+  cache.delete(key);
+  // Mark this page load as already complete so the scheduler stands down:
+  // it has the whole playlist and no continuation token, and letting it
+  // collect again would store a new cache entry and reload a second time.
+  // The reload guard is NOT cleared here — it is cleared on real navigation
+  // (_clearState), which is what lets the next visit run its own cycle
+  // without allowing a loop within this one.
+  window.__ttServedFromCache = key;
 }
 
 // adblock.js hands us the raw, unfiltered contents of the initial response so
@@ -401,17 +436,17 @@ function storeFullPlaylist(key, collectedContents) {
   }
   const cache = getFullCache();
   // Bound the cache: these are full renderer objects and this runs on a TV.
-  const keys = Object.keys(cache);
-  if (keys.length >= FULL_CACHE_MAX_PLAYLISTS && !cache[key]) {
-    const oldest = keys.reduce((a, b) => (cache[a].ts <= cache[b].ts ? a : b));
-    delete cache[oldest];
+  if (cache.size >= FULL_CACHE_MAX_PLAYLISTS && !cache.has(key)) {
+    let oldestKey = null, oldestTs = Infinity;
+    for (const [k2, v] of cache) { if (v.ts < oldestTs) { oldestTs = v.ts; oldestKey = k2; } }
+    if (oldestKey !== null) cache.delete(oldestKey);
   }
-  cache[key] = { contents: initial.contents.concat(collectedContents), ts: Date.now() };
+  cache.set(key, { contents: initial.contents.concat(collectedContents), ts: Date.now() });
   _log('playlist.full_cache.stored', {
     key,
     initial: initial.contents.length,
     collected: collectedContents.length,
-    total: cache[key].contents.length,
+    total: cache.get(key).contents.length,
   });
   return true;
 }
@@ -420,8 +455,8 @@ function storeFullPlaylist(key, collectedContents) {
 // list would render as a truncated playlist with no way to load the rest,
 // since the injected response carries no continuation token.
 function maybeReloadForFullPlaylist(key) {
-  if (!window.__ttFullReloadDone) window.__ttFullReloadDone = {};
-  if (window.__ttFullReloadDone[key]) {
+  if (!(window.__ttFullReloadDone instanceof Set)) window.__ttFullReloadDone = new Set();
+  if (window.__ttFullReloadDone.has(key)) {
     _log('playlist.full_cache.reload_skipped', { key, reason: 'already_reloaded' });
     return;
   }
@@ -429,7 +464,7 @@ function maybeReloadForFullPlaylist(key) {
     _log('playlist.full_cache.reload_skipped', { key, reason: 'navigated_away' });
     return;
   }
-  window.__ttFullReloadDone[key] = true;
+  window.__ttFullReloadDone.add(key);
   _log('playlist.full_cache.reloading', { key });
   try {
     // Reached through a window global rather than an ES import. This module
@@ -533,6 +568,7 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
 
   const key = playlistKeyFromHash();
   if (getCachedFullPlaylist(key)) return; // reloaded pass: already complete
+  if (window.__ttServedFromCache === key) return; // page already holds the full list
 
   // Newest token wins — each native continuation supersedes the last.
   if (_getToken(continuations)) window.__ttLatestContinuations = continuations;
