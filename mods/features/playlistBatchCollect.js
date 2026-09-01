@@ -143,6 +143,11 @@ function _clearState() {
   clearTimeout(window.__ttNativeSettleTimer);
   window.__ttNativeSettleTimer = null;
   window.__ttLatestContinuations = null;
+  // Per-visit guards: cleared on real navigation so the next visit can run
+  // its own collect+reload, while staying set across a SOFT_RELOAD_PAGE
+  // (which does not navigate) so that reload cannot repeat.
+  window.__ttServedFromCache = null;
+  window.__ttFullReloadDone = {};
 }
 window.addEventListener('hashchange', _clearState);
 window.addEventListener('popstate',   _clearState);
@@ -385,6 +390,31 @@ export function getCachedFullPlaylist(key) {
   return entry && Array.isArray(entry.contents) ? entry.contents : null;
 }
 
+// Drop a cached playlist once it has been injected. The cache is strictly a
+// hand-off from the pre-reload pass to the reloaded page, NOT a store to reuse
+// on later visits.
+//
+// It holds raw renderer objects captured at collection time, and
+// getWatchPercent() reads watched state primarily from data embedded in those
+// renderers (thumbnailOverlayResumePlaybackRenderer and friends), consulting
+// the live _ttVideoProgressCache only as a fallback. So a cached item keeps
+// whatever progress it had when it was captured: watch a video, come back, and
+// the injected copy still presents it as unwatched, which is exactly what was
+// reported. Serving a fresh response instead costs one more collect+reload
+// cycle per visit, which is worth it for correct watched state.
+export function consumeCachedFullPlaylist(key) {
+  const cache = getFullCache();
+  if (!cache[key]) return;
+  delete cache[key];
+  // Mark this page load as already complete so the scheduler stands down:
+  // it has the whole playlist and no continuation token, and letting it
+  // collect again would store a new cache entry and reload a second time.
+  // The reload guard is NOT cleared here — it is cleared on real navigation
+  // (_clearState), which is what lets the next visit run its own cycle
+  // without allowing a loop within this one.
+  window.__ttServedFromCache = key;
+}
+
 // adblock.js hands us the raw, unfiltered contents of the initial response so
 // the cached list can start with batch 1 — _collectAll only ever returns the
 // CONTINUATION batches (53 of 68 on the measured playlist), never the first.
@@ -533,6 +563,7 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
 
   const key = playlistKeyFromHash();
   if (getCachedFullPlaylist(key)) return; // reloaded pass: already complete
+  if (window.__ttServedFromCache === key) return; // page already holds the full list
 
   // Newest token wins — each native continuation supersedes the last.
   if (_getToken(continuations)) window.__ttLatestContinuations = continuations;
