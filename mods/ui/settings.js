@@ -811,6 +811,16 @@ export default function modernUI(update, parameters) {
                             value: 'clockShowSeconds'
                         }
                     ]
+                },
+                {
+                    name: t('settings.options.uiSettings.options.disableEnlargingThumbnails'),
+                    icon: null,
+                    value: 'disableEnlargingThumbnails'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.enableShrinkingThumbnails'),
+                    icon: null,
+                    value: 'enableShrinkingThumbnails'
                 }
             ]
         },

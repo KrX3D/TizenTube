@@ -249,7 +249,9 @@
                             "isClock12HourFormat": "12-Stunden-Format für Uhr verwenden",
                             "clockShowSeconds": "Sekunden auf der Uhr anzeigen"
                         }
-                    }
+                    },
+                    "disableEnlargingThumbnails": "Vergrößerte Vorschaubilder deaktivieren",
+                    "enableShrinkingThumbnails": "Verkleinerte Vorschaubilder aktivieren"
                 }
             },
             "updater": {

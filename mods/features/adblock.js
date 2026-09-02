@@ -817,6 +817,20 @@ JSON.parse = function () {
           }
         } catch (_) { }
       }
+      // Strip YouTube own shopping and NFL watermark overlays (upstream
+      // f91f3f8). Deliberately NOT folded into the SponsorBlock branch below:
+      // that branch only assigns timelyActionRenderers when segments exist, so
+      // with manual skips enabled on a video that has none, the originals
+      // would survive untouched.
+      // Upstream first shipped this with || between the two type checks, which
+      // can never be false - a value cannot equal both - so nothing was ever
+      // filtered. && is the corrected form.
+      if (Array.isArray(r?.playerOverlays?.playerOverlayRenderer?.timelyActionRenderers)) {
+        r.playerOverlays.playerOverlayRenderer.timelyActionRenderers =
+          r.playerOverlays.playerOverlayRenderer.timelyActionRenderers.filter(a =>
+            a?.timelyActionRenderer?.type !== 'TIMELY_ACTION_TYPE_SHOPPING' &&
+            a?.timelyActionRenderer?.type !== 'TIMELY_ACTION_TYPE_NFL_WATERMARK');
+      }
       if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
         try {
           const manualSkippedSegments = configRead('sponsorBlockManualSkips');
@@ -1091,6 +1105,20 @@ JSON.parse = function () {
       } catch (_) { }
     }
 
+    // Strip YouTube own shopping and NFL watermark overlays (upstream
+    // f91f3f8). Deliberately NOT folded into the SponsorBlock branch below:
+    // that branch only assigns timelyActionRenderers when segments exist, so
+    // with manual skips enabled on a video that has none, the originals
+    // would survive untouched.
+    // Upstream first shipped this with || between the two type checks, which
+    // can never be false - a value cannot equal both - so nothing was ever
+    // filtered. && is the corrected form.
+    if (Array.isArray(r?.playerOverlays?.playerOverlayRenderer?.timelyActionRenderers)) {
+      r.playerOverlays.playerOverlayRenderer.timelyActionRenderers =
+        r.playerOverlays.playerOverlayRenderer.timelyActionRenderers.filter(a =>
+          a?.timelyActionRenderer?.type !== 'TIMELY_ACTION_TYPE_SHOPPING' &&
+          a?.timelyActionRenderer?.type !== 'TIMELY_ACTION_TYPE_NFL_WATERMARK');
+    }
     if (configRead('sponsorBlockManualSkips').length > 0 && r?.playerOverlays?.playerOverlayRenderer) {
       try {
         const manualSkippedSegments = configRead('sponsorBlockManualSkips');
@@ -1198,6 +1226,17 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
         }
         continue;
       }
+      // Thumbnail focus effects (upstream 9f450ca + 42ce789). YouTube TV grows
+      // the focused thumbnail; tvhtml5Style.effects controls that per shelf.
+      // The object is created when absent because plenty of shelves ship
+      // without it, and upstream found the setting silently did nothing on
+      // those. enlarge is forced off while shrink is forced on - opposite
+      // directions, so the two options are independent rather than duplicates.
+      if (!shelve.shelfRenderer.tvhtml5Style) shelve.shelfRenderer.tvhtml5Style = { effects: {} };
+      if (!shelve.shelfRenderer.tvhtml5Style.effects) shelve.shelfRenderer.tvhtml5Style.effects = {};
+      if (configRead('disableEnlargingThumbnails')) shelve.shelfRenderer.tvhtml5Style.effects.enlarge = false;
+      if (configRead('enableShrinkingThumbnails')) shelve.shelfRenderer.tvhtml5Style.effects.shrink = true;
+
       let shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
       shelfItems = filterHiddenSpecialPlaylistTiles(shelfItems);
