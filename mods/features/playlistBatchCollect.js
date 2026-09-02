@@ -285,7 +285,8 @@ async function _collectAll(url, plc, context, headers) {
       _log('playlist.batch_collect.fetching', {
         batch: batchesLoaded,
         headerKeys: Object.keys(mergedHeaders),
-        contextKeys: context && typeof context === 'object' ? Object.keys(context) : null,
+        // context is non-null here — _collectAll returns early when it is falsy.
+        contextKeys: typeof context === 'object' ? Object.keys(context) : null,
         tokenLen: token.length,
       });
 
