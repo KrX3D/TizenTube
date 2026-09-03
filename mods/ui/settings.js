@@ -821,6 +821,16 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.uiSettings.options.enableShrinkingThumbnails'),
                     icon: null,
                     value: 'enableShrinkingThumbnails'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideMembersOnlyVideos'),
+                    icon: null,
+                    value: 'hideMembersOnlyVideos'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideChannelShelves'),
+                    icon: null,
+                    value: 'hideChannelShelves'
                 }
             ]
         },

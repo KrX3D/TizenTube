@@ -92,6 +92,8 @@ const defaultConfig = {
   clockShowSeconds: false,
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
+  hideMembersOnlyVideos: false,
+  hideChannelShelves: false,
   spoofViewport: 'disabled',
 };
 
