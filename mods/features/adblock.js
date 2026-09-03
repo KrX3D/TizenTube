@@ -30,6 +30,8 @@ import {
 } from './shorts.js';
 import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHider.js';
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
+import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
+import { filterChannelShelves } from './channelShelfHider.js';
 
 // ===== Local utilities =====
 
@@ -530,6 +532,7 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
   clearKeepOneMarkers(items, label);
   let filteredItems = hideVideo(items, pageName);
   filteredItems = filterShortsFromItems(filteredItems, pageName);
+  filteredItems = filterMembersOnlyFromItems(filteredItems, pageName);
   // Every all-watched batch keeps its OWN helper. Do not try to reuse a single
   // helper across batches and return [] for the rest — that was tried and it
   // stops the playlist loading dead:
@@ -633,6 +636,35 @@ function processResponsePayload(payload, detectedPage) {
     addLongPress(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
   }
+  // onResponseReceivedActions — previously handled nowhere in this file.
+  //
+  // Reported: the masthead/banner ad on Home reappears after starting a video
+  // from Home and returning once it ends. That return path does not deliver a
+  // fresh contents.sectionListRenderer or a continuationContents.* shape, so
+  // none of the branches above see it; YouTube pushes the refreshed shelves
+  // through action wrappers instead. Whatever arrives there therefore skipped
+  // every ad filter, which fits an ad that is stripped on first load and back
+  // after a round trip through the player.
+  //
+  // Route those items through the same processShelves used everywhere else,
+  // so the top-level adSlotRenderer strip and the shelf filters apply.
+  const orra = payload?.onResponseReceivedActions || payload?.onResponseReceivedCommands;
+  if (Array.isArray(orra)) {
+    for (const action of orra) {
+      const items = action?.appendContinuationItemsAction?.continuationItems
+        || action?.reloadContinuationItemsCommand?.continuationItems
+        || action?.replaceEnclosingAction?.item?.sectionListRenderer?.contents
+        || null;
+      if (!Array.isArray(items) || !items.length) continue;
+      appendFileOnlyLog('adblock.onResponseReceivedActions', {
+        detectedPage,
+        keys: Object.keys(action || {}),
+        items: items.length,
+      });
+      processShelves(items, true, detectedPage);
+    }
+  }
+
   if (payload?.continuationContents?.sectionListContinuation?.contents) {
     const slc = payload.continuationContents.sectionListContinuation;
     processShelves(slc.contents, true, detectedPage);
@@ -933,6 +965,7 @@ JSON.parse = function () {
       const grid = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
       let gridItems = hideVideo(grid.items, detectedPage);
       gridItems = filterShortsFromItems(gridItems, detectedPage);
+      gridItems = filterMembersOnlyFromItems(gridItems, detectedPage);
       if (detectedPage === 'playlists') gridItems = filterHiddenSpecialPlaylistTiles(gridItems);
       addLongPress(gridItems);
       grid.items = gridItems;
@@ -1075,6 +1108,7 @@ JSON.parse = function () {
             if (Array.isArray(tabGridItems)) {
               let filteredTabGrid = hideVideo(tabGridItems, tabPage);
               filteredTabGrid = filterShortsFromItems(filteredTabGrid, tabPage);
+              filteredTabGrid = filterMembersOnlyFromItems(filteredTabGrid, tabPage);
               if (tabPage === 'playlists') filteredTabGrid = filterHiddenSpecialPlaylistTiles(filteredTabGrid);
               addLongPress(filteredTabGrid);
               tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = filteredTabGrid;
@@ -1189,6 +1223,7 @@ setTimeout(() => clearInterval(_yttvPatchInterval), 15000);
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
   filterHiddenSpecialPlaylistShelves(shelves);
+  filterChannelShelves(shelves, pageHint || window.__ttLastDetectedPage || detectCurrentPage());
   const activePage = pageHint || window.__ttLastDetectedPage || detectCurrentPage();
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {
@@ -1240,6 +1275,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       let shelfItems = shelve?.shelfRenderer?.content?.horizontalListRenderer?.items;
       if (!Array.isArray(shelfItems)) continue;
       shelfItems = filterHiddenSpecialPlaylistTiles(shelfItems);
+      shelfItems = filterMembersOnlyFromItems(shelfItems, activePage);
       shelve.shelfRenderer.content.horizontalListRenderer.items = shelfItems;
       deArrowify(shelfItems);
       hqify(shelfItems);

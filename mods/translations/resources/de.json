@@ -251,7 +251,9 @@
                         }
                     },
                     "disableEnlargingThumbnails": "Vergrößerte Vorschaubilder deaktivieren",
-                    "enableShrinkingThumbnails": "Verkleinerte Vorschaubilder aktivieren"
+                    "enableShrinkingThumbnails": "Verkleinerte Vorschaubilder aktivieren",
+                    "hideMembersOnlyVideos": "Videos nur für Kanalmitglieder ausblenden",
+                    "hideChannelShelves": "Kanal-Regale ausblenden"
                 }
             },
             "updater": {
