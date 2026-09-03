@@ -94,6 +94,7 @@ const defaultConfig = {
   enableShrinkingThumbnails: false,
   hideMembersOnlyVideos: false,
   hideChannelShelves: false,
+  hideSurveys: false,
   spoofViewport: 'disabled',
 };
 
