@@ -32,6 +32,7 @@ import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHid
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
+import { filterSurveyShelves } from './surveyHider.js';
 
 // ===== Local utilities =====
 
@@ -1222,9 +1223,10 @@ setTimeout(() => clearInterval(_yttvPatchInterval), 15000);
 
 function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   if (!Array.isArray(shelves)) return;
-  filterHiddenSpecialPlaylistShelves(shelves);
-  filterChannelShelves(shelves, pageHint || window.__ttLastDetectedPage || detectCurrentPage());
   const activePage = pageHint || window.__ttLastDetectedPage || detectCurrentPage();
+  filterHiddenSpecialPlaylistShelves(shelves);
+  filterChannelShelves(shelves, activePage);
+  filterSurveyShelves(shelves, activePage);
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {
       const shelve = shelves[i];

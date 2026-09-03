@@ -831,6 +831,11 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.uiSettings.options.hideChannelShelves'),
                     icon: null,
                     value: 'hideChannelShelves'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideSurveys'),
+                    icon: null,
+                    value: 'hideSurveys'
                 }
             ]
         },

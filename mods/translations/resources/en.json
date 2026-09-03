@@ -253,7 +253,8 @@
                     "disableEnlargingThumbnails": "Disable Enlarged Thumbnails",
                     "enableShrinkingThumbnails": "Enable Shrinked Thumbnails",
                     "hideMembersOnlyVideos": "Hide Members-Only Videos",
-                    "hideChannelShelves": "Hide Channel Shelves"
+                    "hideChannelShelves": "Hide Channel Shelves",
+                    "hideSurveys": "Hide Feedback Surveys"
                 }
             },
             "updater": {
