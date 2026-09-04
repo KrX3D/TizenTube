@@ -427,6 +427,12 @@ export function consumeCachedFullPlaylist(key) {
 export function noteInitialPlaylistContents(key, contents) {
   if (!Array.isArray(contents) || !contents.length) return;
   window.__ttInitialPlaylistContents = { key, contents: contents.slice() };
+  // Fresh page load for this playlist: restart the native tally. It is
+  // deliberately NOT cleared in _clearState — something wipes the accumulator
+  // mid-visit (the cause of seeded:0) and this counter has to survive that to
+  // be a trustworthy floor. Resetting here instead keeps it per-visit, so a
+  // second visit cannot double it and lock caching out permanently.
+  window.__ttNativeSeen = { key, count: 0 };
 }
 
 function storeFullPlaylist(key, collectedContents) {
@@ -453,9 +459,15 @@ function storeFullPlaylist(key, collectedContents) {
   // to recover the remainder from - better to serve a fresh response.
   const total = initial.contents.length + collectedContents.length;
   const seenCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : 0;
-  if (seenCount && total < seenCount) {
+  // initial + everything native delivered is the true size; take the larger of
+  // the two signals so a partial collection cannot slip past either.
+  const nativeSeen = (window.__ttNativeSeen && window.__ttNativeSeen.key === key)
+    ? initial.contents.length + window.__ttNativeSeen.count
+    : 0;
+  const floor = Math.max(seenCount, nativeSeen);
+  if (floor && total < floor) {
     _log('playlist.full_cache.skip_incomplete', {
-      key, total, seenCount,
+      key, total, floor, seenCount, nativeSeen,
       initial: initial.contents.length,
       collected: collectedContents.length,
     });
@@ -472,6 +484,7 @@ function storeFullPlaylist(key, collectedContents) {
   cache.set(key, { contents: initial.contents.concat(collectedContents), ts: Date.now() });
   _log('playlist.full_cache.stored', {
     key,
+    floor, seenCount, nativeSeen,
     initial: initial.contents.length,
     collected: collectedContents.length,
     total: cache.get(key).contents.length,
@@ -534,6 +547,15 @@ export function noteContinuationBatch(key, contents, continuations) {
   if (!window.__ttContinuationAcc || window.__ttContinuationAcc.key !== key) {
     window.__ttContinuationAcc = { key, contents: [], seen: {} };
   }
+  // Independent tally of what YouTube itself delivered for this playlist.
+  // storeFullPlaylist needs a floor it can trust, and the previous attempt
+  // used __ttCurrentPlaylistItems (playlistContinue.js). On-device that guard
+  // never fired while a 23-item cache was still being stored for a playlist
+  // whose native load had delivered 68, so that array is not dependable here.
+  // This counts the batches as they arrive, before any dedupe or early return.
+  if (!window.__ttNativeSeen || window.__ttNativeSeen.key !== key) window.__ttNativeSeen = { key, count: 0 };
+  window.__ttNativeSeen.count += contents.length;
+
   const acc = window.__ttContinuationAcc;
   for (const item of contents) {
     const id = getItemVideoId(item);
