@@ -436,12 +436,21 @@ export function consumeCachedFullPlaylist(key) {
 export function noteInitialPlaylistContents(key, contents) {
   if (!Array.isArray(contents) || !contents.length) return;
   window.__ttInitialPlaylistContents = { key, contents: contents.slice() };
-  // Fresh page load for this playlist: restart the native tally. It is
-  // deliberately NOT cleared in _clearState — something wipes the accumulator
-  // mid-visit (the cause of seeded:0) and this counter has to survive that to
-  // be a trustworthy floor. Resetting here instead keeps it per-visit, so a
-  // second visit cannot double it and lock caching out permanently.
-  window.__ttNativeSeen = { key, ids: new Set() };
+
+  // Reset the native tally only when the PLAYLIST changes, never merely
+  // because a page-level response arrived.
+  //
+  // YouTube TV re-delivers the initial playlist response during a single
+  // visit (the "page restart" behaviour noted in adblock.js). On-device that
+  // showed up as renderer.result {before:15} firing three times for one
+  // playlist, and because this used to reset unconditionally, the tally was
+  // wiped each time — leaving nativeSeen at 38 for a playlist holding 68.
+  // The floor was then computed from the same truncated data as the payload
+  // it was meant to police, so a 38-item cache passed the check and got
+  // stored and reloaded. That is the list starting part-way in.
+  if (!window.__ttNativeSeen || window.__ttNativeSeen.key !== key) {
+    window.__ttNativeSeen = { key, ids: new Set() };
+  }
 }
 
 function storeFullPlaylist(key, collectedContents) {
@@ -599,7 +608,11 @@ export function noteContinuationBatch(key, contents, continuations) {
     // re-downloading data we hold. Cancel it rather than let it run on for
     // several more seconds of pointless requests.
     window.__ttCollectCancel = true;
-    window.__ttContinuationAcc = null;
+    // Left in place deliberately. Nulling it here meant a page restart
+    // straight after a store rebuilt the accumulator from only the batches
+    // that arrived afterwards (from_native {collected: 8}). Re-accumulation
+    // is already prevented while a cache exists, by the getCachedFullPlaylist
+    // guard at the top of noteContinuationBatch.
     maybeReloadForFullPlaylist(key);
   }
 }
