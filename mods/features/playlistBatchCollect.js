@@ -435,6 +435,33 @@ function storeFullPlaylist(key, collectedContents) {
     _log('playlist.full_cache.skip_no_initial', { key });
     return false;
   }
+  // Refuse to cache a list shorter than what the page has already shown.
+  //
+  // Observed on-device: a playlist whose native load had already delivered 68
+  // items (15 initial + three continuations of 15 + a final 8) was cached as
+  // just 23 — full_cache.stored {initial:15, collected:8, total:23} — because
+  // the accumulator was empty at collection time (native_settled {seeded:0})
+  // and the collector only fetched the last batch. Injecting that on the next
+  // visit renders a playlist with its middle missing, which is what produced
+  // the alternating good/broken entries: the broken cache is served and
+  // consumed, the next visit loads fresh and looks right, then caches badly
+  // again.
+  //
+  // __ttCurrentPlaylistItems (playlistContinue.js) accumulates every item the
+  // page has actually parsed, so it is the honest floor. Caching is skipped
+  // rather than fixed up here because a partial list has no continuation token
+  // to recover the remainder from - better to serve a fresh response.
+  const total = initial.contents.length + collectedContents.length;
+  const seenCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : 0;
+  if (seenCount && total < seenCount) {
+    _log('playlist.full_cache.skip_incomplete', {
+      key, total, seenCount,
+      initial: initial.contents.length,
+      collected: collectedContents.length,
+    });
+    return false;
+  }
+
   const cache = getFullCache();
   // Bound the cache: these are full renderer objects and this runs on a TV.
   if (cache.size >= FULL_CACHE_MAX_PLAYLISTS && !cache.has(key)) {
