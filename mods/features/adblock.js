@@ -633,6 +633,12 @@ function processResponsePayload(payload, detectedPage) {
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
     grid.items = hideVideo(grid.items, detectedPage);
+    // Parity with the object-root grid handler below, which also runs these
+    // two. Their absence here is why members-only videos and Shorts came back
+    // on Home after finishing a video: that return trip is served through the
+    // array-root path, so only hideVideo ran and everything else was skipped.
+    grid.items = filterShortsFromItems(grid.items, detectedPage);
+    grid.items = filterMembersOnlyFromItems(grid.items, detectedPage);
     if (detectedPage === 'playlists') grid.items = filterHiddenSpecialPlaylistTiles(grid.items);
     addLongPress(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
