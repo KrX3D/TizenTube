@@ -139,7 +139,16 @@ function _clearState() {
   // Must be cleared too, or one completed playlist would permanently block
   // collection on every later one.
   window.__ttCollectCancel    = false;
-  window.__ttContinuationAcc  = null;
+  // __ttContinuationAcc is deliberately NOT cleared here. It is keyed by
+  // playlist, and noteContinuationBatch replaces it whenever the key differs,
+  // so stale data from another playlist can never be used. Clearing it on
+  // hashchange actively broke collection: that event fires mid-visit while the
+  // playlist's own continuations are still arriving, so batches accumulated
+  // before it were thrown away. On-device that left the accumulator holding
+  // only the last two batches (from_native {collected: 23} for a playlist
+  // whose continuations total 53), which is why collection never completed and
+  // the cache could never be written. Same reasoning as _lastBrowseContext
+  // above, which was fixed for the identical reason.
   clearTimeout(window.__ttNativeSettleTimer);
   window.__ttNativeSettleTimer = null;
   window.__ttLatestContinuations = null;
@@ -432,7 +441,7 @@ export function noteInitialPlaylistContents(key, contents) {
   // mid-visit (the cause of seeded:0) and this counter has to survive that to
   // be a trustworthy floor. Resetting here instead keeps it per-visit, so a
   // second visit cannot double it and lock caching out permanently.
-  window.__ttNativeSeen = { key, count: 0 };
+  window.__ttNativeSeen = { key, ids: new Set() };
 }
 
 function storeFullPlaylist(key, collectedContents) {
@@ -462,7 +471,7 @@ function storeFullPlaylist(key, collectedContents) {
   // initial + everything native delivered is the true size; take the larger of
   // the two signals so a partial collection cannot slip past either.
   const nativeSeen = (window.__ttNativeSeen && window.__ttNativeSeen.key === key)
-    ? initial.contents.length + window.__ttNativeSeen.count
+    ? initial.contents.length + window.__ttNativeSeen.ids.size
     : 0;
   const floor = Math.max(seenCount, nativeSeen);
   if (floor && total < floor) {
@@ -552,9 +561,18 @@ export function noteContinuationBatch(key, contents, continuations) {
   // used __ttCurrentPlaylistItems (playlistContinue.js). On-device that guard
   // never fired while a 23-item cache was still being stored for a playlist
   // whose native load had delivered 68, so that array is not dependable here.
-  // This counts the batches as they arrive, before any dedupe or early return.
-  if (!window.__ttNativeSeen || window.__ttNativeSeen.key !== key) window.__ttNativeSeen = { key, count: 0 };
-  window.__ttNativeSeen.count += contents.length;
+  // Counts UNIQUE video ids, not raw batch lengths: both the object-root and
+  // array-root handlers feed this, so the same batch can arrive twice. Raw
+  // lengths gave nativeSeen 84 and 92 for a 68-item playlist, a floor nothing
+  // could satisfy. Items with no id are ignored rather than counted, since
+  // they would double-count the same way — undercounting the floor merely
+  // risks accepting a slightly short cache, while overcounting blocks caching
+  // outright.
+  if (!window.__ttNativeSeen || window.__ttNativeSeen.key !== key) window.__ttNativeSeen = { key, ids: new Set() };
+  for (const item of contents) {
+    const nid = getItemVideoId(item);
+    if (nid) window.__ttNativeSeen.ids.add(nid);
+  }
 
   const acc = window.__ttContinuationAcc;
   for (const item of contents) {
