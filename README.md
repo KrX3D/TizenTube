@@ -54,12 +54,98 @@ If a run failed because of a bug in the workflow file itself and that's since be
 
 # Features
 
-- Ad Blocker
-- [SponsorBlock](https://sponsor.ajay.app/) Support
-- Picture-in-Picture Mode
-- [DeArrow](https://dearrow.ajay.app/) Support
-- Customizable Themes (Custom Coloring)
-- More to come, if you [request](https://github.com/reisxd/TizenTube/issues/new) it!
+Everything below is toggleable from the in-app settings menu (**green button** on
+the remote, or `G` / `F2` / `2` when testing in Chrome). This fork carries a
+number of features that upstream TizenTube does not — those are marked
+**(fork)**.
+
+Each row is one settings-menu entry; where an entry has its own sub-menu, its
+options are described in the row rather than listed separately.
+
+## Blocking and filtering
+
+| Feature | What it does |
+| --- | --- |
+| Ad Block | Removes video ads, ad slots, and the masthead/banner ad on Home |
+| [SponsorBlock](https://sponsor.ajay.app/) | Skips sponsor, intro, outro, self-promo, interaction, filler, preview and non-music segments. Each category can be set to auto-skip, skip manually, or ignore, with optional toasts. Highlights (jump to the video's main point) can be enabled separately |
+| Hide End Screen Cards | Removes the suggested-video cards overlaid at the end of a video |
+| "Includes paid promotion" overlay | Toggle the paid-promotion banner |
+| Hide Members-Only Videos **(fork)** | Filters videos you can't watch without a channel membership out of shelves and grids |
+| Hide Channel Shelves **(fork)** | Removes whole channel-recommendation shelves from feeds |
+| Hide Feedback Surveys **(fork)** | Removes YouTube's in-feed "help us improve" survey cards |
+| Hide Special Playlists **(fork)** | Hides Liked Videos and/or Watch Later from the Library and Playlists pages |
+| Enable Shorts | Off by default — Shorts shelves and Shorts tiles are stripped from every surface |
+
+## Watched-video handling
+
+| Feature | What it does |
+| --- | --- |
+| Hide Watched Videos | Hides videos you've already watched. Configurable watched-percentage threshold, and per-page control over where it applies (Home, Search, Subscriptions, Channel pages, Library, individual playlists, History, Music, Gaming, More, Watch) |
+| Playlist Batch Load **(fork)** | Loads a playlist's later batches up front instead of only as you scroll, so hide-watched can act on the whole playlist rather than the first ~30 items. The number of batches fetched is capped by a configurable limit |
+
+## Video player
+
+| Feature | What it does |
+| --- | --- |
+| Preferred Video Quality | Locks playback to a chosen quality (or the next best available) instead of letting YouTube pick |
+| Preferred Video Codec | Prefer VP9, AV1 or AVC1 when the video offers a choice |
+| Auto Frame Rate | Matches the TV's output frame rate to the video, with a configurable pause duration while it switches (Tizen only) |
+| Spoof Viewport Resolution **(fork)** | Reports a different screen resolution to YouTube. Useful when the TV reports a lower resolution to the browser than it can actually decode. Requires an app restart |
+| Speed Settings Increments | Sets the step size used by the playback-speed control |
+| Picture-in-Picture / Mini Player | Both available from the player options popup; the two buttons can be swapped |
+| Screen Off | Blanks the screen while audio keeps playing — for using the TV as a music player |
+| Hide Related Videos in Player | Removes the related/suggested-videos rail that slides in over the player, so a nudge on the D-pad during playback doesn't cover the video with recommendations |
+| Number Keys Jump to Percentage | Pressing `1`–`9` jumps to that percentage of the video, `0` jumps to the start |
+| Reload Player After TV Wakes **(fork)** | Rebuilds the player after standby, fixing the frozen first frame |
+| Player UI patching | Optional Previous/Next, Super Thanks, Ask, and Speed Controls buttons |
+
+## Thumbnails and titles
+
+| Feature | What it does |
+| --- | --- |
+| [DeArrow](https://dearrow.ajay.app/) | Community-sourced, non-clickbait titles, with optional DeArrow thumbnails |
+| High Quality Thumbnails | Upgrades tile thumbnails to `hqdefault`/`sddefault` |
+| Video Previews | Hover/focus previews on tiles |
+| Disable Enlarged Thumbnails | Stops the focused tile from scaling up |
+| Enable Shrinked Thumbnails | Shrinks unfocused tiles instead |
+
+## Interface
+
+| Feature | What it does |
+| --- | --- |
+| Customizable Themes | Custom focus-container and route colouring (**red button**) |
+| Clock | On-screen clock, 12/24-hour, optional seconds, and an option to hide it while a video is playing |
+| Screen Dimming | Dims the screen after a configurable idle timeout, at a configurable opacity |
+| Disable Sidebar Contents | Choose which sidebar entries to hide |
+| Disable Channels on Sidebar | Removes subscribed-channel entries from the sidebar |
+| Launch To on Startup | Choose which page the app opens to |
+| Reload Home on Startup | Forces a fresh Home feed on launch |
+| Library Tabs Buttons to Hide **(fork)** | Hides individual Library tabs (Music, Movies & Shows, Podcasts, My Videos, History, Watch Later, Playlists) |
+| Sort Subscriptions Alphabetically | Alphabetical instead of YouTube's own ordering |
+| Long Press Actions | Long-press a tile for Play, Watch Later, Save to Playlist and Add to Queue |
+| Who's Watching Menu | Control whether the profile picker appears, including on app exit, and whether it stays permanently enabled |
+| "Are you still watching?" prompt | Toggle YouTube's idle-playback interruption |
+| Show Guest Sign In Reminder | Toggle the prompt asking a signed-out viewer to sign in |
+| Show TT Welcome Message | Toggle the TizenTube toast shown on launch |
+| Fix UI | Layout corrections for TVs that render the YouTube TV UI incorrectly |
+
+## Subtitles
+
+| Feature | What it does |
+| --- | --- |
+| Show Local Subtitle | Surfaces subtitles in your own language |
+| Show Hidden Subtitles | Exposes tracks YouTube hides from the picker |
+| Remember Caption Style **(fork)** | Persists caption font/size/colour settings across sessions and restarts |
+
+## Maintenance and diagnostics
+
+| Feature | What it does |
+| --- | --- |
+| Updater | Checks for TizenTube updates, optionally on startup |
+| Debug Console **(fork)** | On-screen log console (**yellow button**), with configurable corner position and height |
+| Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
+
+Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
 
 # Tampermonkey local debugging helpers (Windows + Chrome)
 
