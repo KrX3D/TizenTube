@@ -29,3 +29,4 @@ import "./features/autoFrameRate.js";
 import "./features/visualConsole.js";
 import "./features/playlistContinue.js";
 import "./ui/clock.js";
+import "./features/resumeAfterSuspend.js";

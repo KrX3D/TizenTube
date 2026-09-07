@@ -53,6 +53,7 @@
                     "fixUI": "Fix UI",
                     "hqThumbnails": "Enable High Quality Thumbnails",
                     "longPress": "Enable Long Press Actions",
+                    "reloadOnResume": "Reload Player After TV Wakes",
                     "shorts": "Enable Shorts",
                     "videoPreviews": "Enable Video Previews",
                     "ttWelcomeMsg": "Show TT Welcome Message",
