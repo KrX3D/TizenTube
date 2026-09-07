@@ -158,19 +158,19 @@
                                 "subtitle": "Set the percentage threshold for hiding watched videos"
                             },
                             "setPagesToHideWatchedVideos": "Set Pages to Hide Watched Videos",
-                        "pages": {
-                            "search": "Search Results",
-                            "home": "Home",
-                            "music": "Music",
-                            "gaming": "Gaming",
-                            "subscriptions": "Subscriptions",
-                            "channel": "Channel Pages",
-                            "library": "Library",
-                            "playlist": "Library → Individual Playlists (WL, LL, etc)",
-                            "history": "Library → History",
-                            "more": "More",
-                            "watch": "Watch"
-                        }
+                            "pages": {
+                                "search": "Search Results",
+                                "home": "Home",
+                                "music": "Music",
+                                "gaming": "Gaming",
+                                "subscriptions": "Subscriptions",
+                                "channel": "Channel Pages",
+                                "library": "Library",
+                                "playlist": "Library → Individual Playlists (WL, LL, etc)",
+                                "history": "Library → History",
+                                "more": "More",
+                                "watch": "Watch"
+                            }
                         }
                     },
                     "screenDimming": {
@@ -331,11 +331,18 @@
         "pictureInPicture": "Picture in Picture",
         "previous": "Previous",
         "next": "Next",
-        "withTizenTube": "with TizenTube"
+        "withTizenTube": "with TizenTube",
+        "share": {
+            "title": "Share",
+            "button": "Share",
+            "qrCodeScanMessage": "Scan the QR code below to share this video."
+        }
     },
     "toasts": {
         "downloadingUpdate": "Downloading update, please wait...",
         "videoAddedToQueue": "Video added to queue.",
-        "videoQueueCleared": "Video queue cleared."
+        "videoQueueCleared": "Video queue cleared.",
+        "shareNoVideo": "No video is currently playing.",
+        "shareFailed": "Could not create the QR code."
     }
 }

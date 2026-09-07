@@ -331,11 +331,18 @@
         "pictureInPicture": "Bild-in-Bild",
         "previous": "Zurück",
         "next": "Weiter",
-        "withTizenTube": "mit TizenTube"
+        "withTizenTube": "mit TizenTube",
+        "share": {
+            "title": "Teilen",
+            "button": "Teilen",
+            "qrCodeScanMessage": "Scanne den QR-Code unten, um dieses Video zu teilen."
+        }
     },
     "toasts": {
         "downloadingUpdate": "Update wird heruntergeladen, bitte warten...",
         "videoAddedToQueue": "Video wurde zur Warteschlange hinzugefügt",
-        "videoQueueCleared": "Die Warteschlange wurde geleert."
+        "videoQueueCleared": "Die Warteschlange wurde geleert.",
+        "shareNoVideo": "Es wird gerade kein Video abgespielt.",
+        "shareFailed": "QR-Code konnte nicht erstellt werden."
     }
 }
