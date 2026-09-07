@@ -303,6 +303,10 @@ export default function modernUI(update, parameters) {
                     value: 'enableLongPress'
                 },
                 {
+                    name: t('settings.options.misc.options.jumpToPercentage'),
+                    value: 'enableJumpToPercentage'
+                },
+                {
                     name: t('settings.options.misc.options.reloadOnResume'),
                     value: 'enableReloadOnResume'
                 },

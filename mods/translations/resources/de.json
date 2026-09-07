@@ -53,6 +53,7 @@
                     "fixUI": "UI korrigieren",
                     "hqThumbnails": "Hochqualitative Thumbnails aktivieren",
                     "longPress": "Aktionen bei langem Drücken aktivieren",
+                    "jumpToPercentage": "Zifferntasten springen zu Prozentwert",
                     "reloadOnResume": "Player nach Aufwachen des TVs neu laden",
                     "shorts": "Shorts aktivieren",
                     "videoPreviews": "Videovorschauen aktivieren",
@@ -326,6 +327,7 @@
             "button": "Geschwindigkeit"
         },
         "miniPlayer": "MiniPlayer",
+        "screenOff": "Bildschirm aus",
         "pictureInPicture": "Bild-in-Bild",
         "previous": "Zurück",
         "next": "Weiter",
