@@ -72,6 +72,7 @@ const defaultConfig = {
   launchToOnStartup: null,
   reloadHomeOnStartup: true,
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE', 'SEARCH'],
+  sidebarContentsOrder: [],
   disableChannelsOnSidebar: false,
   enableUpdater: true,
   autoFrameRate: false,

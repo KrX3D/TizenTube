@@ -34,6 +34,7 @@ import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
+import { addChannelSidebarButton } from './sidebarChannelButton.js';
 
 // ===== Local utilities =====
 
@@ -626,6 +627,7 @@ function processResponsePayload(payload, detectedPage) {
     processShelves(slr.contents, true, detectedPage);
     consolidateShelves(slr.contents, 'arrayPayload.sectionList', detectedPage, !!slr.continuations, filterShortsFromItems);
   }
+  addChannelSidebarButton(payload);
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     const tvBrowseSlr = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer;
     processShelves(tvBrowseSlr.contents, true, detectedPage);
@@ -945,6 +947,7 @@ JSON.parse = function () {
       } catch (_) { }
     }
 
+    addChannelSidebarButton(r);
     if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
       const tvBrowseMainSlr = r.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer;
       if (!signinReminderEnabled) tvBrowseMainSlr.contents = tvBrowseMainSlr.contents.filter(elm => !elm.feedNudgeRenderer);

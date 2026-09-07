@@ -2,6 +2,7 @@ import { configRead } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer, scrollPaneRenderer, overlayMessageRenderer, QrCodeRenderer } from './ytUI.js';
 import qrcode from 'qrcode-npm';
 import { t } from 'i18next';
+import resolveCommand from '../resolveCommand.js';
 import { getStandaloneVersion, moduleVersion } from '../version.js';
 
 const qrcodes = {};
@@ -740,30 +741,30 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
+                    // The list of entries is now built from the live /guide
+                    // response instead of a hardcoded set of icon names, so it
+                    // matches whatever the account actually has, in the user's
+                    // own language (upstream 2f2c567).
                     name: t('settings.options.uiSettings.options.disableSidebarContents.title'),
                     icon: 'MENU',
                     value: null,
-                    arrayToEdit: 'disabledSidebarContents',
-                    menuId: 'tt-sidebar-contents',
-                    menuHeader: {
-                        title: t('settings.options.uiSettings.options.disableSidebarContents.title'),
-                        subtitle: t('settings.options.uiSettings.options.disableSidebarContents.subtitle')
-                    },
-                    options: [
-                        { name: t('settings.options.uiSettings.options.nav.search'), icon: 'SEARCH', value: 'SEARCH' },
-                        { name: t('settings.options.uiSettings.options.nav.home'), icon: 'WHAT_TO_WATCH', value: 'WHAT_TO_WATCH' },
-                        { name: t('settings.options.uiSettings.options.nav.sports'), icon: 'TROPHY', value: 'TROPHY' },
-                        { name: t('settings.options.uiSettings.options.nav.news'), icon: 'NEWS', value: 'NEWS' },
-                        { name: t('settings.options.uiSettings.options.nav.music'), icon: 'YOUTUBE_MUSIC', value: 'YOUTUBE_MUSIC' },
-                        { name: t('settings.options.uiSettings.options.nav.podcasts'), icon: 'BROADCAST', value: 'BROADCAST' },
-                        { name: t('settings.options.uiSettings.options.nav.moviesTV'), icon: 'CLAPPERBOARD', value: 'CLAPPERBOARD' },
-                        { name: t('settings.options.uiSettings.options.nav.live'), icon: 'LIVE', value: 'LIVE' },
-                        { name: t('settings.options.uiSettings.options.nav.gaming'), icon: 'GAMING', value: 'GAMING' },
-                        { name: t('settings.options.uiSettings.options.nav.subscriptions'), icon: 'SUBSCRIPTIONS', value: 'SUBSCRIPTIONS' },
-                        { name: t('settings.options.uiSettings.options.nav.library'), icon: 'TAB_LIBRARY', value: 'TAB_LIBRARY' },
-                        { name: t('settings.options.uiSettings.options.nav.more'), icon: 'TAB_MORE', value: 'TAB_MORE' },
-                        { name: t('settings.options.uiSettings.options.nav.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'YOUTUBE_SHORTS_FILL_24' }
-                    ]
+                    action: {
+                        customAction: {
+                            action: 'SHOW_GUIDE_SETTINGS',
+                            parameters: 'disabledSidebarContents'
+                        }
+                    }
+                },
+                {
+                    name: t('settings.options.uiSettings.options.sortSidebarContents.title'),
+                    icon: 'MENU',
+                    value: null,
+                    action: {
+                        customAction: {
+                            action: 'SHOW_GUIDE_SETTINGS',
+                            parameters: 'sortSidebarContents'
+                        }
+                    }
                 },
                 {
                     name: t('settings.options.uiSettings.options.launchToOnStartup.title'),
@@ -933,7 +934,8 @@ export default function modernUI(update, parameters) {
                                     update: setting.options?.title ? 'customUI' : false,
                                     menuId: setting.menuId,
                                     arrayToEdit: setting.arrayToEdit,
-                                    menuHeader: setting.menuHeader
+                                    menuHeader: setting.menuHeader,
+                                    action: setting.action
                                 }
                             }
                         }
@@ -968,6 +970,13 @@ export function optionShow(parameters, update) {
         );
         return;
     }
+    // Settings entries can delegate to a custom action instead of rendering a
+    // static option list — used by the sidebar entries, whose contents are
+    // fetched live rather than declared here.
+    if (parameters.action) {
+        return resolveCommand(parameters.action);
+    }
+
     const buttons = [];
 
     // Check if this is the legacy sponsorBlockManualSkips (array-based) or new boolean-based options
@@ -1006,7 +1015,8 @@ export function optionShow(parameters, update) {
                                     update: true,
                                     menuId: parameters.menuId,
                                     arrayToEdit: parameters.arrayToEdit,
-                                    menuHeader: parameters.menuHeader
+                                    menuHeader: parameters.menuHeader,
+                                    action: parameters.action
                                 }
                             }
                         }
@@ -1080,7 +1090,8 @@ export function optionShow(parameters, update) {
                                     update: parameters.options?.title ? 'customUI' : true,
                                     menuId: parameters.menuId,
                                     arrayToEdit: parameters.arrayToEdit,
-                                    menuHeader: parameters.menuHeader
+                                    menuHeader: parameters.menuHeader,
+                                    action: parameters.action
                                 }
                             }
                         }
@@ -1106,7 +1117,8 @@ export function optionShow(parameters, update) {
                                     update: parameters.options?.title ? 'customUI' : true,
                                     menuId: parameters.menuId,
                                     arrayToEdit: parameters.arrayToEdit,
-                                    menuHeader: parameters.menuHeader
+                                    menuHeader: parameters.menuHeader,
+                                    action: parameters.action
                                 }
                             }
                         }

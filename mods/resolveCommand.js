@@ -9,6 +9,7 @@ import { sendTestPing } from './features/logServer.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
+import showGuideSettings from './ui/sidebarModification.js';
 import { t } from 'i18next';
 
 
@@ -294,6 +295,31 @@ function customAction(action, parameters) {
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
             break;
+        case 'SHOW_GUIDE_SETTINGS':
+            showGuideSettings(parameters);
+            break;
+        case 'SHOW_GUIDE_BUTTONS':
+            showGuideSettings('SHOW_GUIDE_BUTTONS', parameters);
+            break;
+        case 'MOVE_GUIDE_BUTTON':
+            showGuideSettings('MOVE_GUIDE_BUTTON', parameters);
+            break;
+        case 'RELOAD_GUIDE_OPTIONS':
+            showGuideSettings(parameters.settingType, true);
+            break;
+        case 'ADD_OR_REMOVE_CHANNEL_TO_SIDEBAR': {
+            const sidebarOrder = configRead('sidebarContentsOrder') || [];
+            const existing = sidebarOrder.findIndex(entry =>
+                (typeof entry === 'object' && entry !== null ? entry.browseId : entry) === parameters.browseId);
+            if (existing !== -1) {
+                sidebarOrder.splice(existing, 1);
+            } else {
+                sidebarOrder.push({ browseId: parameters.browseId, title: parameters.title });
+            }
+            configWrite('sidebarContentsOrder', sidebarOrder);
+            showToast(t('toasts.sidebarContentsUpdated.title'), t('toasts.sidebarContentsUpdated.subtitle'));
+            break;
+        }
         case 'LOG_SERVER_TEST_PING': {
             showLogServerTestToast(sendTestPing());
             break;

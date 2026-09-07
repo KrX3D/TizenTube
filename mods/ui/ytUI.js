@@ -457,6 +457,39 @@ function ButtonRenderer(disabled, text, iconType, command) {
     };
 }
 
+// A synthetic sidebar entry, used for channels the user pinned to the guide
+// (upstream 2f2c567) — YouTube only sends entries it knows about, so pinned
+// channels have to be built locally.
+function GuideEntryRenderer(simpleText, navigationEndpoint, icon, thumbnail) {
+    const entry = {
+        guideEntryRenderer: {
+            navigationEndpoint,
+            trackingParams: null,
+            formattedTitle: {
+                simpleText
+            }
+        }
+    }
+
+    if (icon) {
+        entry.guideEntryRenderer.icon = {
+            iconType: icon
+        }
+    }
+
+    if (thumbnail) {
+        entry.guideEntryRenderer.thumbnail = {
+            thumbnails: [
+                {
+                    url: thumbnail
+                }
+            ]
+        }
+    }
+
+    return entry;
+}
+
 export {
     showToast,
     Modal,
@@ -475,5 +508,6 @@ export {
     ShelfRenderer,
     TileRenderer,
     QrCodeRenderer,
-    ButtonRenderer
+    ButtonRenderer,
+    GuideEntryRenderer
 }

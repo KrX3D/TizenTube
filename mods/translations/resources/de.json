@@ -258,7 +258,21 @@
                     "enableShrinkingThumbnails": "Verkleinerte Vorschaubilder aktivieren",
                     "hideMembersOnlyVideos": "Videos nur für Kanalmitglieder ausblenden",
                     "hideChannelShelves": "Kanal-Regale ausblenden",
-                    "hideSurveys": "Feedback-Umfragen ausblenden"
+                    "hideSurveys": "Feedback-Umfragen ausblenden",
+                    "sortSidebarContents": {
+                        "title": "Seitenleiste sortieren",
+                        "subtitle": "Ändere die Reihenfolge der Einträge in der Seitenleiste",
+                        "moveUp": {
+                            "title": "Nach oben",
+                            "subtitle": "Diesen Eintrag in der Seitenleiste nach oben verschieben"
+                        },
+                        "moveDown": {
+                            "title": "Nach unten",
+                            "subtitle": "Diesen Eintrag in der Seitenleiste nach unten verschieben"
+                        },
+                        "addToSidebar": "Kanal zur Seitenleiste hinzufügen",
+                        "removeFromSidebar": "Kanal aus der Seitenleiste entfernen"
+                    }
                 }
             },
             "updater": {
@@ -343,6 +357,10 @@
         "videoAddedToQueue": "Video wurde zur Warteschlange hinzugefügt",
         "videoQueueCleared": "Die Warteschlange wurde geleert.",
         "shareNoVideo": "Es wird gerade kein Video abgespielt.",
-        "shareFailed": "QR-Code konnte nicht erstellt werden."
+        "shareFailed": "QR-Code konnte nicht erstellt werden.",
+        "sidebarContentsUpdated": {
+            "title": "Seitenleiste aktualisiert",
+            "subtitle": "Starte die App neu, falls die Seitenleiste sich nicht aktualisiert."
+        }
     }
 }
