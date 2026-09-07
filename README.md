@@ -59,12 +59,15 @@ the remote, or `G` / `F2` / `2` when testing in Chrome). This fork carries a
 number of features that upstream TizenTube does not — those are marked
 **(fork)**.
 
+Each row is one settings-menu entry; where an entry has its own sub-menu, its
+options are described in the row rather than listed separately.
+
 ## Blocking and filtering
 
 | Feature | What it does |
 | --- | --- |
 | Ad Block | Removes video ads, ad slots, and the masthead/banner ad on Home |
-| [SponsorBlock](https://sponsor.ajay.app/) | Skips sponsor, intro, outro, self-promo, interaction, filler, preview and non-music segments. Each category can be set to auto-skip, skip manually, or ignore, with optional toasts |
+| [SponsorBlock](https://sponsor.ajay.app/) | Skips sponsor, intro, outro, self-promo, interaction, filler, preview and non-music segments. Each category can be set to auto-skip, skip manually, or ignore, with optional toasts. Highlights (jump to the video's main point) can be enabled separately |
 | Hide End Screen Cards | Removes the suggested-video cards overlaid at the end of a video |
 | "Includes paid promotion" overlay | Toggle the paid-promotion banner |
 | Hide Members-Only Videos **(fork)** | Filters videos you can't watch without a channel membership out of shelves and grids |
@@ -78,7 +81,7 @@ number of features that upstream TizenTube does not — those are marked
 | Feature | What it does |
 | --- | --- |
 | Hide Watched Videos | Hides videos you've already watched. Configurable watched-percentage threshold, and per-page control over where it applies (Home, Search, Subscriptions, Channel pages, Library, individual playlists, History, Music, Gaming, More, Watch) |
-| Playlist Batch Load **(fork)** | Loads a playlist's later batches up front instead of only as you scroll, so hide-watched can act on the whole playlist rather than the first ~30 items |
+| Playlist Batch Load **(fork)** | Loads a playlist's later batches up front instead of only as you scroll, so hide-watched can act on the whole playlist rather than the first ~30 items. The number of batches fetched is capped by a configurable limit |
 
 ## Video player
 
@@ -120,7 +123,10 @@ number of features that upstream TizenTube does not — those are marked
 | Library Tabs Buttons to Hide **(fork)** | Hides individual Library tabs (Music, Movies & Shows, Podcasts, My Videos, History, Watch Later, Playlists) |
 | Sort Subscriptions Alphabetically | Alphabetical instead of YouTube's own ordering |
 | Long Press Actions | Long-press a tile for Play, Watch Later, Save to Playlist and Add to Queue |
-| Who's Watching Menu | Control whether the profile picker appears, including on app exit |
+| Who's Watching Menu | Control whether the profile picker appears, including on app exit, and whether it stays permanently enabled |
+| "Are you still watching?" prompt | Toggle YouTube's idle-playback interruption |
+| Show Guest Sign In Reminder | Toggle the prompt asking a signed-out viewer to sign in |
+| Show TT Welcome Message | Toggle the TizenTube toast shown on launch |
 | Fix UI | Layout corrections for TVs that render the YouTube TV UI incorrectly |
 
 ## Subtitles
@@ -136,7 +142,7 @@ number of features that upstream TizenTube does not — those are marked
 | Feature | What it does |
 | --- | --- |
 | Updater | Checks for TizenTube updates, optionally on startup |
-| Debug Console **(fork)** | On-screen log console (**yellow button**) |
+| Debug Console **(fork)** | On-screen log console (**yellow button**), with configurable corner position and height |
 | Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
 
 Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
