@@ -33,6 +33,7 @@ import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } 
 import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
+import { hideRelatedVideos } from './relatedVideosHider.js';
 
 // ===== Local utilities =====
 
@@ -897,6 +898,7 @@ JSON.parse = function () {
         } catch (_) { }
       }
       if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
+        hideRelatedVideos(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer);
         try {
           const signinReminderEnabled = configRead('enableSigninReminder');
           const watchNextSlr = r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer;
@@ -1133,6 +1135,7 @@ JSON.parse = function () {
     }
 
     if (r?.contents?.singleColumnWatchNextResults?.pivot?.sectionListRenderer) {
+      hideRelatedVideos(r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer);
       try {
         const nonWatchWnSlr = r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer;
         if (!signinReminderEnabled) nonWatchWnSlr.contents = nonWatchWnSlr.contents.filter(elm => !elm.alertWithActionsRenderer);

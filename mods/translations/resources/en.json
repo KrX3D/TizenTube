@@ -123,6 +123,7 @@
                         "title": "Speed Settings Increments",
                         "subtitle": "Set the speed increments for video playback speed adjustments"
                     },
+                    "hideRelatedVideosPlayer": "Hide Related Videos in Player",
                     "preferredVideoCodec": {
                         "title": "Preferred Video Codec",
                         "subtitle": "Choose the preferred video codec for playback"
@@ -247,7 +248,8 @@
                         "options": {
                             "enableClock": "Enable Clock",
                             "isClock12HourFormat": "Use 12-Hour Format for Clock",
-                            "clockShowSeconds": "Show Seconds on Clock"
+                            "clockShowSeconds": "Show Seconds on Clock",
+                            "clockHideWhenVideoPlaying": "Hide Clock While Video Is Playing"
                         }
                     },
                     "disableEnlargingThumbnails": "Disable Enlarged Thumbnails",

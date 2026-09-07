@@ -90,11 +90,13 @@ const defaultConfig = {
   enableClock: false,
   isClock12HourFormat: false,
   clockShowSeconds: false,
+  clockHideWhenVideoPlaying: false,
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
   hideMembersOnlyVideos: false,
   hideChannelShelves: false,
   hideSurveys: false,
+  hideRelatedVideosPlayer: false,
   spoofViewport: 'disabled',
 };
 
