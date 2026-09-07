@@ -77,6 +77,28 @@ function requestNextAndNavigateChannel(params) {
     }
 }
 
+/**
+ * Fetch the sidebar (guide) through the app's own InnerTube client, so it
+ * comes back with the user's real entries rather than a signed-out default.
+ *
+ * Resolves with the raw guide response, or rejects if the client isn't
+ * available yet.
+ */
+function getGuide() {
+    return new Promise((resolve, reject) => {
+        try {
+            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            if (!KabukiInnerTubeClient) return reject(new Error('KabukiInnerTubeClient unavailable'));
+            KabukiInnerTubeClient.fetch({ path: '/youtubei/v1/guide' })
+                .subscribe(resolve, reject);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 export {
-    requestNextAndNavigateChannel
+    requestNextAndNavigateChannel,
+    getGuide
 }

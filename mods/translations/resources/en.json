@@ -258,7 +258,21 @@
                     "enableShrinkingThumbnails": "Enable Shrinked Thumbnails",
                     "hideMembersOnlyVideos": "Hide Members-Only Videos",
                     "hideChannelShelves": "Hide Channel Shelves",
-                    "hideSurveys": "Hide Feedback Surveys"
+                    "hideSurveys": "Hide Feedback Surveys",
+                    "sortSidebarContents": {
+                        "title": "Sort Sidebar Contents",
+                        "subtitle": "Change the order of the entries in the sidebar",
+                        "moveUp": {
+                            "title": "Move Up",
+                            "subtitle": "Move this item up in the sidebar"
+                        },
+                        "moveDown": {
+                            "title": "Move Down",
+                            "subtitle": "Move this item down in the sidebar"
+                        },
+                        "addToSidebar": "Add Channel to Sidebar",
+                        "removeFromSidebar": "Remove Channel from Sidebar"
+                    }
                 }
             },
             "updater": {
@@ -343,6 +357,10 @@
         "videoAddedToQueue": "Video added to queue.",
         "videoQueueCleared": "Video queue cleared.",
         "shareNoVideo": "No video is currently playing.",
-        "shareFailed": "Could not create the QR code."
+        "shareFailed": "Could not create the QR code.",
+        "sidebarContentsUpdated": {
+            "title": "Sidebar updated",
+            "subtitle": "Restart the app if the sidebar does not refresh."
+        }
     }
 }
