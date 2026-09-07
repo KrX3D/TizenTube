@@ -34,6 +34,7 @@ import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
+import { logSubscriptionsShelfShape } from './subscriptionsShelfDiag.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
 import {
   isLockupVideo,
@@ -1336,6 +1337,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0) shelves.splice(i, 1);
     } catch (shelfErr) { appendFileOnlyLog('processShelves.shelf.error', { index: i, msg: String(shelfErr?.message || shelfErr) }); }
   }
+  logSubscriptionsShelfShape(shelves, activePage);
 }
 
 // ===== addPreviews =====

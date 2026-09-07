@@ -72,7 +72,8 @@
                             "bottomRight": "Bottom Right",
                             "center": "Center"
                         },
-                        "height": "Console Height"
+                        "height": "Console Height",
+                        "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
                     },
                     "logServer": {
                         "title": "Remote Log Server",

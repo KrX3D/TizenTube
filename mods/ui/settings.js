@@ -361,6 +361,11 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
+                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
+                            icon: 'SUBSCRIPTIONS',
+                            value: 'diagSubscriptionsShelf'
+                        },
+                        {
                             name: t('settings.options.misc.options.debugConsole.height'),
                             value: null,
                             menuId: 'tt-debug-console-height',

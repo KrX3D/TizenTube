@@ -84,6 +84,7 @@ const defaultConfig = {
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 1054,
   logServerEnabled: false,
+  diagSubscriptionsShelf: false,
   logServerHost: '192.168.50.57',
   logServerPort: 3030,
   enablePlaylistBatchCollect: false,

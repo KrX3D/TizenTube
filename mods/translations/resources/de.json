@@ -72,7 +72,8 @@
                             "bottomRight": "Unten rechts",
                             "center": "Mitte"
                         },
-                        "height": "Konsolenhöhe"
+                        "height": "Konsolenhöhe",
+                        "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",
