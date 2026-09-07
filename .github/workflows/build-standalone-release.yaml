@@ -286,13 +286,20 @@ jobs:
           name: TizenTube-Standalone-${{ env.RELEASE_SHA }}.wgt
           path: standalone/release/TizenTube.wgt
 
+      # Changelog is built from the PRs merged since the previous published
+      # release; the build/TBI_METADATA header stays first so the TizenBrew
+      # Installer still finds it.
+      - name: Build release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bash .github/scripts/build-release-notes.sh             "${{ env.RELEASE_SHA }}"             "${{ env.RELEASE_VERSION }}"             "${{ env.APP_ID }}"             "${{ env.APP_NAME }}"             "$RUNNER_TEMP/release-notes.md"
+
       - name: Release TizenTube Standalone
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
           target_commitish: ${{ env.RELEASE_SHA }}
-          body: |
-            TizenTube Standalone build from commit `${{ env.RELEASE_SHA }}`, version-synced with the userscript.
-            TBI_METADATA: {"appId":"${{ env.APP_ID }}","appName":"${{ env.APP_NAME }}"}
+          body_path: ${{ runner.temp }}/release-notes.md
           files: |
             standalone/release/*

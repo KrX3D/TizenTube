@@ -1,0 +1,138 @@
+# Watch reisxd/TizenTube for new commits and open a PR that carries them.
+#
+# This fork has rewritten large parts of mods/ (adblock.js, hideWatched.js,
+# settings.js in particular), so most upstream commits touching those files
+# WILL conflict. The workflow does not pretend otherwise: it always produces a
+# branch that merges cleanly into main, and when a file conflicted it keeps the
+# fork's version and says so in the PR body, so the upstream change can be
+# hand-ported afterwards.
+name: Upstream sync
+
+on:
+  schedule:
+    # 04:20 UTC daily — outside the usual release window.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: https://github.com/reisxd/TizenTube.git
+  UPSTREAM_BRANCH: main
+  SYNC_BRANCH: sync/upstream
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Clone repo with full history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Fetch upstream
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM_REPO" 2>/dev/null || git remote set-url upstream "$UPSTREAM_REPO"
+          git fetch upstream "$UPSTREAM_BRANCH" --no-tags
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          set -euo pipefail
+          COUNT=$(git rev-list --count "origin/main..upstream/${UPSTREAM_BRANCH}")
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Upstream commits not in main: $COUNT"
+
+      - name: Merge upstream, keeping the fork's side of any conflict
+        id: merge
+        if: steps.check.outputs.count != '0'
+        run: |
+          set -euo pipefail
+          git checkout -B "$SYNC_BRANCH" origin/main
+
+          CONFLICTS=""
+          if ! git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
+            # Keep this fork's version of every conflicted file. The point of
+            # the PR is to surface the change for review, not to guess at a
+            # resolution — committing conflict markers would only produce a
+            # branch that cannot build.
+            CONFLICTS=$(git diff --name-only --diff-filter=U)
+            echo "Conflicted files kept at fork version:"
+            echo "$CONFLICTS"
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              git checkout --ours -- "$f" 2>/dev/null || git rm -q -- "$f"
+              git add -- "$f" 2>/dev/null || true
+            done <<< "$CONFLICTS"
+            git commit --no-edit
+          fi
+
+          {
+            echo 'conflicts<<TT_EOF'
+            echo "$CONFLICTS"
+            echo 'TT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          if git diff --quiet origin/main -- .; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git push --force-with-lease origin "$SYNC_BRANCH"
+          fi
+
+      - name: Open or update the sync PR
+        if: steps.check.outputs.count != '0' && steps.merge.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+          NEW_COMMITS: ${{ steps.check.outputs.count }}
+        run: |
+          set -euo pipefail
+
+          {
+            echo "Automated sync with [reisxd/TizenTube](https://github.com/reisxd/TizenTube) — **${NEW_COMMITS}** new upstream commit(s)."
+            echo
+
+            if [ -n "${CONFLICTS//[[:space:]]/}" ]; then
+              echo "## :warning: Needs hand-porting"
+              echo
+              echo "These files conflicted and were **kept at this fork's version**, so the upstream changes to them are *not* in this PR. Merging as-is is safe but incomplete — port them by hand before or after merging:"
+              echo
+              while IFS= read -r f; do
+                [ -z "$f" ] && continue
+                echo "- \`$f\`"
+              done <<< "$CONFLICTS"
+              echo
+            else
+              echo "Merged cleanly — no conflicts."
+              echo
+            fi
+
+            echo "## Upstream commits"
+            echo
+            git log --reverse --no-merges --pretty=format:'- [`%h`](https://github.com/reisxd/TizenTube/commit/%H) %s' "origin/main..upstream/${UPSTREAM_BRANCH}"
+            echo
+            echo
+            echo "_Opened automatically by \`.github/workflows/upstream-sync.yml\`._"
+          } > /tmp/pr-body.md
+
+          EXISTING=$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[0].number // empty')
+          TITLE="Sync with upstream (${NEW_COMMITS} new commit(s))"
+
+          if [ -n "$EXISTING" ]; then
+            gh pr edit "$EXISTING" --title "$TITLE" --body-file /tmp/pr-body.md
+            echo "Updated PR #$EXISTING"
+          else
+            gh pr create --base main --head "$SYNC_BRANCH" --title "$TITLE" --body-file /tmp/pr-body.md
+          fi
