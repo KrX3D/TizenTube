@@ -54,6 +54,7 @@
                     "hqThumbnails": "Hochqualitative Thumbnails aktivieren",
                     "longPress": "Aktionen bei langem Drücken aktivieren",
                     "jumpToPercentage": "Zifferntasten springen zu Prozentwert",
+                    "reloadOnResume": "Player nach Aufwachen des TVs neu laden",
                     "shorts": "Shorts aktivieren",
                     "videoPreviews": "Videovorschauen aktivieren",
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",

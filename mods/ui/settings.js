@@ -307,6 +307,10 @@ export default function modernUI(update, parameters) {
                     value: 'enableJumpToPercentage'
                 },
                 {
+                    name: t('settings.options.misc.options.reloadOnResume'),
+                    value: 'enableReloadOnResume'
+                },
+                {
                     name: t('settings.options.misc.options.shorts'),
                     icon: 'YOUTUBE_SHORTS_FILL_24',
                     value: 'enableShorts'

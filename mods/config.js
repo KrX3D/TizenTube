@@ -97,6 +97,7 @@ const defaultConfig = {
   hideSurveys: false,
   enableJumpToPercentage: false,
   spoofViewport: 'disabled',
+  enableReloadOnResume: false,
 };
 
 let localConfig;
