@@ -979,6 +979,13 @@ export function optionShow(parameters, update) {
 
     const buttons = [];
 
+    // An entry with no options and no action has nothing to show; bail instead
+    // of throwing partway through building the modal.
+    if (!Array.isArray(parameters.options)) {
+        console.warn('[settings] optionShow called with no options and no action', parameters.menuId);
+        return;
+    }
+
     // Check if this is the legacy sponsorBlockManualSkips (array-based) or new boolean-based options
     const isArrayBasedOptions = parameters.arrayToEdit !== undefined;
 
@@ -1064,7 +1071,12 @@ export function optionShow(parameters, update) {
                                     update: option.options?.title ? 'customUI' : false,
                                     menuId: option.menuId,
                                     arrayToEdit: option.arrayToEdit,
-                                    menuHeader: option.menuHeader
+                                    menuHeader: option.menuHeader,
+                                    // Nested entries can delegate to a custom action too — without
+                                    // this, a sub-menu entry that has an `action` and no `options`
+                                    // (the sidebar ones) reached optionShow with neither, and it
+                                    // threw on `for (const option of undefined)`.
+                                    action: option.action
                                 }
                             }
                         }

@@ -1,6 +1,6 @@
 import { getGuide } from '../utils/innerTubeCalls.js';
 import { configRead, configWrite } from '../config.js';
-import { buttonItem, overlayPanelItemListRenderer, showModal } from './ytUI.js';
+import { buttonItem, overlayPanelItemListRenderer, showModal, showToast } from './ytUI.js';
 import { t } from 'i18next';
 
 // Sidebar (guide) customisation — upstream 2f2c567 / 79195bb.
@@ -160,9 +160,15 @@ function showSetting(settingType, parameters) {
                 'tt-sidebar-settings',
                 parameters === true
             );
-        }).catch(err => console.warn('[sidebarModification] guide fetch failed:', err));
+        }).catch(err => {
+            // Without this the menu just silently doesn't open, which is
+            // indistinguishable from the entry being broken.
+            console.warn('[sidebarModification] guide fetch failed:', err);
+            showToast('TizenTube', t('toasts.sidebarGuideFetchFailed'));
+        });
     } catch (err) {
         console.warn('[sidebarModification] showSetting failed:', err);
+        showToast('TizenTube', t('toasts.sidebarGuideFetchFailed'));
     }
 }
 
