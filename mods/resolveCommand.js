@@ -6,6 +6,7 @@ import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
+import { screenOff } from './features/screenOff.js';
 import { t } from 'i18next';
 
 
@@ -136,6 +137,19 @@ export function patchResolveCommand() {
                             }
                         ])
                     );
+                    // Screen off (upstream 8977e23). Also splices at 3, so when PiP is
+                    // available it inserts at 3 afterwards and ends up above this one.
+                    cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items.splice(3, 0,
+                        buttonItem(
+                            { title: t('player.screenOff') },
+                            { icon: 'EYE_OFF' }, [
+                            {
+                                customAction: {
+                                    action: 'SCREEN_OFF'
+                                }
+                            }
+                        ])
+                    );
 
                     if (window.h5vcc && window.h5vcc.tizentube && window.h5vcc.tizentube.HasSystemFeature &&
                         window.h5vcc.tizentube.HasSystemFeature('android.software.picture_in_picture')) {
@@ -232,6 +246,9 @@ function customAction(action, parameters) {
         case 'SET_PLAYER_SPEED':
             const speed = Number(parameters);
             document.querySelector('video').playbackRate = speed;
+            break;
+        case 'SCREEN_OFF':
+            screenOff();
             break;
         case 'ENTER_MP':
             enablePip();

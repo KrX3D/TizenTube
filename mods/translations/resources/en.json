@@ -53,6 +53,7 @@
                     "fixUI": "Fix UI",
                     "hqThumbnails": "Enable High Quality Thumbnails",
                     "longPress": "Enable Long Press Actions",
+                    "jumpToPercentage": "Number Keys Jump to Percentage",
                     "shorts": "Enable Shorts",
                     "videoPreviews": "Enable Video Previews",
                     "ttWelcomeMsg": "Show TT Welcome Message",
@@ -323,6 +324,7 @@
             "button": "Speed Controls"
         },
         "miniPlayer": "Mini Player",
+        "screenOff": "Screen Off",
         "pictureInPicture": "Picture in Picture",
         "previous": "Previous",
         "next": "Next",

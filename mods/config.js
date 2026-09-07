@@ -95,6 +95,7 @@ const defaultConfig = {
   hideMembersOnlyVideos: false,
   hideChannelShelves: false,
   hideSurveys: false,
+  enableJumpToPercentage: false,
   spoofViewport: 'disabled',
 };
 

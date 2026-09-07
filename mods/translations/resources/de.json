@@ -53,6 +53,7 @@
                     "fixUI": "UI korrigieren",
                     "hqThumbnails": "Hochqualitative Thumbnails aktivieren",
                     "longPress": "Aktionen bei langem Drücken aktivieren",
+                    "jumpToPercentage": "Zifferntasten springen zu Prozentwert",
                     "shorts": "Shorts aktivieren",
                     "videoPreviews": "Videovorschauen aktivieren",
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",
@@ -323,6 +324,7 @@
             "button": "Geschwindigkeit"
         },
         "miniPlayer": "MiniPlayer",
+        "screenOff": "Bildschirm aus",
         "pictureInPicture": "Bild-in-Bild",
         "previous": "Zurück",
         "next": "Weiter",
