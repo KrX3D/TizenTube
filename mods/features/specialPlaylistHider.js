@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { appendFileOnlyLog } from './hideWatched.js';
 
 const checkId = (id) => {
   const l = String(id || '').toLowerCase();
@@ -23,10 +24,13 @@ const getSpecialPlaylistIdFromTile = (item) =>
 export function filterHiddenSpecialPlaylistTiles(items) {
   const hidden = configRead('hiddenSpecialPlaylistTiles');
   if (!Array.isArray(hidden) || hidden.length === 0) return items;
-  return items.filter(item => {
+  const before = items.length;
+  const kept = items.filter(item => {
     const id = getSpecialPlaylistIdFromTile(item);
     return !id || !hidden.includes(id);
   });
+  if (kept.length !== before) appendFileOnlyLog('specialPlaylist.tiles.hidden', { before, after: kept.length, hidden });
+  return kept;
 }
 
 export function filterHiddenSpecialPlaylistShelves(shelves) {
@@ -34,6 +38,9 @@ export function filterHiddenSpecialPlaylistShelves(shelves) {
   if (!Array.isArray(hidden) || hidden.length === 0) return;
   for (let i = shelves.length - 1; i >= 0; i--) {
     const id = getShelfSpecialPlaylistId(shelves[i]);
-    if (id && hidden.includes(id)) shelves.splice(i, 1);
+    if (id && hidden.includes(id)) {
+      appendFileOnlyLog('specialPlaylist.shelf.hidden', { id });
+      shelves.splice(i, 1);
+    }
   }
 }
