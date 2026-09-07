@@ -53,6 +53,7 @@
                     "fixUI": "UI korrigieren",
                     "hqThumbnails": "Hochqualitative Thumbnails aktivieren",
                     "longPress": "Aktionen bei langem Drücken aktivieren",
+                    "reloadOnResume": "Player nach Aufwachen des TVs neu laden",
                     "shorts": "Shorts aktivieren",
                     "videoPreviews": "Videovorschauen aktivieren",
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",
