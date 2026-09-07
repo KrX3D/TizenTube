@@ -68,7 +68,7 @@ const defaultConfig = {
   dimmingOpacity: 0.5,
   enablePaidPromotionOverlay: false,
   speedSettingsIncrement: 0.25,
-  videoPreferredCodec: 'any',
+  preferredVideoCodec: 'any',
   launchToOnStartup: null,
   reloadHomeOnStartup: true,
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE', 'SEARCH'],

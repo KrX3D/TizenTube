@@ -849,9 +849,9 @@ JSON.parse = function () {
       if (r.endscreen && configRead('enableHideEndScreenCards')) r.endscreen = null;
       if (r.messages && Array.isArray(r.messages) && !configRead('enableYouThereRenderer')) r.messages = r.messages.filter(msg => !msg?.youThereRenderer);
       if (r?.title?.runs) PatchSettings(r);
-      if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
+      if (r?.streamingData?.adaptiveFormats && configRead('preferredVideoCodec') !== 'any') {
         try {
-          const preferredCodec = configRead('videoPreferredCodec');
+          const preferredCodec = configRead('preferredVideoCodec');
           if (r.streamingData.adaptiveFormats.find(f => f.mimeType.includes(preferredCodec))) {
             r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(f => f.mimeType.startsWith('audio/') || f.mimeType.includes(preferredCodec));
           }
@@ -936,9 +936,9 @@ JSON.parse = function () {
 
     const signinReminderEnabled = configRead('enableSigninReminder');
     if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) r.paidContentOverlay = null;
-    if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
+    if (r?.streamingData?.adaptiveFormats && configRead('preferredVideoCodec') !== 'any') {
       try {
-        const preferredCodec = configRead('videoPreferredCodec');
+        const preferredCodec = configRead('preferredVideoCodec');
         if (r.streamingData.adaptiveFormats.find(f => f.mimeType.includes(preferredCodec))) {
           r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(f => f.mimeType.startsWith('audio/') || f.mimeType.includes(preferredCodec));
         }
