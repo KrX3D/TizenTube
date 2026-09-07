@@ -17,10 +17,15 @@ function onVisible() {
     appendFileOnlyLog('resume.player_alive', {});
     return;
   }
+  if (window.__ttResumeReloaded) {
+    appendFileOnlyLog('resume.already_reloaded', {});
+    return;
+  }
   appendFileOnlyLog('resume.player_dead_reloading', {
     hasVideo: !!document.querySelector('video'),
     href: String(location.hash || '')
   });
+  window.__ttResumeReloaded = true;
   location.reload();
 }
 

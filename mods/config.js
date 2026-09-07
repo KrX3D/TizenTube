@@ -96,7 +96,7 @@ const defaultConfig = {
   hideChannelShelves: false,
   hideSurveys: false,
   spoofViewport: 'disabled',
-  enableReloadOnResume: true,
+  enableReloadOnResume: false,
 };
 
 let localConfig;
