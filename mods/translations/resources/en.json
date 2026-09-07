@@ -361,6 +361,7 @@
         "sidebarContentsUpdated": {
             "title": "Sidebar updated",
             "subtitle": "Restart the app if the sidebar does not refresh."
-        }
+        },
+        "sidebarGuideFetchFailed": "Could not load the sidebar entries. Try again in a moment."
     }
 }
