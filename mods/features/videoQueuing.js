@@ -4,6 +4,12 @@ window.queuedVideos = {
 };
 
 import resolveCommand from '../resolveCommand.js';
+import { lockupVideoId, lockupSelectCommand } from './lockupViewModel.js';
+
+// Queued items can be either shape: tileRenderer (most surfaces) or
+// lockupViewModel (search results, upstream ca60382).
+const queuedVideoId = (v) => v?.tileRenderer?.contentId || lockupVideoId(v);
+const queuedSelectCommand = (v) => v?.tileRenderer ? v.tileRenderer.onSelectCommand : lockupSelectCommand(v);
 
 function addListener() {
     const videoPlayer = document.querySelector('.html5-video-player');
@@ -17,20 +23,20 @@ function addListener() {
 
             if (playerStateObject.isEnded) {
                 try {
-                    const index = window.queuedVideos.videos.findIndex(v => v.tileRenderer.contentId === videoData.video_id);
+                    const index = window.queuedVideos.videos.findIndex(v => queuedVideoId(v) === videoData.video_id);
                     if (index !== -1) {
                         if (index + 1 >= window.queuedVideos.videos.length) {
                             resolveCommand({ customAction: { action: 'CLEAR_QUEUE' } });
                             return;
                         }
-                        const videoWatchEndpoint = window.queuedVideos.videos[index + 1].tileRenderer.onSelectCommand;
+                        const videoWatchEndpoint = queuedSelectCommand(window.queuedVideos.videos[index + 1]);
                         setTimeout(() => {
                             try { resolveCommand(videoWatchEndpoint); } catch (e) { console.warn('[videoQueuing] resolveCommand failed (index):', e); }
                         }, 500);
                     } else if (window.queuedVideos.lastVideoId) {
-                        const lastIndex = window.queuedVideos.videos.findIndex(v => v.tileRenderer.contentId === window.queuedVideos.lastVideoId);
+                        const lastIndex = window.queuedVideos.videos.findIndex(v => queuedVideoId(v) === window.queuedVideos.lastVideoId);
                         if (lastIndex !== -1 && lastIndex + 1 < window.queuedVideos.videos.length) {
-                            const videoWatchEndpoint = window.queuedVideos.videos[lastIndex + 1].tileRenderer.onSelectCommand;
+                            const videoWatchEndpoint = queuedSelectCommand(window.queuedVideos.videos[lastIndex + 1]);
                             setTimeout(() => {
                                 try { resolveCommand(videoWatchEndpoint); } catch (e) { console.warn('[videoQueuing] resolveCommand failed (lastIndex):', e); }
                             }, 500);
@@ -39,7 +45,7 @@ function addListener() {
                             return;
                         }
                     } else {
-                        const videoWatchEndpoint = window.queuedVideos.videos[0].tileRenderer.onSelectCommand;
+                        const videoWatchEndpoint = queuedSelectCommand(window.queuedVideos.videos[0]);
                         setTimeout(() => {
                             try { resolveCommand(videoWatchEndpoint); } catch (e) { console.warn('[videoQueuing] resolveCommand failed (first):', e); }
                         }, 500);
@@ -51,7 +57,7 @@ function addListener() {
                 try {
                     const container = document.getElementById('container');
                     if (container) container.style.setProperty('opacity', '1', 'important');
-                    if (window.queuedVideos.videos.find(v => v.contentId === videoData.video_id)) {
+                    if (window.queuedVideos.videos.find(v => queuedVideoId(v) === videoData.video_id)) {
                         window.queuedVideos.lastVideoId = videoData.video_id;
                     }
                 } catch (playingErr) {

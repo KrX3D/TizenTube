@@ -87,6 +87,7 @@ export function getShortInfo(item, opts = {}) {
     || item?.videoRenderer?.title?.runs?.[0]?.text
     || item?.videoRenderer?.title?.simpleText
     || item?.richItemRenderer?.content?.videoRenderer?.title?.runs?.[0]?.text
+    || item?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content
     || 'unknown';
 
   if (item.reelItemRenderer || item.richItemRenderer?.content?.reelItemRenderer) return { isShort: true, reason: 'reel', title };
@@ -100,6 +101,8 @@ export function getShortInfo(item, opts = {}) {
 
   if (!renderer) return { isShort: false, reason: 'no_renderer', title };
   if (renderer.tvhtml5ShelfRendererType === 'TVHTML5_TILE_RENDERER_TYPE_SHORTS') return { isShort: true, reason: 'renderer_type', title };
+  // lockupViewModel (search results) labels Shorts by contentType (upstream ca60382).
+  if (renderer.contentType === 'LOCKUP_CONTENT_TYPE_SHORT') return { isShort: true, reason: 'lockup_content_type', title };
   if (renderer.onSelectCommand?.reelWatchEndpoint) return { isShort: true, reason: 'reelWatchEndpoint', title };
   if (hasShortsEndpointMarkers(item) || hasShortsEndpointMarkers(renderer)) return { isShort: true, reason: 'endpoint_marker', title };
 
