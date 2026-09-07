@@ -35,6 +35,18 @@ import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
+import {
+  isLockupVideo,
+  lockupVideoId,
+  lockupWatchEndpoint,
+  lockupTitle,
+  setLockupTitle,
+  lockupThumbnails,
+  setLockupThumbnails,
+  lockupSubtitle,
+  lockupLongPressMenuItems,
+  setLockupLongPress,
+} from './lockupViewModel.js';
 
 // ===== Local utilities =====
 
@@ -851,9 +863,9 @@ JSON.parse = function () {
       if (r.endscreen && configRead('enableHideEndScreenCards')) r.endscreen = null;
       if (r.messages && Array.isArray(r.messages) && !configRead('enableYouThereRenderer')) r.messages = r.messages.filter(msg => !msg?.youThereRenderer);
       if (r?.title?.runs) PatchSettings(r);
-      if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
+      if (r?.streamingData?.adaptiveFormats && configRead('preferredVideoCodec') !== 'any') {
         try {
-          const preferredCodec = configRead('videoPreferredCodec');
+          const preferredCodec = configRead('preferredVideoCodec');
           if (r.streamingData.adaptiveFormats.find(f => f.mimeType.includes(preferredCodec))) {
             r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(f => f.mimeType.startsWith('audio/') || f.mimeType.includes(preferredCodec));
           }
@@ -938,9 +950,9 @@ JSON.parse = function () {
 
     const signinReminderEnabled = configRead('enableSigninReminder');
     if (r.paidContentOverlay && !configRead('enablePaidPromotionOverlay')) r.paidContentOverlay = null;
-    if (r?.streamingData?.adaptiveFormats && configRead('videoPreferredCodec') !== 'any') {
+    if (r?.streamingData?.adaptiveFormats && configRead('preferredVideoCodec') !== 'any') {
       try {
-        const preferredCodec = configRead('videoPreferredCodec');
+        const preferredCodec = configRead('preferredVideoCodec');
         if (r.streamingData.adaptiveFormats.find(f => f.mimeType.includes(preferredCodec))) {
           r.streamingData.adaptiveFormats = r.streamingData.adaptiveFormats.filter(f => f.mimeType.startsWith('audio/') || f.mimeType.includes(preferredCodec));
         }
@@ -1350,24 +1362,35 @@ function deArrowify(items) {
     const item = items[i];
     if (!item || typeof item !== 'object') continue;
     if (item.adSlotRenderer) { items.splice(i, 1); continue; }
-    if (!item?.tileRenderer) continue;
+    // Search results arrive as lockupViewModel instead of tileRenderer; both
+    // are handled, everything else is skipped.
+    const isLockup = isLockupVideo(item);
+    if (!item?.tileRenderer && !isLockup) continue;
     if (!configRead('enableDeArrow')) continue;
     const capturedItem = item;
-    const videoID = String(capturedItem.tileRenderer.contentId || capturedItem.tileRenderer.onSelectCommand?.watchEndpoint?.videoId || '');
-    if (!videoID || videoID.length !== 11) { appendFileOnlyLog('dearrow.skip', { reason: 'no_video_id', contentId: capturedItem.tileRenderer.contentId || null }); continue; }
+    const videoID = isLockup
+      ? String(lockupVideoId(capturedItem) || lockupWatchEndpoint(capturedItem)?.videoId || '')
+      : String(capturedItem.tileRenderer.contentId || capturedItem.tileRenderer.onSelectCommand?.watchEndpoint?.videoId || '');
+    if (!videoID || videoID.length !== 11) { appendFileOnlyLog('dearrow.skip', { reason: 'no_video_id', lockup: isLockup, contentId: (isLockup ? lockupVideoId(capturedItem) : capturedItem.tileRenderer.contentId) || null }); continue; }
     _deArrowEnqueue(() =>
       fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`)
         .then(res => { if (!res.ok) return null; return res.json(); })
         .then(data => {
           if (!data) return;
           if (Array.isArray(data.titles) && data.titles.length > 0) {
-            try { const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title); capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title; } catch (_) { }
+            try {
+              const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
+              if (isLockup) setLockupTitle(capturedItem, mostVoted.title);
+              else capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
+            } catch (_) { }
           }
           if (Array.isArray(data.thumbnails) && data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
             try {
               const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
               if (mostVotedThumbnail.timestamp !== null && mostVotedThumbnail.timestamp !== undefined) {
-                capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = [{ url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`, width: 1280, height: 640 }];
+                const dearrowThumb = [{ url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`, width: 1280, height: 640 }];
+                if (isLockup) setLockupThumbnails(capturedItem, dearrowThumb);
+                else capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = dearrowThumb;
               }
             } catch (_) { }
           }
@@ -1382,14 +1405,21 @@ function deArrowify(items) {
 function hqify(items) {
   items.forEach((item, index) => {
     try {
-      if (!item.tileRenderer) return;
-      if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') return;
+      const isLockup = isLockupVideo(item);
+      if (!item.tileRenderer && !isLockup) return;
+      if (!isLockup && item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT') return;
       if (!configRead('enableHqThumbnails')) return;
-      const videoID = item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
+      const videoID = isLockup
+        ? (lockupVideoId(item) || lockupWatchEndpoint(item)?.videoId)
+        : item.tileRenderer.onSelectCommand?.watchEndpoint?.videoId;
       if (!videoID) return;
-      const existingUrl = item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails?.[0]?.url;
-      if (!existingUrl) return;
-      const thumbs = item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails;
+      // Both shapes keep their image list as a plain array, so the in-place
+      // upgrade below (hqdefault now, sddefault once the HEAD probe confirms
+      // it exists) works the same either way.
+      const thumbs = isLockup
+        ? lockupThumbnails(item)
+        : item.tileRenderer.header?.tileHeaderRenderer?.thumbnail?.thumbnails;
+      if (!thumbs || !thumbs[0]?.url) return;
       thumbs[0] = { url: `https://i.ytimg.com/vi/${videoID}/hqdefault.jpg`, width: 480, height: 360 };
       setTimeout(() => {
         fetch(`https://i.ytimg.com/vi/${videoID}/sddefault.jpg`, { method: 'HEAD' })
@@ -1406,6 +1436,30 @@ function addLongPress(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
     try {
+      // lockupViewModel items (search results) carry their long-press command
+      // under rendererContext.commandContext instead of onLongPressCommand.
+      if (isLockupVideo(item)) {
+        const existingMenu = lockupLongPressMenuItems(item);
+        if (existingMenu) {
+          existingMenu.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
+          continue;
+        }
+        if (!configRead('enableLongPress')) continue;
+        const watchEndpointData = lockupWatchEndpoint(item);
+        const thumbnails = lockupThumbnails(item);
+        const title = lockupTitle(item);
+        if (!watchEndpointData || !thumbnails || !title) continue;
+        // Lockup metadata rows are plain strings, not runs/simpleText nodes.
+        setLockupLongPress(item, longPressData({
+          videoId: lockupVideoId(item),
+          thumbnails,
+          title,
+          subtitle: lockupSubtitle(item) || '',
+          watchEndpointData,
+          item,
+        }));
+        continue;
+      }
       if (!item?.tileRenderer) {
         // Diagnostic: the TILE_STYLE_YTLR_ROUND check found only channel
         // avatar tiles, not the reported promoted/sponsored tile — it very
