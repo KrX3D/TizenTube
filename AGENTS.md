@@ -788,6 +788,72 @@ install-blocked mode), and the user's hardware is an unconfirmed fit (has
 a Samsung soundbar, not confirmed Q-Symphony-compatible). Ask before
 implementing if this comes back up.
 
+## Hard-won lessons (read before touching `mods/features/adblock.js`)
+
+These cost real debugging time and are not obvious from the code. They are
+recorded here rather than in any one contributor's notes so a fork inherits
+them.
+
+### There are two response-handling paths, and they are not shared code
+
+YouTube delivers responses in two shapes, and `adblock.js` has a separate
+handler for each:
+
+- **array-root** → `processResponsePayload(payload, detectedPage)`
+- **object-root** → the branch inside the patched `JSON.parse`
+
+A filter added to one path and not the other works on some surfaces and
+silently does nothing on others. This has bitten repeatedly: the array-root
+grid handler was missing `filterShortsFromItems` and
+`filterMembersOnlyFromItems`; `noteContinuationBatch` had to be hooked at
+*both* continuation sites; `hideRelatedVideos` is called from both watch-next
+sites.
+
+When adding anything per-item or per-shelf, put the logic in its own module and
+call it from both sites — `mods/features/sidebarChannelButton.js` is the shape
+to copy — rather than duplicating the body. Grep for the sibling call site
+before assuming one hook is enough.
+
+### `JSON.parse` is wrapped by several modules, and order matters
+
+`playlistContinue.js`, `playlistBatchCollect.js`, `adblock.js` and
+`customGuideAction.js` each wrap `JSON.parse`, in that order (set by the import
+order in `userScript.js`). Every wrapper calls through to whatever it captured
+as the original, so they compose — but an early `return` added to any of them
+silently swallows every wrapper installed before it.
+
+`captionStylePersistence.js` independently wraps `resolveCommand` alongside
+`resolveCommand.js`'s own patch. Same rule applies.
+
+### A playlist continuation response must contain at least one item
+
+YouTube's refill loop stops dead if a continuation comes back empty — loading
+never resumes, even on scroll. `hideVideo` therefore deliberately keeps one
+"helper" tile per continuation batch (`__ttKeepOneForContinuation`).
+
+This was learned the hard way: PR #678 capped helpers at one per visit and
+returned `[]` for the rest, and playlist loading stalled after two batches on
+device. It was reverted in #679. If you change the helper logic, test a long,
+mostly-watched playlist and confirm it still loads past batch 2.
+
+### Tizen 5.0 has no usable Polymer element APIs
+
+`yt-virtual-list` positions its rows by transform from its own data model, and
+the Polymer APIs you would reach for to force a re-render are `undefined` on
+Tizen 5.0. Every DOM-level attempt to collapse the blank slot left behind by a
+removed helper tile failed for this reason — rows are recycled and carry their
+previous inline styles, and helper tiles carry no video-id attribute to target
+(the id exists only inside a thumbnail's `background-image` URL).
+
+Blank helper slots are an accepted limitation. Don't re-litigate it at the DOM
+layer without new evidence.
+
+### Verifying that a change actually reached the bundle
+
+`dist/userScript.js` is minified and Babel-transpiled: identifier names are
+mangled, string literals survive. Grep for a distinctive **string literal**,
+never a function name, and use `grep -a` — the bundle is detected as binary.
+
 ## Conventions this repo has established (follow these)
 
 - New app identities (Tizen `package`/app id) must be unique, not reused
@@ -818,3 +884,15 @@ implementing if this comes back up.
   mistake). If you need a per-dependency try/catch wrapper for
   diagnostics, wrap each literal `require('x')` call individually rather
   than passing the module name through a shared helper function.
+- Never run the build by hand and commit the generated output (`dist/*`,
+  `standalone/service/dist/*`) alongside a source change. CI rebuilds and
+  commits it on version bump; doing it manually produces merge conflicts on
+  generated files for everyone branching off `main`. Build locally to check a
+  change compiles, then `git checkout -- dist/` before committing.
+- Work on a branch and open a PR; don't push to `main`. Don't push further
+  commits onto a branch whose PR is already merged — the commits end up
+  orphaned. Check merge state before pushing to an existing branch.
+- When porting an upstream commit, read it rather than applying it: upstream
+  code has shipped with operator-precedence bugs, dead branches behind early
+  returns, and renames that would reset this fork's stored settings. Fix them
+  in the port and say so in the PR.
