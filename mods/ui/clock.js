@@ -43,6 +43,14 @@ function toggleClock(value) {
             const now = new Date();
             const is12HourFormat = configRead('isClock12HourFormat');
             const secondsEnabled = configRead('clockShowSeconds');
+            // Upstream 4d7d478. ytlr-watch-default carries hybridnavfocusable
+            // ='true' only while the watch page owns focus, so it doubles as a
+            // 'video is on screen' signal without polling the media element.
+            if (configRead('clockHideWhenVideoPlaying')) {
+                const watchPage = document.querySelector('ytlr-watch-default');
+                actualClock.style.display =
+                    (watchPage && watchPage.getAttribute('hybridnavfocusable') === 'true') ? 'none' : 'block';
+            }
 
             let hours = now.getHours();
             if (is12HourFormat) {

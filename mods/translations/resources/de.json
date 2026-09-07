@@ -125,6 +125,7 @@
                         "title": "Geschwindigkeitsstufen",
                         "subtitle": "Lege die Schritte für Anpassungen der Wiedergabegeschwindigkeit fest"
                     },
+                    "hideRelatedVideosPlayer": "Ähnliche Videos im Player ausblenden",
                     "preferredVideoCodec": {
                         "title": "Bevorzugter Videocodec",
                         "subtitle": "Wähle den bevorzugten Videocodec für die Wiedergabe"
@@ -249,7 +250,8 @@
                         "options": {
                             "enableClock": "Uhr aktivieren",
                             "isClock12HourFormat": "12-Stunden-Format für Uhr verwenden",
-                            "clockShowSeconds": "Sekunden auf der Uhr anzeigen"
+                            "clockShowSeconds": "Sekunden auf der Uhr anzeigen",
+                            "clockHideWhenVideoPlaying": "Uhr während der Videowiedergabe ausblenden"
                         }
                     },
                     "disableEnlargingThumbnails": "Vergrößerte Vorschaubilder deaktivieren",
