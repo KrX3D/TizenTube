@@ -7,6 +7,8 @@ import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
 import { screenOff } from './features/screenOff.js';
+import { shareCurrentVideo } from './features/qrShare.js';
+import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
 import { t } from 'i18next';
 
 
@@ -150,6 +152,19 @@ export function patchResolveCommand() {
                             }
                         ])
                     );
+                    // Share as QR code (upstream 3aa3039). Splices at 3 as well, so
+                    // it lands directly above Screen off.
+                    cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items.splice(3, 0,
+                        buttonItem(
+                            { title: t('player.share.button') },
+                            { icon: 'OPEN_IN_NEW' }, [
+                            {
+                                customAction: {
+                                    action: 'SHARE'
+                                }
+                            }
+                        ])
+                    );
 
                     if (window.h5vcc && window.h5vcc.tizentube && window.h5vcc.tizentube.HasSystemFeature &&
                         window.h5vcc.tizentube.HasSystemFeature('android.software.picture_in_picture')) {
@@ -272,6 +287,12 @@ function customAction(action, parameters) {
             break;
         case 'PLAYLIST_CONTINUE':
             playlistContinue(resolveCommand, showToast);
+            break;
+        case 'SHARE':
+            shareCurrentVideo();
+            break;
+        case 'GO_TO_CHANNEL':
+            requestNextAndNavigateChannel(parameters);
             break;
         case 'LOG_SERVER_TEST_PING': {
             showLogServerTestToast(sendTestPing());
