@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -120,11 +121,15 @@ export function getWatchPercent(item) {
       const s = String(b?.metadataBadgeRenderer?.style || '') + String(b?.metadataBadgeRenderer?.label || '');
       return s.toLowerCase().includes('watched');
     })) return 100;
-    const raw = item?.watchProgressPercentage ?? item?.percentDurationWatched
-      ?? item?.lockupViewModel?.progressPercentage ?? null;
+    // lockupViewModel (search results) puts progress on a bottom overlay bar
+    // rather than a thumbnailOverlayResumePlaybackRenderer (upstream ca60382).
+    const lockupPct = lockupWatchPercent(item);
+    if (lockupPct !== null) return lockupPct;
+    const raw = item?.watchProgressPercentage ?? item?.percentDurationWatched ?? null;
     if (raw !== null) return Number(raw);
     const videoId = item?.tileRenderer?.contentId
-      || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId;
+      || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId
+      || lockupVideoId(item);
     if (videoId && window._ttVideoProgressCache?.[videoId] !== undefined) {
       return window._ttVideoProgressCache[videoId];
     }
@@ -148,12 +153,17 @@ export function hideVideo(items, pageHint = null) {
   if (!pages.includes(pageName)) return items;
   return items.filter(item => {
     try {
-      if (!item?.tileRenderer?.contentId) return true;
+      // Search results are lockupViewModel rather than tileRenderer; without
+      // this they were never eligible for hiding at all (upstream ca60382 has
+      // the same code path but left it unreachable behind a tileRenderer-only
+      // early return).
+      const videoId = item?.tileRenderer?.contentId || lockupVideoId(item);
+      if (!videoId) return true;
       if (item.__ttKeepOneForContinuation) {
         const currentSeq = Number(window.__ttParseSeq || 0);
         const itemSeq = Number(item.__ttKeepOneForContinuationParseSeq || 0);
         if (pageName === 'playlist' && itemSeq > 0 && itemSeq === currentSeq) {
-          appendFileOnlyLog('hideVideo.keep_one', { pageName, videoId: item?.tileRenderer?.contentId });
+          appendFileOnlyLog('hideVideo.keep_one', { pageName, videoId });
           return true;
         }
         delete item.__ttKeepOneForContinuation;
@@ -162,11 +172,11 @@ export function hideVideo(items, pageHint = null) {
       }
       const pct = getWatchPercent(item);
       if (pct === null) {
-        appendFileOnlyLog('hideVideo.noProgress', { pageName, videoId: item?.tileRenderer?.contentId });
+        appendFileOnlyLog('hideVideo.noProgress', { pageName, videoId });
         return true;
       }
       const keep = pct <= threshold;
-      if (!keep) appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId: item?.tileRenderer?.contentId });
+      if (!keep) appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId });
       return keep;
     } catch { return true; }
   });
