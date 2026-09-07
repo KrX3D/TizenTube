@@ -8,7 +8,7 @@ let pending = null;
 function playerLooksDead() {
   const video = document.querySelector('video');
   if (!video) return true;
-  if (video.error) return false;
+  if (video.error) return true;
   return video.readyState === 0;
 }
 
