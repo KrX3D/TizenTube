@@ -84,6 +84,10 @@ const defaultConfig = {
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 1054,
   logServerEnabled: false,
+  // Every category on by default, so upgrading changes nothing until the
+  // user narrows it down. 'basic' vs 'detailed' controls payload depth.
+  logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
+  logVerbosity: 'detailed',
   logServerHost: '192.168.50.57',
   logServerPort: 3030,
   enablePlaylistBatchCollect: false,

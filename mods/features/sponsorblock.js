@@ -1,5 +1,6 @@
 import sha256 from '../tiny-sha256.js';
 import { configRead } from '../config.js';
+import { appendFileOnlyLog } from './hideWatched.js';
 import { showToast } from '../ui/ytUI.js';
 import { t } from 'i18next';
 
@@ -363,6 +364,12 @@ class SponsorBlockHandler {
           if (configRead('enableSponsorBlockToasts')) {
             showToast('SponsorBlock', t('sponsorblock.toasts.skipping', { segment: skipName }));
           }
+          appendFileOnlyLog('sponsorblock.skip', {
+            category: skipName,
+            start: segment.segment?.[0] ?? null,
+            end,
+            videoId: this.videoID || null,
+          });
           if (this.video.duration - end < 1) {
             this.video.currentTime = end - 1;
           } else {

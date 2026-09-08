@@ -72,7 +72,27 @@
                             "bottomRight": "Unten rechts",
                             "center": "Mitte"
                         },
-                        "height": "Konsolenhöhe"
+                        "height": "Konsolenhöhe",
+                        "verbosity": {
+                            "title": "Detailgrad der Protokolle",
+                            "subtitle": "Einfach protokolliert nur, was passiert ist; detailliert enthält die vollständigen Daten",
+                            "basic": "Einfach",
+                            "detailed": "Detailliert"
+                        },
+                        "categories": {
+                            "title": "Protokoll-Kategorien",
+                            "subtitle": "Wähle aus, welche Funktionen Protokolleinträge schreiben",
+                            "nav": "Navigation und Seiten",
+                            "ads": "Werbeblocker",
+                            "shorts": "Shorts-Filter",
+                            "watched": "Gesehene Videos ausblenden",
+                            "playlist": "Playlist-Stapelladen",
+                            "filters": "Nur für Mitglieder, Umfragen, Mediathek",
+                            "shelves": "Regale und Kacheln",
+                            "thumbs": "Vorschaubilder und DeArrow",
+                            "player": "Player, SponsorBlock, Untertitel",
+                            "other": "Alles Übrige"
+                        }
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",

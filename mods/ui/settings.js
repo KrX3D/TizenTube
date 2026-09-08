@@ -361,6 +361,43 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
+                            name: t('settings.options.misc.options.debugConsole.verbosity.title'),
+                            icon: 'ARTICLE',
+                            value: null,
+                            menuId: 'tt-log-verbosity',
+                            menuHeader: {
+                                title: t('settings.options.misc.options.debugConsole.verbosity.title'),
+                                subtitle: t('settings.options.misc.options.debugConsole.verbosity.subtitle')
+                            },
+                            options: [
+                                { name: t('settings.options.misc.options.debugConsole.verbosity.basic'), key: 'logVerbosity', value: 'basic' },
+                                { name: t('settings.options.misc.options.debugConsole.verbosity.detailed'), key: 'logVerbosity', value: 'detailed' }
+                            ]
+                        },
+                        {
+                            name: t('settings.options.misc.options.debugConsole.categories.title'),
+                            icon: 'BUG_REPORT',
+                            value: null,
+                            arrayToEdit: 'logCategories',
+                            menuId: 'tt-log-categories',
+                            menuHeader: {
+                                title: t('settings.options.misc.options.debugConsole.categories.title'),
+                                subtitle: t('settings.options.misc.options.debugConsole.categories.subtitle')
+                            },
+                            options: [
+                                { name: t('settings.options.misc.options.debugConsole.categories.nav'), icon: 'WHAT_TO_WATCH', value: 'nav' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.ads'), icon: 'DOLLAR_SIGN', value: 'ads' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'shorts' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.watched'), icon: 'VISIBILITY_OFF', value: 'watched' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.playlist'), icon: 'PLAYLIST_PLAY', value: 'playlist' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.filters'), icon: 'PRIVACY_UNLISTED', value: 'filters' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.shelves'), icon: 'MENU', value: 'shelves' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.other'), icon: 'ARTICLE', value: 'other' }
+                            ]
+                        },
+                        {
                             name: t('settings.options.misc.options.debugConsole.height'),
                             value: null,
                             menuId: 'tt-debug-console-height',

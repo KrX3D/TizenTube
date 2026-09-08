@@ -1,6 +1,7 @@
 import { detectCurrentPage } from './hideWatched.js';
 import { LIBRARY_TAB_IDS } from '../ui/settings.js';
 import { configRead } from '../config.js';
+import { appendFileOnlyLog } from './hideWatched.js';
 
 const getHiddenLibraryTabIds = (configured) => {
   if (!Array.isArray(configured) || configured.length === 0) return new Set();
@@ -58,6 +59,9 @@ const pruneLibraryTabs = (node, hiddenIds, _state) => {
       const afterTabCount = node.horizontalListRenderer.items.filter(isKnownLibraryTab).length;
       _state.found = true;
       _state.remaining = Math.max(_state.remaining, afterTabCount);
+      if (afterTabCount !== beforeTabCount) {
+        appendFileOnlyLog('libraryTab.hidden', { before: beforeTabCount, after: afterTabCount, path: 'horizontalListRenderer' });
+      }
     }
   }
 

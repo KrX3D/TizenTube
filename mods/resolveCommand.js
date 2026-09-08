@@ -10,6 +10,7 @@ import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
+import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
 
 
@@ -187,6 +188,14 @@ export function patchResolveCommand() {
                         );
                     }
                 } else if (cmd?.watchEndpoint?.videoId) {
+                    // Basic-tier navigation trail: which video was opened, and
+                    // from where. Page changes are already covered by
+                    // page.store in hideWatched.js.
+                    appendFileOnlyLog('nav.video.open', {
+                        videoId: cmd.watchEndpoint.videoId,
+                        page: window.__ttLastDetectedPage || null,
+                        playlistId: cmd.watchEndpoint.playlistId || null,
+                    });
                     window.isPipPlaying = false;
                     const ytlrPlayerContainer = document.querySelector('ytlr-player-container');
                     ytlrPlayerContainer.style.removeProperty('z-index');
