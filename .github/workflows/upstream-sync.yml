@@ -21,6 +21,7 @@ concurrency:
 env:
   UPSTREAM_REPO: https://github.com/reisxd/TizenTube.git
   UPSTREAM_BRANCH: main
+  UPSTREAM_BRANCH_REF: upstream/main
   SYNC_BRANCH: sync/upstream
 
 jobs:
@@ -59,15 +60,20 @@ jobs:
         if: steps.check.outputs.count != '0'
         run: |
           set -euo pipefail
+          BASE_SHA=$(git rev-parse origin/main)
           git checkout -B "$SYNC_BRANCH" origin/main
 
+          # --no-commit so the CI-exclusion below lands in the same commit
+          # whether or not the merge conflicted, rather than needing a second.
           CONFLICTS=""
-          if ! git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
+          git merge --no-commit --no-ff "$UPSTREAM_BRANCH_REF" || true
+
+          CONFLICTS=$(git diff --name-only --diff-filter=U || true)
+          if [ -n "$CONFLICTS" ]; then
             # Keep this fork's version of every conflicted file. The point of
             # the PR is to surface the change for review, not to guess at a
             # resolution — committing conflict markers would only produce a
             # branch that cannot build.
-            CONFLICTS=$(git diff --name-only --diff-filter=U)
             echo "Conflicted files kept at fork version:"
             echo "$CONFLICTS"
             while IFS= read -r f; do
@@ -75,8 +81,29 @@ jobs:
               git checkout --ours -- "$f" 2>/dev/null || git rm -q -- "$f"
               git add -- "$f" 2>/dev/null || true
             done <<< "$CONFLICTS"
-            git commit --no-edit
           fi
+
+          # CI is never synced from upstream, for two reasons. This fork runs
+          # its own workflows (npm publish, standalone .wgt build, this sync)
+          # which have no upstream counterpart, so importing theirs would be
+          # actively wrong. And GITHUB_TOKEN *cannot* push changes under
+          # .github/workflows at all — there is no "workflows" permission in
+          # the permissions: block, that scope exists only for PATs and GitHub
+          # Apps, so a push carrying one is rejected outright:
+          #   refusing to allow a GitHub App to create or update workflow
+          #   `.github/workflows/...` without `workflows` permission
+          # Restoring the directory to exactly origin/main covers both the
+          # modified and the newly-added case.
+          if git rev-parse --verify -q "${BASE_SHA}:.github/workflows" >/dev/null; then
+            git rm -rf --quiet --ignore-unmatch .github/workflows >/dev/null 2>&1 || true
+            git checkout "$BASE_SHA" -- .github/workflows
+            git add -A .github/workflows
+            echo "Restored .github/workflows to the fork's version"
+          fi
+
+          # A clean merge leaves everything staged but uncommitted because of
+          # --no-commit; a conflicted one is staged by the loop above.
+          git commit --no-edit || echo "Nothing to commit"
 
           {
             echo 'conflicts<<TT_EOF'
