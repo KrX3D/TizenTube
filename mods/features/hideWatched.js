@@ -379,6 +379,10 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
 export function updateProgressCache(r) {
   if (!r?.frameworkUpdates?.entityBatchUpdate?.mutations) return;
   if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+  // Recorded so a capture can show whether progress was actually learned. This
+  // was silent before, which is why "watched videos reappear until the app is
+  // restarted" produced no evidence either way.
+  const learned = [];
   for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
     try {
       const key = String(mutation?.entityKey || '');
@@ -389,12 +393,17 @@ export function updateProgressCache(r) {
         ?? null;
       if (pct !== null) {
         const videoId = key.includes('|') ? key.split('|')[0] : key;
+        const before = window._ttVideoProgressCache[videoId];
         window._ttVideoProgressCache[videoId] = Number(pct);
+        if (before !== Number(pct) && learned.length < 12) learned.push({ videoId, pct: Number(pct) });
         const explicitId = payload?.videoAttributionModel?.externalVideoId
           || payload?.videoData?.videoId || null;
         if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
       }
     } catch (_) { }
+  }
+  if (learned.length) {
+    appendFileOnlyLog('hideVideo.progress_learned', { entries: learned, tracked: Object.keys(window._ttVideoProgressCache).length });
   }
 }
 

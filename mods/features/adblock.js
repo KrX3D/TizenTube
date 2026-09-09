@@ -613,6 +613,30 @@ function filterPlaylistRendererContents(playlistRenderer, pageName, label = 'pla
 function processResponsePayload(payload, detectedPage) {
   if (!payload || typeof payload !== 'object') return;
 
+  // Watch progress was recorded ONLY in the object-root JSON.parse branch
+  // below, never here. Reported symptom: watch two playlist items, leave the
+  // playlist and come back inside the same session, and both still show as
+  // unwatched — but restarting the app fixes it. That fits exactly: the
+  // frameworkUpdates mutation carrying the new percentage arrived as an
+  // array-root response and was dropped, so _ttVideoProgressCache — the
+  // fallback getWatchPercent() uses when a response carries no resume overlay
+  // — never learned about it. After a restart YouTube serves fresh overlays
+  // from its own server, so the fallback is not needed and it appears to work.
+  //
+  // This is the dual-path gap AGENTS.md warns about, and the same class of bug
+  // already found here for addLongPress and the grid filters.
+  updateProgressCache(payload);
+  if (detectedPage !== 'watch' && payload?.frameworkUpdates?.entityBatchUpdate?.mutations) {
+    if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+    for (const mutation of payload.frameworkUpdates.entityBatchUpdate.mutations) {
+      try {
+        for (const entry of collectWatchProgressEntries(mutation?.payload || {})) {
+          if (window._ttVideoProgressCache[entry.id] === undefined) window._ttVideoProgressCache[entry.id] = Number(entry.percent);
+        }
+      } catch (_) { }
+    }
+  }
+
   // Confirmed missing: this array-root path never stripped ad-carrying
   // fields at all — only the object-root JSON.parse patch below did. Any
   // response that happens to arrive as an array root (observed: a manual
