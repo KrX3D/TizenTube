@@ -377,9 +377,17 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
 
 // ── Entity mutation progress cache ────────────────────────────────────────────
 
+// Cap on ids named in one progress_learned line, so a large batch of mutations
+// cannot flood the queue logServer.js drains in-page every second.
+const MAX_LEARNED_LOGGED = 12;
+
 export function updateProgressCache(r) {
   if (!r?.frameworkUpdates?.entityBatchUpdate?.mutations) return;
   if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+  // Recorded so a capture can show whether progress was actually learned. This
+  // was silent before, which is why "watched videos reappear until the app is
+  // restarted" produced no evidence either way.
+  const learned = [];
   for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
     try {
       const key = String(mutation?.entityKey || '');
@@ -390,7 +398,9 @@ export function updateProgressCache(r) {
         ?? null;
       if (pct !== null) {
         const videoId = key.includes('|') ? key.split('|')[0] : key;
+        const before = window._ttVideoProgressCache[videoId];
         window._ttVideoProgressCache[videoId] = Number(pct);
+        if (before !== Number(pct) && learned.length < MAX_LEARNED_LOGGED) learned.push({ videoId, pct: Number(pct) });
         // Persisted so the fallback survives a power cycle — see
         // watchProgressStore.js. The write itself is debounced, so this is
         // cheap to call per mutation.
@@ -403,6 +413,9 @@ export function updateProgressCache(r) {
         }
       }
     } catch (_) { }
+  }
+  if (learned.length) {
+    appendFileOnlyLog('hideVideo.progress_learned', { entries: learned, tracked: Object.keys(window._ttVideoProgressCache).length });
   }
 }
 
