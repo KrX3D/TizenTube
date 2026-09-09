@@ -332,7 +332,7 @@
             }
         },
         "numericEditor": {
-            "hint": "Links/Rechts bewegen · Hoch/Runter ändern · Zifferntasten eingeben",
+            "hint": "Links/Rechts bewegen · Hoch/Runter ändern · Zifferntasten eingeben · weiter rechts zum Speichern",
             "save": "Speichern",
             "cancel": "Abbrechen",
             "saved": "Gespeichert: {{value}}"

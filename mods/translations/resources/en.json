@@ -332,7 +332,7 @@
             }
         },
         "numericEditor": {
-            "hint": "Left/Right move · Up/Down change · number keys type",
+            "hint": "Left/Right move · Up/Down change · number keys type · continue right for Save",
             "save": "Save",
             "cancel": "Cancel",
             "saved": "Saved: {{value}}"
