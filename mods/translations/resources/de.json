@@ -92,7 +92,8 @@
                             "thumbs": "Vorschaubilder und DeArrow",
                             "player": "Player, SponsorBlock, Untertitel",
                             "other": "Alles Übrige"
-                        }
+                        },
+                        "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",
@@ -104,7 +105,9 @@
                         "testQueued": "Testeintrag eingereiht — TizenBrew-Log prüfen",
                         "testDisabled": "Protokollierung zuerst aktivieren",
                         "testFailed": "Log-Ping fehlgeschlagen",
-                        "disabled": "Protokollierung deaktiviert"
+                        "disabled": "Protokollierung deaktiviert",
+                        "host": "IP des Empfänger-PCs",
+                        "port": "Port des Empfängers"
                     }
                 }
             },
@@ -327,6 +330,12 @@
                 "5": "- Buy Me A Coffee: https://www.buymeacoffee.com/reisxd (bevorzugt)",
                 "6": "- GitHub Sponsors: https://github.com/sponsors/reisxd"
             }
+        },
+        "numericEditor": {
+            "hint": "Links/Rechts bewegen · Hoch/Runter ändern · Zifferntasten eingeben",
+            "save": "Speichern",
+            "cancel": "Abbrechen",
+            "saved": "Gespeichert: {{value}}"
         }
     },
     "playlist": {
