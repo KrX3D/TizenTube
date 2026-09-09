@@ -6,6 +6,7 @@ import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
+import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
@@ -329,6 +330,15 @@ function customAction(action, parameters) {
             showToast(t('toasts.sidebarContentsUpdated.title'), t('toasts.sidebarContentsUpdated.subtitle'));
             break;
         }
+        case 'NUMERIC_EDITOR_SHOW':
+            showNumericEditor(parameters);
+            break;
+        case 'NUMERIC_EDITOR_SAVE':
+            saveNumericEditor();
+            break;
+        case 'NUMERIC_EDITOR_CANCEL':
+            cancelNumericEditor();
+            break;
         case 'LOG_SERVER_TEST_PING': {
             showLogServerTestToast(sendTestPing());
             break;
