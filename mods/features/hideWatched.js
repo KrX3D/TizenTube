@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
+import { isCategoryEnabled, applyVerbosity } from './logCategories.js';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -10,10 +11,24 @@ export function appendFileOnlyLog(label, payload) {
   // these onto the PC log receiver, needing enableDebugLogging too, even
   // though these never show in the on-screen visual console either way.
   // logServerEnabled alone is now sufficient for the PC relay path.
-  if (!configRead('enableDebugLogging') && !configRead('logServerEnabled')) return;
+  // Categories only ever come into play while something is actually consuming
+  // logs. The sinks are the visual console (which reads __ttFileOnlyLogs for
+  // its downloadable file), background logging, the log server, and syslog —
+  // with none of them on, nothing is recorded at all and the category list is
+  // irrelevant. syslogEnabled may not exist yet in a given build; configRead
+  // returns undefined for an unknown key, which is correctly falsy here.
+  const anySinkEnabled = configRead('enableDebugConsole')
+    || configRead('enableDebugLogging')
+    || configRead('logServerEnabled')
+    || configRead('syslogEnabled');
+  if (!anySinkEnabled) return;
+  // Filtering happens before the entry is built, so a disabled category costs
+  // nothing — no JSON.stringify, no queue entry, and no work for
+  // logServer.js's once-a-second in-page serialize.
+  if (!isCategoryEnabled(label)) return;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
-  try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
+  try { msg = JSON.stringify(applyVerbosity(payload)); } catch { msg = String(payload); }
   // No longer truncated here — logServer.js's sendRemotePayload now splits
   // long messages into multiple sent parts instead of the previous cutoff
   // silently discarding everything past 500 chars. This array also feeds

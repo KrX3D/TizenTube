@@ -73,6 +73,26 @@
                             "center": "Center"
                         },
                         "height": "Console Height",
+                        "verbosity": {
+                            "title": "Log Detail Level",
+                            "subtitle": "Basic logs what happened; detailed adds the full payload",
+                            "basic": "Basic",
+                            "detailed": "Detailed"
+                        },
+                        "categories": {
+                            "title": "Log Categories",
+                            "subtitle": "Choose which features write log entries",
+                            "nav": "Navigation and pages",
+                            "ads": "Ad blocking",
+                            "shorts": "Shorts filtering",
+                            "watched": "Hide watched videos",
+                            "playlist": "Playlist batch loading",
+                            "filters": "Members-only, surveys, library",
+                            "shelves": "Shelves and tiles",
+                            "thumbs": "Thumbnails and DeArrow",
+                            "player": "Player, SponsorBlock, captions",
+                            "other": "Everything else"
+                        },
                         "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
                     },
                     "logServer": {
@@ -273,7 +293,8 @@
                         },
                         "addToSidebar": "Add Channel to Sidebar",
                         "removeFromSidebar": "Remove Channel from Sidebar"
-                    }
+                    },
+                    "hideDuplicateVideos": "Hide Duplicate Videos"
                 }
             },
             "updater": {

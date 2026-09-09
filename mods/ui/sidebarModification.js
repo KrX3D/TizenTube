@@ -1,6 +1,7 @@
 import { getGuide } from '../utils/innerTubeCalls.js';
 import { configRead, configWrite } from '../config.js';
 import { buttonItem, overlayPanelItemListRenderer, showModal, showToast } from './ytUI.js';
+import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { t } from 'i18next';
 
 // Sidebar (guide) customisation — upstream 2f2c567 / 79195bb.
@@ -44,6 +45,7 @@ function moveGuideButton(parameters) {
     } else if (parameters.direction === 'down' && index < order.length - 1) {
         [order[index + 1], order[index]] = [order[index], order[index + 1]];
     }
+    appendFileOnlyLog('sidebar.move', { browseId, direction: parameters.direction, from: index });
     configWrite('sidebarContentsOrder', order);
 
     return showSetting('', true);
@@ -147,6 +149,7 @@ function showSetting(settingType, parameters) {
                 );
             }
 
+            appendFileOnlyLog('sidebar.menu.open', { mode: isDisableMode ? 'disable' : 'sort', count: buttons.length });
             showModal(
                 {
                     title: isDisableMode
@@ -164,6 +167,7 @@ function showSetting(settingType, parameters) {
             // Without this the menu just silently doesn't open, which is
             // indistinguishable from the entry being broken.
             console.warn('[sidebarModification] guide fetch failed:', err);
+            appendFileOnlyLog('sidebar.guide.error', { msg: String(err?.message || err) });
             showToast('TizenTube', t('toasts.sidebarGuideFetchFailed'));
         });
     } catch (err) {

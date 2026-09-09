@@ -34,6 +34,7 @@ import { filterMembersOnlyFromItems } from './membersOnlyHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
+import { dedupeShelves } from './duplicateVideoHider.js';
 import { logSubscriptionsShelfShape } from './subscriptionsShelfDiag.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
 import {
@@ -1337,6 +1338,9 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       if (shelve.shelfRenderer.content.horizontalListRenderer.items.length === 0) shelves.splice(i, 1);
     } catch (shelfErr) { appendFileOnlyLog('processShelves.shelf.error', { index: i, msg: String(shelfErr?.message || shelfErr) }); }
   }
+  // Last, so it sees shelves after every other filter — deduping earlier would
+  // let an ad or Shorts tile claim the "first occurrence" and hide the real one.
+  dedupeShelves(shelves, activePage);
   logSubscriptionsShelfShape(shelves, activePage);
 }
 
