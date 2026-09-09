@@ -6,6 +6,7 @@ import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
+import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
@@ -37,12 +38,17 @@ export function findFunction(funcName) {
 // settings-menu "Test Log Server Connection" button and the shortcut show
 // the same wording for the same outcome.
 export function showLogServerTestToast(result) {
-    if (!result.enabled) {
-        showToast('TizenTube', t('settings.options.misc.options.logServer.testDisabled'));
-    } else if (result.queued) {
+    // The test now sends whether or not remote logging is enabled, so a
+    // disabled state is no longer a refusal — it just means the ping went out
+    // while ongoing logging stays off. Reported as its own message rather than
+    // the old "enable it first", which made the button useless for its main
+    // job: confirming the host and port before switching logging on.
+    if (!result.queued) {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
+    } else if (result.enabled) {
         showToast('TizenTube', t('settings.options.misc.options.logServer.testQueued'));
     } else {
-        showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testSentButOff'));
     }
 }
 
@@ -329,6 +335,15 @@ function customAction(action, parameters) {
             showToast(t('toasts.sidebarContentsUpdated.title'), t('toasts.sidebarContentsUpdated.subtitle'));
             break;
         }
+        case 'NUMERIC_EDITOR_SHOW':
+            showNumericEditor(parameters);
+            break;
+        case 'NUMERIC_EDITOR_SAVE':
+            saveNumericEditor();
+            break;
+        case 'NUMERIC_EDITOR_CANCEL':
+            cancelNumericEditor();
+            break;
         case 'LOG_SERVER_TEST_PING': {
             showLogServerTestToast(sendTestPing());
             break;

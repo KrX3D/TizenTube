@@ -361,6 +361,18 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
+                            name: t('settings.options.misc.options.debugConsole.height'),
+                            value: null,
+                            menuId: 'tt-debug-console-height',
+                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
+                                return {
+                                    name: `${height}px`,
+                                    key: 'debugConsoleHeight',
+                                    value: height
+                                }
+                            })
+                        },
+                        {
                             name: t('settings.options.misc.options.debugConsole.verbosity.title'),
                             icon: 'ARTICLE',
                             value: null,
@@ -398,16 +410,9 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.height'),
-                            value: null,
-                            menuId: 'tt-debug-console-height',
-                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
-                                return {
-                                    name: `${height}px`,
-                                    key: 'debugConsoleHeight',
-                                    value: height
-                                }
-                            })
+                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
+                            icon: 'SUBSCRIPTIONS',
+                            value: 'diagSubscriptionsShelf'
                         }
                     ]
                 },
@@ -425,6 +430,32 @@ export default function modernUI(update, parameters) {
                             name: t('settings.options.misc.options.logServer.enable'),
                             icon: 'WIFI',
                             value: 'logServerEnabled'
+                        },
+                        {
+                            name: t('settings.options.misc.options.logServer.host'),
+                            subtitle: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                            icon: 'LOCATION_POINT',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'logServerHost',
+                                    kind: 'ipv4',
+                                    title: t('settings.options.misc.options.logServer.host')
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.logServer.port'),
+                            subtitle: String(configRead('logServerPort') || ''),
+                            icon: 'WIFI',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'logServerPort',
+                                    kind: 'port',
+                                    title: t('settings.options.misc.options.logServer.port')
+                                }
+                            }
                         },
                         {
                             name: t('settings.options.misc.options.logServer.test'),
@@ -882,6 +913,11 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.uiSettings.options.hideMembersOnlyVideos'),
                     icon: null,
                     value: 'hideMembersOnlyVideos'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
+                    icon: 'PRIVACY_UNLISTED',
+                    value: 'hideDuplicateVideos'
                 },
                 {
                     name: t('settings.options.uiSettings.options.hideChannelShelves'),

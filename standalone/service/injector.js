@@ -107,7 +107,10 @@ function pollLogQueue(client, relayLog) {
 function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     if (sessionId !== _activeSessionId) return; // superseded by a newer attempt, abort silently
     if (attempt >= MAX_RETRY_ATTEMPTS) {
-        isConnecting = false;
+        // Standing down rather than merely clearing isConnecting: leaving
+        // canConnectToDaemon true meant the next launch began the whole
+        // relaunch cycle again, which is why this never recovered on its own.
+        standDown(relayLog);
         if (typeof relayLog === 'function') {
             relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Giving up after ${MAX_RETRY_ATTEMPTS} attempts (${reason})` });
         }
@@ -164,6 +167,21 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
 
             client.on('disconnect', () => {
                 if (!injected) {
+                    if (!sawAnyContext) {
+                        // Not a transient race: the page never produced a
+                        // single execution context, so another identical launch
+                        // will do the same thing. Retrying regardless is what
+                        // made the app reopen itself ten times with no way to
+                        // exit, so this failure gets a much shorter budget.
+                        noContextFailures++;
+                        if (noContextFailures >= MAX_NO_CONTEXT_FAILURES) {
+                            if (typeof relayLog === 'function') {
+                                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `No execution context after ${noContextFailures} sessions — standing down so the app falls back to the proxy path` });
+                            }
+                            standDown(relayLog);
+                            return;
+                        }
+                    }
                     retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
                 } else if (sessionId === _activeSessionId) {
                     // The session's CDP connection has now genuinely ended
@@ -231,6 +249,11 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // forever with isConnecting stuck true and no mod ever injected.
             let contextRaceMisses = 0;
             const MAX_CONTEXT_RACE_MISSES = 5;
+            // Whether any execution context was seen at all this session. If
+            // none was, re-issuing an identical debug launch cannot help — and
+            // each re-issue relaunches the app and steals the foreground, so
+            // the user cannot even exit while it repeats.
+            let sawAnyContext = false;
 
             // Fetched once per session and reused for every
             // executionContextCreated event, not re-fetched from the CDN
@@ -254,7 +277,19 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                 // (non-default contexts tend to be shorter-lived) and to
                 // wasted work over a long session as more of them appear.
                 const auxData = (m.context && m.context.auxData) || {};
-                if (!auxData.isDefault) return;
+                sawAnyContext = true;
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `executionContextCreated id=${m.context && m.context.id} auxData=${JSON.stringify(auxData)}` });
+                }
+                // Only skip contexts that positively declare themselves NOT
+                // default. The check used to be `if (!auxData.isDefault)`,
+                // which also skipped every context whose auxData omits the
+                // field entirely — and Cobalt does omit it. Captured on-device:
+                // CDP connected, Page.navigate ran, contexts were created, and
+                // not one injection was ever attempted; the session then hit
+                // the safety net as "CDP disconnected before injection
+                // succeeded" and relaunched the app, ten times over.
+                if (auxData.isDefault === false) return;
                 modFilePromise.then(modFile => {
                     // Marker so the userscript can tell it's running under this
                     // standalone app even though this path loads real youtube.com
@@ -386,8 +421,29 @@ const CAN_CONNECT_RETRY_DELAY_MS = 500;
 // given, i.e. only the startDebugger call site, not every getState poll)
 // logging on each failure — after exhausting attempts, resolves with
 // canConnectToDaemon:false rather than hanging forever.
+// Set once the CDP path has proven it cannot work on this device/firmware.
+// Reported on-device: with injection failing, every retry re-launched the app
+// in debug mode, which steals the foreground — so the app could not be exited
+// at all until the whole retry budget was spent. Reporting the daemon as
+// unavailable makes index.html take the proxy path instead, which injects the
+// userscript itself, needs no debugger, and leaves the app usable and exitable.
+let _stoodDown = false;
+const MAX_NO_CONTEXT_FAILURES = 2;
+let noContextFailures = 0;
+
+function standDown(relayLog) {
+    _stoodDown = true;
+    isConnecting = false;
+    if (typeof relayLog === 'function') {
+        relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'CDP injection stood down for this service run; falling back to the proxy path' });
+    }
+}
+
 function canConnectToDaemon(relayLog, attempt) {
     if (attempt === undefined) attempt = 0;
+    // Answered before touching the network: once stood down, nothing should
+    // start another debug launch for the rest of this service's life.
+    if (_stoodDown) return Promise.resolve({ canConnectToDaemon: false, ip: null, isConnecting: false });
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
             return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }

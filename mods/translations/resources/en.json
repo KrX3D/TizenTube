@@ -92,7 +92,8 @@
                             "thumbs": "Thumbnails and DeArrow",
                             "player": "Player, SponsorBlock, captions",
                             "other": "Everything else"
-                        }
+                        },
+                        "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
                     },
                     "logServer": {
                         "title": "Remote Log Server",
@@ -104,7 +105,10 @@
                         "testQueued": "Test entry queued — check TizenBrew log viewer",
                         "testDisabled": "Enable Remote Logging first",
                         "testFailed": "Log ping failed",
-                        "disabled": "Remote Logging disabled"
+                        "disabled": "Remote Logging disabled",
+                        "host": "Receiver PC IP",
+                        "port": "Receiver Port",
+                        "testSentButOff": "Test log sent, but Remote Logging is still off."
                     }
                 }
             },
@@ -292,7 +296,8 @@
                         },
                         "addToSidebar": "Add Channel to Sidebar",
                         "removeFromSidebar": "Remove Channel from Sidebar"
-                    }
+                    },
+                    "hideDuplicateVideos": "Hide Duplicate Videos"
                 }
             },
             "updater": {
@@ -326,6 +331,12 @@
                 "5": "- Buy Me A Coffee: https://www.buymeacoffee.com/reisxd (preferably)",
                 "6": "- GitHub Sponsors: https://github.com/sponsors/reisxd"
             }
+        },
+        "numericEditor": {
+            "hint": "Left/Right move · Up/Down change · number keys type · continue right for Save",
+            "save": "Save",
+            "cancel": "Cancel",
+            "saved": "Saved: {{value}}"
         }
     },
     "playlist": {
