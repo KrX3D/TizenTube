@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
+import { noteProgressChanged } from './watchProgressStore.js';
 import { isCategoryEnabled, applyVerbosity } from './logCategories.js';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
@@ -390,9 +391,16 @@ export function updateProgressCache(r) {
       if (pct !== null) {
         const videoId = key.includes('|') ? key.split('|')[0] : key;
         window._ttVideoProgressCache[videoId] = Number(pct);
+        // Persisted so the fallback survives a power cycle — see
+        // watchProgressStore.js. The write itself is debounced, so this is
+        // cheap to call per mutation.
+        noteProgressChanged(videoId);
         const explicitId = payload?.videoAttributionModel?.externalVideoId
           || payload?.videoData?.videoId || null;
-        if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+        if (explicitId) {
+          window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+          noteProgressChanged(String(explicitId));
+        }
       }
     } catch (_) { }
   }
