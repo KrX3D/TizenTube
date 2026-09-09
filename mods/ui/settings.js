@@ -361,9 +361,16 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
-                            icon: 'SUBSCRIPTIONS',
-                            value: 'diagSubscriptionsShelf'
+                            name: t('settings.options.misc.options.debugConsole.height'),
+                            value: null,
+                            menuId: 'tt-debug-console-height',
+                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
+                                return {
+                                    name: `${height}px`,
+                                    key: 'debugConsoleHeight',
+                                    value: height
+                                }
+                            })
                         },
                         {
                             name: t('settings.options.misc.options.debugConsole.verbosity.title'),
@@ -403,16 +410,9 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.height'),
-                            value: null,
-                            menuId: 'tt-debug-console-height',
-                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
-                                return {
-                                    name: `${height}px`,
-                                    key: 'debugConsoleHeight',
-                                    value: height
-                                }
-                            })
+                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
+                            icon: 'SUBSCRIPTIONS',
+                            value: 'diagSubscriptionsShelf'
                         }
                     ]
                 },
