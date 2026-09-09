@@ -107,7 +107,8 @@
                         "testFailed": "Log-Ping fehlgeschlagen",
                         "disabled": "Protokollierung deaktiviert",
                         "host": "IP des Empfänger-PCs",
-                        "port": "Port des Empfängers"
+                        "port": "Port des Empfängers",
+                        "testSentButOff": "Test-Log gesendet, aber die Remote-Protokollierung ist noch aus."
                     }
                 }
             },

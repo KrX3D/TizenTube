@@ -107,7 +107,8 @@
                         "testFailed": "Log ping failed",
                         "disabled": "Remote Logging disabled",
                         "host": "Receiver PC IP",
-                        "port": "Receiver Port"
+                        "port": "Receiver Port",
+                        "testSentButOff": "Test log sent, but Remote Logging is still off."
                     }
                 }
             },

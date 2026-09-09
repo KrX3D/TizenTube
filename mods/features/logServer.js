@@ -108,20 +108,27 @@ function sendOne(_url, entry) {
 // callers use different toast/i18n setups and this module intentionally has
 // no UI dependencies.
 export function sendTestPing() {
-    if (!isEnabled()) return { enabled: false, queued: false };
     const ts = new Date().toISOString();
+    // Sent regardless of logServerEnabled: the receiver, host and port can now
+    // be verified first, and logging turned on once it is known to work.
     const queued = sendRemotePayload(null, {
         ts,
         level: 'INFO',
         context: 'TizenTube',
         message: 'Manual test ping',
         _formatted: `[${ts}] [INFO] [TizenTube] Manual test ping`,
-    });
-    return { enabled: true, queued };
+    }, true);
+    // enabled is still reported so callers can say "sent, but logging is off"
+    // rather than implying everything is now running.
+    return { enabled: isEnabled(), queued };
 }
 
-export function sendRemotePayload(_url, entry) {
-    if (!isEnabled()) return false;
+export function sendRemotePayload(_url, entry, force) {
+    // force is for the manual test only. Being able to check the receiver
+    // BEFORE turning logging on is the point of a test button — refusing to
+    // send until it is already enabled made it useless for its main job,
+    // confirming the host and port are right.
+    if (!force && !isEnabled()) return false;
 
     const fullMessage = (entry && entry.message) || '';
     if (fullMessage.length <= MAX_MSG_CHUNK) return sendOne(_url, entry);
