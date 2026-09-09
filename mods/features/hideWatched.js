@@ -427,13 +427,36 @@ export function normalizeGridRenderer(gridRenderer, _context = '') {
 // ── Video ID extraction helper ────────────────────────────────────────────────
 
 export function getItemVideoId(item) {
+  // richItemRenderer is a wrapper, not a renderer — the real tile sits inside
+  // it. Unwrapped first so every shape below is reached either way.
+  const inner = item?.richItemRenderer?.content || item;
   return String(
-    item?.tileRenderer?.contentId ||
-    item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
-    item?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId ||
-    item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
+    inner?.tileRenderer?.contentId ||
+    inner?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
+    inner?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId ||
+    inner?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
+    // lockupViewModel gained support across the codebase in the ca60382 port,
+    // but this extractor was left tileRenderer-only. Anything lockup-shaped
+    // therefore came back as '' — invisible to duplicate detection and to the
+    // playlist unique-id floor, with no log line to say so.
+    lockupVideoId(inner) ||
+    inner?.videoRenderer?.videoId ||
+    inner?.gridVideoRenderer?.videoId ||
+    inner?.compactVideoRenderer?.videoId ||
     ''
   );
+}
+
+/** Human-readable title for an item, for diagnostics only. */
+export function getItemTitle(item) {
+  const inner = item?.richItemRenderer?.content || item;
+  return inner?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
+    || inner?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content
+    || inner?.videoRenderer?.title?.runs?.[0]?.text
+    || inner?.videoRenderer?.title?.simpleText
+    || inner?.gridVideoRenderer?.title?.runs?.[0]?.text
+    || inner?.compactVideoRenderer?.title?.runs?.[0]?.text
+    || null;
 }
 
 // ── Deep watch-progress extraction ───────────────────────────────────────────
