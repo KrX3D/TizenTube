@@ -106,6 +106,7 @@ function pollLogQueue(client, relayLog) {
 
 function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     if (sessionId !== _activeSessionId) return; // superseded by a newer attempt, abort silently
+    noteProgress();
     if (attempt >= MAX_RETRY_ATTEMPTS) {
         // Standing down rather than merely clearing isConnecting: leaving
         // canConnectToDaemon true meant the next launch began the whole
@@ -190,6 +191,7 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     // below on why it must NOT clear the moment injection
                     // succeeds.
                     isConnecting = false;
+                    _injectedSession = false;
                 }
             });
 
@@ -278,6 +280,7 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                 // wasted work over a long session as more of them appear.
                 const auxData = (m.context && m.context.auxData) || {};
                 sawAnyContext = true;
+                noteProgress();
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `executionContextCreated id=${m.context && m.context.id} auxData=${JSON.stringify(auxData)}` });
                 }
@@ -298,6 +301,10 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     return client.Runtime.evaluate({ expression: `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\n` + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
+                    // Exempts this session from the stale guard: once injected it
+                    // legitimately sits idle for as long as the user watches.
+                    _injectedSession = true;
+                    noteProgress();
                     // isConnecting deliberately stays true here, not false —
                     // confirmed on-device: the debug-launched app instance's
                     // OWN index.html script keeps running in the background
@@ -431,9 +438,41 @@ let _stoodDown = false;
 const MAX_NO_CONTEXT_FAILURES = 2;
 let noContextFailures = 0;
 
+// Stale-session guard.
+//
+// isConnecting only clears at two terminal points: a successful injection's CDP
+// connection ending, or standing down. Both depend on something happening. A
+// session that neither finishes nor disconnects therefore leaves isConnecting
+// true forever, and index.html — which only takes the CDP path when
+// isConnecting is false — is locked out for the rest of the service's life.
+//
+// That is what a capture showed: the log opened with "Retrying (attempt 1/10)"
+// and the very first getState of a freshly started app already reported
+// isConnecting:true, i.e. a session left over from a previous run that no
+// longer had any way to complete. Reinstalling cleared it only because that
+// restarts the service process.
+//
+// The threshold is measured from the last sign of progress rather than from the
+// session start, so a legitimately long retry cycle is never cut off — every
+// attempt, shell reply and CDP event refreshes it. A session that has already
+// injected is exempt entirely: staying connected with nothing happening is
+// exactly what a normal viewing session looks like.
+const STALE_PROGRESS_MS = 45000;
+let _lastProgressAt = 0;
+let _injectedSession = false;
+
+function noteProgress() { _lastProgressAt = Date.now(); }
+
+function isStaleConnecting() {
+    if (!isConnecting || _injectedSession) return false;
+    if (!_lastProgressAt) return false;
+    return (Date.now() - _lastProgressAt) > STALE_PROGRESS_MS;
+}
+
 function standDown(relayLog) {
     _stoodDown = true;
     isConnecting = false;
+    _injectedSession = false;
     if (typeof relayLog === 'function') {
         relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'CDP injection stood down for this service run; falling back to the proxy path' });
     }
@@ -444,6 +483,18 @@ function canConnectToDaemon(relayLog, attempt) {
     // Answered before touching the network: once stood down, nothing should
     // start another debug launch for the rest of this service's life.
     if (_stoodDown) return Promise.resolve({ canConnectToDaemon: false, ip: null, isConnecting: false });
+    // Release a wedged session so the caller can start a fresh one instead of
+    // polling a flag that will never clear. Bumping the session id makes the
+    // stale session's own callbacks abort the moment they next check, using the
+    // same supersede mechanism a new top-level call already relies on.
+    if (isStaleConnecting()) {
+        if (typeof relayLog === 'function') {
+            relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `isConnecting was stuck with no progress for ${Math.round((Date.now() - _lastProgressAt) / 1000)}s — releasing it so a new attempt can start` });
+        }
+        _activeSessionId++;
+        isConnecting = false;
+        _lastProgressAt = 0;
+    }
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
             return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }
@@ -486,6 +537,8 @@ function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
         // terminal points: a successful injection, or actually giving up
         // after MAX_RETRY_ATTEMPTS.
         isConnecting = true;
+        _injectedSession = false;
+        noteProgress();
     } else if (sessionId !== _activeSessionId) {
         return Promise.resolve(false); // superseded, abort silently
     }
@@ -578,6 +631,7 @@ function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
             };
             const streamEndFallback = setTimeout(endStreamOnce, 5000);
 
+            noteProgress();
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
 
             // See SHELL_SILENCE_* above: no reply at all means the app was still
@@ -616,6 +670,7 @@ function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
             });
             shellCmd.on('data', (data) => {
                 shellAnswered = true;
+                noteProgress();
                 clearTimeout(silenceTimeout);
                 const dataString = data.toString();
                 // Always log the raw response — previously only logged (and
