@@ -1,6 +1,7 @@
 import { configRead, configWrite } from '../config.js';
 import { showModal, buttonItem, overlayPanelItemListRenderer, showToast } from './ytUI.js';
 import resolveCommand from '../resolveCommand.js';
+import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { t } from 'i18next';
 
 /**
@@ -183,9 +184,27 @@ export function showNumericEditor(opts) {
 const LEFT = 37, UP = 38, RIGHT = 39, DOWN = 40, ENTER = 13;
 const BACK_KEYS = [27, 461, 10009];
 
-function digitFor(keyCode) {
-  if (keyCode >= 48 && keyCode <= 57) return keyCode - 48;
-  if (keyCode >= 96 && keyCode <= 105) return keyCode - 96;   // numeric keypad
+/**
+ * Digit pressed, or null.
+ *
+ * keyCode alone was not enough: reported on-device that the remote's number
+ * keys did nothing here. keyCode is the legacy and most platform-dependent of
+ * the three fields, and a TV remote is exactly where it varies — so event.key
+ * and event.code are checked first, since both are specified to carry the digit
+ * regardless of the scancode the remote reports.
+ */
+function digitFromEvent(evt) {
+  // key is the character the platform believes was typed: '7'.
+  if (typeof evt.key === 'string' && evt.key.length === 1 && evt.key >= '0' && evt.key <= '9') {
+    return Number(evt.key);
+  }
+  // code is the physical key: 'Digit7' or 'Numpad7'.
+  const named = /^(?:Digit|Numpad)([0-9])$/.exec(typeof evt.code === 'string' ? evt.code : '');
+  if (named) return Number(named[1]);
+  // keyCode last, both the main row and the keypad.
+  const kc = evt.keyCode;
+  if (kc >= 48 && kc <= 57) return kc - 48;
+  if (kc >= 96 && kc <= 105) return kc - 96;
   return null;
 }
 
@@ -199,7 +218,7 @@ document.addEventListener('keydown', (evt) => {
     const code = evt.keyCode;
     const onDigit = isOnDigit(_state.cursor, slots);
 
-    const typed = digitFor(code);
+    const typed = digitFromEvent(evt);
     if (typed !== null && onDigit) {
       _state.digits[_state.cursor] = String(typed);
       // Auto-advance so an address can be typed straight through. Stops at the
@@ -231,17 +250,28 @@ document.addEventListener('keydown', (evt) => {
       if (isOnCancel(_state.cursor, slots)) cancelNumericEditor();
       else saveNumericEditor();
       evt.preventDefault();
-      evt.stopPropagation();
+      evt.stopImmediatePropagation();
       return;
     } else if (BACK_KEYS.indexOf(code) !== -1) {
       _state = null;   // let the modal's own back handling dismiss it
       return;
     } else {
+      // Not ours. Recorded so a capture shows what the remote actually sends —
+      // number keys appearing dead was undiagnosable without this.
+      appendFileOnlyLog('nav.key.unhandled', {
+        keyCode: code,
+        key: typeof evt.key === 'string' ? evt.key : null,
+        code: typeof evt.code === 'string' ? evt.code : null,
+      });
       return;
     }
 
     evt.preventDefault();
-    evt.stopPropagation();
+    // stopImmediatePropagation, not stopPropagation: jumpToPercentage.js also
+    // listens for digits on document with capture, and stopPropagation does not
+    // stop listeners on the SAME node. Without this, typing an IP could also
+    // seek whatever video happened to be loaded behind the modal.
+    evt.stopImmediatePropagation();
     render(true);
   } catch (err) {
     console.warn('[numericEditor] key handling failed:', err);
