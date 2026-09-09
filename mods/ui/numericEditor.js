@@ -85,14 +85,40 @@ const KINDS = {
 
 let _state = null;
 
+// The cursor walks the digits and then continues onto the two action rows, so
+// Save and Cancel are reachable with the same keys. Up/down were previously
+// swallowed unconditionally for digit editing, which meant focus could never
+// leave the field and neither button could be selected at all.
+const ROW_FIELD = 0, ROW_SAVE = 1, ROW_CANCEL = 2;
+
+function isOnSave(cursor, slots) { return cursor === slots; }
+function isOnCancel(cursor, slots) { return cursor === slots + 1; }
+function isOnDigit(cursor, slots) { return cursor < slots; }
+
+function selectedRow(cursor, slots) {
+  if (isOnSave(cursor, slots)) return ROW_SAVE;
+  if (isOnCancel(cursor, slots)) return ROW_CANCEL;
+  return ROW_FIELD;
+}
+
 function render(isUpdate) {
   const { kind, digits, cursor, title } = _state;
+  const slots = KINDS[kind].slots;
+  const onDigit = isOnDigit(cursor, slots);
+  // Brackets are dropped once the cursor moves to a button, so it is obvious
+  // that up/down is no longer editing a digit.
+  const value = onDigit ? KINDS[kind].display(digits, cursor) : KINDS[kind].display(digits, -1);
+
   showModal(
-    {
-      title,
-      subtitle: `${KINDS[kind].display(digits, cursor)}   —   ${t('settings.numericEditor.hint')}`,
-    },
+    { title },
     overlayPanelItemListRenderer([
+      buttonItem(
+        { title: value, subtitle: t('settings.numericEditor.hint') },
+        { icon: 'LOCATION_POINT' },
+        // Selecting the field row itself does nothing; editing happens through
+        // the key handler below.
+        [{ customAction: { action: 'NUMERIC_EDITOR_NOOP' } }]
+      ),
       buttonItem(
         { title: t('settings.numericEditor.save'), subtitle: KINDS[kind].serialize(digits).toString() },
         { icon: 'CHECK_BOX' },
@@ -103,7 +129,7 @@ function render(isUpdate) {
         { icon: 'CLEAR_COOKIES' },
         [{ customAction: { action: 'NUMERIC_EDITOR_CANCEL' } }]
       ),
-    ], 0),
+    ], selectedRow(cursor, slots)),
     MODAL_ID,
     isUpdate
   );
@@ -168,26 +194,44 @@ document.addEventListener('keydown', (evt) => {
   try {
     const { kind } = _state;
     const slots = KINDS[kind].slots;
+    // Digits, then Save, then Cancel.
+    const positions = slots + 2;
     const code = evt.keyCode;
+    const onDigit = isOnDigit(_state.cursor, slots);
 
     const typed = digitFor(code);
-    if (typed !== null) {
+    if (typed !== null && onDigit) {
       _state.digits[_state.cursor] = String(typed);
-      // Auto-advance so an address can be typed straight through without
-      // touching the arrows; stop at the last slot rather than wrapping,
-      // which would silently overwrite the first digit.
+      // Auto-advance so an address can be typed straight through. Stops at the
+      // last digit rather than running on into Save, which would make typing
+      // the final digit select a button.
       if (_state.cursor < slots - 1) _state.cursor++;
     } else if (code === LEFT) {
-      _state.cursor = (_state.cursor - 1 + slots) % slots;
+      _state.cursor = (_state.cursor - 1 + positions) % positions;
     } else if (code === RIGHT) {
-      _state.cursor = (_state.cursor + 1) % slots;
-    } else if (code === UP) {
-      _state.digits[_state.cursor] = String((Number(_state.digits[_state.cursor]) + 1) % 10);
-    } else if (code === DOWN) {
-      _state.digits[_state.cursor] = String((Number(_state.digits[_state.cursor]) + 9) % 10);
+      _state.cursor = (_state.cursor + 1) % positions;
+    } else if (code === UP || code === DOWN) {
+      if (onDigit) {
+        const delta = code === UP ? 1 : 9;   // 9 === -1 modulo 10
+        _state.digits[_state.cursor] = String((Number(_state.digits[_state.cursor]) + delta) % 10);
+      } else {
+        // On the action rows up/down moves between them, and up from Save
+        // returns to the last digit — so nothing is a dead end.
+        if (code === DOWN) {
+          _state.cursor = slots + 1;                                  // -> Cancel
+        } else {
+          _state.cursor = isOnCancel(_state.cursor, slots) ? slots     // Cancel -> Save
+            : slots - 1;                                              // Save -> last digit
+        }
+      }
     } else if (code === ENTER) {
-      // Enter is left to the focused button (Save / Cancel) so the modal
-      // behaves like every other one in the app.
+      // Handled here rather than left to the focused row, so activation follows
+      // this module's own cursor instead of depending on where the TV thinks
+      // focus is. On a digit, Enter saves — the common case is edit-then-accept.
+      if (isOnCancel(_state.cursor, slots)) cancelNumericEditor();
+      else saveNumericEditor();
+      evt.preventDefault();
+      evt.stopPropagation();
       return;
     } else if (BACK_KEYS.indexOf(code) !== -1) {
       _state = null;   // let the modal's own back handling dismiss it
