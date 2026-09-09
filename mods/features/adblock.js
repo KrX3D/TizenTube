@@ -35,6 +35,7 @@ import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
 import { dedupeShelves } from './duplicateVideoHider.js';
+import { logSubscriptionsShelfShape } from './subscriptionsShelfDiag.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
 import {
   isLockupVideo,
@@ -1340,6 +1341,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   // Last, so it sees shelves after every other filter — deduping earlier would
   // let an ad or Shorts tile claim the "first occurrence" and hide the real one.
   dedupeShelves(shelves, activePage);
+  logSubscriptionsShelfShape(shelves, activePage);
 }
 
 // ===== addPreviews =====

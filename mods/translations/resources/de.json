@@ -92,7 +92,8 @@
                             "thumbs": "Vorschaubilder und DeArrow",
                             "player": "Player, SponsorBlock, Untertitel",
                             "other": "Alles Übrige"
-                        }
+                        },
+                        "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",

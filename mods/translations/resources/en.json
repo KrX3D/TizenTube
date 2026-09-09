@@ -92,7 +92,8 @@
                             "thumbs": "Thumbnails and DeArrow",
                             "player": "Player, SponsorBlock, captions",
                             "other": "Everything else"
-                        }
+                        },
+                        "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
                     },
                     "logServer": {
                         "title": "Remote Log Server",
