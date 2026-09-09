@@ -292,7 +292,8 @@
                         },
                         "addToSidebar": "Kanal zur Seitenleiste hinzufügen",
                         "removeFromSidebar": "Kanal aus der Seitenleiste entfernen"
-                    }
+                    },
+                    "hideDuplicateVideos": "Doppelte Videos ausblenden"
                 }
             },
             "updater": {

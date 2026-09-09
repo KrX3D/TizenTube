@@ -292,7 +292,8 @@
                         },
                         "addToSidebar": "Add Channel to Sidebar",
                         "removeFromSidebar": "Remove Channel from Sidebar"
-                    }
+                    },
+                    "hideDuplicateVideos": "Hide Duplicate Videos"
                 }
             },
             "updater": {

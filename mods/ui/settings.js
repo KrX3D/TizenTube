@@ -884,6 +884,11 @@ export default function modernUI(update, parameters) {
                     value: 'hideMembersOnlyVideos'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
+                    icon: 'PRIVACY_UNLISTED',
+                    value: 'hideDuplicateVideos'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideChannelShelves'),
                     icon: null,
                     value: 'hideChannelShelves'
