@@ -147,6 +147,16 @@ export function saveNumericEditor() {
   const value = KINDS[kind].serialize(digits);
   configWrite(configKey, value);
   close();
+  // The settings tree is built once per open, with each row's subtitle baked in
+  // as a string at that moment — so the row that shows this value kept
+  // displaying the old one, and re-entering the sub-menu re-rendered the same
+  // frozen array rather than re-reading config. Rebuilding the tree is what
+  // makes the saved value actually appear.
+  try {
+    resolveCommand({ customAction: { action: 'SETTINGS_UPDATE', parameters: [] } });
+  } catch (err) {
+    console.warn('[numericEditor] could not refresh the settings menu:', err);
+  }
   showToast('TizenTube', t('settings.numericEditor.saved', { value }));
 }
 
@@ -208,7 +218,13 @@ function digitFromEvent(evt) {
   return null;
 }
 
-document.addEventListener('keydown', (evt) => {
+// Registered on window rather than document, in capture phase. Capture runs
+// window -> document -> target, so this now sees the event before ANY
+// document-level handler — including YouTube's own. The digits still not
+// working while the arrows did is consistent with something on document
+// consuming them first, and window capture is strictly earlier, so it can only
+// help. Arrow handling is unaffected either way.
+window.addEventListener('keydown', (evt) => {
   if (!_state) return;
   try {
     const { kind } = _state;
