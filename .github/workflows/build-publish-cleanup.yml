@@ -9,8 +9,8 @@
 #     - dist/userScript.js  (browser userscript, bundled & minified)
 #     - dist/service.js     (DIAL service, bundled with Rollup)
 # - Publishes the package to https://www.npmjs.com on release only
-# - Automatically removes old versions from npm (within 72-hour window)
-# - Deprecates older versions (beyond 72-hour window) if any remain
+# - Deprecates older versions once the new one is confirmed live on npm
+# - Fails the run if npm's `latest` tag does not match what it published
 # - Purges jsDelivr CDN cache after publishing
 #
 # WHEN IT RUNS
@@ -30,14 +30,24 @@
 #
 # AUTOMATIC VERSION CLEANUP
 # -------------------------
-# After publishing a new version, this workflow automatically:
-# - Identifies all versions except the newly published one
-# - Unpublishes versions that are ≤72 hours old (npm policy allows this)
-# - Deprecates versions >72 hours old (unpublish no longer allowed)
-# - Result: Only the latest version remains active on npm
+# After publishing, this workflow tidies up older versions — but only once the
+# new version is actually readable on npm, and only with writes that change
+# something. Both rules exist because of a real failure:
 #
-# Note: npm allows unpublishing versions within ~72 hours of publication.
-# After that window, versions can only be deprecated, not removed.
+# - npm publish is asynchronous. The CLI exits 0 while the version is still
+#   being processed, and 1.30.30 only appeared in the registry 96 seconds later.
+# - Unpublish and deprecate both work by rewriting the ENTIRE package document.
+#   A rewrite built from a snapshot taken before the new version landed deletes
+#   it again — which is how 1.30.30 vanished one second after it appeared,
+#   leaving `latest` at 1.30.20 while the GitHub release said 1.30.30.
+#
+# So:
+# - Nothing touches the registry until GET /<pkg>/<version> succeeds
+# - Versions that already carry a deprecation message are skipped entirely
+# - The current version and every dist-tag target are never touched
+# - Unpublishing is off (ALLOW_UNPUBLISH); npm rejects it from a granular token
+#   that bypasses 2FA, and each rejected attempt was still a document rewrite
+# - The job fails if `latest` does not end up pointing at what it published
 #
 # VERSION BUMP RULE (push to main only)
 # -------------------------------------
@@ -144,6 +154,11 @@ env:
   PACKAGE_NAME_GH: 'KrX3D/TizenTube'
   NODE_VERSION: '24'
   UNPUBLISH_WINDOW_HOURS: '72'
+  # npm refuses `npm unpublish` from a granular access token that bypasses
+  # two-factor authentication, so every attempt was a 403 — and every 403 was
+  # still a full rewrite of the package document, which is how a freshly
+  # published version gets erased. Left off until the token can do it.
+  ALLOW_UNPUBLISH: 'false'
 
 jobs:
   build-publish-clean:
@@ -414,63 +429,137 @@ jobs:
           echo "Publishing package..."
           npm publish --access public
 
-      - name: Wait for npm propagation (after publish)
-        if: steps.publish_npm.outcome == 'success'
-        run: |
-          echo "Waiting for npm propagation..."
-          sleep 10
-
       # --------------------
-      # FETCH VERSIONS
+      # CONFIRM THE PUBLISH LANDED
       # --------------------
-      - name: Gather versions and publish times
+      # npm's publish endpoint is asynchronous. The CLI prints "Your package is
+      # being processed and may take a few minutes to become available" and exits
+      # 0 well before the version exists in the registry document.
+      #
+      # That is not a cosmetic delay, because every cleanup step below works by
+      # PUTting the WHOLE package document back. npm builds that document from
+      # whatever it can read at the time, so a PUT issued while the new version
+      # is still in flight writes a snapshot that does not contain it — and the
+      # version that was just published is gone again.
+      #
+      # 1.30.30 is what that looks like: published 18:40:16, appeared in the
+      # registry's own time map at 18:41:52, erased at 18:41:53 by the last
+      # npm deprecate of the very same job. The GitHub release said 1.30.30
+      # while the latest tag pointed back at 1.30.20, so every TV loading the
+      # userscript from the CDN got a bundle one version behind its own app.
+      #
+      # So nothing touches the registry until the new version is readable, and if
+      # it never becomes readable the job fails instead of cleaning up around a
+      # version that isn't there.
+      - name: Confirm the published version is live on npm
         if: steps.publish_npm.outcome == 'success'
+        id: confirm_publish
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
           set -euo pipefail
-          echo "Fetching versions & times for ${PKG} ..."
-          npm view "${PKG}" versions --json > /tmp/versions.json
-          npm view "${PKG}" time --json > /tmp/time.json
+          VER=$(node -e "console.log(require('./package.json').version)")
+          echo "$VER" > /tmp/current_version.txt
+          echo "Waiting for ${PKG}@${VER} to become readable..."
+          for i in $(seq 1 40); do
+            # The registry is read directly rather than through npm view, which
+            # has its own HTTP cache and will happily answer from a packument
+            # fetched before the publish landed.
+            if curl -fsSL "https://registry.npmjs.org/${PKG}/${VER}" -o /tmp/published.json; then
+              echo "${PKG}@${VER} is live (attempt ${i})."
+              echo "confirmed=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "confirmed=false" >> "$GITHUB_OUTPUT"
+          echo "::error::${PKG}@${VER} never became readable on npm after 10 minutes. Cleanup is skipped so nothing can overwrite it."
+          exit 1
 
-          CUR_VER=$(node -e "console.log(require('./package.json').version)")
-          echo "Current repo version: $CUR_VER"
-          echo "$CUR_VER" > /tmp/current_version.txt
+      # --------------------
+      # FETCH THE REGISTRY DOCUMENT
+      # --------------------
+      - name: Gather versions, times and deprecation state
+        if: steps.confirm_publish.outputs.confirmed == 'true'
+        env:
+          PKG: ${{ env.PACKAGE_NAME }}
+        run: |
+          set -euo pipefail
+          echo "Fetching the registry document for ${PKG} ..."
+          curl -fsSL "https://registry.npmjs.org/${PKG}" -o /tmp/packument.json
+          node -e '
+          const fs = require("fs");
+          const doc = JSON.parse(fs.readFileSync("/tmp/packument.json","utf8"));
+          const versions = Object.keys(doc.versions || {});
+          const deprecated = versions.filter(function (v) { return doc.versions[v].deprecated; });
+          fs.writeFileSync("/tmp/versions.json", JSON.stringify(versions));
+          fs.writeFileSync("/tmp/time.json", JSON.stringify(doc.time || {}));
+          fs.writeFileSync("/tmp/deprecated.json", JSON.stringify(deprecated));
+          fs.writeFileSync("/tmp/dist_tags.json", JSON.stringify(doc["dist-tags"] || {}));
+          console.log("Live versions: " + versions.length + ", already deprecated: " + deprecated.length);
+          console.log("dist-tags: " + JSON.stringify(doc["dist-tags"] || {}));
+          '
+          echo "Current repo version: $(cat /tmp/current_version.txt)"
 
       # --------------------
       # DECIDE WHAT TO REMOVE
       # --------------------
+      # Two rules, both about never issuing a registry write that changes
+      # nothing — since each one rewrites the whole package document, and one of
+      # those rewrites is what erased 1.30.30:
+      #
+      #  * a version that already carries a deprecation message is skipped. All
+      #    80 live versions were already deprecated, so the previous run made
+      #    about 80 full-document writes for no effect at all.
+      #
+      #  * unpublishing is off unless ALLOW_UNPUBLISH is "true". The npm token
+      #    here is a granular access token, and npm refuses unpublish from tokens
+      #    that bypass two-factor authentication ("Granular access tokens that
+      #    bypass two-factor authentication may not perform this action"). Every
+      #    attempt returned 403 — and every one of those was still a write.
+      #    Re-enable it only with a token that can actually perform it.
+      #
+      # The version just published is kept, as before, and so is whatever each
+      # dist-tag resolves to: installing the tag npm points people at must not
+      # print a deprecation warning. The latest tag was itself deprecated by the
+      # run that lost 1.30.30.
       - name: Decide versions to unpublish / deprecate
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
           UNPUBLISH_WINDOW_HOURS: ${{ env.UNPUBLISH_WINDOW_HOURS }}
+          ALLOW_UNPUBLISH: ${{ env.ALLOW_UNPUBLISH }}
         run: |
           set -euo pipefail
           node -e '
           const fs = require("fs");
           const versions = JSON.parse(fs.readFileSync("/tmp/versions.json","utf8")||"[]");
           const times = JSON.parse(fs.readFileSync("/tmp/time.json","utf8")||"{}");
+          const deprecated = new Set(JSON.parse(fs.readFileSync("/tmp/deprecated.json","utf8")||"[]"));
+          const distTags = JSON.parse(fs.readFileSync("/tmp/dist_tags.json","utf8")||"{}");
           const current = fs.readFileSync("/tmp/current_version.txt","utf8").trim();
 
           const windowHours = Number(process.env.UNPUBLISH_WINDOW_HOURS || 72);
+          const allowUnpublish = String(process.env.ALLOW_UNPUBLISH || "") === "true";
           const now = Date.now();
+
+          const keep = new Set([current].concat(Object.keys(distTags).map(function (tag) { return distTags[tag]; })));
 
           const toUnpublish = [];
           const toDeprecate = [];
 
           for (const v of versions) {
-            if (v === current) continue;
+            if (keep.has(v)) continue;
             const t = times[v] ? new Date(times[v]) : null;
-            if (!t) { toDeprecate.push(v); continue; }
-            const ageHours = (now - t.getTime()) / 36e5;
-            if (ageHours <= windowHours) toUnpublish.push(v);
-            else toDeprecate.push(v);
+            const ageHours = t ? (now - t.getTime()) / 36e5 : Infinity;
+            if (allowUnpublish && t && ageHours <= windowHours) { toUnpublish.push(v); continue; }
+            if (!deprecated.has(v)) toDeprecate.push(v);
           }
 
           fs.writeFileSync("/tmp/to_unpublish.txt", toUnpublish.length ? toUnpublish.join("\n") + "\n" : "");
           fs.writeFileSync("/tmp/to_deprecate.txt", toDeprecate.length ? toDeprecate.join("\n") + "\n" : "");
-          console.log("To unpublish (<= " + windowHours + "h):", toUnpublish);
-          console.log("To deprecate (> " + windowHours + "h + unknown):", toDeprecate);
+          console.log("Keeping (current version + every dist-tag): " + Array.from(keep).join(", "));
+          console.log("To unpublish (<= " + windowHours + "h, enabled=" + allowUnpublish + "):", toUnpublish);
+          console.log("To deprecate (not already deprecated):", toDeprecate);
           '
 
           echo ""
@@ -485,7 +574,7 @@ jobs:
       # UNPUBLISH
       # --------------------
       - name: Unpublish old versions (verified) and fallback to deprecate
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -542,7 +631,7 @@ jobs:
       # DEPRECATE older (>72h)
       # --------------------
       - name: Deprecate older versions
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -563,13 +652,18 @@ jobs:
       # Final wait + verify final state
       # --------------------
       - name: Wait before final verify
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         run: |
           echo "Short wait to let registry propagate final state..."
           sleep 8
 
+      # The cleanup steps above rewrite the whole package document, so the last
+      # thing this job does is check that the version it published is still the
+      # one npm hands out. Without this the job reported success while `latest`
+      # had silently fallen back a release, and the first sign of it was a TV
+      # loading a userscript older than its own app.
       - name: Verify final state
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
         run: |
@@ -577,14 +671,31 @@ jobs:
           echo "Final versions on npm:"
           npm view "${PKG}" versions --json
           echo ""
-          echo "Latest version:"
-          npm view "${PKG}" version
+
+          # Read through the registry rather than `npm view`, whose cache is
+          # what made the original breakage invisible here.
+          curl -fsSL "https://registry.npmjs.org/${PKG}" -o /tmp/packument_final.json
+          node -e '
+          const fs = require("fs");
+          const doc = JSON.parse(fs.readFileSync("/tmp/packument_final.json","utf8"));
+          const want = fs.readFileSync("/tmp/current_version.txt","utf8").trim();
+          const latest = (doc["dist-tags"] || {}).latest;
+          const live = !!(doc.versions || {})[want];
+          const deprecated = live && !!doc.versions[want].deprecated;
+          console.log("published: " + want + ", latest tag: " + latest + ", still live: " + live);
+          let failed = false;
+          if (!live) { console.log("::error::" + want + " is no longer on npm. A cleanup write removed the version this run published."); failed = true; }
+          if (latest !== want) { console.log("::error::npm latest is " + latest + ", not " + want + ". The CDN will serve the wrong bundle to every TV."); failed = true; }
+          if (deprecated) { console.log("::error::" + want + " was published deprecated."); failed = true; }
+          if (failed) process.exit(1);
+          console.log("npm latest matches the version this run published.");
+          '
 
       # --------------------
       # Purge jsDelivr cache
       # --------------------
       - name: Generate jsDelivr URLs to purge
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         id: cdn_urls
         run: |
           set -euo pipefail
@@ -636,7 +747,7 @@ jobs:
           printf '%s\n' "${URLS[@]}"
 
       - name: Purge jsDelivr cache
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
         # jsDelivr rate-limits how often the same path can be re-purged
         # ("Purging request ... was throttled") — expected on frequent
         # releases, not an actual failure of the publish itself. The next
@@ -652,7 +763,7 @@ jobs:
           attempts: 3
 
       - name: Purge individual URLs (fallback if batch fails)
-        if: steps.publish_npm.outcome == 'success' && failure()
+        if: steps.confirm_publish.outputs.confirmed == 'true' && failure()
         continue-on-error: true
         run: |
           set +e
@@ -698,6 +809,6 @@ jobs:
           echo "Individual purge attempts complete"
 
       - name: Cache purge complete
-        if: steps.publish_npm.outcome == 'success'
+        if: steps.confirm_publish.outputs.confirmed == 'true'
 
         run: echo "✅ jsDelivr cache purge complete (npm + GitHub)"
