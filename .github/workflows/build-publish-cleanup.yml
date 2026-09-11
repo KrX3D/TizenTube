@@ -194,11 +194,56 @@ jobs:
             patch = 0;
           }
 
-          const newVer = `${major}.${minor}.${patch}`;
-          pkg.version = newVer;
+          // npm refuses forever to reuse a version number that was once
+          // published and later unpublished. The cleanup step in this same
+          // workflow unpublishes old releases, so 780 of the 857 numbers this
+          // package has ever used are permanently burned. Whenever
+          // package.json drops back into that range - a revert, a bad merge,
+          // an upstream sync - every run then fails with
+          //   E400 Cannot publish over previously published version "x.y.z"
+          // and, because the bump is committed and pushed BEFORE publishing,
+          // main is left pinned on the burned number so every later run fails
+          // the same way. That is exactly what happened twice at 1.16.10.
+          //
+          // The registry time map lists every version ever used, live or not,
+          // so skipping past them makes the bump self-correcting.
+          //
+          // Wrapped in an async IIFE on purpose: this script is fed to `node -`
+          // on stdin, and a top-level await next to the require() above makes
+          // Node fail the whole script with ERR_AMBIGUOUS_MODULE_SYNTAX.
+          (async () => {
+            let used = null;
+            try {
+              const res = await fetch('https://registry.npmjs.org/' + pkg.name);
+              if (res.ok) {
+                const meta = await res.json();
+                const isSemver = (k) => /^[0-9]+[.][0-9]+[.][0-9]+$/.test(k);
+                used = new Set(Object.keys(meta.time || {}).filter(isSemver));
+              }
+            } catch (e) {
+              // Registry unreachable: fall through to the plain bump rather
+              // than blocking a release. A real collision still fails loudly
+              // at publish.
+              used = null;
+            }
 
-          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-          console.log(`Bumped version: ${ver} -> ${newVer}`);
+            let newVer = `${major}.${minor}.${patch}`;
+            if (used) {
+              const firstChoice = newVer;
+              let guard = 0;
+              while (used.has(newVer) && guard++ < 500) {
+                patch += 10;
+                if (patch >= 1000) { minor += 1; patch = 0; }
+                newVer = `${major}.${minor}.${patch}`;
+              }
+              if (used.has(newVer)) throw new Error('No unused version found near ' + ver);
+              if (newVer !== firstChoice) console.log('Skipped burned version numbers: ' + firstChoice + ' -> ' + newVer);
+            }
+
+            pkg.version = newVer;
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + String.fromCharCode(10), 'utf8');
+            console.log('Bumped version: ' + ver + ' -> ' + newVer);
+          })();
           NODE
 
       - name: Show current version (old -> new)
