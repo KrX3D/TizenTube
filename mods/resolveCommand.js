@@ -7,6 +7,7 @@ import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
 import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
+import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
@@ -344,6 +345,17 @@ function customAction(action, parameters) {
         case 'NUMERIC_EDITOR_CANCEL':
             cancelNumericEditor();
             break;
+        case 'SYSLOG_TEST': {
+            const result = sendSyslogTest();
+            // Mirrors the log server's test: a disabled output is no longer a
+            // refusal, so the outcomes are no-host, failed, sent, and
+            // sent-while-output-is-off.
+            if (result.noHost) showToast('TizenTube', t('settings.options.misc.options.syslog.testNoHost'));
+            else if (!result.queued) showToast('TizenTube', t('settings.options.misc.options.syslog.testFailed'));
+            else if (result.enabled) showToast('TizenTube', t('settings.options.misc.options.syslog.testQueued'));
+            else showToast('TizenTube', t('settings.options.misc.options.syslog.testSentButOff'));
+            break;
+        }
         case 'LOG_SERVER_TEST_PING': {
             showLogServerTestToast(sendTestPing());
             break;

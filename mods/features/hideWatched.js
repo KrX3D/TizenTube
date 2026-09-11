@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
+import { sendSyslog } from './syslog.js';
 import { noteProgressChanged } from './watchProgressStore.js';
 import { isCategoryEnabled, applyVerbosity } from './logCategories.js';
 
@@ -16,8 +17,7 @@ export function appendFileOnlyLog(label, payload) {
   // logs. The sinks are the visual console (which reads __ttFileOnlyLogs for
   // its downloadable file), background logging, the log server, and syslog —
   // with none of them on, nothing is recorded at all and the category list is
-  // irrelevant. syslogEnabled may not exist yet in a given build; configRead
-  // returns undefined for an unknown key, which is correctly falsy here.
+  // irrelevant.
   const anySinkEnabled = configRead('enableDebugConsole')
     || configRead('enableDebugLogging')
     || configRead('logServerEnabled')
@@ -30,6 +30,11 @@ export function appendFileOnlyLog(label, payload) {
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
   try { msg = JSON.stringify(applyVerbosity(payload)); } catch { msg = String(payload); }
+  // syslog taps the same choke point rather than logServer.js's array hook, so
+  // the two outputs stay fully independent — either can be on without the
+  // other, and a dead syslog target cannot stop the log server relaying. Sent
+  // after the verbosity pass so both outputs carry the same text.
+  try { sendSyslog({ ts: new Date().toISOString(), level: 'INFO', context: 'TizenTube', label, message: `${label} ${msg}` }); } catch (_) { }
   // No longer truncated here — logServer.js's sendRemotePayload now splits
   // long messages into multiple sent parts instead of the previous cutoff
   // silently discarding everything past 500 chars. This array also feeds

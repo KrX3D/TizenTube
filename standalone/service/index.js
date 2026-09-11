@@ -10,6 +10,12 @@
 // and each require below is wrapped individually so we can see exactly which
 // one fails, if any.
 const http = require('http');
+// Core module, same reasoning as http above: required before anything that
+// might throw, so syslog is available even if a later require() fails.
+const dgram = require('dgram');
+
+// RFC 5424's assigned port; used when a request omits one.
+const DEFAULT_SYSLOG_PORT = 514;
 
 // Blank rather than a baked-in LAN address — see relayLog(), which now
 // returns early instead of posting logs at whoever happens to own that IP.
@@ -31,6 +37,45 @@ const DEFAULT_LOG_PORT = 3030;
 // re-attempted or expired the block.
 const unavailableTargets = {};
 const UNAVAILABLE_COOLDOWN_MS = 15000;
+
+// Emits one already-formatted RFC 5424 frame as a UDP datagram.
+//
+// This is the half of syslog support the page cannot do itself: browser
+// contexts have no raw sockets, so mods/features/syslog.js builds the frame
+// and this sends it. Kept entirely separate from relayLog below so a dead
+// syslog target cannot affect the PC receiver path, or vice versa.
+//
+// A fresh socket per frame is deliberate. Log volume here is low, UDP is
+// connectionless so there is no handshake to amortise, and a long-lived
+// socket would need its own error/rebind handling in a service that stays
+// alive across app launches until the TV reboots.
+function relaySyslog(frame, host, port) {
+    if (!frame) return;
+    // Same validation the HTTP relay gained: this address arrives in a request
+    // body and becomes the destination of an outbound datagram, so it is
+    // checked rather than trusted. Without it a POST could name any host and
+    // this would dutifully send there.
+    const targetPort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
+    if (!isValidHost(host) || !isValidPort(targetPort)) return;
+    let socket;
+    try {
+        socket = dgram.createSocket('udp4');
+    } catch (e) {
+        return;
+    }
+    // UDP gives no delivery signal; errors here mean the send itself failed
+    // (bad host, no route). Swallow them — a syslog target that is not
+    // listening must never disturb playback.
+    socket.on('error', () => { try { socket.close(); } catch (e) { } });
+    try {
+        const buf = Buffer.from(String(frame), 'utf8');
+        socket.send(buf, 0, buf.length, targetPort, host, () => {
+            try { socket.close(); } catch (e) { }
+        });
+    } catch (e) {
+        try { socket.close(); } catch (e2) { }
+    }
+}
 
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
 // (same /tv-log path and JSON shape), so the existing PS1 receiver script
@@ -257,6 +302,8 @@ let injector;
 try {
     injector = require('./injector.js');
     logServiceEvent('INFO', "require('./injector.js') OK");
+    // Lets the CDP path deliver syslog frames the page could not send itself.
+    if (injector && typeof injector.setSyslogRelay === 'function') injector.setSyslogRelay(relaySyslog);
 } catch (err) {
     logServiceEvent('ERROR', `require('./injector.js') FAILED: ${err && err.stack || err}`);
     throw err;
@@ -344,6 +391,14 @@ app.post('/tizentube/log', express.json(), (req, res) => {
     if (!entry) return res.status(400).end();
     noteReceiver(host, port);
     relayLog(entry, host, port);
+    res.status(204).end();
+});
+
+// Syslog frames are built page-side and only need a socket here.
+app.post('/tizentube/syslog', express.json(), (req, res) => {
+    const { host, port, frame } = req.body || {};
+    if (!frame) return res.status(400).end();
+    relaySyslog(frame, host, port);
     res.status(204).end();
 });
 

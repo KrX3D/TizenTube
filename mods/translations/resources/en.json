@@ -109,6 +109,21 @@
                         "host": "Receiver PC IP",
                         "port": "Receiver Port",
                         "testSentButOff": "Test log sent, but Remote Logging is still off."
+                    },
+                    "syslog": {
+                        "title": "Syslog Server",
+                        "enable": "Enable Syslog Output",
+                        "receiverSubtitle": "Sending to {{host}}:{{port}}",
+                        "receiverNotSet": "not set",
+                        "test": "Test Syslog Connection",
+                        "testSubtitle": "Send a single frame to the syslog server",
+                        "testDisabled": "Syslog output is turned off.",
+                        "testNoHost": "No syslog host is set.",
+                        "testQueued": "Syslog test frame sent.",
+                        "testFailed": "Could not send the syslog frame.",
+                        "host": "Syslog Server IP",
+                        "port": "Syslog Port",
+                        "testSentButOff": "Syslog frame sent, but Syslog Output is still off."
                     }
                 }
             },

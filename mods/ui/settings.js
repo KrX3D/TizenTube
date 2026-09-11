@@ -417,6 +417,60 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
+                    name: t('settings.options.misc.options.syslog.title'),
+                    icon: 'SEND',
+                    value: null,
+                    menuId: 'tt-syslog-settings',
+                    subtitle: t('settings.options.misc.options.syslog.receiverSubtitle', {
+                        host: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                        port: configRead('syslogPort')
+                    }),
+                    options: [
+                        {
+                            name: t('settings.options.misc.options.syslog.enable'),
+                            icon: 'WIFI',
+                            value: 'syslogEnabled'
+                        },
+                        {
+                            // Its own address, deliberately separate from the log
+                            // server's: a syslog daemon rarely lives on the same
+                            // machine as the PC receiver script.
+                            name: t('settings.options.misc.options.syslog.host'),
+                            subtitle: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                            icon: 'LOCATION_POINT',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'syslogHost',
+                                    kind: 'ipv4',
+                                    title: t('settings.options.misc.options.syslog.host')
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.syslog.port'),
+                            subtitle: String(configRead('syslogPort') || ''),
+                            icon: 'WIFI',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'syslogPort',
+                                    kind: 'port',
+                                    title: t('settings.options.misc.options.syslog.port')
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.syslog.test'),
+                            subtitle: t('settings.options.misc.options.syslog.testSubtitle'),
+                            icon: 'SEND',
+                            customAction: {
+                                action: 'SYSLOG_TEST'
+                            }
+                        }
+                    ]
+                },
+                {
                     name: t('settings.options.misc.options.logServer.title'),
                     icon: 'SEND',
                     value: null,

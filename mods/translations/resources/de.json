@@ -109,6 +109,21 @@
                         "host": "IP des Empfänger-PCs",
                         "port": "Port des Empfängers",
                         "testSentButOff": "Test-Log gesendet, aber die Remote-Protokollierung ist noch aus."
+                    },
+                    "syslog": {
+                        "title": "Syslog-Server",
+                        "enable": "Syslog-Ausgabe aktivieren",
+                        "receiverSubtitle": "Sendet an {{host}}:{{port}}",
+                        "receiverNotSet": "nicht gesetzt",
+                        "test": "Syslog-Verbindung testen",
+                        "testSubtitle": "Ein einzelnes Paket an den Syslog-Server senden",
+                        "testDisabled": "Die Syslog-Ausgabe ist deaktiviert.",
+                        "testNoHost": "Es ist kein Syslog-Host gesetzt.",
+                        "testQueued": "Syslog-Testpaket gesendet.",
+                        "testFailed": "Das Syslog-Paket konnte nicht gesendet werden.",
+                        "host": "IP des Syslog-Servers",
+                        "port": "Syslog-Port",
+                        "testSentButOff": "Syslog-Paket gesendet, aber die Syslog-Ausgabe ist noch aus."
                     }
                 }
             },

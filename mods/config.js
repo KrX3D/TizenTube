@@ -89,6 +89,13 @@ const defaultConfig = {
   // user narrows it down. 'basic' vs 'detailed' controls payload depth.
   logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
   logVerbosity: 'detailed',
+  // syslog output, independent of the log server above.
+  syslogEnabled: false,
+  syslogHost: '',
+  syslogPort: 514,
+  syslogFacility: 16,
+  syslogAppName: 'TizenTube',
+  syslogHostname: '',
   // Intentionally blank: this used to ship one developer's LAN address, so
   // every install pointed its logs at a machine that is not the user's.
   // Empty means "not set", which the settings menu already renders, and
