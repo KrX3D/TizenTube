@@ -421,3 +421,23 @@ try {
 } catch (err) {
     logServiceEvent('ERROR', `DIAL service (dist/service.js) failed to load: ${err && err.stack || err}`);
 }
+
+// Tizen's service runner does `app = require(<entry>)` and then calls
+// app.onStart / app.onRequest / app.onStop on lifecycle messages. This module
+// exported nothing at all, so every incoming message threw
+//
+//     TypeError: app.onRequest is not a function
+//         at MessagePort.<anonymous> (/usr/share/wrt/app/service/service_runner.js:152)
+//
+// as an UNCAUGHT exception — 29 of them in one captured session on Tizen 6.5,
+// which is what destabilised the service and left index.html reloading against
+// a target that kept dying ("getState fetch failed, reloading" 26 times in the
+// same capture).
+//
+// Everything this service does happens at module load, so these handlers only
+// need to exist. They are defined defensively rather than assumed to be
+// provided by dist/service.js, because that module is a dependency here, not
+// the entry point — its exports are never what the runner sees.
+module.exports.onStart = function () { };
+module.exports.onStop = function () { };
+module.exports.onRequest = function () { };
