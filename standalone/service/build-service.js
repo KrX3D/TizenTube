@@ -70,4 +70,44 @@ async function build() {
     fs.copyFileSync(path.join(__dirname, 'bootstrap.js'), path.join(outDir, 'index.js'));
 }
 
-build();
+// `node build-service.js remove-cobalt-flags` strips the three Cobalt metadata
+// entries from config.xml, so one source tree can produce both packages: build
+// the Cobalt one first, run this, then build the plain one.
+//
+// Done with a line filter rather than an XML parser on purpose. Upstream pulls
+// in fast-xml-parser and rewrites the document, which reformats everything it
+// touches; config.xml here carries comments and ordering that are load-bearing
+// for readability, and a three-line deletion does not justify losing them.
+// A .bak is written so a local run is reversible.
+function removeCobaltFlags() {
+    const configPath = path.join(__dirname, '..', 'config.xml');
+    const original = fs.readFileSync(configPath, 'utf8');
+    fs.writeFileSync(configPath + '.bak', original);
+
+    const cobaltKeys = [
+        'http://samsung.com/tv/metadata/pkgid',
+        'http://samsung.com/tv/metadata/nativeID',
+        'http://samsung.com/tv/metadata/native.userdata',
+    ];
+
+    const LF = String.fromCharCode(10);
+    const allLines = original.split(LF);
+    const kept = allLines.filter((line) => {
+        if (line.indexOf('tizen:metadata') === -1) return true;
+        return !cobaltKeys.some((key) => line.indexOf('"' + key + '"') !== -1);
+    });
+
+    const removed = allLines.length - kept.length;
+    if (removed !== cobaltKeys.length) {
+        throw new Error('Expected to remove ' + cobaltKeys.length + ' Cobalt metadata lines, removed ' + removed);
+    }
+
+    fs.writeFileSync(configPath, kept.join(LF));
+    console.log('Removed ' + removed + ' Cobalt metadata entries from config.xml');
+}
+
+if (process.argv[2] === 'remove-cobalt-flags') {
+    removeCobaltFlags();
+} else {
+    build();
+}
