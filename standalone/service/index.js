@@ -644,13 +644,44 @@ if (typeof Object.hasOwn !== 'function') {
     });
 }
 
-// Start the DIAL server
-global.isTizenTube = true;
+// Cobalt path (upstream e63455ea), or the existing DIAL/proxy path.
+//
+// Rather than injecting into Samsung's YouTube app over CDP, or proxying
+// youtube.com through this service, this launches Samsung's own Cobalt runtime
+// pointed at a local MITM proxy: config.xml declares the app as native Cobalt
+// and passes --proxy=http://127.0.0.2:8101, cobaltSetup copies Cobalt's
+// read-only content directory somewhere writable and installs a generated CA,
+// and cobaltProxyServer mints per-host leaf certificates so it can rewrite
+// YouTube's own HTTPS and inject the userscript. No debugger, no `shell:0
+// debug`, so none of the relaunch behaviour that path brings with it.
+//
+// Setup returns false on anything it cannot do — no Cobalt content directory,
+// certificate generation or installation failing — and the existing path is
+// used instead, so a TV this does not suit behaves as before.
+let cobaltStarted = false;
 try {
-    require('../../dist/service.js');
-    logServiceEvent('INFO', 'DIAL service (dist/service.js) loaded');
+    const cobaltSetup = require('./utils/cobaltSetup.js');
+    const startCobaltProxy = require('./utils/cobaltProxyServer.js');
+    if (cobaltSetup()) {
+        startCobaltProxy();
+        cobaltStarted = true;
+        logServiceEvent('INFO', 'Cobalt content and CA ready; MITM proxy listening on 127.0.0.2:8101');
+    } else {
+        logServiceEvent('INFO', 'Cobalt setup declined (no content dir, or cert generation/install failed); using the DIAL/proxy path');
+    }
 } catch (err) {
-    logServiceEvent('ERROR', `DIAL service (dist/service.js) failed to load: ${err && err.stack || err}`);
+    logServiceEvent('ERROR', `Cobalt setup threw, falling back to the DIAL/proxy path: ${err && err.stack || err}`);
+}
+
+if (!cobaltStarted) {
+    // Start the DIAL server
+    global.isTizenTube = true;
+    try {
+        require('../../dist/service.js');
+        logServiceEvent('INFO', 'DIAL service (dist/service.js) loaded');
+    } catch (err) {
+        logServiceEvent('ERROR', `DIAL service (dist/service.js) failed to load: ${err && err.stack || err}`);
+    }
 }
 
 // Tizen's service runner does `app = require(<entry>)` and then calls
