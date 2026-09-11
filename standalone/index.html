@@ -47,12 +47,37 @@
         // firing at all). Same /tv-log target and payload shape as the
         // service's own relayLog, so scripts/log-receiver/receiver.ps1 needs
         // no changes.
-        // The one place the receiver address is written down. index.html cannot
-        // read the user's setting — that lives in the page's localStorage, a
-        // different origin — so this stays a constant, but only one.
-        var LOG_RECEIVER_HOST = '192.168.50.57';
-        var LOG_RECEIVER_PORT = 3030;
-        var receiverAnnounced = false;
+        // No address is written down here any more. index.html cannot read the
+        // page's settings — those live in localStorage on a different origin —
+        // so instead of carrying a constant it hands its lines to the service,
+        // which knows the receiver the user configured in the settings menu and
+        // persists it across restarts.
+        //
+        // The service is not listening yet when the first lines are produced, so
+        // they are buffered and flushed as soon as it answers. Bounded, because
+        // a service that never comes up must not grow this forever.
+        var MAX_BUFFERED_LOGS = 100;
+        var bufferedLogs = [];
+
+        function postLog(entry) {
+            return fetch('http://localhost:8099/tizentube/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ entry: entry })
+            });
+        }
+
+        function flushBufferedLogs() {
+            if (!bufferedLogs.length) return;
+            var pending = bufferedLogs.splice(0, bufferedLogs.length);
+            for (var i = 0; i < pending.length; i++) {
+                (function (entry) {
+                    try {
+                        postLog(entry).catch(function () { });
+                    } catch (e) { }
+                })(pending[i]);
+            }
+        }
 
         function sendLog(level, message) {
             var ts = new Date().toISOString();
@@ -64,30 +89,14 @@
                 context: 'StandaloneIndexHtml',
                 message: message
             };
-            // Posted straight to the receiver, because this runs before the
-            // service exists and has to catch failures that stop it starting.
             try {
-                fetch('http://' + LOG_RECEIVER_HOST + ':' + LOG_RECEIVER_PORT + '/tv-log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(entry)
-                }).catch(function () { });
-            } catch (e) { }
-            // The service has no configuration of its own, and its own logs —
-            // logServiceEvent, plus everything the injector relays — pass no
-            // host, so blanking its hardcoded default silenced that entire
-            // channel. Telling it the address here brings [StandaloneService]
-            // and [Injector] lines back. Only the address is sent, not the
-            // entry, so nothing is logged twice; retried until one gets
-            // through, because the service may not be listening yet.
-            if (!receiverAnnounced) {
-                try {
-                    fetch('http://localhost:8099/tizentube/receiver', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ host: LOG_RECEIVER_HOST, port: LOG_RECEIVER_PORT })
-                    }).then(function () { receiverAnnounced = true; }).catch(function () { });
-                } catch (e) { }
+                postLog(entry).then(function () {
+                    flushBufferedLogs();
+                }).catch(function () {
+                    if (bufferedLogs.length < MAX_BUFFERED_LOGS) bufferedLogs.push(entry);
+                });
+            } catch (e) {
+                if (bufferedLogs.length < MAX_BUFFERED_LOGS) bufferedLogs.push(entry);
             }
         }
 
