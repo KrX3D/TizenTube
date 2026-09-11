@@ -110,6 +110,14 @@ function render(isUpdate) {
   // that up/down is no longer editing a digit.
   const value = onDigit ? KINDS[kind].display(digits, cursor) : KINDS[kind].display(digits, -1);
 
+  // selectedIndex asks the TV to move its own highlight, and on-device it does
+  // not: reported that moving right past the last digit appeared to select
+  // nothing, so there was no way to tell Save was reachable at all. The
+  // selected action row is therefore marked in its own title, using the same
+  // brackets as the digit cursor, which needs no cooperation from the TV.
+  const mark = (label, isSelected) => (isSelected ? `[ ${label} ]` : label);
+  const row = selectedRow(cursor, slots);
+
   showModal(
     { title },
     overlayPanelItemListRenderer([
@@ -121,16 +129,19 @@ function render(isUpdate) {
         [{ customAction: { action: 'NUMERIC_EDITOR_NOOP' } }]
       ),
       buttonItem(
-        { title: t('settings.numericEditor.save'), subtitle: KINDS[kind].serialize(digits).toString() },
+        {
+          title: mark(t('settings.numericEditor.save'), row === ROW_SAVE),
+          subtitle: KINDS[kind].serialize(digits).toString(),
+        },
         { icon: 'CHECK_BOX' },
         [{ customAction: { action: 'NUMERIC_EDITOR_SAVE' } }]
       ),
       buttonItem(
-        { title: t('settings.numericEditor.cancel') },
+        { title: mark(t('settings.numericEditor.cancel'), row === ROW_CANCEL) },
         { icon: 'CLEAR_COOKIES' },
         [{ customAction: { action: 'NUMERIC_EDITOR_CANCEL' } }]
       ),
-    ], selectedRow(cursor, slots)),
+    ], row),
     MODAL_ID,
     isUpdate
   );
