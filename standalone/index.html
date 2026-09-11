@@ -47,22 +47,57 @@
         // firing at all). Same /tv-log target and payload shape as the
         // service's own relayLog, so scripts/log-receiver/receiver.ps1 needs
         // no changes.
+        // No address is written down here any more. index.html cannot read the
+        // page's settings — those live in localStorage on a different origin —
+        // so instead of carrying a constant it hands its lines to the service,
+        // which knows the receiver the user configured in the settings menu and
+        // persists it across restarts.
+        //
+        // The service is not listening yet when the first lines are produced, so
+        // they are buffered and flushed as soon as it answers. Bounded, because
+        // a service that never comes up must not grow this forever.
+        var MAX_BUFFERED_LOGS = 100;
+        var bufferedLogs = [];
+
+        function postLog(entry) {
+            return fetch('http://localhost:8099/tizentube/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ entry: entry })
+            });
+        }
+
+        function flushBufferedLogs() {
+            if (!bufferedLogs.length) return;
+            var pending = bufferedLogs.splice(0, bufferedLogs.length);
+            for (var i = 0; i < pending.length; i++) {
+                (function (entry) {
+                    try {
+                        postLog(entry).catch(function () { });
+                    } catch (e) { }
+                })(pending[i]);
+            }
+        }
+
         function sendLog(level, message) {
+            var ts = new Date().toISOString();
+            var entry = {
+                _formatted: '[' + ts + '] [' + level + '] [StandaloneIndexHtml] ' + message,
+                app: 'TizenTube Standalone',
+                ts: ts,
+                level: level,
+                context: 'StandaloneIndexHtml',
+                message: message
+            };
             try {
-                var ts = new Date().toISOString();
-                fetch('http://192.168.50.57:3030/tv-log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        _formatted: '[' + ts + '] [' + level + '] [StandaloneIndexHtml] ' + message,
-                        app: 'TizenTube Standalone',
-                        ts: ts,
-                        level: level,
-                        context: 'StandaloneIndexHtml',
-                        message: message
-                    })
-                }).catch(function () { });
-            } catch (e) { }
+                postLog(entry).then(function () {
+                    flushBufferedLogs();
+                }).catch(function () {
+                    if (bufferedLogs.length < MAX_BUFFERED_LOGS) bufferedLogs.push(entry);
+                });
+            } catch (e) {
+                if (bufferedLogs.length < MAX_BUFFERED_LOGS) bufferedLogs.push(entry);
+            }
         }
 
         sendLog('INFO', 'index.html script started');
@@ -99,6 +134,12 @@
         // than none at all.
         var MAX_CONNECTING_POLLS = 30;
         var connectingPolls = 0;
+
+        // The service needs roughly three seconds to listen; these cover that
+        // without restarting the page underneath it.
+        var MAX_STARTUP_RETRIES = 20;
+        var STARTUP_RETRY_MS = 300;
+        var startupRetries = 0;
 
         function useInjectorOrProxy() {
             sendLog('INFO', 'useInjectorOrProxy() called, fetching getState');
@@ -141,7 +182,20 @@
                         location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
                     }
                 }).catch((err) => {
-                    sendLog('ERROR', 'getState fetch failed, reloading: ' + (err && err.message || err));
+                    // The service takes a couple of seconds to come up, and every
+                    // getState during that window fails. Reloading the whole page
+                    // for each one restarted launchAppControl too, producing 16
+                    // reloads in 3 seconds on a 6.5 capture — wasted work that
+                    // shows up as a long wait on the loading screen. Retry just
+                    // the fetch instead, and only fall back to a reload once it
+                    // is clear the service is not merely slow to start.
+                    startupRetries++;
+                    if (startupRetries <= MAX_STARTUP_RETRIES) {
+                        sendLog('INFO', 'getState not up yet, retrying in ' + STARTUP_RETRY_MS + 'ms (' + startupRetries + '/' + MAX_STARTUP_RETRIES + ')');
+                        setTimeout(useInjectorOrProxy, STARTUP_RETRY_MS);
+                        return;
+                    }
+                    sendLog('ERROR', 'getState still failing after ' + MAX_STARTUP_RETRIES + ' retries, reloading: ' + (err && err.message || err));
                     window.location.reload();
                 });
         }

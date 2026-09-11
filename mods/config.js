@@ -96,7 +96,11 @@ const defaultConfig = {
   syslogFacility: 16,
   syslogAppName: 'TizenTube',
   syslogHostname: '',
-  logServerHost: '192.168.50.57',
+  // Intentionally blank: this used to ship one developer's LAN address, so
+  // every install pointed its logs at a machine that is not the user's.
+  // Empty means "not set", which the settings menu already renders, and
+  // sendOne() treats as nothing to send.
+  logServerHost: '',
   logServerPort: 3030,
   enablePlaylistBatchCollect: false,
   playlistBatchCollectMaxBatches: 50,

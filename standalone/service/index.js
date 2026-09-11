@@ -14,7 +14,12 @@ const http = require('http');
 // might throw, so syslog is available even if a later require() fails.
 const dgram = require('dgram');
 
-const DEFAULT_LOG_HOST = '192.168.50.57';
+// RFC 5424's assigned port; used when a request omits one.
+const DEFAULT_SYSLOG_PORT = 514;
+
+// Blank rather than a baked-in LAN address — see relayLog(), which now
+// returns early instead of posting logs at whoever happens to own that IP.
+const DEFAULT_LOG_HOST = '';
 const DEFAULT_LOG_PORT = 3030;
 
 // A plain "connection refused" (nothing listening on that port) fails fast.
@@ -45,8 +50,13 @@ const UNAVAILABLE_COOLDOWN_MS = 15000;
 // socket would need its own error/rebind handling in a service that stays
 // alive across app launches until the TV reboots.
 function relaySyslog(frame, host, port) {
-    if (!frame || !host) return;
-    const targetPort = Number(port) || 514;
+    if (!frame) return;
+    // Same validation the HTTP relay gained: this address arrives in a request
+    // body and becomes the destination of an outbound datagram, so it is
+    // checked rather than trusted. Without it a POST could name any host and
+    // this would dutifully send there.
+    const targetPort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
+    if (!isValidHost(host) || !isValidPort(targetPort)) return;
     let socket;
     try {
         socket = dgram.createSocket('udp4');
@@ -70,9 +80,143 @@ function relaySyslog(frame, host, port) {
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
 // (same /tv-log path and JSON shape), so the existing PS1 receiver script
 // needs no changes.
+// The page knows the receiver address because the user set it in the settings
+// menu; it sends it with every /tizentube/log post. The service has no config
+// of its own, so it learns the address from those posts and reuses it for its
+// own logs — which is how service-side logging keeps working without a
+// hardcoded address baked into the build.
+let _learnedHost = '';
+let _learnedPort = 0;
+
+// Bounded: a service that never hears from the page must not grow this without
+// limit. Oldest dropped first, since the newest lines are the useful ones.
+const MAX_HELD_LOGS = 200;
+const _heldLogs = [];
+
+function holdUntilHostKnown(entry) {
+    _heldLogs.push(entry);
+    if (_heldLogs.length > MAX_HELD_LOGS) _heldLogs.shift();
+}
+
+// Persisted so the address survives a service restart. Without this the
+// receiver is only known after the page has logged at least once, which means
+// every launch loses the early lines — exactly the ones that matter when the
+// app fails before the page ever loads. res/wgt is read-only, so this goes in
+// the app's data directory.
+// Strict validation on the way in and on the way out.
+//
+// CodeQL flagged this path three times and was right each time: the address
+// arrives over HTTP, is written to disk, and is later read back and used as an
+// outbound request target. Validating at both ends is what makes that flow
+// safe, rather than suppressing the alerts.
+//
+// IPv4 only, deliberately. The settings menu's numeric editor cannot produce
+// anything else, so accepting hostnames would widen what a malformed or
+// malicious POST could put in a request target for no practical gain.
+function isValidHost(host) {
+    if (typeof host !== 'string') return false;
+    const parts = host.split('.');
+    if (parts.length !== 4) return false;
+    return parts.every((part) => {
+        if (!/^[0-9]{1,3}$/.test(part)) return false;
+        const n = Number(part);
+        return n >= 0 && n <= 255;
+    });
+}
+
+function isValidPort(port) {
+    const n = Number(port);
+    return Number.isInteger(n) && n >= 1 && n <= 65535;
+}
+
+// Persisted so the address survives a service restart. Without this the
+// receiver is only known after the page has logged at least once, which means
+// every launch loses the early lines — exactly the ones that matter when the
+// app fails before the page ever loads. res/wgt is read-only, so this goes in
+// the app's data directory.
+//
+// There is deliberately no temp-directory fallback. os.tmpdir() is shared and
+// world-writable, and a predictable name there is exactly the insecure-temp-file
+// pattern CodeQL flags: another process could pre-create or symlink the path and
+// redirect where this service sends its logs. If the app directory cannot be
+// determined the address simply stays in memory for the life of the process.
+const RECEIVER_STORE = (function () {
+    try {
+        const appId = tizenAppId();
+        if (appId) return require('path').join('/opt/usr/apps', appId, 'data', 'tt-log-receiver.json');
+    } catch (e) { }
+    return null;
+})();
+
+function tizenAppId() {
+    // /opt/usr/apps/<pkgId>/res/wgt/service/dist — walk back to <pkgId>.
+    const parts = String(__dirname).split(String.fromCharCode(92)).join('/').split('/');
+    const i = parts.indexOf('apps');
+    return (i !== -1 && parts[i + 1]) ? parts[i + 1] : '';
+}
+
+function loadPersistedReceiver() {
+    if (!RECEIVER_STORE) return;
+    try {
+        const raw = require('fs').readFileSync(RECEIVER_STORE, 'utf8');
+        const saved = JSON.parse(raw);
+        // Re-validated rather than trusted: this file is the one thing here that
+        // outlives the process, so whatever produced it is not necessarily the
+        // code above.
+        if (saved && isValidHost(saved.host) && isValidPort(saved.port)) {
+            _learnedHost = saved.host;
+            _learnedPort = Number(saved.port);
+        }
+    } catch (e) {
+        // Absent on first run, or unreadable — neither is worth reporting,
+        // since reporting it would itself need a receiver.
+    }
+}
+
+function persistReceiver() {
+    if (!RECEIVER_STORE || !isValidHost(_learnedHost) || !isValidPort(_learnedPort)) return;
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true, mode: 0o700 }); } catch (e) { }
+        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ host: _learnedHost, port: _learnedPort }), { mode: 0o600 });
+    } catch (e) { }
+}
+
+function noteReceiver(host, port) {
+    // Rejected outright rather than coerced: an address that is not a plain
+    // IPv4 literal has no business becoming a request target, and silently
+    // falling back to a default would hide a misconfigured page.
+    const candidatePort = isValidPort(port) ? Number(port) : DEFAULT_LOG_PORT;
+    if (!isValidHost(host) || !isValidPort(candidatePort)) return;
+    if (host === _learnedHost && candidatePort === _learnedPort) return;
+    _learnedHost = host;
+    _learnedPort = candidatePort;
+    // Anything logged before the page got in touch — including bootstrap.js's
+    // lines, which run before this module even loads — is worth having: that is
+    // where load failures show up.
+    persistReceiver();
+    const pending = _heldLogs.splice(0, _heldLogs.length);
+    const bootstrapped = (global.__ttPendingServiceLogs || []).splice(0, (global.__ttPendingServiceLogs || []).length);
+    for (const held of bootstrapped.concat(pending)) relayLog(held, _learnedHost, _learnedPort);
+}
+
+loadPersistedReceiver();
+
 function relayLog(entry, host, port) {
-    const targetHost = host || DEFAULT_LOG_HOST;
-    const targetPort = Number(port) || DEFAULT_LOG_PORT;
+    // Any caller that knows the address teaches it to the service. That covers
+    // the CDP path too: the page cannot reach localhost from an HTTPS context,
+    // so it queues entries tagged with the host and injector.js drains them
+    // through here — without this, only the proxy path ever taught us.
+    if (host) noteReceiver(host, port);
+    const targetHost = host || _learnedHost || DEFAULT_LOG_HOST;
+    const targetPort = Number(port) || _learnedPort || DEFAULT_LOG_PORT;
+    // Nowhere to send yet. The service's own logs (logServiceEvent, and
+    // everything the injector relays) pass no host, so before this they leaned
+    // entirely on DEFAULT_LOG_HOST — which shipped as one developer's LAN
+    // address. Rather than keep pointing every install at a stranger's machine,
+    // hold these until the page tells us where its receiver is, then flush.
+    if (!targetHost) { holdUntilHostKnown(entry); return; }
     const targetKey = `${targetHost}:${targetPort}`;
     const unavailableSince = unavailableTargets[targetKey];
     if (unavailableSince && (Date.now() - unavailableSince) < UNAVAILABLE_COOLDOWN_MS) return;
@@ -226,9 +370,26 @@ app.get('/tizentube/debugger', (req, res) => {
 
 // host/port come from the request body when the page has them configured;
 // falls back to DEFAULT_LOG_HOST/PORT otherwise (see relayLog above).
+// index.html announces where the receiver is. The service keeps no config of
+// its own, and its own logging passes no host, so without this it has nowhere
+// to send anything once the hardcoded default was removed.
+// index.html has no configuration of its own and cannot read the page's
+// settings (different origin), so it asks the service instead of carrying a
+// hardcoded address.
+app.get('/tizentube/receiver', (req, res) => {
+    res.json({ host: _learnedHost || '', port: _learnedPort || DEFAULT_LOG_PORT });
+});
+
+app.post('/tizentube/receiver', express.json(), (req, res) => {
+    const { host, port } = req.body || {};
+    noteReceiver(host, port);
+    res.status(204).end();
+});
+
 app.post('/tizentube/log', express.json(), (req, res) => {
     const { host, port, entry } = req.body || {};
     if (!entry) return res.status(400).end();
+    noteReceiver(host, port);
     relayLog(entry, host, port);
     res.status(204).end();
 });
@@ -460,6 +621,29 @@ if (!global.crypto || typeof global.crypto.getRandomValues !== 'function') {
     });
 }
 
+// Object.hasOwn is ES2022 (V8 9.3 / Node 16.9). Tizen 6.5's service runtime is
+// Node v12.16.3, so a dependency using it threw during DIAL startup:
+//
+//     DIAL service (dist/service.js) failed to load:
+//         TypeError: Object.hasOwn is not a function
+//
+// Babel transpiles syntax, not runtime APIs, so this needs a shim rather than a
+// build setting. Third failure in the same chain, each one only visible once
+// the previous was fixed: node: imports, then the un-inlined XML templates,
+// now this.
+if (typeof Object.hasOwn !== 'function') {
+    Object.defineProperty(Object, 'hasOwn', {
+        value: function (target, property) {
+            if (target === null || target === undefined) {
+                throw new TypeError('Cannot convert undefined or null to object');
+            }
+            return Object.prototype.hasOwnProperty.call(Object(target), property);
+        },
+        configurable: true,
+        writable: true,
+    });
+}
+
 // Start the DIAL server
 global.isTizenTube = true;
 try {
@@ -468,3 +652,23 @@ try {
 } catch (err) {
     logServiceEvent('ERROR', `DIAL service (dist/service.js) failed to load: ${err && err.stack || err}`);
 }
+
+// Tizen's service runner does `app = require(<entry>)` and then calls
+// app.onStart / app.onRequest / app.onStop on lifecycle messages. This module
+// exported nothing at all, so every incoming message threw
+//
+//     TypeError: app.onRequest is not a function
+//         at MessagePort.<anonymous> (/usr/share/wrt/app/service/service_runner.js:152)
+//
+// as an UNCAUGHT exception — 29 of them in one captured session on Tizen 6.5,
+// which is what destabilised the service and left index.html reloading against
+// a target that kept dying ("getState fetch failed, reloading" 26 times in the
+// same capture).
+//
+// Everything this service does happens at module load, so these handlers only
+// need to exist. They are defined defensively rather than assumed to be
+// provided by dist/service.js, because that module is a dependency here, not
+// the entry point — its exports are never what the runner sees.
+module.exports.onStart = function () { };
+module.exports.onStop = function () { };
+module.exports.onRequest = function () { };

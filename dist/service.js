@@ -13,15 +13,15 @@ var require$$4$1 = require('timers');
 var require$$1$4 = require('assert');
 var require$$1$5 = require('tty');
 var require$$0$7 = require('buffer');
-var require$$4$2 = require('node:zlib');
-var require$$1$7 = require('node:events');
-var require$$8$1 = require('node:path');
-var require$$2$2 = require('node:fs');
-var require$$2$3 = require('node:http');
+var require$$4$2 = require('zlib');
+var require$$1$7 = require('events');
+var require$$8$1 = require('path');
+var require$$2$2 = require('fs');
+var require$$2$3 = require('http');
 var require$$0$8 = require('crypto');
-var require$$6$1 = require('node:querystring');
-var require$$7$2 = require('node:buffer');
-var require$$1$6 = require('node:net');
+var require$$6$1 = require('querystring');
+var require$$7$2 = require('buffer');
+var require$$1$6 = require('net');
 var require$$13 = require('stream');
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -9177,8 +9177,8 @@ var URL = require$$8;
 var xml2js = xml2js$1;
 var cors$1 = libExports$1;
 var gate = gate$1;
-var DEVICE_DESC_TEMPLATE = fs$2.readFileSync(__dirname + '/../xml/device-desc.xml', 'utf8');
-var APP_DESC_TEMPLATE = fs$2.readFileSync(__dirname + '/../xml/app-desc.xml', 'utf8');
+var DEVICE_DESC_TEMPLATE = "<?xml version=\"1.0\"?>\n<root xmlns=\"urn:schemas-upnp-org:device-1-0\">\n  <specVersion>\n    <major>1</major>\n    <minor>0</minor>\n  </specVersion>\n  <URLBase><%=URLBase%></URLBase>\n  <device>\n    <deviceType>urn:dial-multiscreen-org:device:dial:1</deviceType>\n    <friendlyName><%=friendlyName%></friendlyName>\n    <manufacturer><%=manufacturer%></manufacturer>\n    <modelName><%=modelName%></modelName>\n    <UDN>uuid:<%=uuid%></UDN>\n    <iconList>\n      <icon>\n        <mimetype>image/png</mimetype>\n        <width>144</width>\n        <height>144</height>\n        <depth>32</depth>\n        <url>/img/icon.png</url>\n      </icon>\n    </iconList>\n    <serviceList>\n      <service>\n        <serviceType>urn:dial-multiscreen-org:service:dial:1</serviceType>\n        <serviceId>urn:dial-multiscreen-org:serviceId:dial</serviceId>\n        <controlURL>/ssdp/notfound</controlURL>\n        <eventSubURL>/ssdp/notfound</eventSubURL>\n        <SCPDURL>/ssdp/notfound</SCPDURL>\n      </service>\n    </serviceList>\n  </device>\n</root>\n";
+var APP_DESC_TEMPLATE = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<%\nvar ns = \"\";\nfor(var i in namespaces){\n   ns = ns + ' xmlns:'+i+'=\"'+namespaces[i]+'\"';\n}\n%>\n<service xmlns=\"urn:dial-multiscreen-org:schemas:dial\" <%-ns%> dialVer=\"1.7\">\n  <name><%=name%></name>\n  <options allowStop=\"<%=allowStop%>\"/>\n  <state><%=state%></state>\n  <% if(typeof rel != \"undefined\" && typeof href != \"undefined\" && href){ %>\n  <link rel=\"<%=rel%>\" href=\"<%=href%>\" />\n  <% } %>\n  <% if(typeof additionalData != \"undefined\"){ %>\n        <additionalData>\n  <%    for(var i in additionalData){ %>\n            <<%=i%>><%=additionalData[i]%></<%=i%>>\n  <%    } %>\n        </additionalData>\n  <% }  %>\n</service>\n";
 var DEVICE_DESC_RENDERER = ejs.compile(DEVICE_DESC_TEMPLATE);
 var APP_DESC_RENDERER = ejs.compile(APP_DESC_TEMPLATE);
 var SERVER = os.type() + "/" + os.release() + " UPnP/1.1 famium/0.0.1";
@@ -44093,8 +44093,8 @@ var routerExports = router.exports;
    * and HTTPS server you may do so with the "http"
    * and "https" modules as shown here:
    *
-   *    var http = require('node:http')
-   *      , https = require('node:https')
+   *    var http = require('http')
+   *      , https = require('https')
    *      , express = require('express')
    *      , app = express();
    *

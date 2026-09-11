@@ -194,11 +194,56 @@ jobs:
             patch = 0;
           }
 
-          const newVer = `${major}.${minor}.${patch}`;
-          pkg.version = newVer;
+          // npm refuses forever to reuse a version number that was once
+          // published and later unpublished. The cleanup step in this same
+          // workflow unpublishes old releases, so 780 of the 857 numbers this
+          // package has ever used are permanently burned. Whenever
+          // package.json drops back into that range - a revert, a bad merge,
+          // an upstream sync - every run then fails with
+          //   E400 Cannot publish over previously published version "x.y.z"
+          // and, because the bump is committed and pushed BEFORE publishing,
+          // main is left pinned on the burned number so every later run fails
+          // the same way. That is exactly what happened twice at 1.16.10.
+          //
+          // The registry time map lists every version ever used, live or not,
+          // so skipping past them makes the bump self-correcting.
+          //
+          // Wrapped in an async IIFE on purpose: this script is fed to `node -`
+          // on stdin, and a top-level await next to the require() above makes
+          // Node fail the whole script with ERR_AMBIGUOUS_MODULE_SYNTAX.
+          (async () => {
+            let used = null;
+            try {
+              const res = await fetch('https://registry.npmjs.org/' + pkg.name);
+              if (res.ok) {
+                const meta = await res.json();
+                const isSemver = (k) => /^[0-9]+[.][0-9]+[.][0-9]+$/.test(k);
+                used = new Set(Object.keys(meta.time || {}).filter(isSemver));
+              }
+            } catch (e) {
+              // Registry unreachable: fall through to the plain bump rather
+              // than blocking a release. A real collision still fails loudly
+              // at publish.
+              used = null;
+            }
 
-          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
-          console.log(`Bumped version: ${ver} -> ${newVer}`);
+            let newVer = `${major}.${minor}.${patch}`;
+            if (used) {
+              const firstChoice = newVer;
+              let guard = 0;
+              while (used.has(newVer) && guard++ < 500) {
+                patch += 10;
+                if (patch >= 1000) { minor += 1; patch = 0; }
+                newVer = `${major}.${minor}.${patch}`;
+              }
+              if (used.has(newVer)) throw new Error('No unused version found near ' + ver);
+              if (newVer !== firstChoice) console.log('Skipped burned version numbers: ' + firstChoice + ' -> ' + newVer);
+            }
+
+            pkg.version = newVer;
+            fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + String.fromCharCode(10), 'utf8');
+            console.log('Bumped version: ' + ver + ' -> ' + newVer);
+          })();
           NODE
 
       - name: Show current version (old -> new)
@@ -332,6 +377,35 @@ jobs:
       # --------------------
       # PUBLISH
       # --------------------
+      # --------------------
+      # Guard: never publish a tarball whose dist does not match its version
+      # --------------------
+      # Confirmed on 1.30.0: the tarball carried package.json 1.30.0 alongside a
+      # dist/userScript.js stamped 1.16.10, so every TV pulling the CDN got a
+      # build five releases old while the settings menu reported the new number.
+      #
+      # It came from re-running a failed run. A re-run replays the ORIGINAL
+      # commit, so it bumped and built at the old version, and then the
+      # `git rebase origin/main` below took main's newer package.json while
+      # keeping the dist it had already built. package.json and dist are only
+      # guaranteed to agree when a run builds them together, and nothing checked
+      # that they still did by the time publish happened.
+      - name: Verify dist matches package.json version
+        if: success()
+        run: |
+          set -euo pipefail
+          VER="$(node -p "require('./package.json').version")"
+          echo "package.json version: ${VER}"
+          for f in dist/userScript.js dist/service.js; do
+            test -f "$f" || { echo "::error::${f} is missing"; exit 1; }
+          done
+          if ! grep -qF "\"${VER}\"" dist/userScript.js; then
+            FOUND="$(grep -aoE '\"[0-9]+\.[0-9]+\.[0-9]+\"' dist/userScript.js | sort -u | head -3 | xargs echo)"
+            echo "::error::dist/userScript.js was not built from this version. package.json says ${VER}; the bundle contains ${FOUND:-no version string}. Re-run the workflow from a fresh push rather than re-running an old run, so the bump and the build happen together."
+            exit 1
+          fi
+          echo "dist/userScript.js carries ${VER}"
+
       - name: Publish package to npm
         if: success()
         id: publish_npm
