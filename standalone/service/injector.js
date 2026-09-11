@@ -27,29 +27,17 @@ let _activeSessionId = 0;
 const MAX_RETRY_ATTEMPTS = 10;
 const RETRY_DELAY_MS = 750;
 
-// `shell:0 debug <appId>` returns NOTHING — not an error — when the target app
-// is still running, because it launches an app in debug mode rather than
-// attaching to a running one. index.html calls exit() just before the service
-// gets here, but Tizen reports the app gone before it has finished tearing the
-// process down, so an attempt frequently lands too early and the shell stream
-// stays silent. Measured upstream (reisxd/TizenTube#640) on a 2025 S90F running
-// Tizen 9:
+// A silent `shell:0 debug` used to trigger up to eight fast retries here, on
+// the reasoning that silence means "the app is still shutting down" and is
+// cheap to retry. That reasoning missed what a retry actually costs: every
+// `shell:0 debug` LAUNCHES THE APP in debug mode, stealing the foreground and
+// restarting index.html. Eight of them inside about seven seconds thrashed the
+// app hard enough to leave it on a black screen, on both 6.5 and 5.5, where
+// the previous release was fine.
 //
-//     app running  ->  0 debug <appId>  ->  0 bytes
-//     app stopped  ->  0 debug <appId>  ->  successfully launched pid = ... port: 45627
-//
-// Silence therefore means "too early", and the right response is to retry in
-// milliseconds. Previously only the 20s safety net below noticed, and that net
-// also covers the whole post-response CDP phase — so a teardown race consumed a
-// full 20s attempt, worst case MAX_RETRY_ATTEMPTS * 20.75s, roughly three and a
-// half minutes of splash screen before the app gave up and fell back.
-//
-// These fast retries get their own budget deliberately. Charging them to
-// MAX_RETRY_ATTEMPTS would spend the session's ten real attempts on a race that
-// resolves in under a second, making the app give up sooner than it does today.
-const SHELL_SILENCE_TIMEOUT_MS = 500;
-const SHELL_SILENCE_MAX_RETRIES = 8;
-const SHELL_SILENCE_RETRY_DELAY_MS = 400;
+// Silence is therefore handled by the ordinary session machinery again: the
+// 20s safety net notices, retryOrGiveUp counts it as one attempt, and the app
+// is relaunched once per attempt rather than eight times.
 
 // On this path the page is real https://youtube.com, so a page-initiated
 // fetch to http://localhost:8099 (logServer.js's normal standalone relay) is
@@ -513,7 +501,7 @@ function canConnectToDaemon(relayLog, attempt) {
         });
 }
 
-function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
+function startDebugger(args, relayLog, sessionId, attempt) {
     if (sessionId === undefined) {
         // Fresh top-level call (not a retry) — starts a new session,
         // superseding any retry loop still in flight from a previous one.
@@ -543,7 +531,6 @@ function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
         return Promise.resolve(false); // superseded, abort silently
     }
     if (attempt === undefined) attempt = 0;
-    if (silenceAttempt === undefined) silenceAttempt = 0;
 
     return canConnectToDaemon(relayLog).then(res => {
         if (!res.canConnectToDaemon) {
@@ -634,44 +621,17 @@ function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
             noteProgress();
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
 
-            // See SHELL_SILENCE_* above: no reply at all means the app was still
-            // shutting down, so re-issue quickly on a fresh connection rather
-            // than waiting out the 20s net. Any reply — even one that isn't a
-            // debug line — counts as answered and is left to the handling below.
-            let shellAnswered = false;
-            const silenceTimeout = setTimeout(() => {
-                if (shellAnswered) return;
-                if (sessionId !== _activeSessionId) return;
-                clearTimeout(safetyTimeout);
-                clearTimeout(streamEndFallback);
-                endStreamOnce();
-                if (silenceAttempt < SHELL_SILENCE_MAX_RETRIES) {
-                    if (typeof relayLog === 'function') {
-                        relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `shell:0 debug returned nothing (app still shutting down), fast retry ${silenceAttempt + 1}/${SHELL_SILENCE_MAX_RETRIES}` });
-                    }
-                    setTimeout(() => startDebugger(args, relayLog, sessionId, attempt, silenceAttempt + 1), SHELL_SILENCE_RETRY_DELAY_MS);
-                } else {
-                    // Persistent silence is no longer a teardown race — hand it to
-                    // the session-level machinery, which counts it as a real
-                    // attempt and eventually gives up so the app can fall back.
-                    retryOrGiveUp(sessionId, attempt, args, relayLog, `shell:0 debug silent after ${SHELL_SILENCE_MAX_RETRIES} fast retries`);
-                }
-            }, SHELL_SILENCE_TIMEOUT_MS);
 
             shellCmd.on('error', (err) => {
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `shell:0 debug stream error: ${err && err.stack || err}` });
                 }
-                shellAnswered = true;
-                clearTimeout(silenceTimeout);
                 clearTimeout(safetyTimeout);
                 endStreamOnce();
                 retryOrGiveUp(sessionId, attempt, args, relayLog, `shell stream error: ${err && err.message || err}`);
             });
             shellCmd.on('data', (data) => {
-                shellAnswered = true;
                 noteProgress();
-                clearTimeout(silenceTimeout);
                 const dataString = data.toString();
                 // Always log the raw response — previously only logged (and
                 // acted on) when it contained 'debug'; anything else (an

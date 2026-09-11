@@ -225,6 +225,15 @@ app.get('/tizentube/debugger', (req, res) => {
 
 // host/port come from the request body when the page has them configured;
 // falls back to DEFAULT_LOG_HOST/PORT otherwise (see relayLog above).
+// index.html announces where the receiver is. The service keeps no config of
+// its own, and its own logging passes no host, so without this it has nowhere
+// to send anything once the hardcoded default was removed.
+app.post('/tizentube/receiver', express.json(), (req, res) => {
+    const { host, port } = req.body || {};
+    noteReceiver(host, port);
+    res.status(204).end();
+});
+
 app.post('/tizentube/log', express.json(), (req, res) => {
     const { host, port, entry } = req.body || {};
     if (!entry) return res.status(400).end();
