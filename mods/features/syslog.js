@@ -138,6 +138,11 @@ function deliver(frame) {
 
 export function sendSyslog(entry) {
   if (!isSyslogEnabled()) return false;
+  return sendSyslogFrame(entry);
+}
+
+/** Build and deliver, without the enabled check. Used by the test button. */
+function sendSyslogFrame(entry) {
   try {
     const message = String((entry && entry.message) || '');
     if (message.length <= MAX_MSG_BYTES) return deliver(formatSyslog(entry, message));
@@ -159,14 +164,17 @@ export function sendSyslog(entry) {
  * matching the log server's own "Test Connection" button.
  */
 export function sendSyslogTest() {
-  if (!configRead('syslogEnabled')) return { enabled: false, queued: false };
-  if (!configRead('syslogHost')) return { enabled: true, queued: false, noHost: true };
-  const queued = sendSyslog({
+  // Sent whether or not syslog output is enabled, matching the log server's
+  // test button: verifying the host and port BEFORE switching output on is the
+  // whole point of a test, and refusing until it is already on made it useless
+  // for that.
+  if (!configRead('syslogHost')) return { enabled: !!configRead('syslogEnabled'), queued: false, noHost: true };
+  const queued = sendSyslogFrame({
     ts: new Date().toISOString(),
     level: 'INFO',
     context: 'TizenTube',
     label: 'syslog.test',
     message: 'Manual syslog test frame',
   });
-  return { enabled: true, queued };
+  return { enabled: !!configRead('syslogEnabled'), queued };
 }

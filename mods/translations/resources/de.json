@@ -72,7 +72,28 @@
                             "bottomRight": "Unten rechts",
                             "center": "Mitte"
                         },
-                        "height": "Konsolenhöhe"
+                        "height": "Konsolenhöhe",
+                        "verbosity": {
+                            "title": "Detailgrad der Protokolle",
+                            "subtitle": "Einfach protokolliert nur, was passiert ist; detailliert enthält die vollständigen Daten",
+                            "basic": "Einfach",
+                            "detailed": "Detailliert"
+                        },
+                        "categories": {
+                            "title": "Protokoll-Kategorien",
+                            "subtitle": "Wähle aus, welche Funktionen Protokolleinträge schreiben",
+                            "nav": "Navigation und Seiten",
+                            "ads": "Werbeblocker",
+                            "shorts": "Shorts-Filter",
+                            "watched": "Gesehene Videos ausblenden",
+                            "playlist": "Playlist-Stapelladen",
+                            "filters": "Nur für Mitglieder, Umfragen, Mediathek",
+                            "shelves": "Regale und Kacheln",
+                            "thumbs": "Vorschaubilder und DeArrow",
+                            "player": "Player, SponsorBlock, Untertitel",
+                            "other": "Alles Übrige"
+                        },
+                        "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",
@@ -84,7 +105,10 @@
                         "testQueued": "Testeintrag eingereiht — TizenBrew-Log prüfen",
                         "testDisabled": "Protokollierung zuerst aktivieren",
                         "testFailed": "Log-Ping fehlgeschlagen",
-                        "disabled": "Protokollierung deaktiviert"
+                        "disabled": "Protokollierung deaktiviert",
+                        "host": "IP des Empfänger-PCs",
+                        "port": "Port des Empfängers",
+                        "testSentButOff": "Test-Log gesendet, aber die Remote-Protokollierung ist noch aus."
                     },
                     "syslog": {
                         "title": "Syslog-Server",
@@ -96,7 +120,10 @@
                         "testDisabled": "Die Syslog-Ausgabe ist deaktiviert.",
                         "testNoHost": "Es ist kein Syslog-Host gesetzt.",
                         "testQueued": "Syslog-Testpaket gesendet.",
-                        "testFailed": "Das Syslog-Paket konnte nicht gesendet werden."
+                        "testFailed": "Das Syslog-Paket konnte nicht gesendet werden.",
+                        "host": "IP des Syslog-Servers",
+                        "port": "Syslog-Port",
+                        "testSentButOff": "Syslog-Paket gesendet, aber die Syslog-Ausgabe ist noch aus."
                     }
                 }
             },
@@ -284,7 +311,8 @@
                         },
                         "addToSidebar": "Kanal zur Seitenleiste hinzufügen",
                         "removeFromSidebar": "Kanal aus der Seitenleiste entfernen"
-                    }
+                    },
+                    "hideDuplicateVideos": "Doppelte Videos ausblenden"
                 }
             },
             "updater": {
@@ -318,6 +346,12 @@
                 "5": "- Buy Me A Coffee: https://www.buymeacoffee.com/reisxd (bevorzugt)",
                 "6": "- GitHub Sponsors: https://github.com/sponsors/reisxd"
             }
+        },
+        "numericEditor": {
+            "hint": "Links/Rechts bewegen · Hoch/Runter ändern · Zifferntasten eingeben · weiter rechts zum Speichern",
+            "save": "Speichern",
+            "cancel": "Abbrechen",
+            "saved": "Gespeichert: {{value}}"
         }
     },
     "playlist": {

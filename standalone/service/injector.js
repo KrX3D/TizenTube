@@ -27,6 +27,30 @@ let _activeSessionId = 0;
 const MAX_RETRY_ATTEMPTS = 10;
 const RETRY_DELAY_MS = 750;
 
+// `shell:0 debug <appId>` returns NOTHING — not an error — when the target app
+// is still running, because it launches an app in debug mode rather than
+// attaching to a running one. index.html calls exit() just before the service
+// gets here, but Tizen reports the app gone before it has finished tearing the
+// process down, so an attempt frequently lands too early and the shell stream
+// stays silent. Measured upstream (reisxd/TizenTube#640) on a 2025 S90F running
+// Tizen 9:
+//
+//     app running  ->  0 debug <appId>  ->  0 bytes
+//     app stopped  ->  0 debug <appId>  ->  successfully launched pid = ... port: 45627
+//
+// Silence therefore means "too early", and the right response is to retry in
+// milliseconds. Previously only the 20s safety net below noticed, and that net
+// also covers the whole post-response CDP phase — so a teardown race consumed a
+// full 20s attempt, worst case MAX_RETRY_ATTEMPTS * 20.75s, roughly three and a
+// half minutes of splash screen before the app gave up and fell back.
+//
+// These fast retries get their own budget deliberately. Charging them to
+// MAX_RETRY_ATTEMPTS would spend the session's ten real attempts on a race that
+// resolves in under a second, making the app give up sooner than it does today.
+const SHELL_SILENCE_TIMEOUT_MS = 500;
+const SHELL_SILENCE_MAX_RETRIES = 8;
+const SHELL_SILENCE_RETRY_DELAY_MS = 400;
+
 // On this path the page is real https://youtube.com, so a page-initiated
 // fetch to http://localhost:8099 (logServer.js's normal standalone relay) is
 // cross-origin *and* HTTPS-page-to-HTTP-target — Cobalt blocks that as mixed
@@ -98,8 +122,12 @@ function pollLogQueue(client, relayLog) {
 
 function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     if (sessionId !== _activeSessionId) return; // superseded by a newer attempt, abort silently
+    noteProgress();
     if (attempt >= MAX_RETRY_ATTEMPTS) {
-        isConnecting = false;
+        // Standing down rather than merely clearing isConnecting: leaving
+        // canConnectToDaemon true meant the next launch began the whole
+        // relaunch cycle again, which is why this never recovered on its own.
+        standDown(relayLog);
         if (typeof relayLog === 'function') {
             relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Giving up after ${MAX_RETRY_ATTEMPTS} attempts (${reason})` });
         }
@@ -156,6 +184,21 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
 
             client.on('disconnect', () => {
                 if (!injected) {
+                    if (!sawAnyContext) {
+                        // Not a transient race: the page never produced a
+                        // single execution context, so another identical launch
+                        // will do the same thing. Retrying regardless is what
+                        // made the app reopen itself ten times with no way to
+                        // exit, so this failure gets a much shorter budget.
+                        noContextFailures++;
+                        if (noContextFailures >= MAX_NO_CONTEXT_FAILURES) {
+                            if (typeof relayLog === 'function') {
+                                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `No execution context after ${noContextFailures} sessions — standing down so the app falls back to the proxy path` });
+                            }
+                            standDown(relayLog);
+                            return;
+                        }
+                    }
                     retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
                 } else if (sessionId === _activeSessionId) {
                     // The session's CDP connection has now genuinely ended
@@ -164,6 +207,7 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     // below on why it must NOT clear the moment injection
                     // succeeds.
                     isConnecting = false;
+                    _injectedSession = false;
                 }
             });
 
@@ -223,6 +267,11 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // forever with isConnecting stuck true and no mod ever injected.
             let contextRaceMisses = 0;
             const MAX_CONTEXT_RACE_MISSES = 5;
+            // Whether any execution context was seen at all this session. If
+            // none was, re-issuing an identical debug launch cannot help — and
+            // each re-issue relaunches the app and steals the foreground, so
+            // the user cannot even exit while it repeats.
+            let sawAnyContext = false;
 
             // Fetched once per session and reused for every
             // executionContextCreated event, not re-fetched from the CDN
@@ -246,7 +295,20 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                 // (non-default contexts tend to be shorter-lived) and to
                 // wasted work over a long session as more of them appear.
                 const auxData = (m.context && m.context.auxData) || {};
-                if (!auxData.isDefault) return;
+                sawAnyContext = true;
+                noteProgress();
+                if (typeof relayLog === 'function') {
+                    relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `executionContextCreated id=${m.context && m.context.id} auxData=${JSON.stringify(auxData)}` });
+                }
+                // Only skip contexts that positively declare themselves NOT
+                // default. The check used to be `if (!auxData.isDefault)`,
+                // which also skipped every context whose auxData omits the
+                // field entirely — and Cobalt does omit it. Captured on-device:
+                // CDP connected, Page.navigate ran, contexts were created, and
+                // not one injection was ever attempted; the session then hit
+                // the safety net as "CDP disconnected before injection
+                // succeeded" and relaunched the app, ten times over.
+                if (auxData.isDefault === false) return;
                 modFilePromise.then(modFile => {
                     // Marker so the userscript can tell it's running under this
                     // standalone app even though this path loads real youtube.com
@@ -255,6 +317,10 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     return client.Runtime.evaluate({ expression: `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\n` + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
+                    // Exempts this session from the stale guard: once injected it
+                    // legitimately sits idle for as long as the user watches.
+                    _injectedSession = true;
+                    noteProgress();
                     // isConnecting deliberately stays true here, not false —
                     // confirmed on-device: the debug-launched app instance's
                     // OWN index.html script keeps running in the background
@@ -378,8 +444,73 @@ const CAN_CONNECT_RETRY_DELAY_MS = 500;
 // given, i.e. only the startDebugger call site, not every getState poll)
 // logging on each failure — after exhausting attempts, resolves with
 // canConnectToDaemon:false rather than hanging forever.
+// Set once the CDP path has proven it cannot work on this device/firmware.
+// Reported on-device: with injection failing, every retry re-launched the app
+// in debug mode, which steals the foreground — so the app could not be exited
+// at all until the whole retry budget was spent. Reporting the daemon as
+// unavailable makes index.html take the proxy path instead, which injects the
+// userscript itself, needs no debugger, and leaves the app usable and exitable.
+let _stoodDown = false;
+const MAX_NO_CONTEXT_FAILURES = 2;
+let noContextFailures = 0;
+
+// Stale-session guard.
+//
+// isConnecting only clears at two terminal points: a successful injection's CDP
+// connection ending, or standing down. Both depend on something happening. A
+// session that neither finishes nor disconnects therefore leaves isConnecting
+// true forever, and index.html — which only takes the CDP path when
+// isConnecting is false — is locked out for the rest of the service's life.
+//
+// That is what a capture showed: the log opened with "Retrying (attempt 1/10)"
+// and the very first getState of a freshly started app already reported
+// isConnecting:true, i.e. a session left over from a previous run that no
+// longer had any way to complete. Reinstalling cleared it only because that
+// restarts the service process.
+//
+// The threshold is measured from the last sign of progress rather than from the
+// session start, so a legitimately long retry cycle is never cut off — every
+// attempt, shell reply and CDP event refreshes it. A session that has already
+// injected is exempt entirely: staying connected with nothing happening is
+// exactly what a normal viewing session looks like.
+const STALE_PROGRESS_MS = 45000;
+let _lastProgressAt = 0;
+let _injectedSession = false;
+
+function noteProgress() { _lastProgressAt = Date.now(); }
+
+function isStaleConnecting() {
+    if (!isConnecting || _injectedSession) return false;
+    if (!_lastProgressAt) return false;
+    return (Date.now() - _lastProgressAt) > STALE_PROGRESS_MS;
+}
+
+function standDown(relayLog) {
+    _stoodDown = true;
+    isConnecting = false;
+    _injectedSession = false;
+    if (typeof relayLog === 'function') {
+        relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'CDP injection stood down for this service run; falling back to the proxy path' });
+    }
+}
+
 function canConnectToDaemon(relayLog, attempt) {
     if (attempt === undefined) attempt = 0;
+    // Answered before touching the network: once stood down, nothing should
+    // start another debug launch for the rest of this service's life.
+    if (_stoodDown) return Promise.resolve({ canConnectToDaemon: false, ip: null, isConnecting: false });
+    // Release a wedged session so the caller can start a fresh one instead of
+    // polling a flag that will never clear. Bumping the session id makes the
+    // stale session's own callbacks abort the moment they next check, using the
+    // same supersede mechanism a new top-level call already relies on.
+    if (isStaleConnecting()) {
+        if (typeof relayLog === 'function') {
+            relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `isConnecting was stuck with no progress for ${Math.round((Date.now() - _lastProgressAt) / 1000)}s — releasing it so a new attempt can start` });
+        }
+        _activeSessionId++;
+        isConnecting = false;
+        _lastProgressAt = 0;
+    }
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
             return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }
@@ -398,7 +529,7 @@ function canConnectToDaemon(relayLog, attempt) {
         });
 }
 
-function startDebugger(args, relayLog, sessionId, attempt) {
+function startDebugger(args, relayLog, sessionId, attempt, silenceAttempt) {
     if (sessionId === undefined) {
         // Fresh top-level call (not a retry) — starts a new session,
         // superseding any retry loop still in flight from a previous one.
@@ -422,10 +553,13 @@ function startDebugger(args, relayLog, sessionId, attempt) {
         // terminal points: a successful injection, or actually giving up
         // after MAX_RETRY_ATTEMPTS.
         isConnecting = true;
+        _injectedSession = false;
+        noteProgress();
     } else if (sessionId !== _activeSessionId) {
         return Promise.resolve(false); // superseded, abort silently
     }
     if (attempt === undefined) attempt = 0;
+    if (silenceAttempt === undefined) silenceAttempt = 0;
 
     return canConnectToDaemon(relayLog).then(res => {
         if (!res.canConnectToDaemon) {
@@ -513,16 +647,47 @@ function startDebugger(args, relayLog, sessionId, attempt) {
             };
             const streamEndFallback = setTimeout(endStreamOnce, 5000);
 
+            noteProgress();
             const shellCmd = client.createStream(`shell:0 debug ${packageId}.TizenTubeStandalone${isTizen3 ? ' 0' : ''}`);
+
+            // See SHELL_SILENCE_* above: no reply at all means the app was still
+            // shutting down, so re-issue quickly on a fresh connection rather
+            // than waiting out the 20s net. Any reply — even one that isn't a
+            // debug line — counts as answered and is left to the handling below.
+            let shellAnswered = false;
+            const silenceTimeout = setTimeout(() => {
+                if (shellAnswered) return;
+                if (sessionId !== _activeSessionId) return;
+                clearTimeout(safetyTimeout);
+                clearTimeout(streamEndFallback);
+                endStreamOnce();
+                if (silenceAttempt < SHELL_SILENCE_MAX_RETRIES) {
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: `shell:0 debug returned nothing (app still shutting down), fast retry ${silenceAttempt + 1}/${SHELL_SILENCE_MAX_RETRIES}` });
+                    }
+                    setTimeout(() => startDebugger(args, relayLog, sessionId, attempt, silenceAttempt + 1), SHELL_SILENCE_RETRY_DELAY_MS);
+                } else {
+                    // Persistent silence is no longer a teardown race — hand it to
+                    // the session-level machinery, which counts it as a real
+                    // attempt and eventually gives up so the app can fall back.
+                    retryOrGiveUp(sessionId, attempt, args, relayLog, `shell:0 debug silent after ${SHELL_SILENCE_MAX_RETRIES} fast retries`);
+                }
+            }, SHELL_SILENCE_TIMEOUT_MS);
+
             shellCmd.on('error', (err) => {
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `shell:0 debug stream error: ${err && err.stack || err}` });
                 }
+                shellAnswered = true;
+                clearTimeout(silenceTimeout);
                 clearTimeout(safetyTimeout);
                 endStreamOnce();
                 retryOrGiveUp(sessionId, attempt, args, relayLog, `shell stream error: ${err && err.message || err}`);
             });
             shellCmd.on('data', (data) => {
+                shellAnswered = true;
+                noteProgress();
+                clearTimeout(silenceTimeout);
                 const dataString = data.toString();
                 // Always log the raw response — previously only logged (and
                 // acted on) when it contained 'debug'; anything else (an

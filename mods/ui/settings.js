@@ -371,6 +371,48 @@ export default function modernUI(update, parameters) {
                                     value: height
                                 }
                             })
+                        },
+                        {
+                            name: t('settings.options.misc.options.debugConsole.verbosity.title'),
+                            icon: 'ARTICLE',
+                            value: null,
+                            menuId: 'tt-log-verbosity',
+                            menuHeader: {
+                                title: t('settings.options.misc.options.debugConsole.verbosity.title'),
+                                subtitle: t('settings.options.misc.options.debugConsole.verbosity.subtitle')
+                            },
+                            options: [
+                                { name: t('settings.options.misc.options.debugConsole.verbosity.basic'), key: 'logVerbosity', value: 'basic' },
+                                { name: t('settings.options.misc.options.debugConsole.verbosity.detailed'), key: 'logVerbosity', value: 'detailed' }
+                            ]
+                        },
+                        {
+                            name: t('settings.options.misc.options.debugConsole.categories.title'),
+                            icon: 'BUG_REPORT',
+                            value: null,
+                            arrayToEdit: 'logCategories',
+                            menuId: 'tt-log-categories',
+                            menuHeader: {
+                                title: t('settings.options.misc.options.debugConsole.categories.title'),
+                                subtitle: t('settings.options.misc.options.debugConsole.categories.subtitle')
+                            },
+                            options: [
+                                { name: t('settings.options.misc.options.debugConsole.categories.nav'), icon: 'WHAT_TO_WATCH', value: 'nav' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.ads'), icon: 'DOLLAR_SIGN', value: 'ads' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'shorts' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.watched'), icon: 'VISIBILITY_OFF', value: 'watched' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.playlist'), icon: 'PLAYLIST_PLAY', value: 'playlist' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.filters'), icon: 'PRIVACY_UNLISTED', value: 'filters' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.shelves'), icon: 'MENU', value: 'shelves' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
+                                { name: t('settings.options.misc.options.debugConsole.categories.other'), icon: 'ARTICLE', value: 'other' }
+                            ]
+                        },
+                        {
+                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
+                            icon: 'SUBSCRIPTIONS',
+                            value: 'diagSubscriptionsShelf'
                         }
                     ]
                 },
@@ -388,6 +430,35 @@ export default function modernUI(update, parameters) {
                             name: t('settings.options.misc.options.syslog.enable'),
                             icon: 'WIFI',
                             value: 'syslogEnabled'
+                        },
+                        {
+                            // Its own address, deliberately separate from the log
+                            // server's: a syslog daemon rarely lives on the same
+                            // machine as the PC receiver script.
+                            name: t('settings.options.misc.options.syslog.host'),
+                            subtitle: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                            icon: 'LOCATION_POINT',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'syslogHost',
+                                    kind: 'ipv4',
+                                    title: t('settings.options.misc.options.syslog.host')
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.syslog.port'),
+                            subtitle: String(configRead('syslogPort') || ''),
+                            icon: 'WIFI',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'syslogPort',
+                                    kind: 'port',
+                                    title: t('settings.options.misc.options.syslog.port')
+                                }
+                            }
                         },
                         {
                             name: t('settings.options.misc.options.syslog.test'),
@@ -413,6 +484,32 @@ export default function modernUI(update, parameters) {
                             name: t('settings.options.misc.options.logServer.enable'),
                             icon: 'WIFI',
                             value: 'logServerEnabled'
+                        },
+                        {
+                            name: t('settings.options.misc.options.logServer.host'),
+                            subtitle: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                            icon: 'LOCATION_POINT',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'logServerHost',
+                                    kind: 'ipv4',
+                                    title: t('settings.options.misc.options.logServer.host')
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.logServer.port'),
+                            subtitle: String(configRead('logServerPort') || ''),
+                            icon: 'WIFI',
+                            customAction: {
+                                action: 'NUMERIC_EDITOR_SHOW',
+                                parameters: {
+                                    configKey: 'logServerPort',
+                                    kind: 'port',
+                                    title: t('settings.options.misc.options.logServer.port')
+                                }
+                            }
                         },
                         {
                             name: t('settings.options.misc.options.logServer.test'),
@@ -870,6 +967,11 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.uiSettings.options.hideMembersOnlyVideos'),
                     icon: null,
                     value: 'hideMembersOnlyVideos'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
+                    icon: 'PRIVACY_UNLISTED',
+                    value: 'hideDuplicateVideos'
                 },
                 {
                     name: t('settings.options.uiSettings.options.hideChannelShelves'),

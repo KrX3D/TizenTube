@@ -1,6 +1,8 @@
 import { configRead } from '../config.js';
 import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
 import { sendSyslog } from './syslog.js';
+import { noteProgressChanged } from './watchProgressStore.js';
+import { isCategoryEnabled, applyVerbosity } from './logCategories.js';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -11,13 +13,27 @@ export function appendFileOnlyLog(label, payload) {
   // these onto the PC log receiver, needing enableDebugLogging too, even
   // though these never show in the on-screen visual console either way.
   // logServerEnabled alone is now sufficient for the PC relay path.
-  if (!configRead('enableDebugLogging') && !configRead('logServerEnabled') && !configRead('syslogEnabled')) return;
+  // Categories only ever come into play while something is actually consuming
+  // logs. The sinks are the visual console (which reads __ttFileOnlyLogs for
+  // its downloadable file), background logging, the log server, and syslog —
+  // with none of them on, nothing is recorded at all and the category list is
+  // irrelevant.
+  const anySinkEnabled = configRead('enableDebugConsole')
+    || configRead('enableDebugLogging')
+    || configRead('logServerEnabled')
+    || configRead('syslogEnabled');
+  if (!anySinkEnabled) return;
+  // Filtering happens before the entry is built, so a disabled category costs
+  // nothing — no JSON.stringify, no queue entry, and no work for
+  // logServer.js's once-a-second in-page serialize.
+  if (!isCategoryEnabled(label)) return;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
-  try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
-  // syslog taps the same choke point rather than logServer.js's array hook,
-  // so the two outputs stay fully independent — either can be on without the
-  // other, and a dead syslog target cannot stop the log server relaying.
+  try { msg = JSON.stringify(applyVerbosity(payload)); } catch { msg = String(payload); }
+  // syslog taps the same choke point rather than logServer.js's array hook, so
+  // the two outputs stay fully independent — either can be on without the
+  // other, and a dead syslog target cannot stop the log server relaying. Sent
+  // after the verbosity pass so both outputs carry the same text.
   try { sendSyslog({ ts: new Date().toISOString(), level: 'INFO', context: 'TizenTube', label, message: `${label} ${msg}` }); } catch (_) { }
   // No longer truncated here — logServer.js's sendRemotePayload now splits
   // long messages into multiple sent parts instead of the previous cutoff
@@ -366,9 +382,17 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
 
 // ── Entity mutation progress cache ────────────────────────────────────────────
 
+// Cap on ids named in one progress_learned line, so a large batch of mutations
+// cannot flood the queue logServer.js drains in-page every second.
+const MAX_LEARNED_LOGGED = 12;
+
 export function updateProgressCache(r) {
   if (!r?.frameworkUpdates?.entityBatchUpdate?.mutations) return;
   if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+  // Recorded so a capture can show whether progress was actually learned. This
+  // was silent before, which is why "watched videos reappear until the app is
+  // restarted" produced no evidence either way.
+  const learned = [];
   for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
     try {
       const key = String(mutation?.entityKey || '');
@@ -379,12 +403,24 @@ export function updateProgressCache(r) {
         ?? null;
       if (pct !== null) {
         const videoId = key.includes('|') ? key.split('|')[0] : key;
+        const before = window._ttVideoProgressCache[videoId];
         window._ttVideoProgressCache[videoId] = Number(pct);
+        if (before !== Number(pct) && learned.length < MAX_LEARNED_LOGGED) learned.push({ videoId, pct: Number(pct) });
+        // Persisted so the fallback survives a power cycle — see
+        // watchProgressStore.js. The write itself is debounced, so this is
+        // cheap to call per mutation.
+        noteProgressChanged(videoId);
         const explicitId = payload?.videoAttributionModel?.externalVideoId
           || payload?.videoData?.videoId || null;
-        if (explicitId) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+        if (explicitId) {
+          window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+          noteProgressChanged(String(explicitId));
+        }
       }
     } catch (_) { }
+  }
+  if (learned.length) {
+    appendFileOnlyLog('hideVideo.progress_learned', { entries: learned, tracked: Object.keys(window._ttVideoProgressCache).length });
   }
 }
 
@@ -417,13 +453,36 @@ export function normalizeGridRenderer(gridRenderer, _context = '') {
 // ── Video ID extraction helper ────────────────────────────────────────────────
 
 export function getItemVideoId(item) {
+  // richItemRenderer is a wrapper, not a renderer — the real tile sits inside
+  // it. Unwrapped first so every shape below is reached either way.
+  const inner = item?.richItemRenderer?.content || item;
   return String(
-    item?.tileRenderer?.contentId ||
-    item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
-    item?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId ||
-    item?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
+    inner?.tileRenderer?.contentId ||
+    inner?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId ||
+    inner?.tileRenderer?.onSelectCommand?.watchEndpoint?.playlistId ||
+    inner?.tileRenderer?.onSelectCommand?.reelWatchEndpoint?.videoId ||
+    // lockupViewModel gained support across the codebase in the ca60382 port,
+    // but this extractor was left tileRenderer-only. Anything lockup-shaped
+    // therefore came back as '' — invisible to duplicate detection and to the
+    // playlist unique-id floor, with no log line to say so.
+    lockupVideoId(inner) ||
+    inner?.videoRenderer?.videoId ||
+    inner?.gridVideoRenderer?.videoId ||
+    inner?.compactVideoRenderer?.videoId ||
     ''
   );
+}
+
+/** Human-readable title for an item, for diagnostics only. */
+export function getItemTitle(item) {
+  const inner = item?.richItemRenderer?.content || item;
+  return inner?.tileRenderer?.metadata?.tileMetadataRenderer?.title?.simpleText
+    || inner?.lockupViewModel?.metadata?.lockupMetadataViewModel?.title?.content
+    || inner?.videoRenderer?.title?.runs?.[0]?.text
+    || inner?.videoRenderer?.title?.simpleText
+    || inner?.gridVideoRenderer?.title?.runs?.[0]?.text
+    || inner?.compactVideoRenderer?.title?.runs?.[0]?.text
+    || null;
 }
 
 // ── Deep watch-progress extraction ───────────────────────────────────────────

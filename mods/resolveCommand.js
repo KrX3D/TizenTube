@@ -6,11 +6,13 @@ import { showToast, buttonItem } from './ui/ytUI.js';
 import checkForUpdates from './features/updater.js';
 import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
+import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
+import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
 
 
@@ -37,12 +39,17 @@ export function findFunction(funcName) {
 // settings-menu "Test Log Server Connection" button and the shortcut show
 // the same wording for the same outcome.
 export function showLogServerTestToast(result) {
-    if (!result.enabled) {
-        showToast('TizenTube', t('settings.options.misc.options.logServer.testDisabled'));
-    } else if (result.queued) {
+    // The test now sends whether or not remote logging is enabled, so a
+    // disabled state is no longer a refusal — it just means the ping went out
+    // while ongoing logging stays off. Reported as its own message rather than
+    // the old "enable it first", which made the button useless for its main
+    // job: confirming the host and port before switching logging on.
+    if (!result.queued) {
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
+    } else if (result.enabled) {
         showToast('TizenTube', t('settings.options.misc.options.logServer.testQueued'));
     } else {
-        showToast('TizenTube', t('settings.options.misc.options.logServer.testFailed'));
+        showToast('TizenTube', t('settings.options.misc.options.logServer.testSentButOff'));
     }
 }
 
@@ -188,6 +195,14 @@ export function patchResolveCommand() {
                         );
                     }
                 } else if (cmd?.watchEndpoint?.videoId) {
+                    // Basic-tier navigation trail: which video was opened, and
+                    // from where. Page changes are already covered by
+                    // page.store in hideWatched.js.
+                    appendFileOnlyLog('nav.video.open', {
+                        videoId: cmd.watchEndpoint.videoId,
+                        page: window.__ttLastDetectedPage || null,
+                        playlistId: cmd.watchEndpoint.playlistId || null,
+                    });
                     window.isPipPlaying = false;
                     const ytlrPlayerContainer = document.querySelector('ytlr-player-container');
                     ytlrPlayerContainer.style.removeProperty('z-index');
@@ -321,12 +336,24 @@ function customAction(action, parameters) {
             showToast(t('toasts.sidebarContentsUpdated.title'), t('toasts.sidebarContentsUpdated.subtitle'));
             break;
         }
+        case 'NUMERIC_EDITOR_SHOW':
+            showNumericEditor(parameters);
+            break;
+        case 'NUMERIC_EDITOR_SAVE':
+            saveNumericEditor();
+            break;
+        case 'NUMERIC_EDITOR_CANCEL':
+            cancelNumericEditor();
+            break;
         case 'SYSLOG_TEST': {
             const result = sendSyslogTest();
-            if (!result.enabled) showToast('TizenTube', t('settings.options.misc.options.syslog.testDisabled'));
-            else if (result.noHost) showToast('TizenTube', t('settings.options.misc.options.syslog.testNoHost'));
-            else if (result.queued) showToast('TizenTube', t('settings.options.misc.options.syslog.testQueued'));
-            else showToast('TizenTube', t('settings.options.misc.options.syslog.testFailed'));
+            // Mirrors the log server's test: a disabled output is no longer a
+            // refusal, so the outcomes are no-host, failed, sent, and
+            // sent-while-output-is-off.
+            if (result.noHost) showToast('TizenTube', t('settings.options.misc.options.syslog.testNoHost'));
+            else if (!result.queued) showToast('TizenTube', t('settings.options.misc.options.syslog.testFailed'));
+            else if (result.enabled) showToast('TizenTube', t('settings.options.misc.options.syslog.testQueued'));
+            else showToast('TizenTube', t('settings.options.misc.options.syslog.testSentButOff'));
             break;
         }
         case 'LOG_SERVER_TEST_PING': {

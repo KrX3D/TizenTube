@@ -84,6 +84,11 @@ const defaultConfig = {
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 1054,
   logServerEnabled: false,
+  diagSubscriptionsShelf: false,
+  // Every category on by default, so upgrading changes nothing until the
+  // user narrows it down. 'basic' vs 'detailed' controls payload depth.
+  logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
+  logVerbosity: 'detailed',
   // syslog output, independent of the log server above.
   syslogEnabled: false,
   syslogHost: '',
@@ -102,6 +107,7 @@ const defaultConfig = {
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
   hideMembersOnlyVideos: false,
+  hideDuplicateVideos: false,
   hideChannelShelves: false,
   hideSurveys: false,
   enableJumpToPercentage: false,
