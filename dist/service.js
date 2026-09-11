@@ -13,15 +13,15 @@ var require$$4$1 = require('timers');
 var require$$1$4 = require('assert');
 var require$$1$5 = require('tty');
 var require$$0$7 = require('buffer');
-var require$$4$2 = require('node:zlib');
-var require$$1$7 = require('node:events');
-var require$$8$1 = require('node:path');
-var require$$2$2 = require('node:fs');
-var require$$2$3 = require('node:http');
+var require$$4$2 = require('zlib');
+var require$$1$7 = require('events');
+var require$$8$1 = require('path');
+var require$$2$2 = require('fs');
+var require$$2$3 = require('http');
 var require$$0$8 = require('crypto');
-var require$$6$1 = require('node:querystring');
-var require$$7$2 = require('node:buffer');
-var require$$1$6 = require('node:net');
+var require$$6$1 = require('querystring');
+var require$$7$2 = require('buffer');
+var require$$1$6 = require('net');
 var require$$13 = require('stream');
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -44093,8 +44093,8 @@ var routerExports = router.exports;
    * and HTTPS server you may do so with the "http"
    * and "https" modules as shown here:
    *
-   *    var http = require('node:http')
-   *      , https = require('node:https')
+   *    var http = require('http')
+   *      , https = require('https')
    *      , express = require('express')
    *      , app = express();
    *
