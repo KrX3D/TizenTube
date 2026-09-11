@@ -53,7 +53,18 @@ const UNAVAILABLE_COOLDOWN_MS = 15000;
 // connectionless so there is no handshake to amortise, and a long-lived
 // socket would need its own error/rebind handling in a service that stays
 // alive across app launches until the TV reboots.
-function relaySyslog(frame, host, port) {
+//
+// `report` is optional and is how a problem reaches somewhere the user can see
+// it. logServiceEvent only reaches the PC receiver script, and not needing that
+// receiver is the entire point of syslog — so a refusal or a failed send was
+// being logged to an address nobody is listening on. The injector passes a
+// reporter that writes the message into the page's own console instead, where
+// the on-screen debug console shows it.
+function relaySyslog(frame, host, port, report) {
+    function problem(message) {
+        logServiceEvent('ERROR', message);
+        if (typeof report === 'function') { try { report(message); } catch (e) { } }
+    }
     if (!frame) return;
     // Same validation the HTTP relay gained: this address arrives in a request
     // body and becomes the destination of an outbound datagram, so it is
@@ -64,13 +75,14 @@ function relaySyslog(frame, host, port) {
         // Reported: syslog enabled, nothing arrived at the user's syslog
         // server, and nothing anywhere said why. A refusal here was completely
         // silent, which is indistinguishable from the feature not running.
-        logServiceEvent('ERROR', `syslog refused: host=${JSON.stringify(host)} port=${JSON.stringify(port)} is not a plain IPv4 address and port`);
+        problem(`syslog refused: host=${JSON.stringify(host)} port=${JSON.stringify(port)} is not a plain IPv4 address and port`);
         return;
     }
     let socket;
     try {
         socket = dgram.createSocket('udp4');
     } catch (e) {
+        problem(`syslog could not open a UDP socket: ${e && e.message || e}`);
         return;
     }
     // UDP gives no delivery signal; errors here mean the send itself failed
@@ -81,7 +93,7 @@ function relaySyslog(frame, host, port) {
         const buf = Buffer.from(String(frame), 'utf8');
         socket.send(buf, 0, buf.length, targetPort, host, (err) => {
             if (err) {
-                logServiceEvent('ERROR', `syslog send to ${host}:${targetPort} failed: ${err && err.message || err}`);
+                problem(`syslog send to ${host}:${targetPort} failed: ${err && err.message || err}`);
             } else if (!_syslogSendLogged) {
                 // Once per service run: enough to confirm the path works
                 // end to end without one log line per log line.
@@ -91,6 +103,7 @@ function relaySyslog(frame, host, port) {
             try { socket.close(); } catch (e) { }
         });
     } catch (e) {
+        problem(`syslog send threw: ${e && e.message || e}`);
         try { socket.close(); } catch (e2) { }
     }
 }

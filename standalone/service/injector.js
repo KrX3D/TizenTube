@@ -75,6 +75,23 @@ function pollLogQueue(client, relayLog) {
     // competes for CPU right when navigation is also doing real work.
     // Lower frequency (2s) and a smaller worst-case payload (logServer.js's
     // MAX_QUEUE) both reduce that per-poll cost.
+    // A syslog problem is reported by the service through logServiceEvent,
+    // which relays to the PC receiver script — precisely the thing a syslog
+    // user does not have running. Push the message into the page instead, so
+    // the on-screen debug console shows it. Each distinct message goes once:
+    // a syslog target that is down otherwise produces one per frame.
+    const reportedSyslogProblems = new Set();
+    const reportSyslogProblem = (message) => {
+        if (reportedSyslogProblems.has(message) || reportedSyslogProblems.size >= 10) return;
+        reportedSyslogProblems.add(message);
+        client.Runtime.evaluate({
+            // JSON.stringify, so a host or error string cannot break out of
+            // the literal and become code in the page.
+            expression: 'console.warn(' + JSON.stringify('[TizenTube] ' + message) + ')',
+            returnByValue: true
+        }).catch(() => { });
+    };
+
     let consecutiveFailures = 0;
     const interval = setInterval(() => {
         client.Runtime.evaluate({
@@ -96,7 +113,7 @@ function pollLogQueue(client, relayLog) {
             }
             if (_relaySyslog) {
                 for (const item of (Array.isArray(drained) ? [] : (drained.syslog || []))) {
-                    _relaySyslog(item.frame, item.host, item.port);
+                    _relaySyslog(item.frame, item.host, item.port, reportSyslogProblem);
                 }
             }
         }).catch(() => {
