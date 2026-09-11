@@ -53,6 +53,54 @@ function holdUntilHostKnown(entry) {
     if (_heldLogs.length > MAX_HELD_LOGS) _heldLogs.shift();
 }
 
+// Persisted so the address survives a service restart. Without this the
+// receiver is only known after the page has logged at least once, which means
+// every launch loses the early lines — exactly the ones that matter when the
+// app fails before the page ever loads. res/wgt is read-only, so this goes in
+// the app's data directory.
+const RECEIVER_STORE = (function () {
+    try {
+        const appId = tizenAppId();
+        if (appId) return require('path').join('/opt/usr/apps', appId, 'data', 'tt-log-receiver.json');
+    } catch (e) { }
+    try {
+        return require('path').join(require('os').tmpdir(), 'tt-log-receiver.json');
+    } catch (e) { }
+    return null;
+})();
+
+function tizenAppId() {
+    // /opt/usr/apps/<pkgId>/res/wgt/service/dist — walk back to <pkgId>.
+    const parts = String(__dirname).split(String.fromCharCode(92)).join('/').split('/');
+    const i = parts.indexOf('apps');
+    return (i !== -1 && parts[i + 1]) ? parts[i + 1] : '';
+}
+
+function loadPersistedReceiver() {
+    if (!RECEIVER_STORE) return;
+    try {
+        const raw = require('fs').readFileSync(RECEIVER_STORE, 'utf8');
+        const saved = JSON.parse(raw);
+        if (saved && saved.host) {
+            _learnedHost = String(saved.host);
+            _learnedPort = Number(saved.port) || DEFAULT_LOG_PORT;
+        }
+    } catch (e) {
+        // Absent on first run, or unreadable — neither is worth reporting,
+        // since reporting it would itself need a receiver.
+    }
+}
+
+function persistReceiver() {
+    if (!RECEIVER_STORE || !_learnedHost) return;
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true }); } catch (e) { }
+        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ host: _learnedHost, port: _learnedPort }));
+    } catch (e) { }
+}
+
 function noteReceiver(host, port) {
     if (!host || (host === _learnedHost && Number(port) === _learnedPort)) return;
     _learnedHost = host;
@@ -60,12 +108,20 @@ function noteReceiver(host, port) {
     // Anything logged before the page got in touch — including bootstrap.js's
     // lines, which run before this module even loads — is worth having: that is
     // where load failures show up.
+    persistReceiver();
     const pending = _heldLogs.splice(0, _heldLogs.length);
     const bootstrapped = (global.__ttPendingServiceLogs || []).splice(0, (global.__ttPendingServiceLogs || []).length);
     for (const held of bootstrapped.concat(pending)) relayLog(held, _learnedHost, _learnedPort);
 }
 
+loadPersistedReceiver();
+
 function relayLog(entry, host, port) {
+    // Any caller that knows the address teaches it to the service. That covers
+    // the CDP path too: the page cannot reach localhost from an HTTPS context,
+    // so it queues entries tagged with the host and injector.js drains them
+    // through here — without this, only the proxy path ever taught us.
+    if (host) noteReceiver(host, port);
     const targetHost = host || _learnedHost || DEFAULT_LOG_HOST;
     const targetPort = Number(port) || _learnedPort || DEFAULT_LOG_PORT;
     // Nowhere to send yet. The service's own logs (logServiceEvent, and
@@ -228,6 +284,13 @@ app.get('/tizentube/debugger', (req, res) => {
 // index.html announces where the receiver is. The service keeps no config of
 // its own, and its own logging passes no host, so without this it has nowhere
 // to send anything once the hardcoded default was removed.
+// index.html has no configuration of its own and cannot read the page's
+// settings (different origin), so it asks the service instead of carrying a
+// hardcoded address.
+app.get('/tizentube/receiver', (req, res) => {
+    res.json({ host: _learnedHost || '', port: _learnedPort || DEFAULT_LOG_PORT });
+});
+
 app.post('/tizentube/receiver', express.json(), (req, res) => {
     const { host, port } = req.body || {};
     noteReceiver(host, port);
