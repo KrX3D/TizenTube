@@ -377,6 +377,35 @@ jobs:
       # --------------------
       # PUBLISH
       # --------------------
+      # --------------------
+      # Guard: never publish a tarball whose dist does not match its version
+      # --------------------
+      # Confirmed on 1.30.0: the tarball carried package.json 1.30.0 alongside a
+      # dist/userScript.js stamped 1.16.10, so every TV pulling the CDN got a
+      # build five releases old while the settings menu reported the new number.
+      #
+      # It came from re-running a failed run. A re-run replays the ORIGINAL
+      # commit, so it bumped and built at the old version, and then the
+      # `git rebase origin/main` below took main's newer package.json while
+      # keeping the dist it had already built. package.json and dist are only
+      # guaranteed to agree when a run builds them together, and nothing checked
+      # that they still did by the time publish happened.
+      - name: Verify dist matches package.json version
+        if: success()
+        run: |
+          set -euo pipefail
+          VER="$(node -p "require('./package.json').version")"
+          echo "package.json version: ${VER}"
+          for f in dist/userScript.js dist/service.js; do
+            test -f "$f" || { echo "::error::${f} is missing"; exit 1; }
+          done
+          if ! grep -qF "\"${VER}\"" dist/userScript.js; then
+            FOUND="$(grep -aoE '\"[0-9]+\.[0-9]+\.[0-9]+\"' dist/userScript.js | sort -u | head -3 | xargs echo)"
+            echo "::error::dist/userScript.js was not built from this version. package.json says ${VER}; the bundle contains ${FOUND:-no version string}. Re-run the workflow from a fresh push rather than re-running an old run, so the bump and the build happen together."
+            exit 1
+          fi
+          echo "dist/userScript.js carries ${VER}"
+
       - name: Publish package to npm
         if: success()
         id: publish_npm
