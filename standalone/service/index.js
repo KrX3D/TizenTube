@@ -58,13 +58,47 @@ function holdUntilHostKnown(entry) {
 // every launch loses the early lines — exactly the ones that matter when the
 // app fails before the page ever loads. res/wgt is read-only, so this goes in
 // the app's data directory.
+// Strict validation on the way in and on the way out.
+//
+// CodeQL flagged this path three times and was right each time: the address
+// arrives over HTTP, is written to disk, and is later read back and used as an
+// outbound request target. Validating at both ends is what makes that flow
+// safe, rather than suppressing the alerts.
+//
+// IPv4 only, deliberately. The settings menu's numeric editor cannot produce
+// anything else, so accepting hostnames would widen what a malformed or
+// malicious POST could put in a request target for no practical gain.
+function isValidHost(host) {
+    if (typeof host !== 'string') return false;
+    const parts = host.split('.');
+    if (parts.length !== 4) return false;
+    return parts.every((part) => {
+        if (!/^[0-9]{1,3}$/.test(part)) return false;
+        const n = Number(part);
+        return n >= 0 && n <= 255;
+    });
+}
+
+function isValidPort(port) {
+    const n = Number(port);
+    return Number.isInteger(n) && n >= 1 && n <= 65535;
+}
+
+// Persisted so the address survives a service restart. Without this the
+// receiver is only known after the page has logged at least once, which means
+// every launch loses the early lines — exactly the ones that matter when the
+// app fails before the page ever loads. res/wgt is read-only, so this goes in
+// the app's data directory.
+//
+// There is deliberately no temp-directory fallback. os.tmpdir() is shared and
+// world-writable, and a predictable name there is exactly the insecure-temp-file
+// pattern CodeQL flags: another process could pre-create or symlink the path and
+// redirect where this service sends its logs. If the app directory cannot be
+// determined the address simply stays in memory for the life of the process.
 const RECEIVER_STORE = (function () {
     try {
         const appId = tizenAppId();
         if (appId) return require('path').join('/opt/usr/apps', appId, 'data', 'tt-log-receiver.json');
-    } catch (e) { }
-    try {
-        return require('path').join(require('os').tmpdir(), 'tt-log-receiver.json');
     } catch (e) { }
     return null;
 })();
@@ -81,9 +115,12 @@ function loadPersistedReceiver() {
     try {
         const raw = require('fs').readFileSync(RECEIVER_STORE, 'utf8');
         const saved = JSON.parse(raw);
-        if (saved && saved.host) {
-            _learnedHost = String(saved.host);
-            _learnedPort = Number(saved.port) || DEFAULT_LOG_PORT;
+        // Re-validated rather than trusted: this file is the one thing here that
+        // outlives the process, so whatever produced it is not necessarily the
+        // code above.
+        if (saved && isValidHost(saved.host) && isValidPort(saved.port)) {
+            _learnedHost = saved.host;
+            _learnedPort = Number(saved.port);
         }
     } catch (e) {
         // Absent on first run, or unreadable — neither is worth reporting,
@@ -92,19 +129,24 @@ function loadPersistedReceiver() {
 }
 
 function persistReceiver() {
-    if (!RECEIVER_STORE || !_learnedHost) return;
+    if (!RECEIVER_STORE || !isValidHost(_learnedHost) || !isValidPort(_learnedPort)) return;
     try {
         const fs = require('fs');
         const path = require('path');
-        try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true }); } catch (e) { }
-        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ host: _learnedHost, port: _learnedPort }));
+        try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true, mode: 0o700 }); } catch (e) { }
+        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ host: _learnedHost, port: _learnedPort }), { mode: 0o600 });
     } catch (e) { }
 }
 
 function noteReceiver(host, port) {
-    if (!host || (host === _learnedHost && Number(port) === _learnedPort)) return;
+    // Rejected outright rather than coerced: an address that is not a plain
+    // IPv4 literal has no business becoming a request target, and silently
+    // falling back to a default would hide a misconfigured page.
+    const candidatePort = isValidPort(port) ? Number(port) : DEFAULT_LOG_PORT;
+    if (!isValidHost(host) || !isValidPort(candidatePort)) return;
+    if (host === _learnedHost && candidatePort === _learnedPort) return;
     _learnedHost = host;
-    _learnedPort = Number(port) || DEFAULT_LOG_PORT;
+    _learnedPort = candidatePort;
     // Anything logged before the page got in touch — including bootstrap.js's
     // lines, which run before this module even loads — is worth having: that is
     // where load failures show up.
