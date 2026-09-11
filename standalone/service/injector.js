@@ -140,7 +140,31 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // also needed several relaunches during the same broken window:
             // if debug sessions are a limited, shared, per-device resource,
             // leaked ones here would starve everyone, not just this app.
+            // True once Page.navigate has resolved: youtube.com/tv is on screen
+            // and the user is watching, mod or no mod.
+            let navigated = false;
+
             function failAndRetry(reason) {
+                // Every retry issues a fresh `shell:0 debug`, which LAUNCHES the
+                // app and steals the foreground. That is acceptable while the
+                // screen is still blank, but not once the page is up: reported
+                // on 5.5, where injection failed, plain YouTube was left running,
+                // and the app reopened itself every time the user tried to close
+                // it. Retrying there trades a working unmodded session for an
+                // app that cannot be exited.
+                //
+                // The executionContextCreated listener is persistent, so a later
+                // context on this same connection still gets an injection
+                // attempt without relaunching anything. If none ever comes, the
+                // session stands down and leaves the page alone.
+                if (navigated) {
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Not relaunching: page is already up, injection failed (${reason}). Standing down; YouTube stays usable without the mod.` });
+                    }
+                    try { client.close(); } catch (e) { }
+                    standDown(relayLog);
+                    return;
+                }
                 try { client.close(); } catch (e) { }
                 retryOrGiveUp(sessionId, attempt, args, relayLog, reason);
             }
@@ -156,6 +180,17 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
 
             client.on('disconnect', () => {
                 if (!injected) {
+                    if (navigated) {
+                        // Same reasoning as failAndRetry: the page is already on
+                        // screen, so a relaunch would take a usable session away
+                        // from the user to chase an injection that has already
+                        // failed once.
+                        if (typeof relayLog === 'function') {
+                            relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: 'CDP disconnected after navigation without injecting; standing down rather than relaunching' });
+                        }
+                        standDown(relayLog);
+                        return;
+                    }
                     if (!sawAnyContext) {
                         // Not a transient race: the page never produced a
                         // single execution context, so another identical launch
@@ -356,6 +391,9 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // effect before this navigation, rather than racing it.
             preNavigateCleanup.then(() => {
                 return client.Page.navigate({ url: `https://youtube.com/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}` });
+            }).then(() => {
+                navigated = true;
+                noteProgress();
             }).catch(e => {
                 if (typeof relayLog === 'function') {
                     relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `Page.navigate FAILED: ${e && e.stack || e}` });
