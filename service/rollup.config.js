@@ -11,7 +11,14 @@ function injectXmlContent() {
         name: 'inject-xml-content',
         renderChunk(code) {
 
-            const pattern = /var\s+(\w+)_TEMPLATE\s+=\s+fs\$3\.readFileSync\(__dirname\s+\+\s+'\/\.\.\/xml\/([^']+)'\s*,\s*'utf8'\);/g;
+            // The fs import's suffix is assigned by Rollup and shifts whenever
+            // the dependency graph changes — it is fs$2 now, was fs$3 before.
+            // Hardcoding it meant this silently stopped matching, the templates
+            // were never inlined, and the DIAL service died at runtime with
+            //   ENOENT ... open '.../service/dist/../xml/device-desc.xml'
+            // because xml/ is not shipped in the .wgt. Matching any identifier
+            // keeps it working across future graph changes.
+            const pattern = /var\s+(\w+)_TEMPLATE\s+=\s+[\w$]+\.readFileSync\(__dirname\s+\+\s+'\/\.\.\/xml\/([^']+)'\s*,\s*'utf8'\);/g;
 
             const modifiedCode = code.replace(pattern, (match, varName, fileName) => {
                 const xmlContent = fs.readFileSync(`node_modules/@patrickkfkan/peer-dial/xml/${fileName}`, 'utf8');
