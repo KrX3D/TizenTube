@@ -18,6 +18,22 @@ const LIBRARY_TABS_DATA = [
 ];
 export const LIBRARY_TAB_IDS = LIBRARY_TABS_DATA.map(d => d.value);
 
+// A row's subtitle is normally a plain string, baked in when the settings tree
+// is built. That is wrong for anything the user can change from inside the
+// menu: the numeric editor writes a new IP, but the row that displays it keeps
+// showing the value captured when the tree was built, and re-entering the
+// sub-menu re-renders the same frozen array rather than re-reading config. So a
+// row may instead carry a function, resolved here at render time.
+function resolveSubtitle(value) {
+    if (typeof value !== 'function') return value;
+    try {
+        return value();
+    } catch (err) {
+        console.warn('[settings] subtitle getter failed:', err);
+        return undefined;
+    }
+}
+
 export default function modernUI(update, parameters) {
     const standaloneVersion = getStandaloneVersion();
     const versionText = standaloneVersion
@@ -436,7 +452,7 @@ export default function modernUI(update, parameters) {
                             // server's: a syslog daemon rarely lives on the same
                             // machine as the PC receiver script.
                             name: t('settings.options.misc.options.syslog.host'),
-                            subtitle: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                            subtitle: () => configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
                             icon: 'LOCATION_POINT',
                             customAction: {
                                 action: 'NUMERIC_EDITOR_SHOW',
@@ -449,7 +465,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.syslog.port'),
-                            subtitle: String(configRead('syslogPort') || ''),
+                            subtitle: () => String(configRead('syslogPort') || ''),
                             icon: 'WIFI',
                             customAction: {
                                 action: 'NUMERIC_EDITOR_SHOW',
@@ -487,7 +503,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.logServer.host'),
-                            subtitle: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                            subtitle: () => configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
                             icon: 'LOCATION_POINT',
                             customAction: {
                                 action: 'NUMERIC_EDITOR_SHOW',
@@ -500,7 +516,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.logServer.port'),
-                            subtitle: String(configRead('logServerPort') || ''),
+                            subtitle: () => String(configRead('logServerPort') || ''),
                             icon: 'WIFI',
                             customAction: {
                                 action: 'NUMERIC_EDITOR_SHOW',
@@ -1024,7 +1040,7 @@ export default function modernUI(update, parameters) {
         const currentVal = setting.value ? configRead(setting.value) : null;
         buttons.push(
             buttonItem(
-                { title: setting.name, subtitle: setting.subtitle },
+                { title: setting.name, subtitle: resolveSubtitle(setting.subtitle) },
                 {
                     icon: setting.icon ? setting.icon : 'CHEVRON_DOWN',
                     secondaryIcon:
@@ -1089,7 +1105,7 @@ export function optionShow(parameters, update) {
         showModal(
             {
                 title: option.title,
-                subtitle: option.subtitle
+                subtitle: resolveSubtitle(option.subtitle)
             },
             option.content,
             'tt-settings-support',
@@ -1122,7 +1138,7 @@ export function optionShow(parameters, update) {
         for (const option of parameters.options) {
             buttons.push(
                 buttonItem(
-                    { title: option.name, subtitle: option.subtitle },
+                    { title: option.name, subtitle: resolveSubtitle(option.subtitle) },
                     {
                         icon: option.icon ? option.icon : 'CHEVRON_DOWN',
                         secondaryIcon: value.includes(option.value) ? 'CHECK_BOX' : 'CHECK_BOX_OUTLINE_BLANK'
@@ -1171,7 +1187,7 @@ export function optionShow(parameters, update) {
             if (option.customAction) {
                 buttons.push(
                     buttonItem(
-                        { title: option.name, subtitle: option.subtitle },
+                        { title: option.name, subtitle: resolveSubtitle(option.subtitle) },
                         { icon: option.icon ? option.icon : 'SEND' },
                         [{ customAction: option.customAction }]
                     )
@@ -1183,7 +1199,7 @@ export function optionShow(parameters, update) {
             const currentVal = option.value === null ? undefined : configRead(isRadioChoice ? option.key : option.value);
             buttons.push(
                 buttonItem(
-                    { title: option.name, subtitle: option.subtitle },
+                    { title: option.name, subtitle: resolveSubtitle(option.subtitle) },
                     {
                         icon: option.icon ? option.icon : 'CHEVRON_DOWN',
                         secondaryIcon: isRadioChoice ? currentVal === option.value ? 'RADIO_BUTTON_CHECKED' : 'RADIO_BUTTON_UNCHECKED' : option.value === null ? 'CHEVRON_RIGHT' : currentVal ? 'CHECK_BOX' : 'CHECK_BOX_OUTLINE_BLANK'
