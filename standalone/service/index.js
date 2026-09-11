@@ -56,7 +56,8 @@ function relaySyslog(frame, host, port) {
     // checked rather than trusted. Without it a POST could name any host and
     // this would dutifully send there.
     const targetPort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
-    if (!isValidHost(host) || !isValidPort(targetPort)) return;
+    const targetHost = ipv4FromOctets(parseIpv4(host));
+    if (!targetHost || !isValidPort(targetPort)) return;
     let socket;
     try {
         socket = dgram.createSocket('udp4');
@@ -69,7 +70,7 @@ function relaySyslog(frame, host, port) {
     socket.on('error', () => { try { socket.close(); } catch (e) { } });
     try {
         const buf = Buffer.from(String(frame), 'utf8');
-        socket.send(buf, 0, buf.length, targetPort, host, () => {
+        socket.send(buf, 0, buf.length, targetPort, targetHost, () => {
             try { socket.close(); } catch (e) { }
         });
     } catch (e) {
@@ -86,6 +87,8 @@ function relaySyslog(frame, host, port) {
 // own logs — which is how service-side logging keeps working without a
 // hardcoded address baked into the build.
 let _learnedHost = '';
+// The four octets behind _learnedHost, kept so persistence writes numbers.
+let _learnedOctets = null;
 let _learnedPort = 0;
 
 // Bounded: a service that never hears from the page must not grow this without
@@ -113,15 +116,42 @@ function holdUntilHostKnown(entry) {
 // IPv4 only, deliberately. The settings menu's numeric editor cannot produce
 // anything else, so accepting hostnames would widen what a malformed or
 // malicious POST could put in a request target for no practical gain.
-function isValidHost(host) {
-    if (typeof host !== 'string') return false;
+// Parse an IPv4 literal into four numbers, or null.
+//
+// The earlier version was a boolean guard that let the original string through
+// on success. That is sound, but it leaves the value the network supplied as
+// the one that gets written to disk and used as a request target — and CodeQL
+// kept flagging exactly that (js/http-to-file-access, js/file-access-to-http),
+// because a boolean check is not a sanitizer: the tainted string still reaches
+// the sink.
+//
+// Parsing to numbers and rebuilding from those numbers means the string that
+// ends up stored and used is constructed here, from integers this code
+// validated, and never the one that arrived. That breaks the flow properly
+// rather than asserting it is fine, and it canonicalises as a side effect —
+// 010.000.000.005 and 10.0.0.5 become the same value.
+function parseIpv4(host) {
+    if (typeof host !== 'string') return null;
     const parts = host.split('.');
-    if (parts.length !== 4) return false;
-    return parts.every((part) => {
-        if (!/^[0-9]{1,3}$/.test(part)) return false;
+    if (parts.length !== 4) return null;
+    const octets = [];
+    for (const part of parts) {
+        if (!/^[0-9]{1,3}$/.test(part)) return null;
         const n = Number(part);
-        return n >= 0 && n <= 255;
-    });
+        if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+        octets.push(n);
+    }
+    return octets;
+}
+
+// Rebuild a dotted quad from numbers. Returns '' unless all four are integers
+// in range, so a malformed stored value cannot produce a usable address.
+function ipv4FromOctets(octets) {
+    if (!Array.isArray(octets) || octets.length !== 4) return '';
+    for (const n of octets) {
+        if (!Number.isInteger(n) || n < 0 || n > 255) return '';
+    }
+    return octets[0] + '.' + octets[1] + '.' + octets[2] + '.' + octets[3];
 }
 
 function isValidPort(port) {
@@ -160,13 +190,17 @@ function loadPersistedReceiver() {
     try {
         const raw = require('fs').readFileSync(RECEIVER_STORE, 'utf8');
         const saved = JSON.parse(raw);
-        // Re-validated rather than trusted: this file is the one thing here that
-        // outlives the process, so whatever produced it is not necessarily the
-        // code above.
-        if (saved && isValidHost(saved.host) && isValidPort(saved.port)) {
-            _learnedHost = saved.host;
-            _learnedPort = Number(saved.port);
-        }
+        if (!saved) return;
+        // Octets are stored as numbers, so nothing read back here is a string
+        // that then becomes a request target. A file written by an older build
+        // held a host string instead; it is parsed the same way rather than
+        // trusted, so upgrading keeps the address instead of silently losing it.
+        const octets = Array.isArray(saved.octets) ? saved.octets : parseIpv4(saved.host);
+        const host = ipv4FromOctets(octets);
+        if (!host || !isValidPort(saved.port)) return;
+        _learnedOctets = octets.slice();
+        _learnedHost = host;
+        _learnedPort = Number(saved.port);
     } catch (e) {
         // Absent on first run, or unreadable — neither is worth reporting,
         // since reporting it would itself need a receiver.
@@ -174,12 +208,13 @@ function loadPersistedReceiver() {
 }
 
 function persistReceiver() {
-    if (!RECEIVER_STORE || !isValidHost(_learnedHost) || !isValidPort(_learnedPort)) return;
+    if (!RECEIVER_STORE || !ipv4FromOctets(_learnedOctets) || !isValidPort(_learnedPort)) return;
     try {
         const fs = require('fs');
         const path = require('path');
         try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true, mode: 0o700 }); } catch (e) { }
-        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ host: _learnedHost, port: _learnedPort }), { mode: 0o600 });
+        // Numbers, not the string that arrived over the network.
+        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ octets: _learnedOctets, port: _learnedPort }), { mode: 0o600 });
     } catch (e) { }
 }
 
@@ -188,9 +223,15 @@ function noteReceiver(host, port) {
     // IPv4 literal has no business becoming a request target, and silently
     // falling back to a default would hide a misconfigured page.
     const candidatePort = isValidPort(port) ? Number(port) : DEFAULT_LOG_PORT;
-    if (!isValidHost(host) || !isValidPort(candidatePort)) return;
-    if (host === _learnedHost && candidatePort === _learnedPort) return;
-    _learnedHost = host;
+    const octets = parseIpv4(host);
+    if (!octets || !isValidPort(candidatePort)) return;
+    // Rebuilt from the parsed numbers, so what is stored and later used as a
+    // request target is this code's string, not the caller's.
+    const canonical = ipv4FromOctets(octets);
+    if (!canonical) return;
+    if (canonical === _learnedHost && candidatePort === _learnedPort) return;
+    _learnedOctets = octets;
+    _learnedHost = canonical;
     _learnedPort = candidatePort;
     // Anything logged before the page got in touch — including bootstrap.js's
     // lines, which run before this module even loads — is worth having: that is
