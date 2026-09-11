@@ -31,8 +31,22 @@
     <tizen:privilege name="http://tizen.org/privilege/mediacapture"/>
     <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
     <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <!-- Cobalt path (upstream e63455ea). These three declare the app as using
+         Samsung's native Cobalt runtime, the engine behind its own YouTube app,
+         and hand it a command line. The proxy flag points every request Cobalt
+         makes at the MITM proxy this app's service runs on 127.0.0.2:8101, which
+         is what lets the userscript be injected without a debugger. The content
+         flag points at the writable copy of Cobalt's content directory that
+         cobaltSetup.js makes, since the original is read only and the generated
+         CA has to live somewhere Cobalt will read it from.
+
+         build-service.js strips these three for the non Cobalt build, so one
+         config.xml produces both packages. -->
+    <tizen:metadata key="http://samsung.com/tv/metadata/pkgid" value="com.samsung.tv.cobalt"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/nativeID" value="com.samsung.tv.cobalt-yt"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/native.userdata" value="--base_url=https://www.youtube.com/tv --proxy=http://127.0.0.2:8101 --content=/home/owner/share/tizentube-content --dial_name=TizenTube --use_eden"/>
     <tizen:profile name="tv-samsung"/>
-    <tizen:service id="krx3dTtSt1.StandaloneService">
+    <tizen:service id="krx3dTtSt1.StandaloneService" auto-restart="true" on-boot="true">
         <tizen:content src="service/dist/index.js"/>
         <tizen:name>StandaloneService</tizen:name>
         <tizen:description>StandaloneService</tizen:description>
