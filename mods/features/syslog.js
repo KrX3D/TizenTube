@@ -111,13 +111,35 @@ function queue(frame, host, port) {
   }
 }
 
+// Reported once per page load, so a capture shows which route frames took and
+// whether a host was even configured. Without this, syslog failing looked
+// identical to syslog not running — there was nothing logged on either side.
+let _deliveryPathLogged = false;
+
+function noteDeliveryPath(path, host, port) {
+  if (_deliveryPathLogged) return;
+  _deliveryPathLogged = true;
+  // Deliberately console rather than appendFileOnlyLog: that function is what
+  // calls into here, and routing this back through it would recurse.
+  try {
+    console.info(`[TizenTube] syslog delivery via ${path} -> ${host}:${port}`);
+  } catch (_) { }
+}
+
 function deliver(frame) {
   const host = configRead('syslogHost');
   const port = Number(configRead('syslogPort')) || 514;
-  if (!host) return false;
+  if (!host) {
+    if (!_deliveryPathLogged) {
+      _deliveryPathLogged = true;
+      try { console.warn('[TizenTube] syslog is enabled but no Syslog Server IP is set; nothing will be sent'); } catch (_) { }
+    }
+    return false;
+  }
 
   // Same-origin plain HTTP: the standalone service can be reached directly.
   if (window.location.hostname === 'localhost') {
+    noteDeliveryPath('proxy POST', host, port);
     try {
       fetch('http://localhost:8099/tizentube/syslog', {
         method: 'POST',
@@ -132,6 +154,13 @@ function deliver(frame) {
 
   // HTTPS page: a fetch to http://localhost is cross-origin and mixed
   // content, which Cobalt blocks outright. Queue for the CDP drain instead.
+  //
+  // Note the dependency this creates: the queue is drained by injector.js over
+  // the CDP connection, so frames only leave the TV once injection has
+  // succeeded AND the installed .wgt contains a service that knows how to send
+  // them. A page updated from the CDN against an older .wgt will queue frames
+  // that nothing ever drains.
+  noteDeliveryPath('CDP queue', host, port);
   queue(frame, host, port);
   return true;
 }

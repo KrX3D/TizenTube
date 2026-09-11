@@ -17,6 +17,10 @@ const dgram = require('dgram');
 // RFC 5424's assigned port; used when a request omits one.
 const DEFAULT_SYSLOG_PORT = 514;
 
+// Only the first successful send is reported, so confirming the path costs one
+// line rather than doubling the log volume.
+let _syslogSendLogged = false;
+
 // Blank rather than a baked-in LAN address — see relayLog(), which now
 // returns early instead of posting logs at whoever happens to own that IP.
 const DEFAULT_LOG_HOST = '';
@@ -57,7 +61,13 @@ function relaySyslog(frame, host, port) {
     // this would dutifully send there.
     const targetPort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
     const targetHost = ipv4FromOctets(parseIpv4(host));
-    if (!targetHost || !isValidPort(targetPort)) return;
+    if (!targetHost || !isValidPort(targetPort)) {
+        // Reported: syslog enabled, nothing arrived at the user's syslog
+        // server, and nothing anywhere said why. A refusal here was completely
+        // silent, which is indistinguishable from the feature not running.
+        logServiceEvent('ERROR', `syslog refused: host=${JSON.stringify(host)} port=${JSON.stringify(port)} is not a plain IPv4 address and port`);
+        return;
+    }
     let socket;
     try {
         socket = dgram.createSocket('udp4');
@@ -70,7 +80,15 @@ function relaySyslog(frame, host, port) {
     socket.on('error', () => { try { socket.close(); } catch (e) { } });
     try {
         const buf = Buffer.from(String(frame), 'utf8');
-        socket.send(buf, 0, buf.length, targetPort, targetHost, () => {
+        socket.send(buf, 0, buf.length, targetPort, targetHost, (err) => {
+            if (err) {
+                logServiceEvent('ERROR', `syslog send to ${targetHost}:${targetPort} failed: ${err.message || err}`);
+            } else if (!_syslogSendLogged) {
+                // Once per service run: enough to confirm the path works
+                // end to end without one log line per log line.
+                _syslogSendLogged = true;
+                logServiceEvent('INFO', `syslog datagram sent to ${targetHost}:${targetPort} (further sends not logged)`);
+            }
             try { socket.close(); } catch (e) { }
         });
     } catch (e) {
