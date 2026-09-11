@@ -35,11 +35,26 @@ function copyCobaltContent() {
     }
 }
 
+const CA_CERT_PATH = '/home/owner/share/tizentube-ca.crt';
+const CA_KEY_PATH = '/home/owner/share/tizentube-ca.key';
+
+// The pair is only usable if both halves are present and the certificate
+// parses; a half-written pair is worse than none, because the proxy would sign
+// with a key the installed certificate does not match.
+function readExistingCa() {
+    try {
+        const pem = readFileSync(CA_CERT_PATH, 'utf8');
+        readFileSync(CA_KEY_PATH, 'utf8');
+        return pki.certificateFromPem(pem);
+    } catch (err) {
+        return null;
+    }
+}
+
 function createX509Certificate() {
     try {
-        if (existsSync('/home/owner/share/tizentube-ca.crt') && existsSync('/home/owner/share/tizentube-ca.key')) {
-            return pki.certificateFromPem(readFileSync('/home/owner/share/tizentube-ca.crt', 'utf8'));
-        }
+        const existing = readExistingCa();
+        if (existing) return existing;
         const keys = pki.rsa.generateKeyPair(2048);
         const caCert = pki.createCertificate();
 
@@ -67,8 +82,34 @@ function createX509Certificate() {
         const caPemCert = pki.certificateToPem(caCert);
         const caPemPrivateKey = pki.privateKeyToPem(keys.privateKey);
 
-        writeFileSync('/home/owner/share/tizentube-ca.crt', caPemCert);
-        writeFileSync('/home/owner/share/tizentube-ca.key', caPemPrivateKey);
+        // Two problems with writing these plainly, both worth fixing here.
+        //
+        // This is a CA private key, and /home/owner/share is a shared user
+        // directory. Written with default permissions it is readable by other
+        // processes, and whoever reads it can mint certificates that Cobalt
+        // will trust — which is the whole of the user's YouTube session. So
+        // mode 0600.
+        //
+        // And the existence check above was a check-then-write race (CodeQL
+        // js/file-system-race): between the check and the write, another
+        // process can create these paths, including as symlinks, redirecting
+        // where the key lands. 'wx' fails instead of following or overwriting,
+        // which turns the race into an error the code can handle.
+        //
+        // The key file is the gate. If we create it we own the pair and can
+        // write the certificate over whatever is there; if it already exists,
+        // someone else got there first and their pair is used rather than
+        // clobbering a key that may already be signing certificates.
+        try {
+            writeFileSync(CA_KEY_PATH, caPemPrivateKey, { mode: 0o600, flag: 'wx' });
+        } catch (err) {
+            if (err && err.code === 'EEXIST') {
+                const raced = readExistingCa();
+                if (raced) return raced;
+            }
+            return false;
+        }
+        writeFileSync(CA_CERT_PATH, caPemCert, { mode: 0o600 });
         return caCert;
     } catch (err) {
         return false;
