@@ -45,8 +45,9 @@
 # - Nothing touches the registry until GET /<pkg>/<version> succeeds
 # - Versions that already carry a deprecation message are skipped entirely
 # - The current version and every dist-tag target are never touched
-# - Unpublishing is off (ALLOW_UNPUBLISH); npm rejects it from a granular token
-#   that bypasses 2FA, and each rejected attempt was still a document rewrite
+# - Removal is attempted every run; npm rejects it from a granular token that
+#   bypasses 2FA, so those versions are deprecated instead and a local script
+#   (scripts/npm-cleanup) does the real removal with a 2FA code
 # - The job fails if `latest` does not end up pointing at what it published
 #
 # VERSION BUMP RULE (push to main only)
@@ -154,11 +155,13 @@ env:
   PACKAGE_NAME_GH: 'KrX3D/TizenTube'
   NODE_VERSION: '24'
   UNPUBLISH_WINDOW_HOURS: '72'
-  # npm refuses `npm unpublish` from a granular access token that bypasses
-  # two-factor authentication, so every attempt was a 403 — and every 403 was
-  # still a full rewrite of the package document, which is how a freshly
-  # published version gets erased. Left off until the token can do it.
-  ALLOW_UNPUBLISH: 'false'
+  # Removal is still attempted on every run. npm currently refuses it from a
+  # granular access token with bypass-2FA (its only token type since November
+  # 2025), so the attempts 403 and the versions are deprecated instead — but a
+  # refused request writes nothing, and if npm allows this again for
+  # automation, removal resumes on the next run with no change here.
+  # Set to 'false' only to stop attempting it altogether.
+  ALLOW_UNPUBLISH: 'true'
 
 jobs:
   build-publish-clean:
@@ -573,6 +576,28 @@ jobs:
       # --------------------
       # UNPUBLISH
       # --------------------
+      # Unpublishing is the only thing that actually removes a version;
+      # deprecating just labels it. So this still tries, every run, for every
+      # version inside npm's 72-hour window.
+      #
+      # It cannot currently succeed. npm removed legacy tokens in November 2025,
+      # leaving granular access tokens as the only kind, and since August 2026 a
+      # granular token with "bypass 2FA" is refused for sensitive actions, with
+      # unpublish among them — the 403 says so in as many words. Deprecating
+      # still works with the same token.
+      #
+      # Attempting anyway is deliberate and costs nothing. A refused PUT writes
+      # nothing, so those 403s never touched the package document; the version
+      # that got erased was erased by a deprecate that SUCCEEDED. And if npm
+      # restores this for automation, removal resumes with no change here.
+      #
+      # What is not repeated is the noise. The 2FA refusal is reported once and
+      # the remaining versions go straight to the deprecate fallback, instead of
+      # making the same doomed request nineteen more times.
+      #
+      # To actually remove versions today, run
+      # scripts/npm-cleanup/unpublish-old-versions.ps1 locally; it prompts for a
+      # 2FA code, which is the only path npm still allows.
       - name: Unpublish old versions (verified) and fallback to deprecate
         if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
@@ -599,12 +624,40 @@ jobs:
             return 1
           }
 
+          # Deprecating something that is already deprecated is rejected as 422,
+          # and gets there by rewriting the whole package document — the write
+          # that erased 1.30.30. So the fallback checks first.
+          already_deprecated(){
+            node -e '
+            const fs = require("fs");
+            let list = [];
+            try { list = JSON.parse(fs.readFileSync("/tmp/deprecated.json","utf8")); } catch (e) { }
+            process.exit(list.indexOf(process.argv[1]) === -1 ? 1 : 0);
+            ' "$1"
+          }
+
+          deprecate_fallback(){
+            ver="$1"
+            if already_deprecated "$ver"; then
+              echo "${PKG}@${ver} is already deprecated; leaving it alone."
+              return 0
+            fi
+            npm deprecate "${PKG}@${ver}" "Deprecated — please upgrade to a newer release." 2>&1 | tee /tmp/npm_deprecate_${ver}.log || echo "::warning::deprecate failed for ${ver}"
+          }
+
+          UNPUBLISH_BLOCKED=0
+
           if [ ! -s /tmp/to_unpublish.txt ]; then
             echo "No versions to unpublish."
           else
             while IFS= read -r ver; do
               ver="$(echo "$ver" | tr -d '\r' | xargs)"
               [ -z "$ver" ] && continue
+
+              if [ "$UNPUBLISH_BLOCKED" = "1" ]; then
+                deprecate_fallback "$ver"
+                continue
+              fi
 
               echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
               echo "Attempting unpublish: ${PKG}@${ver}"
@@ -616,12 +669,17 @@ jobs:
                   echo "Verified ${PKG}@${ver} removed."
                 else
                   echo "::warning::Still visible after unpublish attempts -> deprecate fallback"
-                  npm deprecate "${PKG}@${ver}" "Deprecated — please upgrade to a newer release." 2>&1 | tee /tmp/npm_deprecate_${ver}.log || echo "::warning::deprecate failed for ${ver}"
+                  deprecate_fallback "$ver"
                 fi
               else
-                echo "::warning::npm unpublish failed or returned non-zero for ${PKG}@${ver}"
-                echo "Attempting to deprecate as fallback..."
-                npm deprecate "${PKG}@${ver}" "Deprecated — please upgrade to a newer release." 2>&1 | tee /tmp/npm_deprecate_${ver}.log || echo "::warning::deprecate failed for ${ver}"
+                if grep -q "bypass two-factor authentication" "/tmp/npm_unpublish_${ver}.log"; then
+                  UNPUBLISH_BLOCKED=1
+                  echo "::warning::npm refuses unpublish from this token: a granular access token with bypass-2FA may not perform it (npm policy, August 2026). The remaining versions would fail identically, so they are deprecated instead. To remove versions, run scripts/npm-cleanup/unpublish-old-versions.ps1 locally."
+                else
+                  echo "::warning::npm unpublish failed or returned non-zero for ${PKG}@${ver}"
+                fi
+                echo "Deprecating instead..."
+                deprecate_fallback "$ver"
               fi
 
             done < /tmp/to_unpublish.txt

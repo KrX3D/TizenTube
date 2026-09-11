@@ -102,6 +102,9 @@ standalone/                  # standalone installable app — see "Standalone mo
 
 scripts/tampermonkey/         # local Chrome-based dev/test loader — see README.md
 scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote logging (see Feature map)
+scripts/npm-cleanup/          # local `npm unpublish` of old versions, with a 2FA code — the publish
+                                # workflow attempts removal too, but npm refuses it from any token it
+                                # still issues, so this is the only path that works
 scripts/pc-installer/         # PC-side install/update script (SDB from the PC, no on-device installer app
                                 # needed) — workaround for the Host PC IP 127.0.0.1 conflict with standalone's
                                 # proxy path; in progress, see AGENTS.md "Known unresolved issues"
