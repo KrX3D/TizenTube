@@ -126,6 +126,12 @@
         var MAX_CONNECTING_POLLS = 30;
         var connectingPolls = 0;
 
+        // The service needs roughly three seconds to listen; these cover that
+        // without restarting the page underneath it.
+        var MAX_STARTUP_RETRIES = 20;
+        var STARTUP_RETRY_MS = 300;
+        var startupRetries = 0;
+
         function useInjectorOrProxy() {
             sendLog('INFO', 'useInjectorOrProxy() called, fetching getState');
             const data = tizen.application.getCurrentApplication().getRequestedAppControl().appControl.data;
@@ -167,7 +173,20 @@
                         location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
                     }
                 }).catch((err) => {
-                    sendLog('ERROR', 'getState fetch failed, reloading: ' + (err && err.message || err));
+                    // The service takes a couple of seconds to come up, and every
+                    // getState during that window fails. Reloading the whole page
+                    // for each one restarted launchAppControl too, producing 16
+                    // reloads in 3 seconds on a 6.5 capture — wasted work that
+                    // shows up as a long wait on the loading screen. Retry just
+                    // the fetch instead, and only fall back to a reload once it
+                    // is clear the service is not merely slow to start.
+                    startupRetries++;
+                    if (startupRetries <= MAX_STARTUP_RETRIES) {
+                        sendLog('INFO', 'getState not up yet, retrying in ' + STARTUP_RETRY_MS + 'ms (' + startupRetries + '/' + MAX_STARTUP_RETRIES + ')');
+                        setTimeout(useInjectorOrProxy, STARTUP_RETRY_MS);
+                        return;
+                    }
+                    sendLog('ERROR', 'getState still failing after ' + MAX_STARTUP_RETRIES + ' retries, reloading: ' + (err && err.message || err));
                     window.location.reload();
                 });
         }

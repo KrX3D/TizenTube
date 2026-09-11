@@ -461,6 +461,29 @@ if (!global.crypto || typeof global.crypto.getRandomValues !== 'function') {
     });
 }
 
+// Object.hasOwn is ES2022 (V8 9.3 / Node 16.9). Tizen 6.5's service runtime is
+// Node v12.16.3, so a dependency using it threw during DIAL startup:
+//
+//     DIAL service (dist/service.js) failed to load:
+//         TypeError: Object.hasOwn is not a function
+//
+// Babel transpiles syntax, not runtime APIs, so this needs a shim rather than a
+// build setting. Third failure in the same chain, each one only visible once
+// the previous was fixed: node: imports, then the un-inlined XML templates,
+// now this.
+if (typeof Object.hasOwn !== 'function') {
+    Object.defineProperty(Object, 'hasOwn', {
+        value: function (target, property) {
+            if (target === null || target === undefined) {
+                throw new TypeError('Cannot convert undefined or null to object');
+            }
+            return Object.prototype.hasOwnProperty.call(Object(target), property);
+        },
+        configurable: true,
+        writable: true,
+    });
+}
+
 // Start the DIAL server
 global.isTizenTube = true;
 try {
