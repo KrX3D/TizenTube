@@ -11,7 +11,9 @@
 // one fails, if any.
 const http = require('http');
 
-const DEFAULT_LOG_HOST = '192.168.50.57';
+// Blank rather than a baked-in LAN address — see relayLog(), which now
+// returns early instead of posting logs at whoever happens to own that IP.
+const DEFAULT_LOG_HOST = '';
 const DEFAULT_LOG_PORT = 3030;
 
 // A plain "connection refused" (nothing listening on that port) fails fast.
@@ -33,9 +35,45 @@ const UNAVAILABLE_COOLDOWN_MS = 15000;
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
 // (same /tv-log path and JSON shape), so the existing PS1 receiver script
 // needs no changes.
+// The page knows the receiver address because the user set it in the settings
+// menu; it sends it with every /tizentube/log post. The service has no config
+// of its own, so it learns the address from those posts and reuses it for its
+// own logs — which is how service-side logging keeps working without a
+// hardcoded address baked into the build.
+let _learnedHost = '';
+let _learnedPort = 0;
+
+// Bounded: a service that never hears from the page must not grow this without
+// limit. Oldest dropped first, since the newest lines are the useful ones.
+const MAX_HELD_LOGS = 200;
+const _heldLogs = [];
+
+function holdUntilHostKnown(entry) {
+    _heldLogs.push(entry);
+    if (_heldLogs.length > MAX_HELD_LOGS) _heldLogs.shift();
+}
+
+function noteReceiver(host, port) {
+    if (!host || (host === _learnedHost && Number(port) === _learnedPort)) return;
+    _learnedHost = host;
+    _learnedPort = Number(port) || DEFAULT_LOG_PORT;
+    // Anything logged before the page got in touch — including bootstrap.js's
+    // lines, which run before this module even loads — is worth having: that is
+    // where load failures show up.
+    const pending = _heldLogs.splice(0, _heldLogs.length);
+    const bootstrapped = (global.__ttPendingServiceLogs || []).splice(0, (global.__ttPendingServiceLogs || []).length);
+    for (const held of bootstrapped.concat(pending)) relayLog(held, _learnedHost, _learnedPort);
+}
+
 function relayLog(entry, host, port) {
-    const targetHost = host || DEFAULT_LOG_HOST;
-    const targetPort = Number(port) || DEFAULT_LOG_PORT;
+    const targetHost = host || _learnedHost || DEFAULT_LOG_HOST;
+    const targetPort = Number(port) || _learnedPort || DEFAULT_LOG_PORT;
+    // Nowhere to send yet. The service's own logs (logServiceEvent, and
+    // everything the injector relays) pass no host, so before this they leaned
+    // entirely on DEFAULT_LOG_HOST — which shipped as one developer's LAN
+    // address. Rather than keep pointing every install at a stranger's machine,
+    // hold these until the page tells us where its receiver is, then flush.
+    if (!targetHost) { holdUntilHostKnown(entry); return; }
     const targetKey = `${targetHost}:${targetPort}`;
     const unavailableSince = unavailableTargets[targetKey];
     if (unavailableSince && (Date.now() - unavailableSince) < UNAVAILABLE_COOLDOWN_MS) return;
@@ -190,6 +228,7 @@ app.get('/tizentube/debugger', (req, res) => {
 app.post('/tizentube/log', express.json(), (req, res) => {
     const { host, port, entry } = req.body || {};
     if (!entry) return res.status(400).end();
+    noteReceiver(host, port);
     relayLog(entry, host, port);
     res.status(204).end();
 });

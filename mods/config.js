@@ -89,7 +89,11 @@ const defaultConfig = {
   // user narrows it down. 'basic' vs 'detailed' controls payload depth.
   logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
   logVerbosity: 'detailed',
-  logServerHost: '192.168.50.57',
+  // Intentionally blank: this used to ship one developer's LAN address, so
+  // every install pointed its logs at a machine that is not the user's.
+  // Empty means "not set", which the settings menu already renders, and
+  // sendOne() treats as nothing to send.
+  logServerHost: '',
   logServerPort: 3030,
   enablePlaylistBatchCollect: false,
   playlistBatchCollectMaxBatches: 50,
