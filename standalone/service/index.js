@@ -17,6 +17,10 @@ const dgram = require('dgram');
 // RFC 5424's assigned port; used when a request omits one.
 const DEFAULT_SYSLOG_PORT = 514;
 
+// Only the first successful send is reported, so confirming the path costs one
+// line rather than doubling the log volume.
+let _syslogSendLogged = false;
+
 // Blank rather than a baked-in LAN address — see relayLog(), which now
 // returns early instead of posting logs at whoever happens to own that IP.
 const DEFAULT_LOG_HOST = '';
@@ -49,7 +53,18 @@ const UNAVAILABLE_COOLDOWN_MS = 15000;
 // connectionless so there is no handshake to amortise, and a long-lived
 // socket would need its own error/rebind handling in a service that stays
 // alive across app launches until the TV reboots.
-function relaySyslog(frame, host, port) {
+//
+// `report` is optional and is how a problem reaches somewhere the user can see
+// it. logServiceEvent only reaches the PC receiver script, and not needing that
+// receiver is the entire point of syslog — so a refusal or a failed send was
+// being logged to an address nobody is listening on. The injector passes a
+// reporter that writes the message into the page's own console instead, where
+// the on-screen debug console shows it.
+function relaySyslog(frame, host, port, report) {
+    function problem(message) {
+        logServiceEvent('ERROR', message);
+        if (typeof report === 'function') { try { report(message); } catch (e) { } }
+    }
     if (!frame) return;
     // Same validation the HTTP relay gained: this address arrives in a request
     // body and becomes the destination of an outbound datagram, so it is
@@ -57,11 +72,18 @@ function relaySyslog(frame, host, port) {
     // this would dutifully send there.
     const targetPort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
     const targetHost = ipv4FromOctets(parseIpv4(host));
-    if (!targetHost || !isValidPort(targetPort)) return;
+    if (!targetHost || !isValidPort(targetPort)) {
+        // Reported: syslog enabled, nothing arrived at the user's syslog
+        // server, and nothing anywhere said why. A refusal here was completely
+        // silent, which is indistinguishable from the feature not running.
+        problem(`syslog refused: host=${JSON.stringify(host)} port=${JSON.stringify(port)} is not a plain IPv4 address and port`);
+        return;
+    }
     let socket;
     try {
         socket = dgram.createSocket('udp4');
     } catch (e) {
+        problem(`syslog could not open a UDP socket: ${e && e.message || e}`);
         return;
     }
     // UDP gives no delivery signal; errors here mean the send itself failed
@@ -70,10 +92,21 @@ function relaySyslog(frame, host, port) {
     socket.on('error', () => { try { socket.close(); } catch (e) { } });
     try {
         const buf = Buffer.from(String(frame), 'utf8');
-        socket.send(buf, 0, buf.length, targetPort, targetHost, () => {
+        socket.send(buf, 0, buf.length, targetPort, targetHost, (err) => {
+            if (err) {
+                // No `err &&` guard: err is the reason this branch was taken,
+                // so testing it again is dead code (CodeQL 131).
+                problem(`syslog send to ${targetHost}:${targetPort} failed: ${err.message || err}`);
+            } else if (!_syslogSendLogged) {
+                // Once per service run: enough to confirm the path works
+                // end to end without one log line per log line.
+                _syslogSendLogged = true;
+                logServiceEvent('INFO', `syslog datagram sent to ${targetHost}:${targetPort} (further sends not logged)`);
+            }
             try { socket.close(); } catch (e) { }
         });
     } catch (e) {
+        problem(`syslog send threw: ${e && e.message || e}`);
         try { socket.close(); } catch (e2) { }
     }
 }
