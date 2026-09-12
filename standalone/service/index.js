@@ -323,6 +323,10 @@ function relayLog(entry, host, port) {
             message: entry.message,
         });
         const req = http.request({
+            // targetHost is built by ipv4FromOctets, which assembles it from a
+            // table of constants rather than from the stored value — see the note
+            // there. This is the sink CodeQL reports (js/file-access-to-http), so
+            // the guarantee is worth restating where the request is actually made.
             hostname: targetHost,
             port: targetPort,
             path: '/tv-log',
