@@ -202,7 +202,7 @@ function ipv4FromOctets(octets) {
     for (const n of octets) {
         if (!Number.isInteger(n) || n < 0 || n > 255) return '';
     }
-    return OCTET_TEXT[octets[0]] + '.' + OCTET_TEXT[octets[1]] + '.' + OCTET_TEXT[octets[2]] + '.' + OCTET_TEXT[octets[3]];
+    return octets[0] + '.' + octets[1] + '.' + octets[2] + '.' + octets[3];
 }
 
 function isValidPort(port) {
