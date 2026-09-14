@@ -23,7 +23,7 @@ const MAX_LOGGED_ITEMS = 12;
 
 // The content arrays a shelf can hold, in the same shapes processShelves
 // already handles.
-function shelfItemArrays(shelve) {
+export function shelfItemArrays(shelve) {
   const base = shelve?.richSectionRenderer?.content || shelve;
   return [
     ['shelfRenderer.content.horizontalListRenderer', base?.shelfRenderer?.content?.horizontalListRenderer],

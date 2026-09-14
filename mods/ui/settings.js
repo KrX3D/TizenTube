@@ -990,6 +990,11 @@ export default function modernUI(update, parameters) {
                     value: 'hideDuplicateVideos'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hideAggregateShelf'),
+                    icon: null,
+                    value: 'hideAggregateShelf'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideChannelShelves'),
                     icon: null,
                     value: 'hideChannelShelves'

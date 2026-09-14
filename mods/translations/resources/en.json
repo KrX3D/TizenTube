@@ -296,6 +296,7 @@
                     "disableEnlargingThumbnails": "Disable Enlarged Thumbnails",
                     "enableShrinkingThumbnails": "Enable Shrinked Thumbnails",
                     "hideMembersOnlyVideos": "Hide Members-Only Videos",
+                    "hideAggregateShelf": "Hide the Combined Subscriptions Row",
                     "hideChannelShelves": "Hide Channel Shelves",
                     "hideSurveys": "Hide Feedback Surveys",
                     "sortSidebarContents": {
