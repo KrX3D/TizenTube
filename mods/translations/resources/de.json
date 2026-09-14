@@ -296,6 +296,7 @@
                     "disableEnlargingThumbnails": "Vergrößerte Vorschaubilder deaktivieren",
                     "enableShrinkingThumbnails": "Verkleinerte Vorschaubilder aktivieren",
                     "hideMembersOnlyVideos": "Videos nur für Kanalmitglieder ausblenden",
+                    "hideAggregateShelf": "Zusammengefasste Abo-Reihe ausblenden",
                     "hideChannelShelves": "Kanal-Regale ausblenden",
                     "hideSurveys": "Feedback-Umfragen ausblenden",
                     "sortSidebarContents": {
