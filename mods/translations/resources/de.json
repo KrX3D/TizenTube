@@ -409,6 +409,11 @@
             "title": "Seitenleiste aktualisiert",
             "subtitle": "Starte die App neu, falls die Seitenleiste sich nicht aktualisiert."
         },
-        "sidebarGuideFetchFailed": "Die Seitenleisten-Einträge konnten nicht geladen werden. Versuche es gleich noch einmal."
+        "sidebarGuideFetchFailed": "Die Seitenleisten-Einträge konnten nicht geladen werden. Versuche es gleich noch einmal.",
+        "networkWaiting": "Warte auf das Netzwerk… ({{seconds}}s)",
+        "networkBack": "Das Netzwerk ist wieder da.",
+        "networkBackReloading": "Das Netzwerk ist wieder da, die Seite wird neu geladen…",
+        "networkStillOffline": "Immer noch kein Netzwerk. Die Seite wird neu geladen, sobald es wieder da ist.",
+        "networkContinuingAnyway": "Immer noch kein Netzwerk, starte trotzdem…"
     }
 }

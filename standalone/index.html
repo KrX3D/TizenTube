@@ -215,6 +215,36 @@
         var NETWORK_WAIT_MAX_MS = 60000;
         var NETWORK_PROBE_TIMEOUT_MS = 4000;
 
+        // Shown under the progress bar while waiting, so a long wait reads as
+        // "waiting for the network" rather than a hung splash screen.
+        //
+        // This page cannot use the translation files: they are bundled into the
+        // userscript, which has not loaded yet. These mirror
+        // toasts.networkWaiting and toasts.networkContinuingAnyway in
+        // mods/translations/resources/en.json and de.json — keep them in step.
+        // Escapes rather than literal characters, because this page declares no
+        // charset and a literal ellipsis or umlaut could render garbled.
+        var STATUS_TEXT = {
+            en: {
+                waiting: 'Waiting for the network\u2026 ({s}s)',
+                continuing: 'Still no network, starting anyway\u2026'
+            },
+            de: {
+                waiting: 'Warte auf das Netzwerk\u2026 ({s}s)',
+                continuing: 'Immer noch kein Netzwerk, starte trotzdem\u2026'
+            }
+        };
+
+        function setStatus(key, seconds) {
+            try {
+                var el = document.getElementById('tt-status');
+                if (!el) return;
+                if (!key) { el.textContent = ''; return; }
+                var lang = String(navigator.language || 'en').toLowerCase().indexOf('de') === 0 ? 'de' : 'en';
+                el.textContent = STATUS_TEXT[lang][key].replace('{s}', String(seconds || 0));
+            } catch (e) { }
+        }
+
         function waitForNetworkThen(next) {
             var started = Date.now();
             var attempts = 0;
@@ -225,15 +255,18 @@
                 return;
             }
             sendLog('INFO', 'Started offline, waiting for the network before loading YouTube');
+            setStatus('waiting', 0);
 
             function retry(reason) {
                 if (Date.now() - started >= NETWORK_WAIT_MAX_MS) {
                     // Past this point waiting further is not helping; proceed and
                     // let the existing paths do what they did before this check.
                     sendLog('ERROR', 'Network still not ready after ' + (Date.now() - started) + 'ms (' + reason + '), continuing anyway');
+                    setStatus('continuing');
                     next();
                     return;
                 }
+                setStatus('waiting', Math.round((Date.now() - started) / 1000));
                 if (attempts === 1 || attempts % 5 === 0) {
                     sendLog('INFO', 'Waiting for network (' + reason + ', attempt ' + attempts + ')');
                 }
@@ -321,6 +354,10 @@
     </h1>
     <div class="progress-container">
         <div class="progress-bar"></div>
+    </div>
+    <!-- Filled in by setStatus() while waiting for the network; empty otherwise. -->
+    <div id="tt-status"
+        style="color: #AAAAAA; font-size: 32px; font-family: Roboto,Noto Sans CJK ZH-HK,Noto Sans Thai,Arial,Helvetica,sans-serif; margin-top: 40px; min-height: 40px;">
     </div>
 </body>
 

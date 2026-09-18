@@ -1,6 +1,8 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { waitForNetwork } from './networkReady.js';
+import { showToast } from '../ui/ytUI.js';
+import { t } from 'i18next';
 
 const SETTLE_MS = 1500;
 
@@ -11,7 +13,17 @@ const SETTLE_MS = 1500;
 // event rather than attempted anyway.
 const NETWORK_WAIT_MS = 120000;
 
+// A toast is gone after a few seconds and the wait can last two minutes, so
+// it is repeated while waiting — often enough that the screen never looks
+// frozen, not so often that it nags.
+const TOAST_REPEAT_MS = 15000;
+const RELOAD_NOTICE_MS = 1200;
+
 let pending = null;
+
+function toast(key, options) {
+  try { showToast('TizenTube', t(key, options)); } catch (_) { }
+}
 
 // Bumped on every visibility change. A wait started for one wake is abandoned
 // as soon as the TV goes back to standby or wakes again, and the newer wake
@@ -42,9 +54,20 @@ async function onVisible(gen) {
   // not YouTube's, has nothing of ours left in it to recover from. 5.5
   // reconnects faster, which is why it only showed up there. See
   // networkReady.js.
+  // Only tell the user once there is actually something to wait for: on a
+  // normal wake the network is already up and a toast would just flash past.
+  let lastToastAt = 0;
+  let toldWaiting = false;
   const net = await waitForNetwork({
     timeoutMs: NETWORK_WAIT_MS,
     shouldContinue: () => gen === generation && document.visibilityState === 'visible',
+    onAttemptFailed: ({ waitedMs }) => {
+      const now = Date.now();
+      if (toldWaiting && now - lastToastAt < TOAST_REPEAT_MS) return;
+      toldWaiting = true;
+      lastToastAt = now;
+      toast('toasts.networkWaiting', { seconds: Math.max(1, Math.round(waitedMs / 1000)) });
+    },
   });
 
   // A later wake took over while this one waited; that one decides.
@@ -59,6 +82,7 @@ async function onVisible(gen) {
   }
   if (!net.online) {
     appendFileOnlyLog('resume.offline_not_reloading', net);
+    toast('toasts.networkStillOffline');
     // Try again the moment the link comes back, rather than only on the next
     // wake — a TV left on with the router rebooting would otherwise stay dead.
     try { window.addEventListener('online', () => schedule(), { once: true }); } catch (_) { }
@@ -69,6 +93,7 @@ async function onVisible(gen) {
   // reload is only worth its cost if the player is still dead.
   if (!playerLooksDead()) {
     appendFileOnlyLog('resume.recovered_while_waiting', net);
+    if (toldWaiting) toast('toasts.networkBack');
     return;
   }
   // Checked again here, not only on entry: the wait is long enough for
@@ -82,7 +107,14 @@ async function onVisible(gen) {
     href: String(location.hash || ''),
   }, net));
   window.__ttResumeReloaded = true;
-  location.reload();
+  if (!toldWaiting) {
+    location.reload();
+    return;
+  }
+  // After a visible wait, say what is about to happen and give the toast a
+  // moment on screen — reloading at once would wipe it before it rendered.
+  toast('toasts.networkBackReloading');
+  setTimeout(() => location.reload(), RELOAD_NOTICE_MS);
 }
 
 function schedule() {
