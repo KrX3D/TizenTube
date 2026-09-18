@@ -3,6 +3,7 @@ import { configRead, configWrite } from '../config.js';
 import { buttonItem, overlayPanelItemListRenderer, showModal, showToast } from './ytUI.js';
 import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { t } from 'i18next';
+import { guideEntryKey, guideEntryHideKeys, guideEntryTitle } from './guideEntryKey.js';
 
 // Sidebar (guide) customisation — upstream 2f2c567 / 79195bb.
 //
@@ -19,12 +20,6 @@ import { t } from 'i18next';
 // built-in guide entry) or a { browseId, title } object (a channel the user
 // pinned there; customGuideAction.js synthesises a guideEntryRenderer for it).
 
-/** The browseId a guide entry navigates to; the search entry has none. */
-function entryBrowseId(item) {
-    const nav = item?.guideEntryRenderer?.navigationEndpoint;
-    return nav?.browseEndpoint?.browseId || (nav?.searchEndpoint ? 'search' : null);
-}
-
 /** Order entries are strings or { browseId } objects — normalise to the id. */
 function orderBrowseId(orderItem) {
     return (typeof orderItem === 'object' && orderItem !== null) ? orderItem.browseId : orderItem;
@@ -34,7 +29,7 @@ function moveGuideButton(parameters) {
     const order = configRead('sidebarContentsOrder');
     if (!Array.isArray(order)) return showSetting('', true);
 
-    const browseId = entryBrowseId(parameters?.item);
+    const browseId = guideEntryKey(parameters?.item);
     const index = order.findIndex(orderItem => orderBrowseId(orderItem) === browseId);
     // Not in the order list yet (a guide entry that appeared after the order
     // was built) — just reopen the list, which re-syncs it.
@@ -52,7 +47,7 @@ function moveGuideButton(parameters) {
 }
 
 function showMoveButtons(settingType, parameters) {
-    const title = parameters?.item?.guideEntryRenderer?.formattedTitle?.simpleText || '';
+    const title = guideEntryTitle(parameters?.item);
 
     const moveButton = (direction, labelKey, icon) => buttonItem(
         {
@@ -85,8 +80,33 @@ function showMoveButtons(settingType, parameters) {
     );
 }
 
+// Cap on entries named in the menu-open log line, so an account with many
+// pinned channels cannot flood the queue.
+const MAX_LOGGED_ENTRIES = 20;
+
+// Hide or show one entry.
+//
+// A dedicated action rather than the generic setClientSettingEndpoint toggle it
+// replaces, because showing an entry again may mean removing more than one key:
+// its own, and its icon, which this fork's default list uses for Search, Sport,
+// News and the rest. That toggle can only flip a single value — and two values
+// in one command flip each other back, since every value is applied once per
+// value — so an entry hidden by its icon could never be shown again from this
+// menu: pressing it only added its page id as well.
+function toggleGuideEntry(parameters) {
+    const keys = guideEntryHideKeys(parameters?.item);
+    if (!keys.length) return showSetting('disabledSidebarContents', true);
+    const disabled = (configRead('disabledSidebarContents') || []).slice();
+    const wasHidden = keys.some(k => disabled.includes(k));
+    const next = wasHidden ? disabled.filter(k => !keys.includes(k)) : disabled.concat([keys[0]]);
+    appendFileOnlyLog('sidebar.toggle', { key: keys[0], keys, hidden: !wasHidden });
+    configWrite('disabledSidebarContents', next);
+    return showSetting('disabledSidebarContents', true);
+}
+
 function showSetting(settingType, parameters) {
     try {
+        if (settingType === 'TOGGLE_GUIDE_ENTRY') return toggleGuideEntry(parameters);
         if (settingType === 'MOVE_GUIDE_BUTTON') return moveGuideButton(parameters);
         if (settingType === 'SHOW_GUIDE_BUTTONS') return showMoveButtons(settingType, parameters);
 
@@ -102,37 +122,45 @@ function showSetting(settingType, parameters) {
                 || guide?.items?.[0]?.guideSectionRenderer?.items
                 || [];
 
+            // Recorded so a capture shows each entry's real shape — Shorts was
+            // added to the sidebar for signed-in accounts only, and its exact
+            // structure could not be seen from outside.
+            const logged = [];
             for (const item of guideItems) {
                 const entry = item?.guideEntryRenderer;
                 if (!entry) continue;
-                const browseId = entryBrowseId(item);
-                if (!browseId) continue;
+                const key = guideEntryKey(item);
+                if (!key) continue;
                 const disabled = configRead('disabledSidebarContents') || [];
+                // Hidden by its own key or, for the default list, by its icon —
+                // the box used to check only the first, so entries hidden by
+                // default showed as visible.
+                const hidden = guideEntryHideKeys(item).some(k => disabled.includes(k));
+                if (logged.length < MAX_LOGGED_ENTRIES) {
+                    const nav = entry.navigationEndpoint || {};
+                    logged.push({
+                        title: guideEntryTitle(item).slice(0, 30),
+                        key,
+                        icon: entry.icon?.iconType || null,
+                        endpoint: Object.keys(nav).find(k => /(Endpoint|Command)$/.test(k)) || null,
+                        hidden
+                    });
+                }
 
                 buttons.push(
                     buttonItem(
-                        { title: entry.formattedTitle?.simpleText || browseId },
+                        { title: guideEntryTitle(item) || key },
                         {
                             icon: entry.icon?.iconType,
                             secondaryIcon: isDisableMode
-                                ? (disabled.includes(browseId) ? 'CHECK_BOX' : 'CHECK_BOX_OUTLINE_BLANK')
+                                ? (hidden ? 'CHECK_BOX' : 'CHECK_BOX_OUTLINE_BLANK')
                                 : null
                         },
                         isDisableMode
                             ? [
                                 {
-                                    setClientSettingEndpoint: {
-                                        settingDatas: [
-                                            {
-                                                clientSettingEnum: { item: 'disabledSidebarContents' },
-                                                arrayValue: browseId
-                                            }
-                                        ]
-                                    }
-                                },
-                                {
                                     customAction: {
-                                        action: 'RELOAD_GUIDE_OPTIONS',
+                                        action: 'TOGGLE_GUIDE_ENTRY',
                                         parameters: { settingType, item }
                                     }
                                 }
@@ -149,7 +177,7 @@ function showSetting(settingType, parameters) {
                 );
             }
 
-            appendFileOnlyLog('sidebar.menu.open', { mode: isDisableMode ? 'disable' : 'sort', count: buttons.length });
+            appendFileOnlyLog('sidebar.menu.open', { mode: isDisableMode ? 'disable' : 'sort', count: buttons.length, entries: logged });
             showModal(
                 {
                     title: isDisableMode
