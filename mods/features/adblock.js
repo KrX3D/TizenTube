@@ -35,6 +35,7 @@ import { filterChannelShelves } from './channelShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
 import { dedupeShelves } from './duplicateVideoHider.js';
+import { noteVideoLength } from './playbackProgress.js';
 import { filterAggregateShelves } from './aggregateShelfHider.js';
 import { logSubscriptionsShelfShape } from './subscriptionsShelfDiag.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
@@ -627,6 +628,7 @@ function processResponsePayload(payload, detectedPage) {
   //
   // This is the dual-path gap AGENTS.md warns about, and the same class of bug
   // already found here for addLongPress and the grid filters.
+  noteVideoLength(payload);
   updateProgressCache(payload);
   if (detectedPage !== 'watch' && payload?.frameworkUpdates?.entityBatchUpdate?.mutations) {
     if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
@@ -870,6 +872,7 @@ JSON.parse = function () {
       applyLibraryShelfSpacing();
     }
 
+    noteVideoLength(r);
     updateProgressCache(r);
     if (detectedPage !== 'watch' && r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
       if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};

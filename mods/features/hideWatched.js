@@ -127,34 +127,51 @@ if (!window.__ttHideWatchedLocationTrackingInit) {
 
 // ── Watch progress extraction ─────────────────────────────────────────────────
 
+// What the response itself says about progress, or null if it says nothing.
+function responseWatchPercent(item) {
+  const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
+    || item?.tileRenderer?.thumbnailOverlays || [];
+  const resume = overlays.find(o => o.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
+  if (resume) {
+    const pct = resume.percentDurationWatched;
+    return (pct !== null && pct !== undefined) ? Number(pct) : 100;
+  }
+  if (overlays.some(o => o.thumbnailOverlayPlaybackStatusRenderer || o.thumbnailOverlayPlayedRenderer)) return 100;
+  const badges = item?.tileRenderer?.badges || [];
+  if (badges.some(b => {
+    const s = String(b?.metadataBadgeRenderer?.style || '') + String(b?.metadataBadgeRenderer?.label || '');
+    return s.toLowerCase().includes('watched');
+  })) return 100;
+  // lockupViewModel (search results) puts progress on a bottom overlay bar
+  // rather than a thumbnailOverlayResumePlaybackRenderer (upstream ca60382).
+  const lockupPct = lockupWatchPercent(item);
+  if (lockupPct !== null) return lockupPct;
+  const raw = item?.watchProgressPercentage ?? item?.percentDurationWatched ?? null;
+  if (raw !== null) return Number(raw);
+  return null;
+}
+
+// The higher of what the response says and what is known locally.
+//
+// The response used to win outright, with the cache only a fallback for when it
+// said nothing, on the reasoning that a rewatch from the start should show its
+// new low progress. But the response is exactly what lags: minutes after a video
+// is watched, YouTube can still send its tile with the old overlay, or none at
+// all, and the filter then shows it again — the reported playlist behaviour.
+// For a filter that hides WATCHED videos, "watched here and not yet reflected by
+// YouTube" has to count, and a rewatch does not make a video unwatched.
 export function getWatchPercent(item) {
   try {
-    const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
-      || item?.tileRenderer?.thumbnailOverlays || [];
-    const resume = overlays.find(o => o.thumbnailOverlayResumePlaybackRenderer)?.thumbnailOverlayResumePlaybackRenderer;
-    if (resume) {
-      const pct = resume.percentDurationWatched;
-      return (pct !== null && pct !== undefined) ? Number(pct) : 100;
-    }
-    if (overlays.some(o => o.thumbnailOverlayPlaybackStatusRenderer || o.thumbnailOverlayPlayedRenderer)) return 100;
-    const badges = item?.tileRenderer?.badges || [];
-    if (badges.some(b => {
-      const s = String(b?.metadataBadgeRenderer?.style || '') + String(b?.metadataBadgeRenderer?.label || '');
-      return s.toLowerCase().includes('watched');
-    })) return 100;
-    // lockupViewModel (search results) puts progress on a bottom overlay bar
-    // rather than a thumbnailOverlayResumePlaybackRenderer (upstream ca60382).
-    const lockupPct = lockupWatchPercent(item);
-    if (lockupPct !== null) return lockupPct;
-    const raw = item?.watchProgressPercentage ?? item?.percentDurationWatched ?? null;
-    if (raw !== null) return Number(raw);
+    const fromResponse = responseWatchPercent(item);
     const videoId = item?.tileRenderer?.contentId
       || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId
       || lockupVideoId(item);
-    if (videoId && window._ttVideoProgressCache?.[videoId] !== undefined) {
-      return window._ttVideoProgressCache[videoId];
-    }
-    return null;
+    const stored = videoId ? window._ttVideoProgressCache?.[videoId] : undefined;
+    const cached = stored === undefined || stored === null ? null : Number(stored);
+    const known = cached !== null && isFinite(cached) ? cached : null;
+    if (fromResponse === null || !isFinite(fromResponse)) return known;
+    if (known === null) return fromResponse;
+    return Math.max(fromResponse, known);
   } catch {
     return null;
   }
@@ -171,6 +188,9 @@ export function hideVideo(items, pageHint = null) {
     : (hashPage !== 'home' && hashPage !== 'search') ? hashPage
     : (window.__ttLastDetectedPage || hashPage);
   appendFileOnlyLog('hideVideo.context', { pageHint, hashPage, pageName, lastDetected: window.__ttLastDetectedPage || null });
+  // Read by playbackProgress.js to tell whether returning to a page produced
+  // a fresh response or a re-shown copy of the old one.
+  window.__ttPageRenderedAt = { page: pageName, at: Date.now() };
   if (!pages.includes(pageName)) return items;
   return items.filter(item => {
     try {
@@ -404,8 +424,13 @@ export function updateProgressCache(r) {
       if (pct !== null) {
         const videoId = key.includes('|') ? key.split('|')[0] : key;
         const before = window._ttVideoProgressCache[videoId];
-        window._ttVideoProgressCache[videoId] = Number(pct);
-        if (before !== Number(pct) && learned.length < MAX_LEARNED_LOGGED) learned.push({ videoId, pct: Number(pct) });
+        // Never lowered. YouTube's number lags what was just watched here
+        // (see playbackProgress.js), and overwriting would undo it.
+        if (!(Number(before) >= Number(pct))) window._ttVideoProgressCache[videoId] = Number(pct);
+        // Logged only when the stored value actually moved, so a capture does
+        // not claim a lower number was learned when the higher one was kept.
+        const after = window._ttVideoProgressCache[videoId];
+        if (before !== after && learned.length < MAX_LEARNED_LOGGED) learned.push({ videoId, pct: Number(pct) });
         // Persisted so the fallback survives a power cycle — see
         // watchProgressStore.js. The write itself is debounced, so this is
         // cheap to call per mutation.
@@ -413,7 +438,8 @@ export function updateProgressCache(r) {
         const explicitId = payload?.videoAttributionModel?.externalVideoId
           || payload?.videoData?.videoId || null;
         if (explicitId) {
-          window._ttVideoProgressCache[String(explicitId)] = Number(pct);
+          const prior = window._ttVideoProgressCache[String(explicitId)];
+          if (!(Number(prior) >= Number(pct))) window._ttVideoProgressCache[String(explicitId)] = Number(pct);
           noteProgressChanged(String(explicitId));
         }
       }
