@@ -200,6 +200,93 @@
                 });
         }
 
+        // Reported on Tizen 6.5: powering the TV on sometimes lands on the
+        // webview's own error page (ERR_INTERNET_DISCONNECTED) instead of
+        // YouTube. Chromium raises that when it believes the device is offline,
+        // so a navigation went out before the network had come back from
+        // standby. Both paths below navigate to YouTube almost at once, so hold
+        // them until the network is really there.
+        //
+        // Deliberately a no-op on a normal launch: if the browser already
+        // reports a link at the first check, this proceeds immediately without
+        // probing anything. The probe only runs when the app starts offline,
+        // which is the case being fixed — so even a probe that misbehaved on
+        // some firmware could never slow down an ordinary start.
+        var NETWORK_WAIT_MAX_MS = 60000;
+        var NETWORK_PROBE_TIMEOUT_MS = 4000;
+
+        function waitForNetworkThen(next) {
+            var started = Date.now();
+            var attempts = 0;
+            var delay = 1000;
+
+            if (navigator.onLine !== false) {
+                next();
+                return;
+            }
+            sendLog('INFO', 'Started offline, waiting for the network before loading YouTube');
+
+            function retry(reason) {
+                if (Date.now() - started >= NETWORK_WAIT_MAX_MS) {
+                    // Past this point waiting further is not helping; proceed and
+                    // let the existing paths do what they did before this check.
+                    sendLog('ERROR', 'Network still not ready after ' + (Date.now() - started) + 'ms (' + reason + '), continuing anyway');
+                    next();
+                    return;
+                }
+                if (attempts === 1 || attempts % 5 === 0) {
+                    sendLog('INFO', 'Waiting for network (' + reason + ', attempt ' + attempts + ')');
+                }
+                // Whichever comes first — the delay or the link coming back —
+                // runs the next attempt, and cancels the other. Leaving the
+                // listener behind would start a second attempt chain in
+                // parallel, and that one could call next() a second time.
+                var fired = false;
+                function go() {
+                    if (fired) return;
+                    fired = true;
+                    clearTimeout(timer);
+                    window.removeEventListener('online', go);
+                    attempt();
+                }
+                var timer = setTimeout(go, delay);
+                window.addEventListener('online', go);
+                delay = Math.min(Math.round(delay * 1.5), 5000);
+            }
+
+            function attempt() {
+                attempts++;
+                if (navigator.onLine === false) {
+                    retry('navigator.onLine is false');
+                    return;
+                }
+                var finished = false;
+                var timer = setTimeout(function () {
+                    if (finished) return;
+                    finished = true;
+                    retry('probe timed out');
+                }, NETWORK_PROBE_TIMEOUT_MS);
+                // generate_204 answers with an empty 204; no-cors because only
+                // whether it arrives matters, not what it says.
+                fetch('https://www.youtube.com/generate_204?_=' + Date.now(), { mode: 'no-cors', cache: 'no-store', credentials: 'omit' })
+                    .then(function () {
+                        if (finished) return;
+                        finished = true;
+                        clearTimeout(timer);
+                        sendLog('INFO', 'Network ready after ' + (Date.now() - started) + 'ms, ' + attempts + ' check(s)');
+                        next();
+                    })
+                    .catch(function (e) {
+                        if (finished) return;
+                        finished = true;
+                        clearTimeout(timer);
+                        retry('probe failed: ' + (e && e.message || e));
+                    });
+            }
+
+            attempt();
+        }
+
         function launchService() {
             sendLog('INFO', 'Launching StandaloneService via launchAppControl');
             tizen.application.launchAppControl(
@@ -207,7 +294,7 @@
                 serviceId,
                 function () {
                     sendLog('INFO', 'launchAppControl success callback fired');
-                    useInjectorOrProxy();
+                    waitForNetworkThen(useInjectorOrProxy);
                 },
                 function (e) {
                     // Confirmed on-device: right after a TV reboot, this can
