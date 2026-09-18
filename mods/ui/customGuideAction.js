@@ -1,12 +1,7 @@
 import { configChangeEmitter, configRead, configWrite } from "../config.js";
 import getCommandExecutor from "./customCommandExecution.js";
 import { GuideEntryRenderer } from "./ytUI.js";
-
-/** The browseId a guide entry navigates to; the search entry has none. */
-function entryBrowseId(item) {
-    const nav = item?.guideEntryRenderer?.navigationEndpoint;
-    return nav?.browseEndpoint?.browseId || (nav?.searchEndpoint ? 'search' : null);
-}
+import { guideEntryKey } from "./guideEntryKey.js";
 
 /** Order entries are plain browseId strings or { browseId, title } objects. */
 function orderBrowseId(orderItem) {
@@ -26,10 +21,10 @@ function syncOrder(section) {
     if (!Array.isArray(order)) return { order: [], changed: false };
     let changed = false;
     for (const item of section.items) {
-        const browseId = entryBrowseId(item);
-        if (!browseId) continue;
-        if (!order.some(orderItem => orderBrowseId(orderItem) === browseId)) {
-            order.push(browseId);
+        const key = guideEntryKey(item);
+        if (!key) continue;
+        if (!order.some(orderItem => orderBrowseId(orderItem) === key)) {
+            order.push(key);
             changed = true;
         }
     }
@@ -61,7 +56,7 @@ function applyOrder(section, order) {
     const used = new Set();
     for (const orderItem of order) {
         const browseId = orderBrowseId(orderItem);
-        const index = available.findIndex((item, i) => !used.has(i) && entryBrowseId(item) === browseId);
+        const index = available.findIndex((item, i) => !used.has(i) && guideEntryKey(item) === browseId);
         if (index !== -1) {
             used.add(index);
             ordered.push(available[index]);
@@ -105,13 +100,14 @@ JSON.parse = function () {
                         try {
                             const item = section.items[j].guideEntryRenderer;
                             if (!item) continue;
-                            // Entries are keyed by browseId now (upstream 2f2c567).
+                            // Entries are keyed by guideEntryKey: the browseId, or
+                            // for an entry that opens no page (Shorts) its icon.
                             // The old iconType keys are still honoured so existing
                             // configs — including this fork's non-empty default —
                             // keep hiding what they always did.
-                            const browseId = entryBrowseId(section.items[j]);
+                            const key = guideEntryKey(section.items[j]);
                             const isDisabled = disabledSidebarContents?.length && (
-                                (browseId && disabledSidebarContents.includes(browseId))
+                                (key && disabledSidebarContents.includes(key))
                                 || (item.icon?.iconType && disabledSidebarContents.includes(item.icon.iconType))
                             );
                             if (isDisabled || (disableChannelsOnSidebar && item?.thumbnail)) {

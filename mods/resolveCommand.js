@@ -320,6 +320,9 @@ function customAction(action, parameters) {
         case 'MOVE_GUIDE_BUTTON':
             showGuideSettings('MOVE_GUIDE_BUTTON', parameters);
             break;
+        case 'TOGGLE_GUIDE_ENTRY':
+            showGuideSettings('TOGGLE_GUIDE_ENTRY', parameters);
+            break;
         case 'RELOAD_GUIDE_OPTIONS':
             showGuideSettings(parameters.settingType, true);
             break;
