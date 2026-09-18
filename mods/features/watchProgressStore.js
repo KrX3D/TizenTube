@@ -1,21 +1,25 @@
 /**
  * watchProgressStore.js — persist watch progress across app restarts.
  *
- * getWatchPercent() has three sources, in order: the response's own resume
- * overlay, a lockup progress bar, and window._ttVideoProgressCache as the
- * fallback. That cache is populated only from frameworkUpdates mutations as
- * videos are watched, and it was plain in-memory state — a power cycle emptied
- * it.
+ * getWatchPercent() combines what the response says about progress (the resume
+ * overlay, a lockup progress bar) with window._ttVideoProgressCache. That cache
+ * is fed by progress entries in YouTube's responses and, since
+ * playbackProgress.js, by the player itself — and it was plain in-memory state,
+ * so a power cycle emptied it.
  *
  * Reported symptom: watch videos 19 and 20 of a playlist, power the TV off,
  * come back, and both are still shown as unwatched — and re-entering the
  * playlist never fixes it, because nothing repopulates the cache until
  * something is watched again. In a warm session the same steps work.
  *
- * So the progress the app already knows about has to survive a restart. Only
- * the fallback is persisted; a resume overlay in the live response still wins,
- * which matters when a video is re-watched from the start — YouTube reports the
- * new, low progress and that takes precedence over anything stored here.
+ * So the progress the app already knows about has to survive a restart.
+ *
+ * getWatchPercent() now takes the higher of this cache and the response rather
+ * than letting the response win. The response is what lags: minutes after a
+ * video is watched YouTube can still send its tile with the old overlay or none,
+ * and a filter for WATCHED videos must not un-hide it. playbackProgress.js also
+ * writes here from the player itself, so this is no longer only a mirror of
+ * what YouTube reported.
  */
 
 const STORAGE_KEY = 'ytaf-watch-progress';
