@@ -400,9 +400,45 @@ function getFullCache() {
   return window.__ttPlaylistFullCache;
 }
 
+// How long after the reload is issued the cached list may still be served.
+// The reloaded response normally arrives within a second or two; this leaves
+// room for a slow TV without letting the entry outlive the visit it was for.
+const HANDOFF_WINDOW_MS = 30000;
+
+// Only the reload an entry was stored for may use it.
+//
+// Reported: watch videos from a playlist (autoplay running through several),
+// go back to it, and the watched ones are all still there — sometimes, and
+// always fixed by restarting the app. The entry was only ever deleted when it
+// was SERVED. If collection finished after playback had started, the reload
+// was skipped as navigated_away and the entry stayed in memory; the next visit
+// to that playlist then received the snapshot taken before anything was
+// watched. Whether collection finished before or after pressing play is the
+// "sometimes", and a restart empties this Map, which is why that always
+// worked.
+//
+// So an entry is served only once its reload has been issued, and only within
+// the window above. Anything else is discarded rather than served.
 export function getCachedFullPlaylist(key) {
-  const entry = getFullCache().get(key);
-  return entry && Array.isArray(entry.contents) ? entry.contents : null;
+  const cache = getFullCache();
+  const entry = cache.get(key);
+  if (!entry || !Array.isArray(entry.contents)) return null;
+  const issuedAt = Number(entry.reloadIssuedAt) || 0;
+  const age = issuedAt ? Date.now() - issuedAt : null;
+  if (!issuedAt || age > HANDOFF_WINDOW_MS) {
+    cache.delete(key);
+    _log('playlist.full_cache.expired', { key, reloadIssued: !!issuedAt, ageMs: age });
+    return null;
+  }
+  return entry.contents;
+}
+
+// An entry whose reload will never happen must not be kept for a later visit.
+function discardFullPlaylist(key, reason) {
+  const cache = getFullCache();
+  if (!cache.has(key)) return;
+  cache.delete(key);
+  _log('playlist.full_cache.discarded', { key, reason });
 }
 
 // Drop a cached playlist once it has been injected. The cache is strictly a
@@ -517,10 +553,15 @@ function maybeReloadForFullPlaylist(key) {
   if (!(window.__ttFullReloadDone instanceof Set)) window.__ttFullReloadDone = new Set();
   if (window.__ttFullReloadDone.has(key)) {
     _log('playlist.full_cache.reload_skipped', { key, reason: 'already_reloaded' });
+    discardFullPlaylist(key, 'already_reloaded');
     return;
   }
   if (playlistKeyFromHash() !== key) {
     _log('playlist.full_cache.reload_skipped', { key, reason: 'navigated_away' });
+    // The case behind the report: collection finished after playback began.
+    // Kept, this snapshot would be served on the next visit with every
+    // video's progress frozen at the moment it was taken.
+    discardFullPlaylist(key, 'navigated_away');
     return;
   }
   window.__ttFullReloadDone.add(key);
@@ -533,11 +574,15 @@ function maybeReloadForFullPlaylist(key) {
     const rc = window.__ttResolveCommand;
     if (typeof rc !== 'function') {
       _log('playlist.full_cache.reload_error', { key, err: 'resolveCommand unavailable' });
+      discardFullPlaylist(key, 'resolveCommand unavailable');
       return;
     }
+    const entry = getFullCache().get(key);
+    if (entry) entry.reloadIssuedAt = Date.now();
     rc({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } });
   } catch (err) {
     _log('playlist.full_cache.reload_error', { key, err: String(err?.message || err) });
+    discardFullPlaylist(key, 'reload_error');
   }
 }
 
