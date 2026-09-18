@@ -76,10 +76,14 @@ function pause(ms) {
  * @param {Function} opts.shouldContinue polled between attempts; returning
  *                                       false cancels, e.g. when the TV goes
  *                                       back to standby mid-wait
+ * @param {Function} opts.onAttemptFailed called after each attempt that found
+ *                                       no network, with { attempts, waitedMs,
+ *                                       offline } — how the caller tells the
+ *                                       user something is happening
  * @returns {Promise<{online:boolean, cancelled?:boolean, timedOut?:boolean,
  *                    attempts:number, waitedMs:number, offlineAtStart:boolean}>}
  */
-export async function waitForNetwork({ timeoutMs = 120000, shouldContinue = () => true } = {}) {
+export async function waitForNetwork({ timeoutMs = 120000, shouldContinue = () => true, onAttemptFailed = null } = {}) {
   const started = Date.now();
   const offlineAtStart = isBrowserOffline();
   let attempts = 0;
@@ -91,7 +95,13 @@ export async function waitForNetwork({ timeoutMs = 120000, shouldContinue = () =
     attempts++;
     // Only probe once the browser itself thinks there is a link — probing
     // while it reports offline would just fail the same way the reload did.
-    if (!isBrowserOffline() && await probeOnce()) return result({ online: true });
+    const offline = isBrowserOffline();
+    if (!offline && await probeOnce()) return result({ online: true });
+    // A throwing callback must not end the wait: the wait is what prevents the
+    // error page, the callback only reports on it.
+    if (typeof onAttemptFailed === 'function') {
+      try { onAttemptFailed({ attempts, waitedMs: Date.now() - started, offline }); } catch (_) { }
+    }
     await pause(delay);
     delay = Math.min(Math.round(delay * 1.5), MAX_DELAY_MS);
   }

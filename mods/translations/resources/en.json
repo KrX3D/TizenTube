@@ -409,6 +409,11 @@
             "title": "Sidebar updated",
             "subtitle": "Restart the app if the sidebar does not refresh."
         },
-        "sidebarGuideFetchFailed": "Could not load the sidebar entries. Try again in a moment."
+        "sidebarGuideFetchFailed": "Could not load the sidebar entries. Try again in a moment.",
+        "networkWaiting": "Waiting for the network… ({{seconds}}s)",
+        "networkBack": "The network is back.",
+        "networkBackReloading": "The network is back, reloading the page…",
+        "networkStillOffline": "Still no network. The page will reload as soon as it is back.",
+        "networkContinuingAnyway": "Still no network, starting anyway…"
     }
 }
