@@ -177,6 +177,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # The branch as it is when this run starts, not the commit that
+          # triggered it. Runs are queued (see concurrency above), so by the
+          # time one starts the previous run may already have pushed its own
+          # version-bump commit. Checking out the triggering commit rebuilt on
+          # top of the older version, and the push at the end then collided with
+          # that bump. That is what happened when #745 and #746 were merged back
+          # to back: the second run bumped from 1.30.80 while main was already at
+          # 1.30.90, the rebase conflicted on package.json and dist/userScript.js,
+          # and #746 was never published.
+          ref: ${{ github.ref_name }}
           # ensure the checkout action leaves credentials so we can push
           persist-credentials: true
           fetch-depth: 0
@@ -367,7 +377,15 @@ jobs:
 
           git fetch origin main
           #git pull --rebase origin main
-          git rebase origin/main
+          # Should no longer conflict now that each run starts from the current
+          # branch, but if main moves underneath a run in a way that does, stop
+          # with instructions rather than a bare git error. Nothing has been
+          # pushed or published at this point.
+          if ! git rebase origin/main; then
+            git rebase --abort || true
+            echo "::error::main changed during this run in a way that conflicts with its version bump. Nothing was pushed or published. Start the workflow again (Actions, this workflow, Run workflow) so it builds on top of the current main."
+            exit 1
+          fi
           # git reset --hard
 
           echo "Pushing changes back to main..."
