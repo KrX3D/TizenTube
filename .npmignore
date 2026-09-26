@@ -1,3 +1,6 @@
 node_modules
 mods
 service
+standalone
+docs
+.github
