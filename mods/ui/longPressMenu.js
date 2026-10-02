@@ -22,7 +22,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'watchLater', 'playlists', 'savePlaylist', 'queue', 'share', 'channel'];
+export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'queue', 'share', 'channel'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -31,6 +31,7 @@ export const ENTRY_LABELS = {
     watchLater: 'videoMenu.watchLater',
     playlists: 'videoMenu.yourPlaylists',
     savePlaylist: 'videoMenu.savePlaylist',
+    playNext: 'videoMenu.playNext',
     queue: 'videoMenu.addToQueue',
     channel: 'videoMenu.goToChannel',
     share: 'videoMenu.share',
@@ -158,6 +159,10 @@ function baseEntries(data) {
         tagMenuItem('savePlaylist', MenuNavigationItemRenderer(t('videoMenu.savePlaylist'), {
             clickTrackingParams: null,
             addToPlaylistEndpoint: { videoId: data.videoId }
+        })),
+        tagMenuItem('playNext', MenuServiceItemRenderer(t('videoMenu.playNext'), {
+            clickTrackingParams: null,
+            playlistEditEndpoint: { customAction: { action: 'PLAY_NEXT', parameters: data.item } }
         })),
         tagMenuItem('queue', MenuServiceItemRenderer(t('videoMenu.addToQueue'), {
             clickTrackingParams: null,

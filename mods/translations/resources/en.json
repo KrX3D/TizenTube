@@ -429,7 +429,8 @@
         "addToNamedPlaylist": "Save to {{name}}",
         "notInterested": "Not interested",
         "dontRecommendChannel": "Don't recommend channel",
-        "share": "Share (QR Code)"
+        "share": "Share (QR Code)",
+        "playNext": "Play Next"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",
@@ -448,6 +449,7 @@
         "networkBack": "The network is back.",
         "networkBackReloading": "The network is back, reloading the page…",
         "networkStillOffline": "Still no network. The page will reload as soon as it is back.",
-        "networkContinuingAnyway": "Still no network, starting anyway…"
+        "networkContinuingAnyway": "Still no network, starting anyway…",
+        "videoPlaysNext": "Video plays next."
     }
 }
