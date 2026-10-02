@@ -1,7 +1,8 @@
 import { configRead } from '../config.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
-import { timelyAction, longPressData, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer, showToast } from '../ui/ytUI.js';
+import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
+import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
@@ -1525,22 +1526,29 @@ function hasOwnFeedbackToken(value, depth) {
 }
 function feedbackMenuItems(panel) {
   return [
-    MenuServiceItemRenderer(t('videoMenu.notInterested'), {
+    tagMenuItem('notInterested', MenuServiceItemRenderer(t('videoMenu.notInterested'), {
       clickTrackingParams: null,
       customAction: { action: 'NOT_INTERESTED', parameters: panel }
-    }),
-    MenuServiceItemRenderer(t('videoMenu.dontRecommendChannel'), {
+    })),
+    tagMenuItem('dontRecommendChannel', MenuServiceItemRenderer(t('videoMenu.dontRecommendChannel'), {
       clickTrackingParams: null,
       customAction: { action: 'DONT_RECOMMEND_CHANNEL', parameters: panel }
-    })
+    }))
   ];
 }
 
-function restoreFeedbackMenuItems(item, menuItems) {
+// Restores the feedback entries and then applies the user's order and hiding.
+// Called from every path that builds or extends a long press menu, which is why
+// the preferences are applied here rather than in each of them: the feedback
+// entries are appended after the menu is otherwise finished, so applying them
+// any earlier would leave those two stuck at the end.
+function finishLongPressMenu(item, menuItems) {
   try {
     const panel = getFeedbackPanel(item);
-    if (!panel || !Array.isArray(menuItems) || menuHasFeedbackItems(menuItems)) return;
-    for (const feedbackItem of feedbackMenuItems(panel)) menuItems.push(feedbackItem);
+    if (panel && Array.isArray(menuItems) && !menuHasFeedbackItems(menuItems)) {
+      for (const feedbackItem of feedbackMenuItems(panel)) menuItems.push(feedbackItem);
+    }
+    applyMenuPreferences(menuItems);
   } catch (err) {
     appendFileOnlyLog('addLongPress.feedback.error', { message: err?.message || String(err) });
   }
@@ -1555,8 +1563,8 @@ function addLongPress(items) {
       if (isLockupVideo(item)) {
         const existingMenu = lockupLongPressMenuItems(item);
         if (existingMenu) {
-          existingMenu.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
-          restoreFeedbackMenuItems(item, existingMenu);
+          existingMenu.push(tagMenuItem('queue', MenuServiceItemRenderer(t('videoMenu.addToQueue'), { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } })));
+          finishLongPressMenu(item, existingMenu);
           continue;
         }
         if (!configRead('enableLongPress')) continue;
@@ -1573,7 +1581,7 @@ function addLongPress(items) {
           watchEndpointData,
           item,
         });
-        restoreFeedbackMenuItems(item, lockupData.showMenuCommand.menu.menuRenderer.items);
+        finishLongPressMenu(item, lockupData.showMenuCommand.menu.menuRenderer.items);
         setLockupLongPress(item, lockupData);
         continue;
       }
@@ -1611,15 +1619,15 @@ function addLongPress(items) {
         continue;
       }
       if (item.tileRenderer.onLongPressCommand?.showMenuCommand) {
-        item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
-        restoreFeedbackMenuItems(item, item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items);
+        item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(tagMenuItem('queue', MenuServiceItemRenderer(t('videoMenu.addToQueue'), { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } })));
+        finishLongPressMenu(item, item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items);
         continue;
       }
       if (!configRead('enableLongPress')) continue;
       if (!item.tileRenderer?.metadata?.tileMetadataRenderer) continue;
       const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
       const data = longPressData({ videoId: item.tileRenderer.contentId, thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails, title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText, subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText, watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint, item });
-      restoreFeedbackMenuItems(item, data.showMenuCommand.menu.menuRenderer.items);
+      finishLongPressMenu(item, data.showMenuCommand.menu.menuRenderer.items);
       item.tileRenderer.onLongPressCommand = data;
     } catch (error) { appendFileOnlyLog('addLongPress.item.error', { message: error?.message || String(error) }); }
   }

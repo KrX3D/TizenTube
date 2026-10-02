@@ -153,10 +153,126 @@ function sendFeedbackToken(feedbackToken) {
     });
 }
 
+// Your own playlists, for the long press menu.
+//
+// The menu is built while a response is being processed and cannot wait for a
+// fetch, so the list is kept warm here instead: whoever asks gets what is
+// cached and triggers a refresh if it is stale. A menu built before the first
+// fetch returns simply has no playlist entries, and the next one has them.
+const PLAYLIST_CACHE_MS = 10 * 60 * 1000;
+let _playlists = [];
+let _playlistsFetchedAt = 0;
+let _playlistsInFlight = false;
+
+/** The cached playlists, refreshing in the background when stale. */
+function getUserPlaylists() {
+    if (Date.now() - _playlistsFetchedAt > PLAYLIST_CACHE_MS) refreshUserPlaylists();
+    return _playlists;
+}
+
+function refreshUserPlaylists() {
+    if (_playlistsInFlight) return Promise.resolve(_playlists);
+    _playlistsInFlight = true;
+    return new Promise((resolve) => {
+        try {
+            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            if (!KabukiInnerTubeClient) {
+                _playlistsInFlight = false;
+                return resolve(_playlists);
+            }
+            KabukiInnerTubeClient.fetch({ path: '/youtubei/v1/browse', payload: { browseId: 'FEplaylist_aggregation' } })
+                .subscribe((response) => {
+                    _playlistsInFlight = false;
+                    _playlistsFetchedAt = Date.now();
+                    const found = extractPlaylists(response);
+                    // An empty result is not cached as success: a response that
+                    // arrived before sign-in would otherwise stick for ten
+                    // minutes with no playlists in it.
+                    if (found.length) _playlists = found;
+                    else _playlistsFetchedAt = 0;
+                    resolve(_playlists);
+                }, () => {
+                    _playlistsInFlight = false;
+                    resolve(_playlists);
+                });
+        } catch (err) {
+            _playlistsInFlight = false;
+            resolve(_playlists);
+        }
+    });
+}
+
+// A playlist tile navigates to the playlist's own page, whose browseId is the
+// playlist id with a VL in front. Collected by walking the response rather than
+// by naming a path, since the library page has been reshaped more than once.
+//
+// The id and the title live on different parts of the same tile — the id under
+// its select command, the title under its metadata — so both are read from the
+// tile rather than from whichever node happens to carry the id.
+const OWN_PLAYLIST = /^(PL|FL)/;
+
+function nodePlaylistId(node) {
+    const browseIds = [
+        node.browseEndpoint?.browseId,
+        node.onSelectCommand?.browseEndpoint?.browseId,
+        node.navigationEndpoint?.browseEndpoint?.browseId,
+        node.endpoint?.browseEndpoint?.browseId,
+    ];
+    for (const browseId of browseIds) {
+        if (typeof browseId === 'string' && browseId.indexOf('VL') === 0 && OWN_PLAYLIST.test(browseId.slice(2))) {
+            return browseId.slice(2);
+        }
+    }
+    // Watch Later has its own entry already, Liked Videos is not a normal
+    // target, and a mix (RD) or a channel uploads list (UU) is not yours.
+    if (typeof node.playlistId === 'string' && OWN_PLAYLIST.test(node.playlistId)) return node.playlistId;
+    return null;
+}
+
+function extractPlaylists(node, out = [], seen = new Set(), depth = 0) {
+    if (!node || typeof node !== 'object' || depth > 12 || out.length >= 100) return out;
+    if (Array.isArray(node)) {
+        for (const child of node) extractPlaylists(child, out, seen, depth + 1);
+        return out;
+    }
+    const playlistId = nodePlaylistId(node);
+    if (playlistId && !seen.has(playlistId)) {
+        const title = playlistTitle(node);
+        if (title) {
+            seen.add(playlistId);
+            out.push({ playlistId, title });
+        }
+    }
+    for (const key of Object.keys(node)) {
+        // Never follow an action's parameters: a long press entry keeps a copy
+        // of a whole video item there, playlist ids included.
+        if (key === 'parameters') continue;
+        extractPlaylists(node[key], out, seen, depth + 1);
+    }
+    return out;
+}
+function playlistTitle(node) {
+    const candidates = [
+        node.title,
+        node.metadata?.tileMetadataRenderer?.title,
+        node.header?.tileHeaderRenderer?.title,
+    ];
+    for (const candidate of candidates) {
+        if (!candidate) continue;
+        if (typeof candidate === 'string') return candidate;
+        if (candidate.simpleText) return String(candidate.simpleText);
+        if (Array.isArray(candidate.runs)) return candidate.runs.map(r => r?.text || '').join('');
+    }
+    return '';
+}
+
 export {
     requestNextAndNavigateChannel,
     getGuide,
     findFeedbackToken,
     getFeedbackPanelTokens,
-    sendFeedbackToken
+    sendFeedbackToken,
+    getUserPlaylists,
+    refreshUserPlaylists
 }

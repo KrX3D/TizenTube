@@ -124,6 +124,25 @@
                         "host": "IP des Syslog-Servers",
                         "port": "Syslog-Port",
                         "testSentButOff": "Syslog-Paket gesendet, aber die Syslog-Ausgabe ist noch aus."
+                    },
+                    "longPressMenu": {
+                        "visible": {
+                            "title": "Einträge im Langdruck-Menü",
+                            "subtitle": "Wähle aus, welche Einträge das Langdruck-Menü zeigt"
+                        },
+                        "sort": {
+                            "title": "Langdruck-Menü sortieren",
+                            "subtitle": "Wähle die Reihenfolge der Einträge"
+                        },
+                        "moveUp": {
+                            "title": "Nach oben",
+                            "subtitle": "Diesen Eintrag eine Position nach oben"
+                        },
+                        "moveDown": {
+                            "title": "Nach unten",
+                            "subtitle": "Diesen Eintrag eine Position nach unten"
+                        },
+                        "showPlaylists": "Deine Playlists im Langdruck-Menü zeigen"
                     }
                 }
             },
@@ -403,6 +422,14 @@
         }
     },
     "videoMenu": {
+        "play": "Abspielen",
+        "watchLater": "Zu „Später ansehen“",
+        "removeFromWatchLater": "Aus „Später ansehen“ entfernen",
+        "savePlaylist": "In Playlist speichern",
+        "addToQueue": "Zur Warteschlange hinzufügen",
+        "goToChannel": "Zum Kanal",
+        "yourPlaylists": "Deine Playlists",
+        "addToNamedPlaylist": "In „{{name}}“ speichern",
         "notInterested": "Kein Interesse",
         "dontRecommendChannel": "Kanal nicht mehr empfehlen"
     },
