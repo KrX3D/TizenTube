@@ -7,6 +7,8 @@ import { showToast } from './ytUI.js';
 import modernUI from './settings.js';
 import resolveCommand, { patchResolveCommand } from '../resolveCommand.js';
 import { pipToFullscreen } from '../features/pictureInPicture.js';
+import { noteReload, recentReload, clearReloadNote } from '../features/reloadCoordinator.js';
+import { appendFileOnlyLog } from '../features/hideWatched.js';
 import getCommandExecutor from './customCommandExecution.js';
 import { t } from 'i18next';
 
@@ -236,9 +238,18 @@ ${isStandalone ? `
   }
 
   if (configRead('reloadHomeOnStartup')) {
-    if (configRead('launchToOnStartup')) {
+    // Not after the page has just been reloaded for waking up: the feed is as
+    // fresh as this would make it, and doing it anyway is the second of the
+    // three reloads reported after powering the TV on.
+    const justReloaded = recentReload();
+    if (justReloaded) {
+      appendFileOnlyLog('reload.startup_skipped', justReloaded);
+      clearReloadNote();
+    } else if (configRead('launchToOnStartup')) {
+      noteReload('startup_launch_to');
       resolveCommand(JSON.parse(configRead('launchToOnStartup')));
     } else {
+      noteReload('startup_home');
       resolveCommand({
         signalAction: {
           signal: 'SOFT_RELOAD_PAGE'
