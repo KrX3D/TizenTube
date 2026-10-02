@@ -124,6 +124,25 @@
                         "host": "Syslog Server IP",
                         "port": "Syslog Port",
                         "testSentButOff": "Syslog frame sent, but Syslog Output is still off."
+                    },
+                    "longPressMenu": {
+                        "visible": {
+                            "title": "Long Press Menu Entries",
+                            "subtitle": "Choose which entries the long press menu shows"
+                        },
+                        "sort": {
+                            "title": "Sort Long Press Menu",
+                            "subtitle": "Choose the order the entries appear in"
+                        },
+                        "moveUp": {
+                            "title": "Move Up",
+                            "subtitle": "Move this entry one place up"
+                        },
+                        "moveDown": {
+                            "title": "Move Down",
+                            "subtitle": "Move this entry one place down"
+                        },
+                        "showPlaylists": "Show Your Playlists in the Long Press Menu"
                     }
                 }
             },
@@ -400,6 +419,14 @@
         }
     },
     "videoMenu": {
+        "play": "Play",
+        "watchLater": "Save to Watch Later",
+        "removeFromWatchLater": "Remove from Watch Later",
+        "savePlaylist": "Save to Playlist",
+        "addToQueue": "Add to Queue",
+        "goToChannel": "Go To Channel",
+        "yourPlaylists": "Your Playlists",
+        "addToNamedPlaylist": "Save to {{name}}",
         "notInterested": "Not interested",
         "dontRecommendChannel": "Don't recommend channel"
     },

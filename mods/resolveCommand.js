@@ -12,6 +12,7 @@ import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
+import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
 
@@ -327,6 +328,18 @@ function customAction(action, parameters) {
             break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
+            break;
+        case 'SHOW_LONGPRESS_MENU_SETTINGS':
+            showLongPressMenuSettings(parameters);
+            break;
+        case 'SHOW_LONGPRESS_MOVE':
+            showLongPressMenuSettings('SHOW_LONGPRESS_MOVE', parameters);
+            break;
+        case 'MOVE_LONGPRESS_ENTRY':
+            showLongPressMenuSettings('MOVE_LONGPRESS_ENTRY', parameters);
+            break;
+        case 'TOGGLE_LONGPRESS_ENTRY':
+            showLongPressMenuSettings('TOGGLE_LONGPRESS_ENTRY', parameters);
             break;
         case 'SHOW_GUIDE_SETTINGS':
             showGuideSettings(parameters);

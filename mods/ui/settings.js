@@ -320,6 +320,32 @@ export default function modernUI(update, parameters) {
                     value: 'enableLongPress'
                 },
                 {
+                    name: t('settings.options.misc.options.longPressMenu.visible.title'),
+                    icon: 'MENU',
+                    value: null,
+                    action: {
+                        customAction: {
+                            action: 'SHOW_LONGPRESS_MENU_SETTINGS',
+                            parameters: 'longPressMenuHidden'
+                        }
+                    }
+                },
+                {
+                    name: t('settings.options.misc.options.longPressMenu.sort.title'),
+                    icon: 'MENU',
+                    value: null,
+                    action: {
+                        customAction: {
+                            action: 'SHOW_LONGPRESS_MENU_SETTINGS',
+                            parameters: 'longPressMenuOrder'
+                        }
+                    }
+                },
+                {
+                    name: t('settings.options.misc.options.longPressMenu.showPlaylists'),
+                    value: 'longPressShowPlaylists'
+                },
+                {
                     name: t('settings.options.misc.options.jumpToPercentage'),
                     value: 'enableJumpToPercentage'
                 },

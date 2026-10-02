@@ -187,86 +187,6 @@ function timelyAction(text, icon, command, triggerTimeMs, timeoutMs) {
 
 }
 
-function longPressData(data) {
-    const isWatchLaterItem = data.watchEndpointData.playlistId === 'WL';
-    const watchLaterAction = isWatchLaterItem ? {
-        removedVideoId: data.videoId,
-        action: 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID'
-    } : {
-        addedVideoId: data.videoId,
-        action: 'ACTION_ADD_VIDEO'
-    };
-
-    return {
-        clickTrackingParams: null,
-        showMenuCommand: {
-            contentId: data.videoId,
-            thumbnail: {
-                thumbnails: data.thumbnails
-            },
-            title: {
-                simpleText: data.title
-            },
-            subtitle: {
-                simpleText: data.subtitle
-            },
-            menu: {
-                menuRenderer: {
-                    items: [
-                        MenuNavigationItemRenderer('Play', {
-                            clickTrackingParams: null,
-                            watchEndpoint: data.watchEndpointData
-                        }),
-                        MenuServiceItemRenderer(isWatchLaterItem ? 'Remove from Watch Later' : 'Save to Watch Later', {
-                            clickTrackingParams: null,
-                            commandMetadata: {
-                                webCommandMetadata: {
-                                    sendPost: true,
-                                    apiUrl: '/youtubei/v1/browse/edit_playlist'
-                                }
-                            },
-                            playlistEditEndpoint: {
-                                playlistId: 'WL',
-                                actions: [watchLaterAction]
-                            }
-                        }),
-                        MenuNavigationItemRenderer('Save to Playlist', {
-                            clickTrackingParams: null,
-                            addToPlaylistEndpoint: {
-                                videoId: data.videoId
-                            }
-                        }),
-                        MenuServiceItemRenderer('Add to Queue', {
-                            clickTrackingParams: null,
-                            playlistEditEndpoint: {
-                                customAction: {
-                                    action: 'ADD_TO_QUEUE',
-                                    parameters: data.item
-                                }
-                            }
-                        }),
-                        MenuServiceItemRenderer('Go To Channel', {
-                            clickTrackingParams: null,
-                            playlistEditEndpoint: {
-                                customAction: {
-                                    action: 'GO_TO_CHANNEL',
-                                    parameters: data.item
-                                }
-                            }
-                        }),
-                    ],
-                    trackingParams: null,
-                    accessibility: {
-                        accessibilityData: {
-                            label: 'Video options'
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 function MenuServiceItemRenderer(text, serviceEndpoint) {
     return {
         menuServiceItemRenderer: {
@@ -501,7 +421,7 @@ export {
     timelyAction,
     scrollPaneRenderer,
     scrollPaneItemListRenderer,
-    longPressData,
+    MenuNavigationItemRenderer,
     MenuServiceItemRenderer,
     SettingsCategory,
     SettingActionRenderer,
