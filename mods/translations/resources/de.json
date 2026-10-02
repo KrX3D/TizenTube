@@ -399,7 +399,13 @@
             "qrCodeScanMessage": "Scanne den QR-Code unten, um dieses Video zu teilen."
         }
     },
+    "videoMenu": {
+        "notInterested": "Kein Interesse",
+        "dontRecommendChannel": "Kanal nicht mehr empfehlen"
+    },
     "toasts": {
+        "feedbackSent": "Feedback gesendet.",
+        "feedbackFailed": "Das Feedback konnte nicht gesendet werden.",
         "downloadingUpdate": "Update wird heruntergeladen, bitte warten...",
         "videoAddedToQueue": "Video wurde zur Warteschlange hinzugefügt",
         "videoQueueCleared": "Die Warteschlange wurde geleert.",
