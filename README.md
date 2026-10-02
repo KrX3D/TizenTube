@@ -71,8 +71,13 @@ options are described in the row rather than listed separately.
 | Hide End Screen Cards | Removes the suggested-video cards overlaid at the end of a video |
 | "Includes paid promotion" overlay | Toggle the paid-promotion banner |
 | Hide Members-Only Videos **(fork)** | Filters videos you can't watch without a channel membership out of shelves and grids |
+| Hide Paid Videos **(fork)** | Filters videos that have to be rented or bought ("Kostenpflichtig") |
+| Hide Free Films With Ads **(fork)** | Filters the free, ad-supported films YouTube mixes into rows and into the list beside the player |
 | Hide Channel Shelves **(fork)** | Removes whole channel-recommendation shelves from feeds |
 | Hide Feedback Surveys **(fork)** | Removes YouTube's in-feed "help us improve" survey cards |
+| Hide Duplicate Videos **(fork)** | Removes a video from a page when it has already appeared higher up, keeping the first occurrence. Rows left empty by this are dropped too. Never applied on the watch page or inside a playlist, where repeats are meaningful |
+| Hide the Combined Subscriptions Row **(fork)** | Subscriptions opens with one long row ("Relevanteste") holding videos that also appear in the per-channel rows below it. Because the duplicate filter keeps the first copy, that row would win every tie and the rows below it would empty out, collapsing the page into one row. This removes the combined row instead, so the per-channel rows survive. Identified by the overlap between rows, not by its title, which is localised |
+| Hide the Music Row **(fork)** | Removes the YouTube Music row on Home ("Noch mal anhören" with its "Mehr Musik" link), identified by where it points rather than by its title |
 | Hide Special Playlists **(fork)** | Hides Liked Videos and/or Watch Later from the Library and Playlists pages |
 | Enable Shorts | Off by default — Shorts shelves and Shorts tiles are stripped from every surface |
 
@@ -118,11 +123,12 @@ options are described in the row rather than listed separately.
 | Screen Dimming | Dims the screen after a configurable idle timeout, at a configurable opacity |
 | Disable Sidebar Contents | Choose which sidebar entries to hide |
 | Disable Channels on Sidebar | Removes subscribed-channel entries from the sidebar |
+| Sort Sidebar Contents | Reorder the sidebar entries, and place channels you pinned there |
 | Launch To on Startup | Choose which page the app opens to |
 | Reload Home on Startup | Forces a fresh Home feed on launch |
 | Library Tabs Buttons to Hide **(fork)** | Hides individual Library tabs (Music, Movies & Shows, Podcasts, My Videos, History, Watch Later, Playlists) |
 | Sort Subscriptions Alphabetically | Alphabetical instead of YouTube's own ordering |
-| Long Press Actions | Long-press a tile for Play, Watch Later, Save to Playlist and Add to Queue |
+| Long Press Actions | Long-press a tile for Play, Watch Later, Save to Playlist, Add to Queue and Go To Channel. "Not interested" and "Don't recommend channel" are restored there too: YouTube stopped sending them in the menu, so they are rebuilt from the panel it sends instead |
 | Who's Watching Menu | Control whether the profile picker appears, including on app exit, and whether it stays permanently enabled |
 | "Are you still watching?" prompt | Toggle YouTube's idle-playback interruption |
 | Show Guest Sign In Reminder | Toggle the prompt asking a signed-out viewer to sign in |
@@ -143,6 +149,11 @@ options are described in the row rather than listed separately.
 | --- | --- |
 | Updater | Checks for TizenTube updates, optionally on startup |
 | Debug Console **(fork)** | On-screen log console (**yellow button**), with configurable corner position and height |
+| Background Debug Logging **(fork)** | Keeps collecting logs with the on-screen console closed, so a problem can be captured without the console covering it |
+| Log Detail Level **(fork)** | Basic keeps each line short; Detailed keeps the full payloads |
+| Log Categories **(fork)** | Choose which parts log at all: navigation, ad blocking, Shorts, hide-watched, playlist loading, filters, shelves and tiles, thumbnails, player, and everything else |
+| Log Subscriptions Shelf Layout **(fork)** | One-off diagnostic that records how the Subscriptions page is laid out, for chasing a layout problem on a specific TV |
+| Syslog Output **(fork)** | Sends the same logs to a syslog server (an unRAID box, a router, anything that listens), with its own IP, port and connection test. Independent of the log server below, so one can be used without the other |
 | Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
 
 Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
