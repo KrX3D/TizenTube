@@ -300,6 +300,7 @@
                     "hideFreeWithAdsVideos": "Hide Free Films With Ads",
                     "hideAggregateShelf": "Hide the Combined Subscriptions Row",
                     "hideChannelShelves": "Hide Channel Shelves",
+                    "hideMusicShelf": "Hide the Music Row",
                     "hideSurveys": "Hide Feedback Surveys",
                     "sortSidebarContents": {
                         "title": "Sort Sidebar Contents",

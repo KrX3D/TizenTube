@@ -32,6 +32,7 @@ import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHid
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 import { filterBadgedVideos } from './badgedVideoHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
+import { filterMusicShelves } from './musicShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
 import { dedupeShelves } from './duplicateVideoHider.js';
@@ -1280,6 +1281,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   const activePage = pageHint || window.__ttLastDetectedPage || detectCurrentPage();
   filterHiddenSpecialPlaylistShelves(shelves);
   filterChannelShelves(shelves, activePage);
+  filterMusicShelves(shelves, activePage);
   filterSurveyShelves(shelves, activePage);
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {
