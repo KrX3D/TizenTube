@@ -22,7 +22,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'watchLater', 'playlists', 'savePlaylist', 'queue', 'channel'];
+export const DEFAULT_ORDER = ['play', 'watchLater', 'playlists', 'savePlaylist', 'queue', 'share', 'channel'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -33,6 +33,7 @@ export const ENTRY_LABELS = {
     savePlaylist: 'videoMenu.savePlaylist',
     queue: 'videoMenu.addToQueue',
     channel: 'videoMenu.goToChannel',
+    share: 'videoMenu.share',
     notInterested: 'videoMenu.notInterested',
     dontRecommendChannel: 'videoMenu.dontRecommendChannel',
 };
@@ -161,6 +162,12 @@ function baseEntries(data) {
         tagMenuItem('queue', MenuServiceItemRenderer(t('videoMenu.addToQueue'), {
             clickTrackingParams: null,
             playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: data.item } }
+        })),
+        // The player can already do this; from a tile it is the only way to get
+        // a link off a TV, which has no clipboard and no address bar.
+        tagMenuItem('share', MenuServiceItemRenderer(t('videoMenu.share'), {
+            clickTrackingParams: null,
+            playlistEditEndpoint: { customAction: { action: 'SHARE_VIDEO', parameters: { videoId: data.videoId } } }
         })),
         tagMenuItem('channel', MenuServiceItemRenderer(t('videoMenu.goToChannel'), {
             clickTrackingParams: null,

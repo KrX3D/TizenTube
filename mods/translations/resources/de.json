@@ -428,7 +428,8 @@
         "yourPlaylists": "Deine Playlists",
         "addToNamedPlaylist": "In „{{name}}“ speichern",
         "notInterested": "Kein Interesse",
-        "dontRecommendChannel": "Kanal nicht mehr empfehlen"
+        "dontRecommendChannel": "Kanal nicht mehr empfehlen",
+        "share": "Teilen (QR-Code)"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
