@@ -122,6 +122,14 @@ jobs:
         if: steps.check.outputs.count != '0' && steps.merge.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          # gh resolves the base repository of a fork to its PARENT, so these
+          # commands ran against reisxd/TizenTube — where this token has no
+          # access. That is the whole failure:
+          #   pull request create failed: GraphQL: Resource not accessible by
+          #   integration (createPullRequest)
+          # It also meant `gh pr list` never found the existing sync PR, so every
+          # run tried to create a new one. GH_REPO pins all three to this fork.
+          GH_REPO: ${{ github.repository }}
           CONFLICTS: ${{ steps.merge.outputs.conflicts }}
           NEW_COMMITS: ${{ steps.check.outputs.count }}
         run: |
