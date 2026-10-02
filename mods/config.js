@@ -111,6 +111,8 @@ const defaultConfig = {
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
   hideMembersOnlyVideos: false,
+  hidePaidVideos: false,
+  hideFreeWithAdsVideos: false,
   hideDuplicateVideos: false,
   hideAggregateShelf: false,
   hideChannelShelves: false,

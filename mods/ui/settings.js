@@ -985,6 +985,16 @@ export default function modernUI(update, parameters) {
                     value: 'hideMembersOnlyVideos'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hidePaidVideos'),
+                    icon: null,
+                    value: 'hidePaidVideos'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideFreeWithAdsVideos'),
+                    icon: null,
+                    value: 'hideFreeWithAdsVideos'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
                     icon: 'PRIVACY_UNLISTED',
                     value: 'hideDuplicateVideos'
