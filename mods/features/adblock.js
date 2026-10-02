@@ -1469,6 +1469,81 @@ function hqify(items) {
 
 // ===== addLongPress =====
 
+// ===== Not interested / Don't recommend channel (upstream 137ab52d) =====
+//
+// YouTube stopped embedding the feedback tokens in the long press menu. They
+// now arrive as an engagement panel reference (panelId + params) that has to be
+// fetched through /youtubei/v1/get_panel before the tokens can be used, which
+// is why both entries simply vanished from the menu. Upstream's port of the
+// SmartTube fix puts them back: the entries are added here, and the fetching
+// and sending happen on click, in resolveCommand.js.
+
+function getFeedbackPanel(item) {
+  const onLongPress = item?.tileRenderer
+    ? item.tileRenderer.onLongPressCommand
+    : item?.lockupViewModel?.rendererContext?.commandContext?.onLongPress;
+  const endpoint = onLongPress?.showEngagementPanelEndpoint
+    || onLongPress?.innertubeCommand?.showEngagementPanelEndpoint;
+  if (endpoint?.identifier?.tag && endpoint?.globalConfiguration?.params) {
+    return { panelId: endpoint.identifier.tag, params: endpoint.globalConfiguration.params };
+  }
+  return null;
+}
+
+// Whether the menu already offers feedback, from either source.
+//
+// Two differences from upstream here, both of which only show up in this fork.
+// Upstream looks for a feedback TOKEN, but the entries restored below carry no
+// token — the panel is fetched on click — so a second pass over the same item
+// added them a second time. And it searches the whole endpoint, while this
+// fork's own entries (Add to Queue, Go To Channel) embed a copy of the entire
+// video item in their parameters; that copy can contain a token of its own, and
+// finding it suppressed the real entries entirely.
+function menuHasFeedbackItems(menuItems) {
+  if (!Array.isArray(menuItems)) return false;
+  return menuItems.some((menuItem) => {
+    const endpoint = menuItem?.menuServiceItemRenderer?.serviceEndpoint
+      || menuItem?.menuNavigationItemRenderer?.navigationEndpoint;
+    if (!endpoint) return false;
+    const action = endpoint.customAction?.action || endpoint.playlistEditEndpoint?.customAction?.action;
+    if (action === 'NOT_INTERESTED' || action === 'DONT_RECOMMEND_CHANNEL') return true;
+    return hasOwnFeedbackToken(endpoint, 0);
+  });
+}
+
+// A token on the endpoint itself, never one inside an action's parameters.
+function hasOwnFeedbackToken(value, depth) {
+  if (!value || typeof value !== 'object' || depth > 8) return false;
+  if (typeof value.feedbackToken === 'string') return true;
+  for (const key of Object.keys(value)) {
+    if (key === 'parameters') continue;
+    if (hasOwnFeedbackToken(value[key], depth + 1)) return true;
+  }
+  return false;
+}
+function feedbackMenuItems(panel) {
+  return [
+    MenuServiceItemRenderer(t('videoMenu.notInterested'), {
+      clickTrackingParams: null,
+      customAction: { action: 'NOT_INTERESTED', parameters: panel }
+    }),
+    MenuServiceItemRenderer(t('videoMenu.dontRecommendChannel'), {
+      clickTrackingParams: null,
+      customAction: { action: 'DONT_RECOMMEND_CHANNEL', parameters: panel }
+    })
+  ];
+}
+
+function restoreFeedbackMenuItems(item, menuItems) {
+  try {
+    const panel = getFeedbackPanel(item);
+    if (!panel || !Array.isArray(menuItems) || menuHasFeedbackItems(menuItems)) return;
+    for (const feedbackItem of feedbackMenuItems(panel)) menuItems.push(feedbackItem);
+  } catch (err) {
+    appendFileOnlyLog('addLongPress.feedback.error', { message: err?.message || String(err) });
+  }
+}
+
 function addLongPress(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
@@ -1479,6 +1554,7 @@ function addLongPress(items) {
         const existingMenu = lockupLongPressMenuItems(item);
         if (existingMenu) {
           existingMenu.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
+          restoreFeedbackMenuItems(item, existingMenu);
           continue;
         }
         if (!configRead('enableLongPress')) continue;
@@ -1487,14 +1563,16 @@ function addLongPress(items) {
         const title = lockupTitle(item);
         if (!watchEndpointData || !thumbnails || !title) continue;
         // Lockup metadata rows are plain strings, not runs/simpleText nodes.
-        setLockupLongPress(item, longPressData({
+        const lockupData = longPressData({
           videoId: lockupVideoId(item),
           thumbnails,
           title,
           subtitle: lockupSubtitle(item) || '',
           watchEndpointData,
           item,
-        }));
+        });
+        restoreFeedbackMenuItems(item, lockupData.showMenuCommand.menu.menuRenderer.items);
+        setLockupLongPress(item, lockupData);
         continue;
       }
       if (!item?.tileRenderer) {
@@ -1532,12 +1610,14 @@ function addLongPress(items) {
       }
       if (item.tileRenderer.onLongPressCommand?.showMenuCommand) {
         item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items?.push(MenuServiceItemRenderer('Add to Queue', { clickTrackingParams: null, playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: item } } }));
+        restoreFeedbackMenuItems(item, item.tileRenderer.onLongPressCommand.showMenuCommand?.menu?.menuRenderer?.items);
         continue;
       }
       if (!configRead('enableLongPress')) continue;
       if (!item.tileRenderer?.metadata?.tileMetadataRenderer) continue;
       const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
       const data = longPressData({ videoId: item.tileRenderer.contentId, thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails, title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText, subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText, watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint, item });
+      restoreFeedbackMenuItems(item, data.showMenuCommand.menu.menuRenderer.items);
       item.tileRenderer.onLongPressCommand = data;
     } catch (error) { appendFileOnlyLog('addLongPress.item.error', { message: error?.message || String(error) }); }
   }

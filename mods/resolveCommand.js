@@ -10,7 +10,7 @@ import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo } from './features/qrShare.js';
-import { requestNextAndNavigateChannel } from './utils/innerTubeCalls.js';
+import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
@@ -308,6 +308,23 @@ function customAction(action, parameters) {
         case 'SHARE':
             shareCurrentVideo();
             break;
+        case 'NOT_INTERESTED':
+            markFeedback(parameters, 0, false);
+            break;
+        case 'DONT_RECOMMEND_CHANNEL':
+            markFeedback(parameters, 1, true);
+            break;
+        case 'FEEDBACK_REASON':
+            sendFeedbackToken(parameters.token)
+                .then(() => {
+                    resolveCommand({ signalAction: { signal: 'POPUP_BACK' } });
+                    showToast('TizenTube', t('toasts.feedbackSent'));
+                })
+                .catch((err) => {
+                    console.warn('TizenTube: failed to send feedback:', err);
+                    showToast('TizenTube', t('toasts.feedbackFailed'));
+                });
+            break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
             break;
@@ -364,4 +381,59 @@ function customAction(action, parameters) {
             break;
         }
     }
+}
+
+// "Not interested" and "Don't recommend channel" (upstream 137ab52d, itself a
+// port of the SmartTube fix). The tokens are no longer in the long press menu;
+// the entry carries an engagement panel reference, the panel is fetched here,
+// and its token is what gets sent. Token order: [0] not interested,
+// [1] don't recommend channel.
+//
+// "Don't recommend channel" may come back with a follow-up asking why; those
+// reasons are shown as a modal and the chosen one is sent as FEEDBACK_REASON.
+async function markFeedback(parameters, tokenIndex, showReasons) {
+    try {
+        const tokens = await getFeedbackPanelTokens(parameters.panelId, parameters.params);
+        const token = tokens[tokenIndex];
+        if (!token) {
+            showToast('TizenTube', t('toasts.feedbackFailed'));
+            return;
+        }
+
+        const response = await sendFeedbackToken(token);
+        if (!showReasons) {
+            showToast('TizenTube', t('toasts.feedbackSent'));
+            return;
+        }
+
+        const dismissal = response?.feedbackResponses?.[0]?.followUpDialog?.dismissalFollowUpRenderer;
+        const reasons = dismissal?.reasons;
+        if (!Array.isArray(reasons) || !reasons.length) {
+            showToast('TizenTube', t('toasts.feedbackSent'));
+            return;
+        }
+
+        const buttons = reasons.map((reason) => buttonItem(
+            { title: extractFeedbackText(reason.title) },
+            null,
+            [
+                { signalAction: { signal: 'POPUP_BACK' } },
+                { customAction: { action: 'FEEDBACK_REASON', parameters: { token: reason.token } } }
+            ]
+        ));
+        showModal(extractFeedbackText(dismissal.dismissalReasonsPrompt), overlayPanelItemListRenderer(buttons), 'tt-feedback-reasons');
+    } catch (err) {
+        console.warn('TizenTube: failed to mark feedback:', err);
+        showToast('TizenTube', t('toasts.feedbackFailed'));
+    }
+}
+
+// Panel text arrives as simpleText, runs or a plain content string depending on
+// which renderer YouTube used.
+function extractFeedbackText(text) {
+    if (!text) return '';
+    if (text.simpleText) return text.simpleText;
+    if (text.content) return text.content;
+    if (Array.isArray(text.runs)) return text.runs.map((run) => run?.text ?? '').join('');
+    return String(text);
 }

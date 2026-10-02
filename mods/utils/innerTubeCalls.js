@@ -98,7 +98,65 @@ function getGuide() {
     });
 }
 
+// Find a feedbackToken anywhere inside an innertube command.
+//
+// The "Not interested" and "Don't recommend channel" panel items carry it
+// either directly (onTap.innertubeCommand.feedbackEndpoint) or wrapped in an
+// openPopupAction, so the shape cannot be relied on.
+function findFeedbackToken(obj, depth = 0) {
+    // Bounded: these objects can embed a whole copy of the video item, and an
+    // unbounded walk on a TV is not free.
+    if (!obj || typeof obj !== 'object' || depth > 12) return null;
+    if (typeof obj.feedbackToken === 'string') return obj.feedbackToken;
+    for (const value of Object.values(obj)) {
+        const token = findFeedbackToken(value, depth + 1);
+        if (token) return token;
+    }
+    return null;
+}
+
+// The feedback tokens are no longer in the long press menu. YouTube now sends
+// an engagement panel reference (panelId + params) that has to be fetched
+// first; the panel's items carry the tokens, in order:
+//   [0] "Not interested"   [1] "Don't recommend channel"
+function getFeedbackPanelTokens(panelId, params) {
+    return new Promise((resolve, reject) => {
+        try {
+            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            if (!KabukiInnerTubeClient) return reject(new Error('KabukiInnerTubeClient unavailable'));
+            KabukiInnerTubeClient.fetch({ path: '/youtubei/v1/get_panel', payload: { panelId, params } })
+                .subscribe((response) => {
+                    const listItems = response?.content?.engagementPanelSectionListRenderer?.content?.listViewModel?.listItems;
+                    if (!Array.isArray(listItems)) return resolve([]);
+                    resolve(listItems.map((item) => findFeedbackToken(item?.listItemViewModel)).filter(Boolean));
+                }, reject);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+// Send one feedback token. The response may carry a follow-up dialog asking
+// why, whose reasons are shown by markFeedback() in resolveCommand.js.
+function sendFeedbackToken(feedbackToken) {
+    return new Promise((resolve, reject) => {
+        try {
+            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            if (!KabukiInnerTubeClient) return reject(new Error('KabukiInnerTubeClient unavailable'));
+            KabukiInnerTubeClient.fetch({ path: '/youtubei/v1/feedback', payload: { feedbackTokens: [feedbackToken] } })
+                .subscribe(resolve, reject);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 export {
     requestNextAndNavigateChannel,
-    getGuide
+    getGuide,
+    findFeedbackToken,
+    getFeedbackPanelTokens,
+    sendFeedbackToken
 }

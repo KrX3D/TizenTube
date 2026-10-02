@@ -399,7 +399,13 @@
             "qrCodeScanMessage": "Scan the QR code below to share this video."
         }
     },
+    "videoMenu": {
+        "notInterested": "Not interested",
+        "dontRecommendChannel": "Don't recommend channel"
+    },
     "toasts": {
+        "feedbackSent": "Feedback sent.",
+        "feedbackFailed": "Could not send the feedback.",
         "downloadingUpdate": "Downloading update, please wait...",
         "videoAddedToQueue": "Video added to queue.",
         "videoQueueCleared": "Video queue cleared.",
