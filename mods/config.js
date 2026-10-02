@@ -114,6 +114,7 @@ const defaultConfig = {
   hideDuplicateVideos: false,
   hideAggregateShelf: false,
   hideChannelShelves: false,
+  hideMusicShelf: false,
   hideSurveys: false,
   enableJumpToPercentage: false,
   hideRelatedVideosPlayer: false,

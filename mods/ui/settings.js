@@ -1000,6 +1000,11 @@ export default function modernUI(update, parameters) {
                     value: 'hideChannelShelves'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hideMusicShelf'),
+                    icon: null,
+                    value: 'hideMusicShelf'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideSurveys'),
                     icon: null,
                     value: 'hideSurveys'
