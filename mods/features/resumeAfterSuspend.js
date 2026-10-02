@@ -1,6 +1,7 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { waitForNetwork } from './networkReady.js';
+import { noteReload } from './reloadCoordinator.js';
 import { showToast } from '../ui/ytUI.js';
 import { t } from 'i18next';
 
@@ -107,6 +108,9 @@ async function onVisible(gen) {
     href: String(location.hash || ''),
   }, net));
   window.__ttResumeReloaded = true;
+  // So the startup reload that runs once the page comes back does not reload it
+  // a second time for the same wake.
+  noteReload('resume');
   if (!toldWaiting) {
     location.reload();
     return;
