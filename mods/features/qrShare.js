@@ -15,6 +15,8 @@ const QR_ERROR_CORRECTION = 'H';
 const QR_CELL_SIZE = 8;
 const QR_MARGIN = 8;
 
+// Shares whatever is playing. The long press menu shares a tile instead, which
+// is the same thing minus the player lookup — see shareVideo below.
 export function shareCurrentVideo() {
     try {
         const videoPlayer = document.querySelector('.html5-video-player');
@@ -26,6 +28,24 @@ export function shareCurrentVideo() {
             return;
         }
 
+        shareVideo(videoId);
+    } catch (err) {
+        console.warn('[qrShare] failed to build share QR code:', err);
+        showToast('TizenTube', t('toasts.shareFailed'));
+    }
+}
+
+/**
+ * Show the QR code for one video id, wherever it came from.
+ *
+ * @param {string} videoId
+ */
+export function shareVideo(videoId) {
+    try {
+        if (!videoId) {
+            showToast('TizenTube', t('toasts.shareNoVideo'));
+            return;
+        }
         const shareUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
         const qr = qrcode.qrcode(QR_VERSION, QR_ERROR_CORRECTION);

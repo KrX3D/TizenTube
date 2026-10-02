@@ -431,7 +431,8 @@
         "yourPlaylists": "Your Playlists",
         "addToNamedPlaylist": "Save to {{name}}",
         "notInterested": "Not interested",
-        "dontRecommendChannel": "Don't recommend channel"
+        "dontRecommendChannel": "Don't recommend channel",
+        "share": "Share (QR Code)"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",

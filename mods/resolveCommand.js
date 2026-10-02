@@ -9,7 +9,7 @@ import { sendTestPing } from './features/logServer.js';
 import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
-import { shareCurrentVideo } from './features/qrShare.js';
+import { shareCurrentVideo, shareVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
@@ -325,6 +325,9 @@ function customAction(action, parameters) {
                     console.warn('TizenTube: failed to send feedback:', err);
                     showToast('TizenTube', t('toasts.feedbackFailed'));
                 });
+            break;
+        case 'SHARE_VIDEO':
+            shareVideo(parameters?.videoId);
             break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
