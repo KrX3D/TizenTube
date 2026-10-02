@@ -335,7 +335,13 @@
                         "addToSidebar": "Add Channel to Sidebar",
                         "removeFromSidebar": "Remove Channel from Sidebar"
                     },
-                    "hideDuplicateVideos": "Hide Duplicate Videos"
+                    "hideDuplicateVideos": "Hide Duplicate Videos",
+                    "hiddenChannels": {
+                        "title": "Hidden Channels",
+                        "subtitle": "Channels hidden from the long press menu",
+                        "unhide": "Select to show this channel again",
+                        "empty": "No channels are hidden"
+                    }
                 }
             },
             "updater": {
@@ -434,7 +440,8 @@
         "dontRecommendChannel": "Don't recommend channel",
         "share": "Share (QR Code)",
         "playNext": "Play Next",
-        "removeFromPlaylist": "Remove From This Playlist"
+        "removeFromPlaylist": "Remove From This Playlist",
+        "hideChannel": "Hide This Channel"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",
@@ -454,6 +461,9 @@
         "networkBackReloading": "The network is back, reloading the page…",
         "networkStillOffline": "Still no network. The page will reload as soon as it is back.",
         "networkContinuingAnyway": "Still no network, starting anyway…",
-        "videoPlaysNext": "Video plays next."
+        "videoPlaysNext": "Video plays next.",
+        "channelHidden": "“{{name}}” is now hidden.",
+        "channelShownAgain": "“{{name}}” is shown again.",
+        "channelHideFailed": "This tile does not say which channel it belongs to."
     }
 }

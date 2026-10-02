@@ -32,6 +32,7 @@ import {
 import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHider.js';
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 import { filterBadgedVideos } from './badgedVideoHider.js';
+import { filterHiddenChannels } from './channelHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterMusicShelves } from './musicShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
@@ -554,6 +555,7 @@ function filterContinuationItems(items, pageName, hasContinuation = false, label
   let filteredItems = hideVideo(items, pageName);
   filteredItems = filterShortsFromItems(filteredItems, pageName);
   filteredItems = filterBadgedVideos(filteredItems, pageName);
+  filteredItems = filterHiddenChannels(filteredItems, pageName);
   // Every all-watched batch keeps its OWN helper. Do not try to reuse a single
   // helper across batches and return [] for the rest — that was tried and it
   // stops the playlist loading dead:
@@ -685,6 +687,7 @@ function processResponsePayload(payload, detectedPage) {
     // array-root path, so only hideVideo ran and everything else was skipped.
     grid.items = filterShortsFromItems(grid.items, detectedPage);
     grid.items = filterBadgedVideos(grid.items, detectedPage);
+    grid.items = filterHiddenChannels(grid.items, detectedPage);
     if (detectedPage === 'playlists') grid.items = filterHiddenSpecialPlaylistTiles(grid.items);
     addLongPress(grid.items);
     normalizeGridRenderer(grid, 'arrayPayload.contents.tvBrowseRenderer.grid');
@@ -1022,6 +1025,7 @@ JSON.parse = function () {
       let gridItems = hideVideo(grid.items, detectedPage);
       gridItems = filterShortsFromItems(gridItems, detectedPage);
       gridItems = filterBadgedVideos(gridItems, detectedPage);
+      gridItems = filterHiddenChannels(gridItems, detectedPage);
       if (detectedPage === 'playlists') gridItems = filterHiddenSpecialPlaylistTiles(gridItems);
       addLongPress(gridItems);
       grid.items = gridItems;
@@ -1165,6 +1169,7 @@ JSON.parse = function () {
               let filteredTabGrid = hideVideo(tabGridItems, tabPage);
               filteredTabGrid = filterShortsFromItems(filteredTabGrid, tabPage);
               filteredTabGrid = filterBadgedVideos(filteredTabGrid, tabPage);
+              filteredTabGrid = filterHiddenChannels(filteredTabGrid, tabPage);
               if (tabPage === 'playlists') filteredTabGrid = filterHiddenSpecialPlaylistTiles(filteredTabGrid);
               addLongPress(filteredTabGrid);
               tab.tabRenderer.content.tvSurfaceContentRenderer.content.gridRenderer.items = filteredTabGrid;
@@ -1335,6 +1340,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
       if (!Array.isArray(shelfItems)) continue;
       shelfItems = filterHiddenSpecialPlaylistTiles(shelfItems);
       shelfItems = filterBadgedVideos(shelfItems, activePage);
+      shelfItems = filterHiddenChannels(shelfItems, activePage);
       shelve.shelfRenderer.content.horizontalListRenderer.items = shelfItems;
       deArrowify(shelfItems);
       hqify(shelfItems);

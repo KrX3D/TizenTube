@@ -13,6 +13,7 @@ import { shareCurrentVideo, shareVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
+import showHiddenChannels from './ui/hiddenChannelsSettings.js';
 import { lockupVideoId } from './features/lockupViewModel.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
@@ -332,6 +333,27 @@ function customAction(action, parameters) {
             break;
         case 'SHARE_VIDEO':
             shareVideo(parameters?.videoId);
+            break;
+        case 'HIDE_CHANNEL': {
+            const name = String(parameters?.name || '').trim();
+            if (!name) {
+                // Nothing on the tile said which channel it is, so there is
+                // nothing to hide by. Better a toast than silence.
+                showToast('TizenTube', t('toasts.channelHideFailed'));
+                break;
+            }
+            const channels = configRead('hiddenChannels') || [];
+            if (!channels.some(c => String(c).trim().toLowerCase() === name.toLowerCase())) {
+                configWrite('hiddenChannels', channels.concat([name]));
+            }
+            showToast('TizenTube', t('toasts.channelHidden', { name }));
+            break;
+        }
+        case 'SHOW_HIDDEN_CHANNELS':
+            showHiddenChannels('hiddenChannels');
+            break;
+        case 'UNHIDE_CHANNEL':
+            showHiddenChannels('UNHIDE_CHANNEL', parameters);
             break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
