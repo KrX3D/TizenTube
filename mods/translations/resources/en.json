@@ -433,7 +433,8 @@
         "notInterested": "Not interested",
         "dontRecommendChannel": "Don't recommend channel",
         "share": "Share (QR Code)",
-        "playNext": "Play Next"
+        "playNext": "Play Next",
+        "removeFromPlaylist": "Remove From This Playlist"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",

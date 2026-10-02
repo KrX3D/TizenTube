@@ -22,7 +22,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'queue', 'share', 'channel'];
+export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -31,6 +31,7 @@ export const ENTRY_LABELS = {
     watchLater: 'videoMenu.watchLater',
     playlists: 'videoMenu.yourPlaylists',
     savePlaylist: 'videoMenu.savePlaylist',
+    removeFromPlaylist: 'videoMenu.removeFromPlaylist',
     playNext: 'videoMenu.playNext',
     queue: 'videoMenu.addToQueue',
     channel: 'videoMenu.goToChannel',
@@ -147,6 +148,26 @@ function playlistEntries(data) {
     return entries;
 }
 
+// Removing a video from the playlist you are looking at. Shown only there, and
+// never on Watch Later, whose own entry already removes.
+//
+// The playlist is the one the tile belongs to, which it carries on the endpoint
+// that opens it — the same field the Watch Later entry reads. Only a playlist
+// of yours can be edited; YouTube refuses the rest, which is why the entry says
+// "your playlist".
+function removeFromPlaylistEntry(data) {
+    const playlistId = data.watchEndpointData?.playlistId;
+    if (!playlistId || playlistId === 'WL') return [];
+    return [tagMenuItem('removeFromPlaylist', MenuServiceItemRenderer(t('videoMenu.removeFromPlaylist'), {
+        clickTrackingParams: null,
+        commandMetadata: { webCommandMetadata: { sendPost: true, apiUrl: '/youtubei/v1/browse/edit_playlist' } },
+        playlistEditEndpoint: {
+            playlistId,
+            actions: [{ removedVideoId: data.videoId, action: 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID' }]
+        }
+    }))];
+}
+
 /** Every entry this fork adds, before the user's order and hiding are applied. */
 function baseEntries(data) {
     return [
@@ -164,6 +185,7 @@ function baseEntries(data) {
             clickTrackingParams: null,
             playlistEditEndpoint: { customAction: { action: 'PLAY_NEXT', parameters: data.item } }
         })),
+        ...removeFromPlaylistEntry(data),
         tagMenuItem('queue', MenuServiceItemRenderer(t('videoMenu.addToQueue'), {
             clickTrackingParams: null,
             playlistEditEndpoint: { customAction: { action: 'ADD_TO_QUEUE', parameters: data.item } }

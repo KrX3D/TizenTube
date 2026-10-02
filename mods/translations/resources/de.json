@@ -433,7 +433,8 @@
         "notInterested": "Kein Interesse",
         "dontRecommendChannel": "Kanal nicht mehr empfehlen",
         "share": "Teilen (QR-Code)",
-        "playNext": "Als Nächstes abspielen"
+        "playNext": "Als Nächstes abspielen",
+        "removeFromPlaylist": "Aus dieser Playlist entfernen"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
