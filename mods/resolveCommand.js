@@ -13,6 +13,7 @@ import { shareCurrentVideo, shareVideo } from './features/qrShare.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
+import { lockupVideoId } from './features/lockupViewModel.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
 
@@ -296,6 +297,9 @@ function customAction(action, parameters) {
             window.queuedVideos.videos.push(parameters);
             showToast('TizenTube', t('toasts.videoAddedToQueue'));
             break;
+        case 'PLAY_NEXT':
+            playNext(parameters);
+            break;
         case 'CLEAR_QUEUE':
             window.queuedVideos.videos = [];
             showToast('TizenTube', t('toasts.videoQueueCleared'));
@@ -452,4 +456,33 @@ function extractFeedbackText(text) {
     if (text.content) return text.content;
     if (Array.isArray(text.runs)) return text.runs.map((run) => run?.text ?? '').join('');
     return String(text);
+}
+
+// Put one video next in the queue.
+//
+// Not the front of the list: the queue plays the entry AFTER the one currently
+// playing (see videoQueuing.js), so inserting at the front would only play next
+// when nothing from the queue is playing — which is also exactly when the front
+// IS next, so both cases are covered by anchoring on the current video.
+function playNext(item) {
+    try {
+        const queue = window.queuedVideos?.videos;
+        if (!Array.isArray(queue)) return;
+        const idOf = (v) => v?.tileRenderer?.contentId || lockupVideoId(v) || null;
+        const id = idOf(item);
+
+        // Queue it once. A second copy would also confuse the queue, which
+        // finds the playing video by the FIRST match.
+        const existing = id ? queue.findIndex((v) => idOf(v) === id) : -1;
+        if (existing !== -1) queue.splice(existing, 1);
+
+        const playing = (() => {
+            try { return document.querySelector('.html5-video-player')?.getVideoData?.()?.video_id || null; } catch (_) { return null; }
+        })() || window.queuedVideos.lastVideoId || null;
+        const anchor = playing ? queue.findIndex((v) => idOf(v) === playing) : -1;
+        queue.splice(anchor === -1 ? 0 : anchor + 1, 0, item);
+        showToast('TizenTube', t('toasts.videoPlaysNext'));
+    } catch (err) {
+        console.warn('TizenTube: could not queue the video next:', err);
+    }
 }

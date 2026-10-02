@@ -432,7 +432,8 @@
         "addToNamedPlaylist": "In „{{name}}“ speichern",
         "notInterested": "Kein Interesse",
         "dontRecommendChannel": "Kanal nicht mehr empfehlen",
-        "share": "Teilen (QR-Code)"
+        "share": "Teilen (QR-Code)",
+        "playNext": "Als Nächstes abspielen"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
@@ -451,6 +452,7 @@
         "networkBack": "Das Netzwerk ist wieder da.",
         "networkBackReloading": "Das Netzwerk ist wieder da, die Seite wird neu geladen…",
         "networkStillOffline": "Immer noch kein Netzwerk. Die Seite wird neu geladen, sobald es wieder da ist.",
-        "networkContinuingAnyway": "Immer noch kein Netzwerk, starte trotzdem…"
+        "networkContinuingAnyway": "Immer noch kein Netzwerk, starte trotzdem…",
+        "videoPlaysNext": "Video wird als Nächstes abgespielt."
     }
 }
