@@ -3,6 +3,7 @@ import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
+import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { t } from 'i18next';
 import './logServer.js';
@@ -936,6 +937,7 @@ JSON.parse = function () {
       } else if (r?.playerOverlays?.playerOverlayRenderer) {
         r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
       }
+      filterPlayerButtonsInResponse(r);
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
           if (window?.sponsorblock?.segments) {
@@ -1232,6 +1234,7 @@ JSON.parse = function () {
       r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
     }
 
+    filterPlayerButtonsInResponse(r);
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {
         if (window?.sponsorblock?.segments) {
