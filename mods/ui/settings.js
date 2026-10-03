@@ -653,43 +653,43 @@ export default function modernUI(update, parameters) {
                             name: t('settings.options.videoPlayer.options.patching.options.swapMPWithPIP'),
                             icon: 'CLEAR_COOKIES',
                             value: 'enableSwapMPWithPIP'
-                        }
-                    ]
-                },
-                {
-                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.title'),
-                    icon: 'VISIBILITY_OFF',
-                    value: null,
-                    menuId: 'tt-player-buttons-hide',
-                    menuHeader: {
-                        title: t('settings.options.videoPlayer.options.hidePlayerButtons.title'),
-                        subtitle: t('settings.options.videoPlayer.options.hidePlayerButtons.subtitle')
-                    },
-                    options: [
-                        {
-                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.join'),
-                            icon: 'MONEY_HAND',
-                            value: 'hidePlayerJoinButton'
                         },
                         {
-                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.subscribe'),
-                            icon: 'SUBSCRIPTIONS',
-                            value: 'hidePlayerSubscribeButton'
-                        },
-                        {
-                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.like'),
-                            icon: 'STAR',
-                            value: 'hidePlayerLikeButton'
-                        },
-                        {
-                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.dislike'),
-                            icon: 'EYE_OFF',
-                            value: 'hidePlayerDislikeButton'
-                        },
-                        {
-                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.save'),
-                            icon: 'BOOKMARK_BORDER',
-                            value: 'hidePlayerSaveButton'
+                            name: t('settings.options.videoPlayer.options.hidePlayerButtons.title'),
+                            icon: 'VISIBILITY_OFF',
+                            value: null,
+                            menuId: 'tt-player-buttons-hide',
+                            menuHeader: {
+                                title: t('settings.options.videoPlayer.options.hidePlayerButtons.title'),
+                                subtitle: t('settings.options.videoPlayer.options.hidePlayerButtons.subtitle')
+                            },
+                            options: [
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.join'),
+                                    icon: 'MONEY_HAND',
+                                    value: 'hidePlayerJoinButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.subscribe'),
+                                    icon: 'SUBSCRIPTIONS',
+                                    value: 'hidePlayerSubscribeButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.like'),
+                                    icon: 'STAR',
+                                    value: 'hidePlayerLikeButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.dislike'),
+                                    icon: 'EYE_OFF',
+                                    value: 'hidePlayerDislikeButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.save'),
+                                    icon: 'BOOKMARK_BORDER',
+                                    value: 'hidePlayerSaveButton'
+                                }
+                            ]
                         }
                     ]
                 },
