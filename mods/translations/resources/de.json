@@ -365,7 +365,8 @@
                         "subtitle": "Kanäle, die über das Langdruck-Menü ausgeblendet wurden",
                         "unhide": "Auswählen, um den Kanal wieder einzublenden",
                         "empty": "Es sind keine Kanäle ausgeblendet"
-                    }
+                    },
+                    "keywordHider": "Videos nach Titel-Stichwort ausblenden"
                 }
             },
             "updater": {

@@ -1073,6 +1073,11 @@ export default function modernUI(update, parameters) {
                     value: 'enableShrinkingThumbnails'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.keywordHider'),
+                    icon: null,
+                    value: 'enableKeywordHider'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideMembersOnlyVideos'),
                     icon: null,
                     value: 'hideMembersOnlyVideos'
