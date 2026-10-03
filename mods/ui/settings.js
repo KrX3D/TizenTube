@@ -698,6 +698,16 @@ export default function modernUI(update, parameters) {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.save'),
                                     icon: 'BOOKMARK_BORDER',
                                     value: 'hidePlayerSaveButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.comments'),
+                                    icon: 'ARTICLE',
+                                    value: 'hidePlayerCommentsButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.about'),
+                                    icon: 'HELP',
+                                    value: 'hidePlayerAboutButton'
                                 }
                             ]
                         }

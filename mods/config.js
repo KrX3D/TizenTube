@@ -55,6 +55,8 @@ const defaultConfig = {
   hidePlayerLikeButton: false,
   hidePlayerDislikeButton: false,
   hidePlayerSaveButton: false,
+  hidePlayerCommentsButton: false,
+  hidePlayerAboutButton: false,
   enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,

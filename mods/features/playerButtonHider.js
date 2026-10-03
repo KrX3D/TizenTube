@@ -64,6 +64,15 @@ const BUTTONS = [
         key: 'hidePlayerSaveButton', name: 'save',
         match: [/^ADD_TO_PLAYLIST/i, /^SAVE/i, /^addToPlaylistEndpoint$/i],
     },
+    {
+        key: 'hidePlayerCommentsButton', name: 'comments',
+        match: [/^COMMENTS?$/i, /^COMMENTS?_/i, /^commentsEndpoint$/i, /^showEngagementPanelEndpoint:comments/i],
+    },
+    {
+        key: 'hidePlayerAboutButton', name: 'about',
+        // ABOUT_BUTTON is the name the app uses; nothing else begins with it.
+        match: [/^ABOUT/i],
+    },
 ];
 
 // The renderers a button can be wrapped in, and the endpoint fields each can
@@ -125,11 +134,24 @@ function enabled(key) {
     }
 }
 
-/** True when the name covers thumbs up and thumbs down together. */
+/**
+ * True when the name covers thumbs up and thumbs down together.
+ *
+ * Two shapes mean that. A name holding both words, which is the obvious one:
+ * DISLIKE contains LIKE, so the dislikes come out of the name first and a LIKE
+ * left over is a second, separate button. And LIKE_BUTTON, which is not
+ * obvious at all — it is the name the app gives the ONE button that draws both
+ * thumbs, and there is no separate dislike type at all. siriusvoid's fork
+ * labels that single type 'Hide Like and Dislike Buttons', which is how it
+ * came to light here.
+ *
+ * Getting this wrong is not cosmetic: before, hiding the thumbs up alone
+ * matched LIKE_BUTTON and took the thumbs down away with it.
+ */
 function isCombinedLike(name) {
-    if (!name || name.indexOf('DISLIKE') === -1) return false;
-    // DISLIKE contains LIKE, so the dislikes come out of the name first; a
-    // LIKE left over after that is a second, separate button in one name.
+    if (!name) return false;
+    if (/^LIKE_BUTTON/i.test(name)) return true;
+    if (name.indexOf('DISLIKE') === -1) return false;
     return name.split('DISLIKE').join('').indexOf('LIKE') !== -1;
 }
 
