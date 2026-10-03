@@ -149,6 +149,7 @@ it. The options live on their own settings page under Miscellaneous.
 | Sort Long Press Menu **(fork)** | Choose the order the entries appear in. Only this fork's entries are reordered; YouTube's own keep their position |
 | Show Your Playlists in the Long Press Menu **(fork)** | Adds one entry per playlist of yours, so a video goes straight into it instead of through YouTube's picker. The menu shows at most 15 of them — past that it is quicker to use the picker |
 | Playlists in the Long Press Menu **(fork)** | Pick which of your playlists appear there. Picking none means all of them, so the feature shows something before anything is chosen |
+| Sort Playlists in the Long Press Menu **(fork)** | Choose the order your playlists appear in. A playlist deleted on YouTube drops out of both lists the next time the picker is opened |
 | Share (QR Code) **(fork)** | Menu entry. Shows a QR code for the video, to carry it over to a phone |
 | Play Next **(fork)** | Menu entry. Queues the video directly after the one playing, rather than at the end of the queue |
 | Remove From This Playlist **(fork)** | Menu entry, offered only while you are inside one of your own playlists: removes the video from that playlist |

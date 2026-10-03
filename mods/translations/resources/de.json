@@ -132,7 +132,8 @@
                         },
                         "sort": {
                             "title": "Langdruck-Menü sortieren",
-                            "subtitle": "Wähle die Reihenfolge der Einträge"
+                            "subtitle": "Wähle die Reihenfolge der Einträge",
+                            "empty": "Es werden keine Einträge angezeigt — zuerst welche aktivieren"
                         },
                         "moveUp": {
                             "title": "Nach oben",
@@ -148,6 +149,10 @@
                             "subtitle": "Wähle aus, welche deiner Playlists dort erscheinen",
                             "loading": "Deine Playlists werden geladen…",
                             "retry": "Erneut versuchen"
+                        },
+                        "playlistOrder": {
+                            "title": "Playlists im Longpress-Menü sortieren",
+                            "subtitle": "Reihenfolge deiner Playlists festlegen"
                         },
                         "title": "Langdruck-Menü"
                     }

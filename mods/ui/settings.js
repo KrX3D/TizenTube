@@ -362,6 +362,16 @@ export default function modernUI(update, parameters) {
                                     action: 'SHOW_LONGPRESS_PLAYLISTS'
                                 }
                             }
+                        },
+                        {
+                            name: t('settings.options.misc.options.longPressMenu.playlistOrder.title'),
+                            icon: 'MENU',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'SHOW_LONGPRESS_PLAYLIST_ORDER'
+                                }
+                            }
                         }
                     ]
                 },

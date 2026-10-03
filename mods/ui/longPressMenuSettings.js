@@ -26,6 +26,22 @@ function orderedIds() {
     return order.filter(id => ENTRY_LABELS[id]);
 }
 
+/**
+ * Can this entry appear in the menu at all?
+ *
+ * Hidden entries and entries a setting rules out are left off the sort screen.
+ * Entries that depend on where you are — removeFromPlaylist inside a playlist,
+ * channel off a channel page, the two feedback entries when YouTube sends the
+ * panel — stay listed: they do appear, just not everywhere, and leaving them
+ * out would mean never being able to order them.
+ */
+function shownInMenu(id) {
+    const hidden = configRead('longPressMenuHidden') || [];
+    if (hidden.indexOf(id) !== -1) return false;
+    if (id === 'playlists' && !configRead('longPressShowPlaylists')) return false;
+    return true;
+}
+
 function moveEntry(parameters) {
     const order = orderedIds();
     const index = order.indexOf(parameters?.id);
@@ -93,7 +109,10 @@ function showSetting(settingType, parameters) {
 
         const isHideMode = settingType === 'longPressMenuHidden';
         const hidden = configRead('longPressMenuHidden') || [];
-        const buttons = orderedIds().map(id => buttonItem(
+        // The hide screen has to list everything — it is where an entry is
+        // brought back. The sort screen lists only what the menu shows.
+        const listed = isHideMode ? orderedIds() : orderedIds().filter(shownInMenu);
+        const buttons = listed.map(id => buttonItem(
             { title: t(ENTRY_LABELS[id]) },
             {
                 icon: null,
@@ -110,6 +129,14 @@ function showSetting(settingType, parameters) {
                 }
             ]
         ));
+
+        if (!buttons.length) {
+            buttons.push(buttonItem(
+                { title: t('settings.options.misc.options.longPressMenu.sort.empty') },
+                { icon: null },
+                [{ signalAction: { signal: 'POPUP_BACK' } }]
+            ));
+        }
 
         appendFileOnlyLog('longPress.menu.open', { mode: isHideMode ? 'hide' : 'sort', count: buttons.length });
         return showModal(

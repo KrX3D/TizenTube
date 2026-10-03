@@ -132,7 +132,8 @@
                         },
                         "sort": {
                             "title": "Sort Long Press Menu",
-                            "subtitle": "Choose the order the entries appear in"
+                            "subtitle": "Choose the order the entries appear in",
+                            "empty": "No entries are shown — turn some on first"
                         },
                         "moveUp": {
                             "title": "Move Up",
@@ -148,6 +149,10 @@
                             "subtitle": "Pick which of your playlists appear there",
                             "loading": "Loading your playlists…",
                             "retry": "Try again"
+                        },
+                        "playlistOrder": {
+                            "title": "Sort Playlists in the Long Press Menu",
+                            "subtitle": "Choose the order your playlists appear in"
                         },
                         "title": "Long Press Menu"
                     }
