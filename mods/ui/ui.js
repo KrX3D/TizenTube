@@ -64,6 +64,17 @@ function execute_once_dom_loaded() {
     } catch (e) { }
   }
 
+  // Ask the app to remember whether captions were on, which it can do itself
+  // (upstream PR 608 found the switch). Gated on the caption setting rather
+  // than on enableFixedUI, since it is not a UI fix. Our own replay in
+  // captionStylePersistence.js stays as the fallback for builds without it:
+  // it bails out when captions are already on, so the two cannot fight.
+  if (configRead('enableCaptionStylePersistence')) {
+    try {
+      window.tectonicConfig.featureSwitches.enableCaptionsPersistence = true;
+    } catch (e) { }
+  }
+
   // We handle key events ourselves.
   window.__spatialNavigation__.keyMode = 'NONE';
 
