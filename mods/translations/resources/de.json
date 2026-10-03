@@ -375,6 +375,31 @@
                 "options": {
                     "checkForUpdates": "Nach Updates suchen",
                     "checkForUpdatesOnStartup": "Beim Start nach Updates suchen"
+                },
+                "updateAvailable": {
+                    "title": "Update verfügbar",
+                    "subtitle": "Eine neue Version von TizenTube Cobalt ist verfügbar: {{latestVersion}}, aktuell: {{currentVersion}}"
+                },
+                "releaseDate": "Veröffentlicht: {{date}}",
+                "updateNow": {
+                    "title": "Jetzt aktualisieren",
+                    "subtitle": "Auswählen, um die neueste Version zu laden."
+                },
+                "remindLater": {
+                    "title": "Später erinnern",
+                    "subtitle": "Später nach Updates suchen."
+                },
+                "upToDate": {
+                    "title": "TizenTube ist aktuell",
+                    "subtitle": "Du verwendest die neueste Version ({{version}}) von TizenTube Cobalt."
+                },
+                "checkFailed": {
+                    "title": "Update-Prüfung fehlgeschlagen",
+                    "subtitle": "Es konnte nicht nach Updates gesucht werden."
+                },
+                "downloading": {
+                    "title": "TizenTube Update",
+                    "subtitle": "Update wird geladen, bitte warten …"
                 }
             }
         },
