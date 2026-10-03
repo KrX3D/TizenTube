@@ -128,12 +128,31 @@ options are described in the row rather than listed separately.
 | Reload Home on Startup | Forces a fresh Home feed on launch |
 | Library Tabs Buttons to Hide **(fork)** | Hides individual Library tabs (Music, Movies & Shows, Podcasts, My Videos, History, Watch Later, Playlists) |
 | Sort Subscriptions Alphabetically | Alphabetical instead of YouTube's own ordering |
-| Long Press Actions | Long-press a tile for Play, Watch Later, Save to Playlist, Add to Queue and Go To Channel. "Not interested" and "Don't recommend channel" are restored there too: YouTube stopped sending them in the menu, so they are rebuilt from the panel it sends instead |
 | Who's Watching Menu | Control whether the profile picker appears, including on app exit, and whether it stays permanently enabled |
 | "Are you still watching?" prompt | Toggle YouTube's idle-playback interruption |
 | Show Guest Sign In Reminder | Toggle the prompt asking a signed-out viewer to sign in |
 | Show TT Welcome Message | Toggle the TizenTube toast shown on launch |
 | Fix UI | Layout corrections for TVs that render the YouTube TV UI incorrectly |
+
+## Long press menu
+
+Long-pressing a tile opens a menu of actions for that video. Upstream offers a
+fixed list of five; this fork makes the list configurable and adds entries to
+it. The options live on their own settings page under Miscellaneous.
+
+| Feature | What it does |
+| --- | --- |
+| Enable Long Press Actions | The menu itself. Play, Save to Watch Later, Save to Playlist, Add to Queue and Go To Channel |
+| "Not interested" / "Don't recommend channel" **(fork)** | Restored to the menu. YouTube stopped sending them as menu entries, so they are rebuilt from the feedback panel it sends instead |
+| Long Press Menu Entries **(fork)** | Choose which entries the menu shows. Entries YouTube itself put there are never hidden, since this fork did not add them |
+| Sort Long Press Menu **(fork)** | Choose the order the entries appear in. Only this fork's entries are reordered; YouTube's own keep their position |
+| Show Your Playlists in the Long Press Menu **(fork)** | Adds one entry per playlist of yours, so a video goes straight into it instead of through YouTube's picker. The menu shows at most 15 of them — past that it is quicker to use the picker |
+| Playlists in the Long Press Menu **(fork)** | Pick which of your playlists appear there. Picking none means all of them, so the feature shows something before anything is chosen |
+| Share (QR Code) **(fork)** | Menu entry. Shows a QR code for the video, to carry it over to a phone |
+| Play Next **(fork)** | Menu entry. Queues the video directly after the one playing, rather than at the end of the queue |
+| Remove From This Playlist **(fork)** | Menu entry, offered only while you are inside one of your own playlists: removes the video from that playlist |
+| Hide This Channel **(fork)** | Menu entry. Hides everything from that channel across the feeds. Matched on the channel name, because tiles do not carry a channel id |
+| Hidden Channels **(fork)** | Lists the channels you hid, under Interface settings. Select one to show it again |
 
 ## Subtitles
 
