@@ -2,6 +2,53 @@
     "__contributors": [
         "CrazyWolf13"
     ],
+    "settingsTransfer": {
+        "title": "Einstellungen übertragen",
+        "subtitle": "Einstellungen auf einen anderen TV kopieren oder von dort holen",
+        "unavailable": "In diesem Modus nicht verfügbar — die Seite erreicht hier den lokalen Dienst nicht",
+        "close": "Schließen",
+        "on": "Ein",
+        "off": "Aus",
+        "itemCount": "{{count}} Einträge",
+        "shareFailed": "Freigabe konnte nicht gestartet werden.",
+        "applied": "{{count}} Einstellungen übernommen.",
+        "appliedNone": "Es wurde nichts übernommen.",
+        "export": {
+            "title": "An anderen TV senden",
+            "subtitle": "{{count}} Einstellungen werden freigegeben — jetzt am anderen TV Importieren öffnen",
+            "stop": "Freigabe beenden",
+            "stopSubtitle": "Die Freigabe endet auch, wenn du diesen Bildschirm verlässt",
+            "stopped": "Freigabe beendet."
+        },
+        "import": {
+            "title": "Von anderem TV holen",
+            "subtitle": "TV auswählen, von dem kopiert wird",
+            "searching": "Suche nach TizenTube im Netzwerk…",
+            "noneFound": "Kein anderer TV gefunden",
+            "noneFoundSubtitle": "Zuerst am anderen TV Senden öffnen, dann hier erneut suchen",
+            "peerSharing": "Gibt gerade frei",
+            "peerNotSharing": "Keine Freigabe — dort zuerst Senden öffnen",
+            "searchFailed": "Das Netzwerk konnte nicht durchsucht werden.",
+            "fetchFailed": "Die Einstellungen dieses TVs konnten nicht gelesen werden.",
+            "reading": "Einstellungen werden gelesen…"
+        },
+        "changes": {
+            "title": "Was sich ändern würde",
+            "subtitle": "{{count}} deiner Einstellungen weichen von {{name}} ab",
+            "subtitleSkipped": "{{count}} Einstellungen weichen von {{name}} ab — {{skipped}} hier nicht unterstützt",
+            "identical": "Nichts zu übernehmen — dieser TV stimmt bereits mit {{name}} überein",
+            "apply": "{{count}} Einstellungen übernehmen",
+            "selectNone": "Alle abwählen",
+            "selectAll": "Alle auswählen"
+        },
+        "undo": {
+            "title": "Letzten Import zurücknehmen",
+            "subtitle": "Zurücksetzen, was der letzte Import geändert hat",
+            "confirm": "Import zurücknehmen",
+            "done": "{{count}} Einstellungen zurückgesetzt.",
+            "nothing": "Es gibt keinen Import zum Zurücknehmen."
+        }
+    },
     "settings": {
         "options": {
             "socialMedia": {
