@@ -537,6 +537,43 @@ function standDown(relayLog) {
     }
 }
 
+// What the daemon says about developer mode, in whichever shape it says it.
+//
+// The check used to be `developerMode === '1'` against the raw value. Reported
+// on another fork as the reason a TV with developer mode plainly ON still took
+// the proxy path: some daemons answer with the number 1, or true, or 'on',
+// and a strict comparison against the string reads every one of those as off.
+// Trimmed and lower-cased, because a trailing space has the same effect.
+function developerModeOn(value) {
+    if (value === true || value === 1) return true;
+    const text = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+    return text === '1' || text === 'true' || text === 'on' || text === 'enabled';
+}
+
+// Developer mode sends the TV's debug traffic to this address. Both spellings
+// are the same address: Tizen reports the second on some builds.
+function developerIpIsLoopback(value) {
+    const text = String(value === undefined || value === null ? '' : value).trim();
+    return text === '127.0.0.1' || text === '1.0.0.127';
+}
+
+// Logged once per distinct answer, so a TV that reports something new can be
+// named from a capture rather than guessed at. A device with developer mode off
+// is the ordinary case and says so every poll; only the shape is interesting.
+let _lastDaemonShape = null;
+
+function noteDaemonShape(device, relayLog, verdict) {
+    if (typeof relayLog !== 'function') return;
+    const shape = typeof device.developerIP + ':' + String(device.developerIP)
+        + '|' + typeof device.developerMode + ':' + String(device.developerMode) + '|' + verdict;
+    if (shape === _lastDaemonShape) return;
+    _lastDaemonShape = shape;
+    relayLog({
+        ts: new Date().toISOString(), level: 'INFO', context: 'Injector',
+        message: `daemon reports developerIP=${JSON.stringify(device.developerIP)} developerMode=${JSON.stringify(device.developerMode)} -> canConnectToDaemon=${verdict}`
+    });
+}
+
 function canConnectToDaemon(relayLog, attempt) {
     if (attempt === undefined) attempt = 0;
     // Answered before touching the network: once stood down, nothing should
@@ -556,7 +593,13 @@ function canConnectToDaemon(relayLog, attempt) {
     }
     return fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
         .then(json => {
-            return { canConnectToDaemon: (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1', ip: json.device.ip, isConnecting }
+            // A response without a device block used to throw here and land in
+            // the catch below, which then reported it as a failed fetch and
+            // burned a retry on a request that had in fact succeeded.
+            const device = (json && json.device) || {};
+            const verdict = developerIpIsLoopback(device.developerIP) && developerModeOn(device.developerMode);
+            noteDaemonShape(device, relayLog, verdict);
+            return { canConnectToDaemon: verdict, ip: device.ip || null, isConnecting };
         }).catch(e => {
             if (attempt >= CAN_CONNECT_MAX_ATTEMPTS) {
                 if (typeof relayLog === 'function') {
