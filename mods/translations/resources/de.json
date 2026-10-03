@@ -170,6 +170,17 @@
                             "swapMPWithPIP": "Mini-Player-Schaltfläche mit PiP-Schaltfläche tauschen"
                         }
                     },
+                    "hidePlayerButtons": {
+                        "title": "Player-Buttons ausblenden",
+                        "subtitle": "Buttons, die aus der Reihe unter dem Player entfernt werden",
+                        "options": {
+                            "join": "Button \"Mitglied werden\" ausblenden",
+                            "subscribe": "Button \"Abonnieren\" ausblenden",
+                            "like": "Button \"Daumen hoch\" ausblenden",
+                            "dislike": "Button \"Daumen runter\" ausblenden",
+                            "save": "Button \"Speichern\" ausblenden"
+                        }
+                    },
                     "preferredVideoQuality": {
                         "title": "Bevorzugte Videoqualität",
                         "subtitle": "Wähle die bevorzugte oder nächstbeste Videoqualität, die beim Start der Wiedergabe verwendet wird"
