@@ -136,6 +136,12 @@ function showSetting(settingType, parameters) {
                 // the box used to check only the first, so entries hidden by
                 // default showed as visible.
                 const hidden = guideEntryHideKeys(item).some(k => disabled.includes(k));
+                // A channel is identified by having a thumbnail, which is what
+                // customGuideAction.js keys its own removal on.
+                const isChannel = !!entry.thumbnail;
+                const showsInSidebar = !hidden
+                    && !(isChannel && configRead('disableChannelsOnSidebar'));
+                if (!isDisableMode && !showsInSidebar) continue;
                 if (logged.length < MAX_LOGGED_ENTRIES) {
                     const nav = entry.navigationEndpoint || {};
                     logged.push({
@@ -175,6 +181,14 @@ function showSetting(settingType, parameters) {
                             ]
                     )
                 );
+            }
+
+            if (!buttons.length) {
+                buttons.push(buttonItem(
+                    { title: t('settings.options.uiSettings.options.sortSidebarContents.empty') },
+                    { icon: null },
+                    [{ signalAction: { signal: 'POPUP_BACK' } }]
+                ));
             }
 
             appendFileOnlyLog('sidebar.menu.open', { mode: isDisableMode ? 'disable' : 'sort', count: buttons.length, entries: logged });

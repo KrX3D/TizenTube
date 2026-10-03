@@ -356,7 +356,8 @@
                             "subtitle": "Move this item down in the sidebar"
                         },
                         "addToSidebar": "Add Channel to Sidebar",
-                        "removeFromSidebar": "Remove Channel from Sidebar"
+                        "removeFromSidebar": "Remove Channel from Sidebar",
+                        "empty": "No sidebar entries are shown — turn some back on first"
                     },
                     "hideDuplicateVideos": "Hide Duplicate Videos",
                     "hiddenChannels": {
