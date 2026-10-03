@@ -170,6 +170,17 @@
                             "swapMPWithPIP": "Swap Mini Player Button with PiP Button"
                         }
                     },
+                    "hidePlayerButtons": {
+                        "title": "Hide Player Buttons",
+                        "subtitle": "Buttons to remove from the row under the player",
+                        "options": {
+                            "join": "Hide Join/Membership Button",
+                            "subscribe": "Hide Subscribe Button",
+                            "like": "Hide Thumbs Up Button",
+                            "dislike": "Hide Thumbs Down Button",
+                            "save": "Hide Save Button"
+                        }
+                    },
                     "preferredVideoQuality": {
                         "title": "Preferred Video Quality",
                         "subtitle": "Choose the preferred or next best video quality applied when playback starts"

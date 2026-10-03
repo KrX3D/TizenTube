@@ -103,6 +103,7 @@ options are described in the row rather than listed separately.
 | Number Keys Jump to Percentage | Pressing `1`–`9` jumps to that percentage of the video, `0` jumps to the start |
 | Reload Player After TV Wakes **(fork)** | Rebuilds the player after standby, fixing the frozen first frame |
 | Player UI patching | Optional Previous/Next, Super Thanks, Ask, and Speed Controls buttons |
+| Hide Player Buttons **(fork)** | Removes buttons from the action row under the player: Join/Membership, Subscribe, Thumbs Up, Thumbs Down and Save. Each one is a separate toggle, and the row is matched on the button types rather than on the labels, which are localised |
 
 ## Thumbnails and titles
 

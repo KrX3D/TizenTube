@@ -4,6 +4,7 @@ import { extractAssignedFunctions } from "../utils/ASTParser.js";
 import { configRead } from "../config.js";
 import { ButtonRenderer } from "./ytUI.js";
 import { t } from 'i18next';
+import { anyPlayerButtonHidden, filterPlayerButtons } from '../features/playerButtonHider.js';
 
 function applyPatches() {
     if (!window._yttv) return setTimeout(applyPatches, 250);
@@ -45,6 +46,33 @@ function applyPatches() {
 
         const functions = extractAssignedFunctions(origMethod.toString());
 
+        const patchingEnabled = configRead('enablePatchingVideoPlayer');
+
+        // Hiding buttons comes first: the lookups below read names out of
+        // minified source and throw when one of them has moved, and this
+        // has to keep working when they do. Wrapping first also puts this
+        // innermost, so the buttons the patches below add are not filtered
+        // — none of them match, but the order makes that moot.
+        if (anyPlayerButtonHidden()) {
+            // The five sit across groups this file only has names for two
+            // of, so every group that deals in transport-control buttons is
+            // wrapped. filterPlayerButtons passes anything that is not a
+            // list of buttons straight through.
+            const groups = [];
+            for (const func of functions) {
+                if (!func.rhs.includes('TRANSPORT_CONTROLS_BUTTON_TYPE') && !func.rhs.includes('engagementActions')) continue;
+                const name = func.left.split('.')[1];
+                if (name && groups.indexOf(name) === -1) groups.push(name);
+            }
+            for (const group of groups) {
+                const origGroup = inst[group];
+                if (typeof origGroup !== 'function') continue;
+                inst[group] = function () {
+                    return filterPlayerButtons(origGroup.apply(this, arguments), group);
+                };
+            }
+        }
+
         const pipCommand = {
             "type": "TRANSPORT_CONTROLS_BUTTON_TYPE_PIP",
             "button": {
@@ -68,7 +96,7 @@ function applyPatches() {
         if (!settingActionGroup) return inst;
 
         const origSettingActionGroup = inst[settingActionGroup];
-        if (configRead('enableMPButton')) {
+        if (patchingEnabled && configRead('enableMPButton')) {
             inst[settingActionGroup] = function () {
                 const res = origSettingActionGroup.apply(this, arguments);
                 const idx = res.findIndex(item => item.type === 'TRANSPORT_CONTROLS_BUTTON_TYPE_PLAYBACK_SETTINGS');
@@ -99,7 +127,7 @@ function applyPatches() {
 
         const engagementActionButton = functions.find(func => func.rhs.includes('props.data.engagementActions')).left.split('.')[1];
 
-        if (engagementActionButton && configRead('enableSpeedControlsButton')) {
+        if (patchingEnabled && engagementActionButton && configRead('enableSpeedControlsButton')) {
             const origEngagementActionButton = inst[engagementActionButton];
             inst[engagementActionButton] = function () {
                 const res = origEngagementActionButton.apply(this, arguments);
@@ -123,7 +151,7 @@ function applyPatches() {
             }
         }
 
-        if (!configRead('enableSuperThanksButton')) {
+        if (patchingEnabled && !configRead('enableSuperThanksButton')) {
             const origEngagementActionButton = inst[engagementActionButton];
             inst[engagementActionButton] = function () {
                 const res = origEngagementActionButton.apply(this, arguments);
@@ -133,7 +161,7 @@ function applyPatches() {
             }
         }
 
-        if (!configRead('enableAIAskButton')) {
+        if (patchingEnabled && !configRead('enableAIAskButton')) {
             const origEngagementActionButton = inst[engagementActionButton];
             inst[engagementActionButton] = function () {
                 const res = origEngagementActionButton.apply(this, arguments);
@@ -141,7 +169,7 @@ function applyPatches() {
             }
         }
 
-        if (configRead('enablePreviousNextButtons')) {
+        if (patchingEnabled && configRead('enablePreviousNextButtons')) {
             if (!previousButtonName || !nextButtonName) return inst;
             inst[previousButtonName] = function () {
                 return ButtonRenderer(
@@ -174,7 +202,11 @@ function applyPatches() {
         return inst;
     }
 
-    if (configRead('enablePatchingVideoPlayer')) {
+    // Either reason is enough to replace the container. Hiding a player
+    // button has to work for someone who left the rest of the patching off,
+    // and every patch above is gated on its own flag, so nothing else
+    // changes for them.
+    if (configRead('enablePatchingVideoPlayer') || anyPlayerButtonHidden()) {
         YtlrPlayerActionsContainer.prototype = origMethod.prototype;
         window._yttv[methods[0]] = YtlrPlayerActionsContainer;
     }

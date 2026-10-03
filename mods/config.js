@@ -46,6 +46,12 @@ const defaultConfig = {
   enablePatchingVideoPlayer: true,
   enableMPButton: true,
   enableSwapMPWithPIP: false,
+  // Buttons removed from the action row under the player.
+  hidePlayerJoinButton: false,
+  hidePlayerSubscribeButton: false,
+  hidePlayerLikeButton: false,
+  hidePlayerDislikeButton: false,
+  hidePlayerSaveButton: false,
   enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,
