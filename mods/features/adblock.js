@@ -5,6 +5,7 @@ import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, But
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
+import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
 import './logServer.js';
 import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
@@ -771,9 +772,18 @@ function processResponsePayload(payload, detectedPage) {
     // batch to the single kept helper.
     noteContinuationBatch(String(window.location?.hash || ''), plc.contents, plc.continuations);
     plc.contents = filterContinuationItems(plc.contents, detectedPage, !!plc?.continuations, 'arrayPayload.playlist.continuation');
+    addLongPress(plc.contents);
   }
   const arrayTopPlaylistRenderer = payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.twoColumnRenderer?.rightColumn?.playlistVideoListRenderer;
-  if (arrayTopPlaylistRenderer?.contents) filterPlaylistRendererContents(arrayTopPlaylistRenderer, detectedPage, 'arrayPayload.playlist.renderer');
+  if (arrayTopPlaylistRenderer?.contents) {
+    filterPlaylistRendererContents(arrayTopPlaylistRenderer, detectedPage, 'arrayPayload.playlist.renderer');
+    // Reported: inside a playlist no long press menu opened at all, so the
+    // remove entry could not be reached. The playlist page is the one surface
+    // whose items never reached addLongPress. After the filter, so the menu
+    // is attached to the tiles that survive it.
+    notePlaylistPage(arrayTopPlaylistRenderer);
+    addLongPress(arrayTopPlaylistRenderer.contents);
+  }
   processTileArraysDeep(payload, detectedPage, 'arrayPayload', 0, filterShortsFromItems);
 }
 
@@ -1074,6 +1084,8 @@ JSON.parse = function () {
       // token to collect with.
       scheduleCollectAfterNativeSettles(topPlaylistRenderer.continuations, 'page_load');
       filterPlaylistRendererContents(topPlaylistRenderer, detectedPage, 'playlist.renderer');
+      notePlaylistPage(topPlaylistRenderer);
+      addLongPress(topPlaylistRenderer.contents);
     }
 
     if (r?.continuationContents?.sectionListContinuation?.contents) {
@@ -1123,6 +1135,7 @@ JSON.parse = function () {
       // already here and roughly ten seconds sooner.
       noteContinuationBatch(String(window.location?.hash || ''), plc.contents, plc.continuations);
       plc.contents = filterContinuationItems(plc.contents, detectedPage, hasContinuation, 'playlist.continuation');
+      addLongPress(plc.contents);
     }
 
     if (r?.contents?.tvBrowseRenderer?.content?.tvSecondaryNavRenderer?.sections) {
@@ -1615,6 +1628,8 @@ function finishLongPressMenu(item, menuItems) {
   }
 }
 
+let _lastLoggedNonVideoTileKeys = null;
+
 function addLongPress(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
@@ -1686,6 +1701,18 @@ function addLongPress(items) {
       }
       if (!configRead('enableLongPress')) continue;
       if (!item.tileRenderer?.metadata?.tileMetadataRenderer) continue;
+      // Reported from History: a playlist tile was given the video menu.
+      // A playlist opens with a browseEndpoint and has no watchEndpoint, so
+      // every entry built from one acts on an id that is not a video. The
+      // lockup branch above already refuses these; this one never did.
+      if (!item.tileRenderer.onSelectCommand?.watchEndpoint) {
+        const selectKeys = Object.keys(item.tileRenderer.onSelectCommand || {}).sort().join(',');
+        if (selectKeys !== _lastLoggedNonVideoTileKeys) {
+          _lastLoggedNonVideoTileKeys = selectKeys;
+          appendFileOnlyLog('tile.notAVideo', { select: Object.keys(item.tileRenderer.onSelectCommand || {}) });
+        }
+        continue;
+      }
       const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
       const data = longPressData({ videoId: item.tileRenderer.contentId, thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails, title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText, subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText, watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint, item });
       finishLongPressMenu(item, data.showMenuCommand.menu.menuRenderer.items);

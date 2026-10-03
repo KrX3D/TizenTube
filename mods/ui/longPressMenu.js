@@ -2,6 +2,8 @@ import { configRead } from '../config.js';
 import { MenuServiceItemRenderer, MenuNavigationItemRenderer } from './ytUI.js';
 import { getUserPlaylists, refreshUserPlaylists } from '../utils/innerTubeCalls.js';
 import { channelNameOf } from '../features/channelHider.js';
+import { detectCurrentPage } from '../features/hideWatched.js';
+import { currentPlaylistEditable } from '../features/playlistOwnership.js';
 import { t } from 'i18next';
 
 /**
@@ -170,6 +172,10 @@ function playlistEntries(data) {
 function removeFromPlaylistEntry(data) {
     const playlistId = data.watchEndpointData?.playlistId;
     if (!playlistId || playlistId === 'WL') return [];
+    // Reported: it was offered inside playlists saved from someone else,
+    // where the edit is refused. Offered again when the page does not say
+    // either way — see playlistOwnership.js for why that way round.
+    if (currentPlaylistEditable() === false) return [];
     return [tagMenuItem('removeFromPlaylist', MenuServiceItemRenderer(t('videoMenu.removeFromPlaylist'), {
         clickTrackingParams: null,
         commandMetadata: { webCommandMetadata: { sendPost: true, apiUrl: '/youtubei/v1/browse/edit_playlist' } },
@@ -177,6 +183,19 @@ function removeFromPlaylistEntry(data) {
             playlistId,
             actions: [{ removedVideoId: data.videoId, action: 'ACTION_REMOVE_VIDEO_BY_VIDEO_ID' }]
         }
+    }))];
+}
+
+// Reported: on a channel page this goes where you already are. The page is
+// read as the menu is built rather than stored, since a response for one page
+// can be processed while another is open.
+function channelEntry(data) {
+    try {
+        if (detectCurrentPage() === 'channel') return [];
+    } catch (_) { }
+    return [tagMenuItem('channel', MenuServiceItemRenderer(t('videoMenu.goToChannel'), {
+        clickTrackingParams: null,
+        playlistEditEndpoint: { customAction: { action: 'GO_TO_CHANNEL', parameters: data.item } }
     }))];
 }
 
@@ -214,10 +233,7 @@ function baseEntries(data) {
             clickTrackingParams: null,
             playlistEditEndpoint: { customAction: { action: 'HIDE_CHANNEL', parameters: { name: channelNameOf(data.item) } } }
         })),
-        tagMenuItem('channel', MenuServiceItemRenderer(t('videoMenu.goToChannel'), {
-            clickTrackingParams: null,
-            playlistEditEndpoint: { customAction: { action: 'GO_TO_CHANNEL', parameters: data.item } }
-        })),
+        ...channelEntry(data),
     ];
 }
 

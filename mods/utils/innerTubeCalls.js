@@ -1,4 +1,5 @@
 import resolveCommand from '../resolveCommand.js';
+import { notePlaylistTileShape } from '../features/playlistOwnership.js';
 
 // Direct InnerTube calls made through the app's own client, so they carry the
 // real identity/auth context instead of an unauthenticated fetch.
@@ -242,6 +243,11 @@ function extractPlaylists(node, out = [], seen = new Set(), depth = 0) {
         if (title) {
             seen.add(playlistId);
             out.push({ playlistId, title });
+            // Reported: playlists saved from someone else are offered too,
+            // and cannot be written to. Nothing here can tell them apart
+            // yet — both kinds of id start with PL — so this records what
+            // the tile carries instead of guessing.
+            notePlaylistTileShape(node, playlistId);
         }
     }
     for (const key of Object.keys(node)) {
