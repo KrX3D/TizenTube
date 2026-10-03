@@ -373,6 +373,15 @@ function customAction(action, parameters) {
         case 'TOGGLE_LONGPRESS_PLAYLIST':
             showLongPressPlaylists('TOGGLE_LONGPRESS_PLAYLIST', parameters);
             break;
+        case 'SHOW_LONGPRESS_PLAYLIST_ORDER':
+            showLongPressPlaylists('longPressPlaylistOrder');
+            break;
+        case 'SHOW_LONGPRESS_PLAYLIST_MOVE':
+            showLongPressPlaylists('SHOW_LONGPRESS_PLAYLIST_MOVE', parameters);
+            break;
+        case 'MOVE_LONGPRESS_PLAYLIST':
+            showLongPressPlaylists('MOVE_LONGPRESS_PLAYLIST', parameters);
+            break;
         case 'SHOW_LONGPRESS_MENU_SETTINGS':
             showLongPressMenuSettings(parameters);
             break;

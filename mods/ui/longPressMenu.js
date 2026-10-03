@@ -131,15 +131,47 @@ function watchLaterEntry(data) {
 // the menu is assembled while a response is being processed and cannot wait for
 // a fetch, so a playlist list that is not ready yet simply adds no entries and
 // the next menu has them.
+/**
+ * The playlists the menu should show, in the order it should show them.
+ *
+ * Exported because the settings screens have to agree with the menu about
+ * both questions, and the rules are not obvious enough to state twice.
+ */
+export function pickedPlaylists(all) {
+    const list = Array.isArray(all) ? all.filter(p => p?.playlistId && p?.title) : [];
+    const chosen = configRead('longPressPlaylistIds');
+    let picked = list;
+    if (Array.isArray(chosen) && chosen.length) {
+        picked = list.filter(p => chosen.indexOf(p.playlistId) !== -1);
+        // Every picked playlist is gone — deleted on YouTube, or the TV is
+        // signed into another account. Reported as a worry, and it would
+        // otherwise be a dead end: the menu would show no playlists while the
+        // picker showed them all unticked, with nothing to untick to recover.
+        // An unusable selection is treated as no selection.
+        if (!picked.length) picked = list;
+    }
+    return sortByConfiguredOrder(picked);
+}
+
+/** Ordered by the stored order; anything it has not seen keeps YouTube's. */
+function sortByConfiguredOrder(playlists) {
+    const order = configRead('longPressPlaylistOrder');
+    if (!Array.isArray(order) || !order.length) return playlists;
+    const rank = (playlist) => {
+        const at = order.indexOf(playlist.playlistId);
+        return at === -1 ? order.length : at;
+    };
+    // Decorated with the arrival index and compared on it as a tie-break:
+    // Array.prototype.sort is only stable from Chromium 70, and 5.5 ships 69.
+    return playlists
+        .map((playlist, index) => ({ playlist, index }))
+        .sort((a, b) => (rank(a.playlist) - rank(b.playlist)) || (a.index - b.index))
+        .map((entry) => entry.playlist);
+}
+
 function playlistEntries(data) {
     if (!configRead('longPressShowPlaylists')) return [];
-    const all = getUserPlaylists() || [];
-    // An empty selection means all of them, so switching the feature on shows
-    // something before anything has been picked.
-    const chosen = configRead('longPressPlaylistIds');
-    const playlists = Array.isArray(chosen) && chosen.length
-        ? all.filter(p => chosen.indexOf(p?.playlistId) !== -1)
-        : all;
+    const playlists = pickedPlaylists(getUserPlaylists() || []);
     const entries = [];
     for (const playlist of playlists.slice(0, MAX_PLAYLIST_ENTRIES)) {
         if (!playlist?.playlistId || !playlist?.title) continue;

@@ -28,6 +28,7 @@ const defaultConfig = {
   longPressShowPlaylists: false,
   hiddenChannels: [],
   longPressPlaylistIds: [],
+  longPressPlaylistOrder: [],
   enableShorts: false,
   dontCheckUpdateUntil: 0,
   enableWhoIsWatchingMenu: false,
