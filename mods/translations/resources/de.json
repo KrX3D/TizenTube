@@ -206,6 +206,7 @@
                         "title": "Geschwindigkeitsstufen",
                         "subtitle": "Lege die Schritte für Anpassungen der Wiedergabegeschwindigkeit fest"
                     },
+                    "remainingTime": "Restzeit neben der Gesamtzeit anzeigen",
                     "hideRelatedVideosPlayer": "Ähnliche Videos im Player ausblenden",
                     "preferredVideoCodec": {
                         "title": "Bevorzugter Videocodec",
