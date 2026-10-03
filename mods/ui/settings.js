@@ -1021,6 +1021,16 @@ export default function modernUI(update, parameters) {
                     value: 'hideFreeWithAdsVideos'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hiddenChannels.title'),
+                    icon: 'PERSON',
+                    value: null,
+                    action: {
+                        customAction: {
+                            action: 'SHOW_HIDDEN_CHANNELS'
+                        }
+                    }
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
                     icon: 'PRIVACY_UNLISTED',
                     value: 'hideDuplicateVideos'

@@ -1,6 +1,7 @@
 import { configRead } from '../config.js';
 import { MenuServiceItemRenderer, MenuNavigationItemRenderer } from './ytUI.js';
 import { getUserPlaylists, refreshUserPlaylists } from '../utils/innerTubeCalls.js';
+import { channelNameOf } from '../features/channelHider.js';
 import { t } from 'i18next';
 
 /**
@@ -22,7 +23,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel'];
+export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -36,6 +37,7 @@ export const ENTRY_LABELS = {
     queue: 'videoMenu.addToQueue',
     channel: 'videoMenu.goToChannel',
     share: 'videoMenu.share',
+    hideChannel: 'videoMenu.hideChannel',
     notInterested: 'videoMenu.notInterested',
     dontRecommendChannel: 'videoMenu.dontRecommendChannel',
 };
@@ -195,6 +197,12 @@ function baseEntries(data) {
         tagMenuItem('share', MenuServiceItemRenderer(t('videoMenu.share'), {
             clickTrackingParams: null,
             playlistEditEndpoint: { customAction: { action: 'SHARE_VIDEO', parameters: { videoId: data.videoId } } }
+        })),
+        // The name rather than the item: the filter that acts on it reads the
+        // same name off a tile, and hiding has to key on exactly what that sees.
+        tagMenuItem('hideChannel', MenuServiceItemRenderer(t('videoMenu.hideChannel'), {
+            clickTrackingParams: null,
+            playlistEditEndpoint: { customAction: { action: 'HIDE_CHANNEL', parameters: { name: channelNameOf(data.item) } } }
         })),
         tagMenuItem('channel', MenuServiceItemRenderer(t('videoMenu.goToChannel'), {
             clickTrackingParams: null,

@@ -335,7 +335,13 @@
                         "addToSidebar": "Kanal zur Seitenleiste hinzufügen",
                         "removeFromSidebar": "Kanal aus der Seitenleiste entfernen"
                     },
-                    "hideDuplicateVideos": "Doppelte Videos ausblenden"
+                    "hideDuplicateVideos": "Doppelte Videos ausblenden",
+                    "hiddenChannels": {
+                        "title": "Ausgeblendete Kanäle",
+                        "subtitle": "Kanäle, die über das Langdruck-Menü ausgeblendet wurden",
+                        "unhide": "Auswählen, um den Kanal wieder einzublenden",
+                        "empty": "Es sind keine Kanäle ausgeblendet"
+                    }
                 }
             },
             "updater": {
@@ -434,7 +440,8 @@
         "dontRecommendChannel": "Kanal nicht mehr empfehlen",
         "share": "Teilen (QR-Code)",
         "playNext": "Als Nächstes abspielen",
-        "removeFromPlaylist": "Aus dieser Playlist entfernen"
+        "removeFromPlaylist": "Aus dieser Playlist entfernen",
+        "hideChannel": "Diesen Kanal ausblenden"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
@@ -454,6 +461,9 @@
         "networkBackReloading": "Das Netzwerk ist wieder da, die Seite wird neu geladen…",
         "networkStillOffline": "Immer noch kein Netzwerk. Die Seite wird neu geladen, sobald es wieder da ist.",
         "networkContinuingAnyway": "Immer noch kein Netzwerk, starte trotzdem…",
-        "videoPlaysNext": "Video wird als Nächstes abgespielt."
+        "videoPlaysNext": "Video wird als Nächstes abgespielt.",
+        "channelHidden": "„{{name}}“ ist jetzt ausgeblendet.",
+        "channelShownAgain": "„{{name}}“ wird wieder angezeigt.",
+        "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört."
     }
 }
