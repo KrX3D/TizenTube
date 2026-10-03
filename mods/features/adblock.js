@@ -1487,18 +1487,70 @@ function hqify(items) {
 // SmartTube fix puts them back: the entries are added here, and the fetching
 // and sending happen on click, in resolveCommand.js.
 
-function getFeedbackPanel(item) {
-  const onLongPress = item?.tileRenderer
-    ? item.tileRenderer.onLongPressCommand
-    : item?.lockupViewModel?.rendererContext?.commandContext?.onLongPress;
-  const endpoint = onLongPress?.showEngagementPanelEndpoint
-    || onLongPress?.innertubeCommand?.showEngagementPanelEndpoint;
+// Reported: neither feedback entry shows up. They are only added when the item
+// carries the panel reference YouTube now sends instead of the tokens, so the
+// question is where that reference sits — upstream reads exactly two places.
+// This looks in those first and then searches the item, since a reference that
+// moved one level is indistinguishable from one that is absent, and both end as
+// a menu with nothing in it.
+const FEEDBACK_SEARCH_DEPTH = 8;
+
+function readPanelEndpoint(endpoint) {
   if (endpoint?.identifier?.tag && endpoint?.globalConfiguration?.params) {
     return { panelId: endpoint.identifier.tag, params: endpoint.globalConfiguration.params };
   }
   return null;
 }
 
+function findPanelAnywhere(node, depth) {
+  if (!node || typeof node !== 'object' || depth > FEEDBACK_SEARCH_DEPTH) return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const hit = findPanelAnywhere(child, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  const direct = readPanelEndpoint(node.showEngagementPanelEndpoint);
+  if (direct) return direct;
+  for (const key of Object.keys(node)) {
+    // Never follow an action's parameters: this fork's own entries keep a copy
+    // of the whole video item there, panel reference included, which would make
+    // every item look like it had one of its own.
+    if (key === 'parameters') continue;
+    const hit = findPanelAnywhere(node[key], depth + 1);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// One line per distinct shape, so a capture shows whether the reference is
+// there at all and where — the difference between "YouTube stopped sending it"
+// and "we looked in the wrong place".
+const _loggedFeedbackShapes = new Set();
+
+function getFeedbackPanel(item) {
+  const onLongPress = item?.tileRenderer
+    ? item.tileRenderer.onLongPressCommand
+    : item?.lockupViewModel?.rendererContext?.commandContext?.onLongPress;
+  const known = readPanelEndpoint(onLongPress?.showEngagementPanelEndpoint)
+    || readPanelEndpoint(onLongPress?.innertubeCommand?.showEngagementPanelEndpoint);
+  const panel = known || findPanelAnywhere(item, 0);
+  try {
+    const shape = (item?.tileRenderer ? 'tile' : 'lockup')
+      + '|' + Object.keys(onLongPress || {}).sort().join(',')
+      + '|' + (known ? 'known' : panel ? 'searched' : 'none');
+    if (!_loggedFeedbackShapes.has(shape) && _loggedFeedbackShapes.size < 20) {
+      _loggedFeedbackShapes.add(shape);
+      appendFileOnlyLog('addLongPress.feedbackPanel', {
+        where: known ? 'onLongPressCommand' : panel ? 'elsewhere in the item' : 'not found',
+        itemShape: item?.tileRenderer ? 'tileRenderer' : 'lockupViewModel',
+        longPressKeys: Object.keys(onLongPress || {}),
+      });
+    }
+  } catch (_) { }
+  return panel;
+}
 // Whether the menu already offers feedback, from either source.
 //
 // Two differences from upstream here, both of which only show up in this fork.
