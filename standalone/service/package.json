@@ -14,7 +14,8 @@
     "adbhost": "^0.0.2",
     "chrome-remote-interface": "^0.25.7",
     "express": "^4.22.2",
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^2.7.0",
+    "node-forge": "^1.4.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
