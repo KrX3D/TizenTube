@@ -14,6 +14,7 @@ import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToke
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
+import * as settingsTransferUI from './ui/settingsTransferUI.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
 import { lockupVideoId } from './features/lockupViewModel.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
@@ -366,6 +367,33 @@ function customAction(action, parameters) {
                     console.warn('TizenTube: could not save to the playlist:', err);
                     showToast('TizenTube', t('toasts.saveToPlaylistFailed', { name: parameters?.name || '' }));
                 });
+            break;
+        case 'TT_SETTINGS_EXPORT':
+            settingsTransferUI.showExport();
+            break;
+        case 'TT_SETTINGS_SHARE_STOP':
+            settingsTransferUI.stopExport();
+            break;
+        case 'TT_SETTINGS_IMPORT':
+            settingsTransferUI.showImport();
+            break;
+        case 'TT_SETTINGS_IMPORT_FROM':
+            settingsTransferUI.showChanges(parameters);
+            break;
+        case 'TT_SETTINGS_TOGGLE_ROW':
+            settingsTransferUI.toggleRow(parameters);
+            break;
+        case 'TT_SETTINGS_SELECT':
+            settingsTransferUI.selectRows(parameters);
+            break;
+        case 'TT_SETTINGS_APPLY':
+            settingsTransferUI.applyChanges();
+            break;
+        case 'TT_SETTINGS_UNDO':
+            settingsTransferUI.showUndo();
+            break;
+        case 'TT_SETTINGS_UNDO_APPLY':
+            settingsTransferUI.applyUndo();
             break;
         case 'SHOW_LONGPRESS_PLAYLISTS':
             showLongPressPlaylists('longPressPlaylistIds');
