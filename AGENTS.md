@@ -249,6 +249,20 @@ CI owns that file's committed state.
 
 ## Known unresolved issues (as of writing)
 
+> **Read this first (2026-10-03).** Standalone mode is the path the user
+> actually runs: the standalone `.wgt` is installed and in daily use on
+> **both** TVs (Tizen 5.5 and 6.5), and the TizenBrew-injected path is no
+> longer used at all. The "Standalone runtime issues on-device" entry below
+> is **history**, not current state — the 5.5 hang and the 6.5 crash-loop
+> both stopped reproducing. Several fixes in that entry are still marked
+> "not yet retested on-device"; daily use has in fact exercised them, but no
+> single change was ever isolated as the cause, so the log is kept in full
+> rather than rewritten into a conclusion it does not support.
+>
+> Practical consequence: treat changes under `standalone/` as changes to
+> live, in-use code, with the same care as `mods/` — not as work on a
+> broken mode nobody runs.
+
 **Standalone `.wgt` install failure — RESOLVED (2026-08-02).** Kept here for
 the history, since it took several disproven theories to get there:
 
@@ -296,8 +310,13 @@ the history, since it took several disproven theories to get there:
      will *not* pick up a workflow fix merged afterward. Use **Run
      workflow** (`workflow_dispatch`) or a new tag to actually test a fix.
 
-**Standalone runtime issues on-device — open, one fix attempted.**
-Reported 2026-08-02 after the install issue above was fixed:
+**Standalone runtime issues on-device — NO LONGER REPRODUCING
+(2026-10-03), cause never isolated.** In daily use on both TVs since; see
+the note at the top of this section. The investigation below is kept as
+history, because it is the record of what was tried and what was disproven
+— and because an unexplained fix can come back.
+
+Originally reported 2026-08-02 after the install issue above was fixed:
 - **Tizen 5.5:** app shows the TizenTube splash + loading bar, then hangs
   indefinitely — never finishes loading. Also reproduces with upstream's
   own published build, so this isn't a regression from anything in this
@@ -786,8 +805,9 @@ server keys off — only the proxy can rewrite that. Needs a
 isTypeSupported`/`canPlayType` for AC-3/E-AC-3/AC-4, careful never to claim
 a codec the platform doesn't actually support), a settings toggle with 3
 UA profiles, and a diagnostics panel (~600 lines total). Not yet ported —
-deferred until the standalone signing issue above is fixed (can't test an
-install-blocked mode), and the user's hardware is an unconfirmed fit (has
+deferred. Of its two reasons the first is now gone: standalone mode runs and
+is in daily use (see the top of "Known unresolved issues"), so it can be
+tested. Still open is that the user's hardware is an unconfirmed fit (has
 a Samsung soundbar, not confirmed Q-Symphony-compatible). Ask before
 implementing if this comes back up.
 
