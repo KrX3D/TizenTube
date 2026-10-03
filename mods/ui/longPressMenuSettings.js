@@ -57,8 +57,12 @@ function showMoveButtons(parameters) {
     return showModal(
         t(ENTRY_LABELS[parameters.id] || 'videoMenu.play'),
         overlayPanelItemListRenderer([
-            moveButton('moveUp', 'moveUp', 'UP_ARROW'),
-            moveButton('moveDown', 'moveDown', 'DOWN_ARROW')
+            // First argument is the DIRECTION, second the label. Passing the
+            // label as both is what stopped every move: moveEntry compares it
+            // against 'up' and 'down', so nothing ever matched and it wrote the
+            // list back unchanged.
+            moveButton('up', 'moveUp', 'UP_ARROW'),
+            moveButton('down', 'moveDown', 'DOWN_ARROW')
         ]),
         'tt-move-longpress-entry'
     );

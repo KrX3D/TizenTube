@@ -316,34 +316,54 @@ export default function modernUI(update, parameters) {
                     value: 'enableChapters'
                 },*/
                 {
-                    name: t('settings.options.misc.options.longPress'),
-                    value: 'enableLongPress'
-                },
-                {
-                    name: t('settings.options.misc.options.longPressMenu.visible.title'),
-                    icon: 'MENU',
+                    // Its own menu: these rows made the Miscellaneous list
+                    // noticeably longer, and they belong together.
+                    name: t('settings.options.misc.options.longPressMenu.title'),
+                    icon: 'PRIVACY_UNLISTED',
+                    menuId: 'tt-long-press-menu-settings',
                     value: null,
-                    action: {
-                        customAction: {
-                            action: 'SHOW_LONGPRESS_MENU_SETTINGS',
-                            parameters: 'longPressMenuHidden'
+                    options: [
+                        {
+                            name: t('settings.options.misc.options.longPress'),
+                            value: 'enableLongPress'
+                        },
+                        {
+                            name: t('settings.options.misc.options.longPressMenu.visible.title'),
+                            icon: 'MENU',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'SHOW_LONGPRESS_MENU_SETTINGS',
+                                    parameters: 'longPressMenuHidden'
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.longPressMenu.sort.title'),
+                            icon: 'MENU',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'SHOW_LONGPRESS_MENU_SETTINGS',
+                                    parameters: 'longPressMenuOrder'
+                                }
+                            }
+                        },
+                        {
+                            name: t('settings.options.misc.options.longPressMenu.showPlaylists'),
+                            value: 'longPressShowPlaylists'
+                        },
+                        {
+                            name: t('settings.options.misc.options.longPressMenu.playlists.title'),
+                            icon: 'MENU',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'SHOW_LONGPRESS_PLAYLISTS'
+                                }
+                            }
                         }
-                    }
-                },
-                {
-                    name: t('settings.options.misc.options.longPressMenu.sort.title'),
-                    icon: 'MENU',
-                    value: null,
-                    action: {
-                        customAction: {
-                            action: 'SHOW_LONGPRESS_MENU_SETTINGS',
-                            parameters: 'longPressMenuOrder'
-                        }
-                    }
-                },
-                {
-                    name: t('settings.options.misc.options.longPressMenu.showPlaylists'),
-                    value: 'longPressShowPlaylists'
+                    ]
                 },
                 {
                     name: t('settings.options.misc.options.jumpToPercentage'),

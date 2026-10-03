@@ -267,6 +267,29 @@ function playlistTitle(node) {
     return '';
 }
 
+// Add one video to one playlist.
+//
+// Done here rather than by handing YouTube a playlistEditEndpoint, which is how
+// the menu entry used to work: YouTube then shows its own confirmation, and that
+// confirmation said “Watch Later” whatever playlist was actually written to.
+// Doing the call ourselves means the message can name the playlist you picked.
+function addVideoToPlaylist(playlistId, videoId) {
+    return new Promise((resolve, reject) => {
+        try {
+            if (!playlistId || !videoId) return reject(new Error('playlistId and videoId are required'));
+            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            if (!KabukiInnerTubeClient) return reject(new Error('KabukiInnerTubeClient unavailable'));
+            KabukiInnerTubeClient.fetch({
+                path: '/youtubei/v1/browse/edit_playlist',
+                payload: { playlistId, actions: [{ addedVideoId: videoId, action: 'ACTION_ADD_VIDEO' }] }
+            }).subscribe(resolve, reject);
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 export {
     requestNextAndNavigateChannel,
     getGuide,
@@ -274,5 +297,6 @@ export {
     getFeedbackPanelTokens,
     sendFeedbackToken,
     getUserPlaylists,
-    refreshUserPlaylists
+    refreshUserPlaylists,
+    addVideoToPlaylist
 }

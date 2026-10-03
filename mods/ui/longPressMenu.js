@@ -131,7 +131,13 @@ function watchLaterEntry(data) {
 // the next menu has them.
 function playlistEntries(data) {
     if (!configRead('longPressShowPlaylists')) return [];
-    const playlists = getUserPlaylists() || [];
+    const all = getUserPlaylists() || [];
+    // An empty selection means all of them, so switching the feature on shows
+    // something before anything has been picked.
+    const chosen = configRead('longPressPlaylistIds');
+    const playlists = Array.isArray(chosen) && chosen.length
+        ? all.filter(p => chosen.indexOf(p?.playlistId) !== -1)
+        : all;
     const entries = [];
     for (const playlist of playlists.slice(0, MAX_PLAYLIST_ENTRIES)) {
         if (!playlist?.playlistId || !playlist?.title) continue;
@@ -139,10 +145,14 @@ function playlistEntries(data) {
             t('videoMenu.addToNamedPlaylist', { name: playlist.title }),
             {
                 clickTrackingParams: null,
-                commandMetadata: { webCommandMetadata: { sendPost: true, apiUrl: '/youtubei/v1/browse/edit_playlist' } },
+                // Our own action rather than a playlistEditEndpoint: YouTube's
+                // confirmation for one of those says “Watch Later” whichever
+                // playlist was written to, which is what was reported.
                 playlistEditEndpoint: {
-                    playlistId: playlist.playlistId,
-                    actions: [{ addedVideoId: data.videoId, action: 'ACTION_ADD_VIDEO' }]
+                    customAction: {
+                        action: 'ADD_TO_PLAYLIST',
+                        parameters: { playlistId: playlist.playlistId, videoId: data.videoId, name: playlist.title }
+                    }
                 }
             }
         )));

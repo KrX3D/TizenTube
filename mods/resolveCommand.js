@@ -10,9 +10,10 @@ import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo, shareVideo } from './features/qrShare.js';
-import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken } from './utils/innerTubeCalls.js';
+import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken, addVideoToPlaylist } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
+import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
 import { lockupVideoId } from './features/lockupViewModel.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
@@ -357,6 +358,20 @@ function customAction(action, parameters) {
             break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);
+            break;
+        case 'ADD_TO_PLAYLIST':
+            addVideoToPlaylist(parameters?.playlistId, parameters?.videoId)
+                .then(() => showToast('TizenTube', t('toasts.savedToPlaylist', { name: parameters?.name || '' })))
+                .catch((err) => {
+                    console.warn('TizenTube: could not save to the playlist:', err);
+                    showToast('TizenTube', t('toasts.saveToPlaylistFailed', { name: parameters?.name || '' }));
+                });
+            break;
+        case 'SHOW_LONGPRESS_PLAYLISTS':
+            showLongPressPlaylists('longPressPlaylistIds');
+            break;
+        case 'TOGGLE_LONGPRESS_PLAYLIST':
+            showLongPressPlaylists('TOGGLE_LONGPRESS_PLAYLIST', parameters);
             break;
         case 'SHOW_LONGPRESS_MENU_SETTINGS':
             showLongPressMenuSettings(parameters);

@@ -142,7 +142,14 @@
                             "title": "Move Down",
                             "subtitle": "Move this entry one place down"
                         },
-                        "showPlaylists": "Show Your Playlists in the Long Press Menu"
+                        "showPlaylists": "Show Your Playlists in the Long Press Menu",
+                        "playlists": {
+                            "title": "Playlists in the Long Press Menu",
+                            "subtitle": "Pick which of your playlists appear there",
+                            "loading": "Loading your playlists…",
+                            "retry": "Try again"
+                        },
+                        "title": "Long Press Menu"
                     }
                 }
             },
@@ -475,6 +482,8 @@
         "videoPlaysNext": "Video plays next.",
         "channelHidden": "“{{name}}” is now hidden.",
         "channelShownAgain": "“{{name}}” is shown again.",
-        "channelHideFailed": "This tile does not say which channel it belongs to."
+        "channelHideFailed": "This tile does not say which channel it belongs to.",
+        "savedToPlaylist": "Saved to “{{name}}”.",
+        "saveToPlaylistFailed": "Could not save to “{{name}}”."
     }
 }

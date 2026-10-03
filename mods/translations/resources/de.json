@@ -142,7 +142,14 @@
                             "title": "Nach unten",
                             "subtitle": "Diesen Eintrag eine Position nach unten"
                         },
-                        "showPlaylists": "Deine Playlists im Langdruck-Menü zeigen"
+                        "showPlaylists": "Deine Playlists im Langdruck-Menü zeigen",
+                        "playlists": {
+                            "title": "Playlists im Langdruck-Menü",
+                            "subtitle": "Wähle aus, welche deiner Playlists dort erscheinen",
+                            "loading": "Deine Playlists werden geladen…",
+                            "retry": "Erneut versuchen"
+                        },
+                        "title": "Langdruck-Menü"
                     }
                 }
             },
@@ -475,6 +482,8 @@
         "videoPlaysNext": "Video wird als Nächstes abgespielt.",
         "channelHidden": "„{{name}}“ ist jetzt ausgeblendet.",
         "channelShownAgain": "„{{name}}“ wird wieder angezeigt.",
-        "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört."
+        "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört.",
+        "savedToPlaylist": "In „{{name}}“ gespeichert.",
+        "saveToPlaylistFailed": "Konnte nicht in „{{name}}“ gespeichert werden."
     }
 }
