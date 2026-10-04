@@ -54,6 +54,10 @@ const defaultConfig = {
   // Buttons removed from the action row under the player.
   hidePlayerJoinButton: false,
   hidePlayerSubscribeButton: false,
+  hidePlayerThumbsButtons: false,
+  // Retired: there is one button for both thumbs, so a thumbs up option on
+  // its own could never work. Read only for settings stored before that was
+  // understood; hidePlayerThumbsButtons replaces it.
   hidePlayerLikeButton: false,
   hidePlayerDislikeButton: false,
   hidePlayerSaveButton: false,

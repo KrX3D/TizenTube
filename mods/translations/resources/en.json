@@ -190,7 +190,7 @@
                         "options": {
                             "join": "Hide Join/Membership Button",
                             "subscribe": "Hide Subscribe Button",
-                            "like": "Hide Thumbs Up Button",
+                            "thumbs": "Hide Thumbs Up and Down Buttons",
                             "dislike": "Hide Thumbs Down Button",
                             "save": "Hide Save Button",
                             "comments": "Hide Comments Button",
