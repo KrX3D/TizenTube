@@ -1108,6 +1108,16 @@ export default function modernUI(update, parameters) {
                     value: 'enableKeywordHider'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hideViewCounts'),
+                    icon: null,
+                    value: 'hideViewCounts'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.hideQualityBadges'),
+                    icon: null,
+                    value: 'hideQualityBadges'
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideMembersOnlyVideos'),
                     icon: null,
                     value: 'hideMembersOnlyVideos'

@@ -132,6 +132,8 @@ const defaultConfig = {
   // empty list written into it. Anything set here is taken as deliberate.
   hiddenTitleKeywords: [],
   hideMembersOnlyVideos: false,
+  hideViewCounts: false,
+  hideQualityBadges: false,
   hidePaidVideos: false,
   hideFreeWithAdsVideos: false,
   hideDuplicateVideos: false,
