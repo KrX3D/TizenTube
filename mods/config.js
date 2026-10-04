@@ -149,6 +149,45 @@ const defaultConfig = {
   enableFinishTime: false,
 };
 
+/**
+ * Keys that must not travel to another TV.
+ *
+ * Settings transfer copies the config from one TV to another, which only
+ * makes sense for what you chose. These are either tied to the machine, to
+ * the moment, or are state rather than a setting, and copying them would be
+ * at best pointless and at worst wrong — spoofViewport is the clearest case,
+ * since two TVs with different panels want different answers.
+ *
+ * Declared beside the defaults on purpose: a new key should be classified
+ * where it is born, not somewhere a later reader has to go looking for.
+ */
+export const NON_TRANSFERABLE_KEYS = [
+    // Tied to this screen.
+    'spoofViewport',
+    // Tied to this network, or to a receiver only this TV can reach.
+    'logServerHost', 'logServerPort',
+    'syslogHost', 'syslogPort', 'syslogHostname', 'syslogAppName', 'syslogFacility',
+    // State, not settings: carried across restarts for this TV alone.
+    'dontCheckUpdateUntil', 'lastAnnouncementCheck',
+    'captionStyleSettings', 'captionsEnabled', 'captionsOnCommand', 'captionRawKeyBackups',
+    // Diagnostics that are deliberately off at every start anyway.
+    'enableDebugConsole', 'enableDebugLogging', 'logServerEnabled', 'syslogEnabled', 'diagSubscriptionsShelf',
+];
+
+/** The config, as stored. Used by settings transfer; nothing else should write it. */
+export function configAll() {
+    return { ...localConfig };
+}
+
+export function configDefault(key) {
+    return Object.prototype.hasOwnProperty.call(defaultConfig, key) ? defaultConfig[key] : undefined;
+}
+
+/** Every key this build knows, so a payload cannot introduce unknown ones. */
+export function configKnownKeys() {
+    return Object.keys(defaultConfig);
+}
+
 let localConfig;
 const populatedConfigWarnings = new Set();
 
