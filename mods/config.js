@@ -134,6 +134,7 @@ const defaultConfig = {
   hideRelatedVideosPlayer: false,
   spoofViewport: 'disabled',
   enableReloadOnResume: false,
+  enableRemainingTime: false,
 };
 
 let localConfig;

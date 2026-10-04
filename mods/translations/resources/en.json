@@ -206,6 +206,7 @@
                         "title": "Speed Settings Increments",
                         "subtitle": "Set the speed increments for video playback speed adjustments"
                     },
+                    "remainingTime": "Show Remaining Time Beside the Total",
                     "hideRelatedVideosPlayer": "Hide Related Videos in Player",
                     "preferredVideoCodec": {
                         "title": "Preferred Video Codec",

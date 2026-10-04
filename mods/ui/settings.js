@@ -704,6 +704,11 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
+                    name: t('settings.options.videoPlayer.options.remainingTime'),
+                    icon: 'TIMER',
+                    value: 'enableRemainingTime'
+                },
+                {
                     name: t('settings.options.videoPlayer.options.preferredVideoQuality.title'),
                     icon: 'VIDEO_QUALITY',
                     value: null,
