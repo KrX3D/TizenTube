@@ -730,6 +730,40 @@ export default function modernUI(update, parameters) {
                             name: t('settings.options.videoPlayer.options.finishTime'),
                             icon: 'TIMER',
                             value: 'enableFinishTime'
+                        },
+                        {
+                            name: t('settings.options.videoPlayer.options.instantSeek.title'),
+                            icon: 'SKIP_NEXT',
+                            value: null,
+                            menuId: 'tt-instant-seek',
+                            menuHeader: {
+                                title: t('settings.options.videoPlayer.options.instantSeek.title'),
+                                subtitle: t('settings.options.videoPlayer.options.instantSeek.subtitle')
+                            },
+                            options: [
+                                {
+                                    name: t('settings.options.videoPlayer.options.instantSeek.options.enable'),
+                                    icon: 'SKIP_NEXT',
+                                    value: 'enableInstantSeek'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.instantSeek.options.delay.title'),
+                                    icon: 'TIMER',
+                                    value: null,
+                                    menuId: 'tt-instant-seek-delay',
+                                    menuHeader: {
+                                        title: t('settings.options.videoPlayer.options.instantSeek.options.delay.title'),
+                                        subtitle: t('settings.options.videoPlayer.options.instantSeek.options.delay.subtitle')
+                                    },
+                                    options: [250, 500, 750, 1000, 1500].map((ms) => {
+                                        return {
+                                            name: t('settings.options.videoPlayer.options.instantSeek.options.delay.value', { ms }),
+                                            key: 'instantSeekDelayMs',
+                                            value: ms
+                                        };
+                                    })
+                                }
+                            ]
                         }
                     ]
                 },

@@ -224,7 +224,19 @@
                     "codecAny": "Any",
                     "qualityAuto": "Auto",
                     "finishTime": "Show When the Video Will End",
-                    "stopAtPlaylistEnd": "Stop at the End of a Playlist"
+                    "stopAtPlaylistEnd": "Stop at the End of a Playlist",
+                    "instantSeek": {
+                        "title": "Instant Seek",
+                        "subtitle": "Keep the seek bar moving instead of waiting for OK",
+                        "options": {
+                            "enable": "Enable Instant Seek",
+                            "delay": {
+                                "title": "Commit Delay",
+                                "subtitle": "How long to wait after you stop pressing",
+                                "value": "{{ms}} ms"
+                            }
+                        }
+                    }
                 }
             },
             "time": {
