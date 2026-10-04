@@ -500,10 +500,10 @@
             "button": "Teilen",
             "qrCodeScanMessage": "Scanne den QR-Code unten, um dieses Video zu teilen."
         },
-        "upNext": {
-            "title": "Als Nächstes",
+        "playlistEnd": {
+            "title": "Ende der Playlist",
             "cancel": "Abbrechen",
-            "paused": "Automatische Wiedergabe ist pausiert",
+            "paused": "Es wird nichts weiter abgespielt",
             "replay": "Dieses Video erneut abspielen"
         }
     },

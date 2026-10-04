@@ -38,7 +38,12 @@ import { t } from 'i18next';
 
 const COUNTDOWN_SECS = 5;
 
-let _loggedOnce = false;
+// Reported: all logging on, all categories on, and a playlist end still
+// wrote nothing. This was a single flag for the lifetime of the app, so the
+// first /next response of the session spent it and every later stop was
+// silent. One line per video instead, capped so a long session cannot grow
+// without bound.
+const _stopped = new Set();
 const _skips = new Set();
 
 /**
@@ -154,11 +159,11 @@ export function stopAtPlaylistEnd(response) {
 
             overlayRenderer.autoplay = {
                 playerOverlayAutoplayRenderer: {
-                    title: { simpleText: t('player.upNext.title') },
+                    title: { simpleText: t('player.playlistEnd.title') },
                     videoTitle: pivot.title,
                     byline,
-                    cancelText: { simpleText: t('player.upNext.cancel') },
-                    pauseText: { simpleText: t('player.upNext.paused') },
+                    cancelText: { simpleText: t('player.playlistEnd.cancel') },
+                    pauseText: { simpleText: t('player.playlistEnd.paused') },
                     background: pivot.thumbnail,
                     countDownSecs: COUNTDOWN_SECS,
                     nextButton: {
@@ -166,7 +171,7 @@ export function stopAtPlaylistEnd(response) {
                             isDisabled: false,
                             icon: { iconType: 'PLAYING' },
                             navigationEndpoint: pivot.navigationEndpoint,
-                            accessibility: { label: t('player.upNext.replay') },
+                            accessibility: { label: t('player.playlistEnd.replay') },
                             trackingParams: pivot.trackingParams ?? ''
                         }
                     },
@@ -178,11 +183,13 @@ export function stopAtPlaylistEnd(response) {
             };
         }
 
-        if (!_loggedOnce) {
-            _loggedOnce = true;
+        if (!_stopped.has(pivot.videoId) && _stopped.size < 50) {
+            _stopped.add(pivot.videoId);
             appendVisibleLog('player.playlistEndStopped', {
                 videoId: pivot.videoId,
-                items: playlist.totalVideos,
+                index: where.index,
+                items: where.total,
+                decidedBy: where.from,
                 overlay: !!overlayRenderer,
             });
         }

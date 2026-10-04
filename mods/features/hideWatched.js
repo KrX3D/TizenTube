@@ -60,12 +60,22 @@ const _shownOnScreen = new Set();
  * on-screen console is small and a repeated line would push the rest off it.
  */
 export function appendVisibleLog(label, payload) {
-  appendFileOnlyLog(label, payload);
   try {
     let msg = '';
     try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
     const line = `[TizenTube] ${label} ${msg}`;
-    if (_shownOnScreen.has(line) || _shownOnScreen.size >= 40) return;
+    // The screen holds one copy of a line and only so many of them.
+    const blocked = _shownOnScreen.has(line) || _shownOnScreen.size >= 40;
+
+    // Once the console is captured, console.warn already reaches the log file
+    // and the log server, so writing a file copy here as well is what put
+    // every one of these in the log twice. Where the line is not going to the
+    // screen, the file copy is the only one there is.
+    let captured = false;
+    try { captured = window.__ttConsoleCaptured === true; } catch (_) { }
+    if (!captured || blocked) appendFileOnlyLog(label, payload);
+
+    if (blocked) return;
     _shownOnScreen.add(line);
     console.warn(line);
   } catch (_) { }
