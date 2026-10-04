@@ -252,11 +252,6 @@ export default function modernUI(update, parameters) {
                     value: 'enableDeArrow'
                 },
                 {
-                    name: t('settings.options.uiSettings.options.returnYoutubeDislike'),
-                    icon: 'STAR',
-                    value: 'enableReturnYoutubeDislike'
-                },
-                {
                     name: t('settings.options.dearrow.options.enableDAThumbnails'),
                     icon: 'TV',
                     value: 'enableDeArrowThumbnails'
@@ -1219,6 +1214,11 @@ export default function modernUI(update, parameters) {
                     name: t('settings.options.uiSettings.options.hideSurveys'),
                     icon: null,
                     value: 'hideSurveys'
+                },
+                {
+                    name: t('settings.options.uiSettings.options.returnYoutubeDislike'),
+                    icon: 'STAR',
+                    value: 'enableReturnYoutubeDislike'
                 }
             ]
         },
