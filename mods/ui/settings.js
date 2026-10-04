@@ -708,6 +708,21 @@ export default function modernUI(update, parameters) {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.about'),
                                     icon: 'HELP',
                                     value: 'hidePlayerAboutButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.description'),
+                                    icon: 'ARTICLE',
+                                    value: 'hidePlayerDescriptionButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.previous'),
+                                    icon: 'SKIP_PREVIOUS',
+                                    value: 'hidePlayerPreviousButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.next'),
+                                    icon: 'SKIP_NEXT',
+                                    value: 'hidePlayerNextButton'
                                 }
                             ]
                         }
