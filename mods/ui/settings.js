@@ -609,6 +609,10 @@ export default function modernUI(update, parameters) {
                     value: 'enableShowOtherLanguages'
                 },
                 {
+                    name: t('settings.options.subtitles.options.stopForcedSubtitles'),
+                    value: 'enableStopForcedSubtitles'
+                },
+                {
                     name: t('settings.options.subtitles.options.persistCaptionStyle'),
                     value: 'enableCaptionStylePersistence'
                 }

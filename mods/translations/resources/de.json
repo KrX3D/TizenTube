@@ -163,7 +163,8 @@
                 "options": {
                     "showLocalSubtitle": "Lokale Untertitel anzeigen",
                     "showHiddenSubtitles": "Versteckte Untertitel anzeigen",
-                    "persistCaptionStyle": "Untertitelstil merken"
+                    "persistCaptionStyle": "Untertitelstil merken",
+                    "stopForcedSubtitles": "Automatisches Einschalten von Untertiteln verhindern"
                 }
             },
             "videoPlayer": {
