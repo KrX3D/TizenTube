@@ -4,6 +4,7 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
+import { stopAtPlaylistEnd } from './playlistEndStopper.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
@@ -953,6 +954,7 @@ JSON.parse = function () {
         r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
       }
       filterPlayerButtonsInResponse(r);
+      stopAtPlaylistEnd(r);
       hideViewCountsAndBadges(r);
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
@@ -1256,6 +1258,7 @@ JSON.parse = function () {
     }
 
     filterPlayerButtonsInResponse(r);
+    stopAtPlaylistEnd(r);
     hideViewCountsAndBadges(r);
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {

@@ -786,6 +786,11 @@ export default function modernUI(update, parameters) {
                     })
                 },
                 {
+                    name: t('settings.options.videoPlayer.options.stopAtPlaylistEnd'),
+                    icon: 'PLAYLIST_PLAY',
+                    value: 'enableStopAtPlaylistEnd'
+                },
+                {
                     name: t('settings.options.videoPlayer.options.hideRelatedVideosPlayer'),
                     icon: 'VISIBILITY_OFF',
                     value: 'hideRelatedVideosPlayer'
