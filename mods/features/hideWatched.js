@@ -44,6 +44,33 @@ export function appendFileOnlyLog(label, payload) {
   if (window.__ttFileOnlyLogs.length > 5000) window.__ttFileOnlyLogs.shift();
 }
 
+const _shownOnScreen = new Set();
+
+/**
+ * A diagnostic the user is being asked to read, so it has to be readable.
+ *
+ * appendFileOnlyLog is exactly what its name says: it reaches the downloadable
+ * file, the log server and syslog, and never the on-screen console. That is
+ * right for the high-volume per-tile lines, and wrong for the handful of
+ * one-shot "send me this line" diagnostics — reported after being asked to
+ * look in the visual console for a line that could never appear there.
+ *
+ * So this writes to the file log as before and also goes through console.warn,
+ * which visualConsole.js intercepts. Once per distinct message, because the
+ * on-screen console is small and a repeated line would push the rest off it.
+ */
+export function appendVisibleLog(label, payload) {
+  appendFileOnlyLog(label, payload);
+  try {
+    let msg = '';
+    try { msg = JSON.stringify(payload); } catch { msg = String(payload); }
+    const line = `[TizenTube] ${label} ${msg}`;
+    if (_shownOnScreen.has(line) || _shownOnScreen.size >= 40) return;
+    _shownOnScreen.add(line);
+    console.warn(line);
+  } catch (_) { }
+}
+
 // ── Page detection ────────────────────────────────────────────────────────────
 
 function browseIdToPage(id) {

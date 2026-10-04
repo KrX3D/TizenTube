@@ -1,5 +1,5 @@
 import { configRead } from '../config.js';
-import { appendFileOnlyLog } from './hideWatched.js';
+import { appendFileOnlyLog, appendVisibleLog } from './hideWatched.js';
 
 /**
  * playerButtonHider.js — drop buttons from the action row under the player.
@@ -254,7 +254,7 @@ function noteCombinedShape(item) {
         const shape = JSON.stringify(describe(item, 0));
         if (!shape || seenCombined.indexOf(shape) !== -1 || seenCombined.length >= 4) return;
         seenCombined.push(shape);
-        appendFileOnlyLog('player.combinedThumbsShape', { shape });
+        appendVisibleLog('player.combinedThumbsShape', { shape });
     } catch (e) { }
 }
 
@@ -262,7 +262,7 @@ function noteShape(items, group) {
     const shape = items.map((item) => signalsOf(item).join('+') || '?').join(' | ');
     if (!shape || seenShapes.indexOf(shape) !== -1) return;
     seenShapes.push(shape);
-    appendFileOnlyLog('player.buttonTypes', { source: group, items: shape });
+    appendVisibleLog('player.buttonTypes', { source: group, items: shape });
 }
 
 /**

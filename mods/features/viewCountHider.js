@@ -1,5 +1,5 @@
 import { configRead } from '../config.js';
-import { appendFileOnlyLog } from './hideWatched.js';
+import { appendFileOnlyLog, appendVisibleLog } from './hideWatched.js';
 
 /**
  * viewCountHider.js — take the view count, and the 4K/8K/dubbed badges, off
@@ -124,7 +124,7 @@ function isHiddenBadge(wrapper) {
     // rather than guessed at. Once per label, capped.
     if (_loggedBadges.size < 40 && !_loggedBadges.has(lower)) {
         _loggedBadges.add(lower);
-        appendFileOnlyLog('tiles.badgeSeen', { label });
+        appendVisibleLog('tiles.badgeSeen', { label });
     }
     return false;
 }
