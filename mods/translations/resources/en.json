@@ -223,7 +223,8 @@
                     },
                     "codecAny": "Any",
                     "qualityAuto": "Auto",
-                    "finishTime": "Show When the Video Will End"
+                    "finishTime": "Show When the Video Will End",
+                    "stopAtPlaylistEnd": "Stop at the End of a Playlist"
                 }
             },
             "time": {
@@ -483,6 +484,12 @@
             "title": "Share",
             "button": "Share",
             "qrCodeScanMessage": "Scan the QR code below to share this video."
+        },
+        "upNext": {
+            "title": "Up next",
+            "cancel": "Cancel",
+            "paused": "Auto-play is paused",
+            "replay": "Play this video again"
         }
     },
     "videoMenu": {

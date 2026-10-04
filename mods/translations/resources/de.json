@@ -223,7 +223,8 @@
                     },
                     "codecAny": "Beliebig",
                     "qualityAuto": "Automatisch",
-                    "finishTime": "Endzeit des Videos anzeigen"
+                    "finishTime": "Endzeit des Videos anzeigen",
+                    "stopAtPlaylistEnd": "Am Ende einer Playlist anhalten"
                 }
             },
             "time": {
@@ -483,6 +484,12 @@
             "title": "Teilen",
             "button": "Teilen",
             "qrCodeScanMessage": "Scanne den QR-Code unten, um dieses Video zu teilen."
+        },
+        "upNext": {
+            "title": "Als Nächstes",
+            "cancel": "Abbrechen",
+            "paused": "Automatische Wiedergabe ist pausiert",
+            "replay": "Dieses Video erneut abspielen"
         }
     },
     "videoMenu": {
