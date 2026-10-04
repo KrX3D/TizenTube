@@ -78,6 +78,9 @@ options are described in the row rather than listed separately.
 | Hide Duplicate Videos **(fork)** | Removes a video from a page when it has already appeared higher up, keeping the first occurrence. Rows left empty by this are dropped too. Never applied on the watch page or inside a playlist, where repeats are meaningful |
 | Hide the Combined Subscriptions Row **(fork)** | Subscriptions opens with one long row ("Relevanteste") holding videos that also appear in the per-channel rows below it. Because the duplicate filter keeps the first copy, that row would win every tie and the rows below it would empty out, collapsing the page into one row. This removes the combined row instead, so the per-channel rows survive. Identified by the overlap between rows, not by its title, which is localised |
 | Hide the Music Row **(fork)** | Removes the YouTube Music row on Home ("Noch mal anhören" with its "Mehr Musik" link), identified by where it points rather than by its title |
+| Hide Videos by Title Keyword **(fork)** | Hides videos whose title contains one of your keywords. The list starts empty — see "Title keyword filter" below for how to set it and a suggested starting list. Matched case-insensitively anywhere in the title, except a single short word, which is matched on word boundaries so "ai" does not hide "Thailand" |
+| Hide View Counts **(fork)** | Takes the view count off every tile, and cleans up the separator it leaves behind. Matched on the response fields rather than on the word "views", so it works in any language |
+| Hide 4K/8K and Dubbed Badges **(fork)** | Removes the resolution and auto-dubbed badges from tiles. A badge it does not recognise is logged with its wording, so an unlisted one can be added |
 | Hide Special Playlists **(fork)** | Hides Liked Videos and/or Watch Later from the Library and Playlists pages |
 | Enable Shorts | Off by default — Shorts shelves and Shorts tiles are stripped from every surface |
 
@@ -103,7 +106,12 @@ options are described in the row rather than listed separately.
 | Number Keys Jump to Percentage | Pressing `1`–`9` jumps to that percentage of the video, `0` jumps to the start |
 | Reload Player After TV Wakes **(fork)** | Rebuilds the player after standby, fixing the frozen first frame |
 | Player UI patching | Optional Previous/Next, Super Thanks, Ask, and Speed Controls buttons |
-| Hide Player Buttons **(fork)** | Removes buttons from the action row under the player: Join/Membership, Subscribe, Thumbs Up, Thumbs Down and Save. Each one is a separate toggle, and the row is matched on the button types rather than on the labels, which are localised |
+| Hide Player Buttons **(fork)** | Removes buttons from the action row under the player: Join/Membership, Subscribe, Thumbs Up, Thumbs Down, Save, Comments, About, Description, Previous and Next. Each one is a separate toggle. Matched on the button types and the endpoints they run rather than on the labels, which are localised — the description button is found by the panel it opens. Where YouTube sends one combined thumbs button, it goes only when both thumbs are hidden. Hiding Previous/Next wins over the setting that adds them |
+| Show Time Remaining **(fork)** | Adds how much of the video is left to the player’s own duration readout: `42:17 · -12:04` |
+| Show When the Video Will End **(fork)** | Adds the clock time the video finishes at: `42:17 · →14:35`. Follows the playback speed, and uses the same 12/24-hour setting as the on-screen clock. Both readouts together give `42:17 · -12:04 · →14:35` — the minus means time left, the arrow means "until" |
+| Instant Seek **(fork)** | The seek bar keeps moving while you hold left or right instead of waiting for OK on every step; the seek commits by itself once you stop. The delay is configurable (250–1500 ms) |
+| Stop at the End of a Playlist **(fork)** | At the end of a playlist, stops and offers to replay instead of playing an unrelated recommendation (or showing a black screen) |
+| Return YouTube Dislike **(fork)** | Puts the dislike count back, on the thumbs-down button and in the description panel. Sends the id of every video you open to returnyoutubedislike.com, so it is off by default and the setting names the service |
 
 ## Thumbnails and titles
 
@@ -129,6 +137,8 @@ options are described in the row rather than listed separately.
 | Reload Home on Startup | Forces a fresh Home feed on launch |
 | Library Tabs Buttons to Hide **(fork)** | Hides individual Library tabs (Music, Movies & Shows, Podcasts, My Videos, History, Watch Later, Playlists) |
 | Sort Subscriptions Alphabetically | Alphabetical instead of YouTube's own ordering |
+| Stop Bixby Interrupting Voice Search **(fork)** | Pressing the microphone button starts Bixby and YouTube’s own speech recognition at the same time, and Bixby’s "not understood" dismisses the YouTube result. This swallows the key for Bixby while a search is on screen; the mic button works as normal everywhere else |
+| Transfer Settings **(fork)** | Copies your settings to or from another TV on the same network. The receiving TV lists only the settings that would actually change, each one something you can leave out, and keeps a one-step undo. Device-bound settings never travel. See "Transferring settings between TVs" below |
 | Who's Watching Menu | Control whether the profile picker appears, including on app exit, and whether it stays permanently enabled |
 | "Are you still watching?" prompt | Toggle YouTube's idle-playback interruption |
 | Show Guest Sign In Reminder | Toggle the prompt asking a signed-out viewer to sign in |
@@ -155,6 +165,7 @@ it. The options live on their own settings page under Miscellaneous.
 | Remove From This Playlist **(fork)** | Menu entry, offered only while you are inside one of your own playlists: removes the video from that playlist |
 | Hide This Channel **(fork)** | Menu entry. Hides everything from that channel across the feeds. Matched on the channel name, because tiles do not carry a channel id |
 | Hidden Channels **(fork)** | Lists the channels you hid, under Interface settings. Select one to show it again |
+| Sort Playlists in the Long Press Menu **(fork)** | Choose the order your playlists appear in. A playlist deleted on YouTube drops out of both lists the next time the picker is opened |
 
 ## Subtitles
 
@@ -163,6 +174,7 @@ it. The options live on their own settings page under Miscellaneous.
 | Show Local Subtitle | Surfaces subtitles in your own language |
 | Show Hidden Subtitles | Exposes tracks YouTube hides from the picker |
 | Remember Caption Style **(fork)** | Persists caption font/size/colour settings across sessions and restarts |
+| Stop Videos Turning Subtitles On **(fork)** | Removes the instruction some videos carry to switch subtitles on by themselves — auto-dubbed videos mostly. Not the same as remembering your caption choice: that restores subtitles you switched on and cannot counteract a video that forces them. Every subtitle track stays selectable by hand |
 
 ## Maintenance and diagnostics
 
@@ -178,6 +190,95 @@ it. The options live on their own settings page under Miscellaneous.
 | Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
 
 Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
+
+# Title keyword filter
+
+**The keyword list ships empty.** Turning *Hide Videos by Title Keyword* on
+does nothing until you put words in it, which is deliberate: what counts as
+noise is not the same for two people, and a list of defaults would hide
+things you never asked to lose.
+
+A TV has no free-text entry, so the list is edited the way the log server’s
+host is — through the config. From the debug console (yellow button) or a
+Tampermonkey session:
+
+```js
+const c = JSON.parse(localStorage['ytaf-configuration']);
+c.hiddenTitleKeywords = ['ai generated', 'ai voice', 'ai story'];
+c.enableKeywordHider = true;
+localStorage['ytaf-configuration'] = JSON.stringify(c);
+```
+
+Then restart the app.
+
+## A suggested starting list
+
+This is the list krakenkall’s fork hardcodes, which is where the feature came
+from. It targets AI-generated uploads and a few drama tropes:
+
+```js
+c.hiddenTitleKeywords = [
+    'ai generated', 'ai-generated', 'ai voice', 'ai story',
+    'ai animation', 'ai movie', 'ai video',
+    'cung đấu', 'cung dau',      // palace-intrigue drama
+    'tổng tài', 'tong tai',      // "CEO" romance drama
+    'chủ tịch', 'chu tich',      // "chairman" drama
+];
+```
+
+## How a keyword is matched
+
+| Keyword | Matches | Does not match |
+| --- | --- | --- |
+| `ai generated` | "How I made an **AI generated** film" | "AI-generated" (different punctuation — add both) |
+| `ai` | "Made with **AI**", "(**AI**) slop" | "She s**ai**d nothing", "Th**ai**land" |
+| `generation` | "**Generations** of pasta" | — |
+| `c++` | "What a **c++** video" | — (regex characters are taken literally) |
+
+A keyword of four characters or fewer with no space in it is matched on word
+boundaries, which is what keeps `ai` from sweeping up ordinary videos.
+Anything longer, or containing a space, is matched anywhere in the title. All
+matching is case-insensitive.
+
+Every removal is logged under `filters.keywordHidden` (log category
+**filters**) with the keyword and the title, so a keyword catching more than
+you meant is easy to spot.
+
+# Transferring settings between TVs
+
+Under Miscellaneous → Transfer Settings. On the TV you are copying **from**,
+open *Export*; on the other, open *Import*. The importing TV searches the
+network, you pick the TV, and it then shows **only the settings that differ**
+— each one a row you can untick:
+
+```
+What Would Change — 6 of your settings differ from Wohnzimmer
+
+  Oberfläche
+  [x] Shorts aktivieren         Aus  →  Ein
+  [x] Uhr anzeigen              Aus  →  Ein
+  [ ] Ausgeblendete Kanäle      4 Einträge  →  11 Einträge
+
+  [ Import 3 settings ]   [ Alle abwählen ]
+```
+
+Two TVs that already match say so rather than showing an empty list. Nothing
+is written until you confirm, and **Undo Last Import** puts back whatever the
+last one changed.
+
+What does not travel: anything tied to the machine rather than chosen — the
+spoofed viewport resolution (two TVs with different panels want different
+answers), the log and syslog addresses, and state such as the caption
+backups. A setting with no row in the settings menu cannot be transferred at
+all: if a value cannot be named and shown on screen, it is not something to
+copy between TVs.
+
+Sharing is held in memory only, never written to disk, and the route answers
+nothing unless the Export screen is open — it closes when you leave it.
+
+Works in standalone mode on both its paths, and in TizenBrew mode in a plain
+HTTP context. In TizenBrew over HTTPS the page cannot reach any local server
+in either direction, and the screen says so rather than hanging.
 
 # Tampermonkey local debugging helpers (Windows + Chrome)
 
