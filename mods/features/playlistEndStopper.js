@@ -1,5 +1,5 @@
 import { configRead } from '../config.js';
-import { appendFileOnlyLog } from './hideWatched.js';
+import { appendFileOnlyLog, appendVisibleLog } from './hideWatched.js';
 import { t } from 'i18next';
 
 /**
@@ -39,6 +39,70 @@ import { t } from 'i18next';
 const COUNTDOWN_SECS = 5;
 
 let _loggedOnce = false;
+const _skips = new Set();
+
+/**
+ * Say why nothing was done, once per distinct reason.
+ *
+ * Visible on screen, not just in the log file: this exists to be read after a
+ * playlist failed to stop, and a line nobody can see is no use for that.
+ */
+function noteSkip(reason, detail) {
+    const key = reason + JSON.stringify(detail || {});
+    if (_skips.has(key) || _skips.size >= 8) return;
+    _skips.add(key);
+    appendVisibleLog('player.playlistEnd.skipped', Object.assign({ reason }, detail || {}));
+}
+
+/** A number out of "12 Videos", "12 videos", "12" or 12. */
+function countFrom(value) {
+    if (typeof value === 'number' && isFinite(value)) return value;
+    const text = value && typeof value === 'object'
+        ? (value.simpleText || (Array.isArray(value.runs) ? value.runs.map((r) => r?.text || '').join('') : ''))
+        : String(value || '');
+    const digits = text.replace(/[^0-9]/g, '');
+    return digits ? Number(digits) : null;
+}
+
+/**
+ * Is this the last video of the playlist, and what was that decided from?
+ *
+ * The first cut read currentIndex and totalVideos and nothing else, so a build
+ * that names either of them differently — or omits the count, which a playlist
+ * still loading does — read as "not the last video" and the feature never
+ * fired. Every signal the renderer might carry is tried, and which one answered
+ * is reported.
+ */
+export function lastVideoVerdict(playlist) {
+    const index = typeof playlist.currentIndex === 'number' ? playlist.currentIndex : null;
+    const counts = {
+        totalVideos: countFrom(playlist.totalVideos),
+        localizedTotalVideos: countFrom(playlist.localizedTotalVideos),
+        totalVideosText: countFrom(playlist.totalVideosText),
+        contents: Array.isArray(playlist.contents) ? playlist.contents.length : null,
+    };
+
+    for (const field of ['totalVideos', 'localizedTotalVideos', 'totalVideosText', 'contents']) {
+        const total = counts[field];
+        if (index === null || !total) continue;
+        return { isLast: index === total - 1, from: field, index, total };
+    }
+
+    // No count to compare against, so fall back to the panel itself: the last
+    // item being the one marked as playing is the same statement.
+    const items = Array.isArray(playlist.contents) ? playlist.contents : null;
+    if (items && items.length) {
+        const selectedAt = items.findIndex((item) => {
+            const r = item?.playlistPanelVideoRenderer || item?.tileRenderer || item;
+            return r?.selected === true || r?.isPlaying === true || r?.playing === true;
+        });
+        if (selectedAt !== -1) {
+            return { isLast: selectedAt === items.length - 1, from: 'selectedItem', index: selectedAt, total: items.length };
+        }
+    }
+
+    return { isLast: false, from: 'nothing', index, counts, keys: Object.keys(playlist).slice(0, 14) };
+}
 
 /**
  * Rewrite the end-of-playlist case in a /next response, in place.
@@ -56,12 +120,28 @@ export function stopAtPlaylistEnd(response) {
         const pivot = results?.autoplay?.autoplay?.replayVideoRenderer?.pivotVideoRenderer;
         const overlayRenderer = response?.playerOverlays?.playerOverlayRenderer;
 
-        if (!playlist || !Array.isArray(sets) || !pivot?.navigationEndpoint?.watchEndpoint) return response;
-        // currentIndex is zero-based, so the last video is one less than the
-        // count. A playlist still loading reports what it has, and being wrong
-        // here only means the stop happens a video early or late, not that
-        // anything breaks.
-        if (playlist.currentIndex !== playlist.totalVideos - 1) return response;
+        // Not a watch response for a playlist at all: the overwhelming
+        // majority of responses, so this is silent.
+        if (!playlist) return response;
+
+        if (!Array.isArray(sets) || !pivot?.navigationEndpoint?.watchEndpoint) {
+            noteSkip('no autoplay set or nothing to replay', {
+                sets: Array.isArray(sets) ? sets.length : typeof sets,
+                pivot: !!pivot,
+            });
+            return response;
+        }
+
+        const where = lastVideoVerdict(playlist);
+        if (!where.isLast) {
+            // Reported: the last video of a playlist still counted down into
+            // something unrelated. The count and the position are read from
+            // whichever of these the build actually sends, and when none of
+            // them answers, the shape is reported rather than silently
+            // treated as "not the last video" — which is what happened.
+            noteSkip('not the last video', where);
+            return response;
+        }
 
         for (const set of sets) {
             if (set && set.mode === 'NORMAL') delete set.autoplayVideoRenderer;
@@ -100,7 +180,7 @@ export function stopAtPlaylistEnd(response) {
 
         if (!_loggedOnce) {
             _loggedOnce = true;
-            appendFileOnlyLog('player.playlistEndStopped', {
+            appendVisibleLog('player.playlistEndStopped', {
                 videoId: pivot.videoId,
                 items: playlist.totalVideos,
                 overlay: !!overlayRenderer,
