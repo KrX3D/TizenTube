@@ -710,11 +710,6 @@ export default function modernUI(update, parameters) {
                                     value: 'hidePlayerAboutButton'
                                 },
                                 {
-                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.description'),
-                                    icon: 'ARTICLE',
-                                    value: 'hidePlayerDescriptionButton'
-                                },
-                                {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.previous'),
                                     icon: 'SKIP_PREVIOUS',
                                     value: 'hidePlayerPreviousButton'
@@ -725,18 +720,18 @@ export default function modernUI(update, parameters) {
                                     value: 'hidePlayerNextButton'
                                 }
                             ]
+                        },
+                        {
+                            name: t('settings.options.videoPlayer.options.remainingTime'),
+                            icon: 'TIMER',
+                            value: 'enableRemainingTime'
+                        },
+                        {
+                            name: t('settings.options.videoPlayer.options.finishTime'),
+                            icon: 'TIMER',
+                            value: 'enableFinishTime'
                         }
                     ]
-                },
-                {
-                    name: t('settings.options.videoPlayer.options.remainingTime'),
-                    icon: 'TIMER',
-                    value: 'enableRemainingTime'
-                },
-                {
-                    name: t('settings.options.videoPlayer.options.finishTime'),
-                    icon: 'TIMER',
-                    value: 'enableFinishTime'
                 },
                 {
                     name: t('settings.options.videoPlayer.options.preferredVideoQuality.title'),

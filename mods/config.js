@@ -57,7 +57,6 @@ const defaultConfig = {
   hidePlayerSaveButton: false,
   hidePlayerCommentsButton: false,
   hidePlayerAboutButton: false,
-  hidePlayerDescriptionButton: false,
   hidePlayerPreviousButton: false,
   hidePlayerNextButton: false,
   enablePreviews: false,

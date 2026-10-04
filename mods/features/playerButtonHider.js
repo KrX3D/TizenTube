@@ -69,16 +69,13 @@ const BUTTONS = [
         match: [/^COMMENTS?$/i, /^COMMENTS?_/i, /^commentsEndpoint$/i, /^showEngagementPanelEndpoint:comments/i],
     },
     {
+        // ABOUT_BUTTON is what the app calls it internally, but on screen it
+        // reads "Beschreibung" — reported after #777 shipped calling it Info.
+        // There is one button here, not two: the panel it opens is
+        // video-description-ep-identifier, which is why the separate
+        // description option this once had was the same button twice.
         key: 'hidePlayerAboutButton', name: 'about',
-        // ABOUT_BUTTON is the name the app uses; nothing else begins with it.
-        match: [/^ABOUT/i],
-    },
-    {
-        key: 'hidePlayerDescriptionButton', name: 'description',
-        // The panel it opens is the reliable part: video-description-ep-identifier
-        // is the same string in every language, and is what this fork already
-        // reads to put the dislike count into the description.
-        match: [/^DESCRIPTION/i, /^panel:video-description/i, /^descriptionEndpoint$/i],
+        match: [/^ABOUT/i, /^DESCRIPTION/i, /^panel:video-description/i, /^descriptionEndpoint$/i],
     },
     {
         key: 'hidePlayerPreviousButton', name: 'previous',
