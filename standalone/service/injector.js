@@ -53,6 +53,41 @@ const RETRY_DELAY_MS = 750;
 let _relaySyslog = null;
 function setSyslogRelay(fn) { _relaySyslog = typeof fn === 'function' ? fn : null; }
 
+// Settings transfer on this path: the page is real https://youtube.com and
+// cannot fetch anything http://, so it leaves requests in window.
+// __ttRequestQueue and this carries them to the local service and writes the
+// answer back. Only this project's own service is ever called, and only
+// its settings routes — the path is checked here rather than trusted, because it
+// arrives from the page.
+const BRIDGE_ORIGIN = 'http://localhost:8085';
+const BRIDGE_ALLOWED = new RegExp('^/tizentube/settings(/(share|stop|peers|peer|hello))?([?][^#]*)?$');
+
+function serveBridgeRequest(client, request) {
+    const id = request && typeof request.id === 'string' ? request.id : null;
+    if (!id) return;
+
+    const answer = (result) => {
+        client.Runtime.evaluate({
+            // The whole result goes through JSON.stringify, so nothing from a
+            // peer can break out of the literal and become code in the page.
+            expression: '(function(){ window.__ttRequestResults = window.__ttRequestResults || {}; window.__ttRequestResults['
+                + JSON.stringify(id) + '] = ' + JSON.stringify(result) + '; })()',
+            returnByValue: true
+        }).catch(() => { });
+    };
+
+    const path = request && typeof request.path === 'string' ? request.path : '';
+    if (!BRIDGE_ALLOWED.test(path)) return answer({ error: 'path not allowed' });
+
+    const options = request.body
+        ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request.body), timeout: 10000 }
+        : { method: 'GET', timeout: 10000 };
+
+    fetch(BRIDGE_ORIGIN + path, options)
+        .then((res) => res.json().then((body) => answer({ body })))
+        .catch((err) => answer({ error: String((err && err.message) || err) }));
+}
+
 function pollLogQueue(client, relayLog) {
     if (typeof relayLog !== 'function') return;
 
@@ -98,7 +133,7 @@ function pollLogQueue(client, relayLog) {
             // Both queues are drained in the same round-trip: syslog adds no
             // extra evaluate() and so no extra in-page cost, which matters
             // because this poll already competes with YouTube's own rendering.
-            expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; return JSON.stringify({ logs: q, syslog: s }); })()',
+            expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var r = window.__ttRequestQueue || []; window.__ttRequestQueue = []; return JSON.stringify({ logs: q, syslog: s, requests: r }); })()',
             returnByValue: true
         }).then(result => {
             consecutiveFailures = 0;
@@ -115,6 +150,9 @@ function pollLogQueue(client, relayLog) {
                 for (const item of (Array.isArray(drained) ? [] : (drained.syslog || []))) {
                     _relaySyslog(item.frame, item.host, item.port, reportSyslogProblem);
                 }
+            }
+            for (const request of (Array.isArray(drained) ? [] : (drained.requests || []))) {
+                serveBridgeRequest(client, request);
             }
         }).catch(() => {
             consecutiveFailures++;

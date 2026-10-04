@@ -525,5 +525,52 @@
         "channelHideFailed": "This tile does not say which channel it belongs to.",
         "savedToPlaylist": "Saved to “{{name}}”.",
         "saveToPlaylistFailed": "Could not save to “{{name}}”."
+    },
+    "settingsTransfer": {
+        "title": "Transfer Settings",
+        "subtitle": "Copy your settings to or from another TV",
+        "unavailable": "Not available in this mode — the page cannot reach the local service here",
+        "close": "Close",
+        "on": "On",
+        "off": "Off",
+        "itemCount": "{{count}} items",
+        "shareFailed": "Could not start sharing.",
+        "applied": "{{count}} settings imported.",
+        "appliedNone": "Nothing was imported.",
+        "export": {
+            "title": "Export to Another TV",
+            "subtitle": "Sharing {{count}} settings — open Import on the other TV now",
+            "stop": "Stop sharing",
+            "stopSubtitle": "Sharing also stops when you leave this screen",
+            "stopped": "Sharing stopped."
+        },
+        "import": {
+            "title": "Import from Another TV",
+            "subtitle": "Pick the TV to copy from",
+            "searching": "Looking for TizenTube on your network…",
+            "noneFound": "No other TV found",
+            "noneFoundSubtitle": "Open Export on the other TV first, then select to search again",
+            "peerSharing": "Sharing now",
+            "peerNotSharing": "Not sharing — open Export there first",
+            "searchFailed": "Could not search the network.",
+            "fetchFailed": "Could not read the settings from that TV.",
+            "reading": "Reading settings…"
+        },
+        "changes": {
+            "title": "What Would Change",
+            "subtitle": "{{count}} of your settings differ from {{name}}",
+            "subtitleSkipped": "{{count}} settings differ from {{name}} — {{skipped}} not supported here",
+            "identical": "Nothing to import — this TV already matches {{name}}",
+            "apply": "Import {{count}} settings",
+            "selectNone": "Deselect all",
+            "selectAll": "Select all"
+        },
+        "undo": {
+            "title": "Undo Last Import",
+            "subtitle": "Put back what the last import changed",
+            "confirm": "Undo the import",
+            "done": "{{count}} settings put back.",
+            "nothing": "There is no import to undo."
+        }
     }
 }

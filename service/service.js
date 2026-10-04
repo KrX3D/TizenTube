@@ -1,6 +1,7 @@
 const dial = require("@patrickkfkan/peer-dial");
 const express = require('express');
 const cors = require('cors');
+const mountSettingsShare = require('./settingsShare.js');
 const app = express();
 
 app.use(cors());
@@ -103,6 +104,11 @@ setInterval(() => {
         }
     });
 }, 5000);
+
+// Settings transfer between TVs. Mounted here because this is the only server
+// this project runs that the network can reach, and because it runs in both
+// modes — standalone and TizenBrew-injected — so the routes exist either way.
+mountSettingsShare(app, { name: 'TizenTube', version: process.env.TT_VERSION || null });
 
 app.listen(PORT, () => {
     dialServer.start();

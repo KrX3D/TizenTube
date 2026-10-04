@@ -34,6 +34,25 @@ function resolveSubtitle(value) {
     }
 }
 
+/**
+ * The settings tree as the menu last built it.
+ *
+ * settingsTransfer.js needs it to turn a config key into the name you see on
+ * screen. It is recorded rather than moved out into a function of its own:
+ * the tree is 1100 lines, and lifting it would rewrite the whole file and
+ * collide with every later change to any setting.
+ *
+ * Nothing has to run it first. The only way to reach the transfer screens is
+ * through this menu, so by the time anything asks, modernUI has built the
+ * tree at least once. An empty answer means a caller found another way in,
+ * and the worst of that is a row labelled with its config key.
+ */
+let lastBuiltTree = null;
+
+export function builtSettingsTree() {
+    return lastBuiltTree || [];
+}
+
 export default function modernUI(update, parameters) {
     const standaloneVersion = getStandaloneVersion();
     const versionText = standaloneVersion
@@ -315,6 +334,48 @@ export default function modernUI(update, parameters) {
                     icon: 'BOOKMARK_BORDER',
                     value: 'enableChapters'
                 },*/
+                {
+                    name: t('settingsTransfer.title'),
+                    icon: 'SEND',
+                    value: null,
+                    menuId: 'tt-settings-transfer',
+                    menuHeader: {
+                        title: t('settingsTransfer.title'),
+                        subtitle: t('settingsTransfer.subtitle')
+                    },
+                    options: [
+                        {
+                            name: t('settingsTransfer.export.title'),
+                            icon: 'SEND',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'TT_SETTINGS_EXPORT'
+                                }
+                            }
+                        },
+                        {
+                            name: t('settingsTransfer.import.title'),
+                            icon: 'OPEN_IN_NEW',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'TT_SETTINGS_IMPORT'
+                                }
+                            }
+                        },
+                        {
+                            name: t('settingsTransfer.undo.title'),
+                            icon: 'SYSTEM_UPDATE',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'TT_SETTINGS_UNDO'
+                                }
+                            }
+                        }
+                    ]
+                },
                 {
                     // Its own menu: these rows made the Miscellaneous list
                     // noticeably longer, and they belong together.
@@ -1199,6 +1260,7 @@ export default function modernUI(update, parameters) {
                 ]
             } : null
     ];
+    lastBuiltTree = settings;
 
     const buttons = [];
 
