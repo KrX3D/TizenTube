@@ -258,6 +258,52 @@ function noteCombinedShape(item) {
     } catch (e) { }
 }
 
+const seenHolders = [];
+
+/**
+ * Where the player's button row actually is, on this build.
+ *
+ * Reported: with one thumb option on, nothing at all was logged — not on
+ * screen, not through the log server. Every other diagnostic here only fires
+ * once a button list has been found, so "nothing" means the row was not found
+ * where this looks for it, and none of those lines could ever appear. That is
+ * the one fact worth capturing, and it has to be captured unconditionally.
+ *
+ * Key names only, one level, plus which keys held something that looked like a
+ * list of buttons. Recorded once per distinct shape.
+ */
+function noteHolders(response, holders) {
+    try {
+        // Only for a response that carries a player at all, or this would fire
+        // for every browse payload.
+        if (!response || typeof response !== 'object') return;
+        if (!response.transportControls && !response.playerOverlays) return;
+
+        const seen = {};
+        for (const [name, holder] of holders) {
+            if (!holder || typeof holder !== 'object') {
+                seen[name] = holder === undefined ? 'absent' : typeof holder;
+                continue;
+            }
+            const lists = [];
+            const keys = [];
+            for (const key of Object.keys(holder)) {
+                keys.push(key);
+                if (Array.isArray(holder[key])) {
+                    lists.push(key + '[' + holder[key].length + ']' + (looksLikeButtonList(holder[key]) ? '*' : ''));
+                }
+            }
+            seen[name] = { keys: keys.slice(0, 24), lists };
+        }
+        const shape = JSON.stringify(seen);
+        if (seenHolders.indexOf(shape) !== -1 || seenHolders.length >= 4) return;
+        seenHolders.push(shape);
+        // A starred list is one this code would filter; no star means the
+        // buttons are somewhere this does not look.
+        appendVisibleLog('player.rowShape', { seen });
+    } catch (e) { }
+}
+
 function noteShape(items, group) {
     const shape = items.map((item) => signalsOf(item).join('+') || '?').join(' | ');
     if (!shape || seenShapes.indexOf(shape) !== -1) return;
@@ -325,6 +371,7 @@ export function filterPlayerButtonsInResponse(response) {
             ['transportControls', response?.transportControls?.transportControlsRenderer],
             ['playerOverlay', response?.playerOverlays?.playerOverlayRenderer],
         ];
+        noteHolders(response, holders);
         for (const [name, holder] of holders) {
             if (!holder || typeof holder !== 'object') continue;
             for (const key of Object.keys(holder)) {
