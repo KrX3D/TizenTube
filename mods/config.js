@@ -124,6 +124,8 @@ const defaultConfig = {
   clockHideWhenVideoPlaying: false,
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
+  enableKeywordHider: false,
+  hiddenTitleKeywords: [],
   hideMembersOnlyVideos: false,
   hidePaidVideos: false,
   hideFreeWithAdsVideos: false,

@@ -369,7 +369,8 @@
                         "subtitle": "Channels hidden from the long press menu",
                         "unhide": "Select to show this channel again",
                         "empty": "No channels are hidden"
-                    }
+                    },
+                    "keywordHider": "Hide Videos by Title Keyword"
                 }
             },
             "updater": {
