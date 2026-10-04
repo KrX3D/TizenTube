@@ -21,6 +21,7 @@ import "./features/captionStylePersistence.js";
 import "./features/updater.js";
 import "./features/pictureInPicture.js";
 import "./features/preferredVideoQuality.js";
+import "./features/instantSeek.js";
 import "./features/remainingTime.js";
 import "./features/videoQueuing.js";
 import "./features/enableFeatures.js";

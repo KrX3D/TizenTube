@@ -225,7 +225,19 @@
                     "codecAny": "Beliebig",
                     "qualityAuto": "Automatisch",
                     "finishTime": "Endzeit des Videos anzeigen",
-                    "stopAtPlaylistEnd": "Am Ende einer Playlist anhalten"
+                    "stopAtPlaylistEnd": "Am Ende einer Playlist anhalten",
+                    "instantSeek": {
+                        "title": "Direktes Spulen",
+                        "subtitle": "Die Suchleiste läuft weiter, statt auf OK zu warten",
+                        "options": {
+                            "enable": "Direktes Spulen aktivieren",
+                            "delay": {
+                                "title": "Verzögerung",
+                                "subtitle": "Wie lange nach dem letzten Tastendruck gewartet wird",
+                                "value": "{{ms}} ms"
+                            }
+                        }
+                    }
                 }
             },
             "time": {
