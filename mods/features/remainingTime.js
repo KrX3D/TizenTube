@@ -1,12 +1,27 @@
 import { configRead, configChangeEmitter } from '../config.js';
 
 /**
- * remainingTime.js — show how much of the video is left, beside the total.
+ * remainingTime.js — what is left of the video, and when it will end.
  *
- * Ported from siriusvoid's fork, with the behaviour changed as requested: that
- * version replaces the total with a countdown, this one appends the countdown
- * to it, so the player reads `42:17 (-12:04)` and you can still see how long
- * the video is.
+ * Ported from siriusvoid's fork. That version replaces the total with a
+ * countdown; this one appends to the total, so the length of the video is
+ * still there, and it can also say the clock time the video will finish at.
+ *
+ * The layout marks each value rather than bracketing it, because three times
+ * in a row with nothing to tell them apart cannot be read — "42:17 / 12:04 /
+ * 14:35" says nothing about which is which:
+ *
+ *   42:17                    nothing switched on: the app's own text, untouched
+ *   42:17 · -12:04           time left, marked by the minus every player uses
+ *   42:17 · →14:35           when it ends, marked by an arrow reading "until"
+ *   42:17 · -12:04 · →14:35  both
+ *
+ * The separator is the middle dot the app itself puts between the parts of a
+ * tile's metadata, so the row looks like it belongs there.
+ *
+ * The finish time follows the playback rate — at 1.5x, twelve minutes of video
+ * is eight minutes of waiting — and uses the 12/24 hour setting the on-screen
+ * clock already has, rather than asking the same question twice.
  *
  * Their two hard-won findings are kept, because both were established against
  * a real device and neither is guessable:
@@ -33,6 +48,18 @@ const DURATION_SELECTOR = '[idomkey="time-label"] [idomkey="duration"]';
 const GUARD_SELECTOR = 'ytlr-progress-bar[idomkey="progress-bar"]';
 const ATTACH_RETRY_MS = 100;
 
+const SEPARATOR = ' · ';
+const MINUS = '-';
+const UNTIL = '→';
+
+// Everything this feature appended, so the app's own total can be recovered
+// from the text on screen. The second alternative is the bracketed layout this
+// replaced, so upgrading does not strand a "(-12:04)" that nothing matches.
+const OURS = new RegExp(
+    '(\\s*·\\s*[' + MINUS + UNTIL + '][^·]*)+$'
+    + '|\\s*\\(' + MINUS + '[^)]*\\)\\s*$'
+);
+
 let video = null;
 let desiredText = null;
 let nativeText = null;
@@ -57,7 +84,7 @@ function findGuardContainer() {
     return document.querySelector(GUARD_SELECTOR);
 }
 
-function enabled() {
+function wantRemaining() {
     try {
         return configRead('enableRemainingTime') === true;
     } catch (e) {
@@ -65,9 +92,47 @@ function enabled() {
     }
 }
 
+function wantFinishTime() {
+    try {
+        return configRead('enableFinishTime') === true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function enabled() {
+    return wantRemaining() || wantFinishTime();
+}
+
 /**
- * The text the readout should hold: the app's own total with the countdown
- * after it.
+ * The clock time the video will reach its end, as hh:mm.
+ *
+ * Rounded to the nearest minute: a readout that says 14:35 while the video
+ * ends at 14:35:50 is worse than one that says 14:36.
+ */
+export function finishTimeText(secondsLeft, now) {
+    // At 1.5x the remainder passes half again as fast. A rate of zero means
+    // nothing is moving, so there is no wall-clock answer to give.
+    const reported = video ? video.playbackRate : undefined;
+    const rate = (reported === undefined || reported === null || reported === '') ? 1 : Number(reported);
+    if (!(rate > 0)) return null;
+    const at = new Date((now === undefined ? Date.now() : now) + Math.round(secondsLeft / rate) * 1000);
+    // Round to the nearest minute by looking at the seconds we are dropping.
+    const end = new Date(at.getTime() + (at.getSeconds() >= 30 ? 60000 : 0));
+
+    let hours = end.getHours();
+    let suffix = '';
+    try {
+        if (configRead('isClock12HourFormat') === true) {
+            suffix = hours >= 12 ? ' PM' : ' AM';
+            hours = hours % 12 || 12;
+        }
+    } catch (e) { }
+    return String(hours).padStart(2, '0') + ':' + String(end.getMinutes()).padStart(2, '0') + suffix;
+}
+
+/**
+ * The text the readout should hold.
  *
  * The total is taken from what the app wrote rather than formatted from
  * video.duration, so a live stream, a chaptered video or any other case where
@@ -75,10 +140,20 @@ function enabled() {
  */
 function computeDesiredText(el) {
     if (!video || !video.duration || !isFinite(video.duration)) return null;
-    const total = (el.textContent || '').replace(/\s*\(-[^)]*\)\s*$/, '').trim();
+    const total = (el.textContent || '').replace(OURS, '').trim();
     if (!total) return null;
     nativeText = total;
-    return `${total} (-${formatTime(video.duration - video.currentTime)})`;
+
+    const secondsLeft = Math.max(0, video.duration - video.currentTime);
+    const parts = [total];
+    if (wantRemaining()) parts.push(MINUS + formatTime(secondsLeft));
+    if (wantFinishTime()) {
+        const finish = finishTimeText(secondsLeft);
+        if (finish) parts.push(UNTIL + finish);
+    }
+    // Nothing of ours to add means nothing to write: leave the app's text be.
+    if (parts.length === 1) return null;
+    return parts.join(SEPARATOR);
 }
 
 function apply() {
@@ -91,12 +166,12 @@ function apply() {
     if (el.textContent !== desiredText) el.textContent = desiredText;
 }
 
-/** Put the app's own total back, for when the setting is switched off. */
+/** Put the app's own total back, for when both settings are switched off. */
 function restoreNative() {
     desiredText = null;
     const el = findDurationEl();
     if (!el || !nativeText) return;
-    const stripped = (el.textContent || '').replace(/\s*\(-[^)]*\)\s*$/, '').trim();
+    const stripped = (el.textContent || '').replace(OURS, '').trim();
     if (stripped && el.textContent !== stripped) el.textContent = stripped;
 }
 
@@ -115,6 +190,7 @@ function detach() {
         video.removeEventListener('durationchange', apply);
         video.removeEventListener('seeking', apply);
         video.removeEventListener('seeked', apply);
+        video.removeEventListener('ratechange', apply);
     }
     video = null;
 }
@@ -139,6 +215,9 @@ function attach() {
     video.addEventListener('durationchange', apply);
     video.addEventListener('seeking', apply);
     video.addEventListener('seeked', apply);
+    // Changing the speed moves the finish time, and nothing else would notice
+    // until the next second ticked.
+    video.addEventListener('ratechange', apply);
 
     guardObserver = new MutationObserver(() => {
         if (desiredText === null) return;
@@ -150,12 +229,14 @@ function attach() {
     apply();
 }
 
-// Switching the setting takes effect at once rather than at the next restart:
-// off tears the observer down and puts the app's own text back, on attaches.
+// Switching either setting takes effect at once rather than at the next
+// restart. What matters is what the pair says afterwards, not which one
+// changed: turning one off while the other is on still leaves work to do.
 try {
     configChangeEmitter.addEventListener('configChange', (ev) => {
-        if (ev?.detail?.key !== 'enableRemainingTime') return;
-        if (ev.detail.value) attach();
+        const key = ev?.detail?.key;
+        if (key !== 'enableRemainingTime' && key !== 'enableFinishTime') return;
+        if (enabled()) attach();
         else {
             detach();
             restoreNative();

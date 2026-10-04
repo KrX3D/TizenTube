@@ -208,7 +208,7 @@
                         "title": "Speed Settings Increments",
                         "subtitle": "Set the speed increments for video playback speed adjustments"
                     },
-                    "remainingTime": "Show Remaining Time Beside the Total",
+                    "remainingTime": "Show Time Remaining",
                     "hideRelatedVideosPlayer": "Hide Related Videos in Player",
                     "preferredVideoCodec": {
                         "title": "Preferred Video Codec",
@@ -220,7 +220,8 @@
                         "subtitle": "Set the duration (in seconds) to pause video playback when adjusting frame rate"
                     },
                     "codecAny": "Any",
-                    "qualityAuto": "Auto"
+                    "qualityAuto": "Auto",
+                    "finishTime": "Show When the Video Will End"
                 }
             },
             "time": {
