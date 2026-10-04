@@ -37,6 +37,7 @@ const defaultConfig = {
   enableShowUserLanguage: true,
   enableShowOtherLanguages: false,
   enableCaptionStylePersistence: true,
+  enableStopForcedSubtitles: false,
   captionStyleSettings: null,
   captionsEnabled: null,
   captionsOnCommand: null,

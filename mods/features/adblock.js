@@ -5,6 +5,7 @@ import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, But
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
 import { stopAtPlaylistEnd } from './playlistEndStopper.js';
+import { stopForcedSubtitles } from './forcedSubtitleStopper.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
 import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
@@ -955,6 +956,7 @@ JSON.parse = function () {
       }
       filterPlayerButtonsInResponse(r);
       stopAtPlaylistEnd(r);
+      stopForcedSubtitles(r);
       hideViewCountsAndBadges(r);
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
@@ -1259,6 +1261,7 @@ JSON.parse = function () {
 
     filterPlayerButtonsInResponse(r);
     stopAtPlaylistEnd(r);
+    stopForcedSubtitles(r);
     hideViewCountsAndBadges(r);
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {
