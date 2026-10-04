@@ -37,6 +37,7 @@ import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHid
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 import { filterBadgedVideos } from './badgedVideoHider.js';
 import { hideViewCountsAndBadges } from './viewCountHider.js';
+import { addDislikes } from './returnYoutubeDislike.js';
 import { filterByKeyword } from './keywordHider.js';
 import { filterHiddenChannels } from './channelHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
@@ -958,6 +959,7 @@ JSON.parse = function () {
       stopAtPlaylistEnd(r);
       stopForcedSubtitles(r);
       hideViewCountsAndBadges(r);
+      addDislikes(r);
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
           if (window?.sponsorblock?.segments) {
@@ -1263,6 +1265,7 @@ JSON.parse = function () {
     stopAtPlaylistEnd(r);
     stopForcedSubtitles(r);
     hideViewCountsAndBadges(r);
+    addDislikes(r);
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {
         if (window?.sponsorblock?.segments) {

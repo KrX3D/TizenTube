@@ -388,7 +388,8 @@
                     },
                     "keywordHider": "Hide Videos by Title Keyword",
                     "hideViewCounts": "Hide View Counts",
-                    "hideQualityBadges": "Hide 4K/8K and Dubbed Badges"
+                    "hideQualityBadges": "Hide 4K/8K and Dubbed Badges",
+                    "returnYoutubeDislike": "Return YouTube Dislike (sends video ids to returnyoutubedislike.com)"
                 }
             },
             "updater": {
@@ -545,5 +546,13 @@
         "channelHideFailed": "This tile does not say which channel it belongs to.",
         "savedToPlaylist": "Saved to “{{name}}”.",
         "saveToPlaylistFailed": "Could not save to “{{name}}”."
+    },
+    "general": {
+        "dislikes": "Dislikes",
+        "countSuffix": {
+            "thousand": "K",
+            "million": "M",
+            "billion": "B"
+        }
     }
 }

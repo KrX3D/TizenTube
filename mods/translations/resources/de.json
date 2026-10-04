@@ -388,7 +388,8 @@
                     },
                     "keywordHider": "Videos nach Titel-Stichwort ausblenden",
                     "hideViewCounts": "Aufrufzahlen ausblenden",
-                    "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden"
+                    "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden",
+                    "returnYoutubeDislike": "Return YouTube Dislike (sendet Video-IDs an returnyoutubedislike.com)"
                 }
             },
             "updater": {
@@ -545,5 +546,13 @@
         "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört.",
         "savedToPlaylist": "In „{{name}}“ gespeichert.",
         "saveToPlaylistFailed": "Konnte nicht in „{{name}}“ gespeichert werden."
+    },
+    "general": {
+        "dislikes": "Dislikes",
+        "countSuffix": {
+            "thousand": " Tsd.",
+            "million": " Mio.",
+            "billion": " Mrd."
+        }
     }
 }
