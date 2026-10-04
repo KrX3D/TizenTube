@@ -127,6 +127,9 @@ const defaultConfig = {
   disableEnlargingThumbnails: false,
   enableShrinkingThumbnails: false,
   enableKeywordHider: false,
+  // Empty means the built-in list in features/keywordHider.js, which is
+  // where it lives so that an upgrade reaches a config that already has an
+  // empty list written into it. Anything set here is taken as deliberate.
   hiddenTitleKeywords: [],
   hideMembersOnlyVideos: false,
   hidePaidVideos: false,
