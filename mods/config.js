@@ -17,6 +17,7 @@ const defaultConfig = {
   preferredVideoQuality: 'auto',
   enableDeArrow: true,
   enableDeArrowThumbnails: false,
+  enableReturnYoutubeDislike: false,
   focusContainerColor: '#0f0f0f',
   routeColor: '#0f0f0f',
   enableFixedUI: (window.h5vcc && window.h5vcc.tizentube) ? false : true,
