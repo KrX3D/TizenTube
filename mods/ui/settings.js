@@ -694,9 +694,9 @@ export default function modernUI(update, parameters) {
                                     value: 'hidePlayerSubscribeButton'
                                 },
                                 {
-                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.like'),
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.thumbs'),
                                     icon: 'STAR',
-                                    value: 'hidePlayerLikeButton'
+                                    value: 'hidePlayerThumbsButtons'
                                 },
                                 {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.dislike'),

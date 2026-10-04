@@ -53,7 +53,10 @@ const BUTTONS = [
         match: [/^SUBSCRIBE/i, /^UNSUBSCRIBE/i, /^subscribeCommand$/i],
     },
     {
-        key: 'hidePlayerLikeButton', name: 'like',
+        // Both thumbs together, which on this build is one button. A build
+        // that does send a separate thumbs up button has it hidden by this
+        // same setting, which is still what the label promises.
+        key: 'hidePlayerThumbsButtons', name: 'thumbs',
         match: [/^LIKE$/, /^LIKE_/, /^likeEndpoint:LIKE$/],
     },
     {
@@ -198,22 +201,29 @@ function hiddenReason(item) {
     // likeButtonRenderer carries, among the like and dislike counts,
     // `likesAllowed` and — the useful one — `hideDislikeButton`, which is the
     // flag YouTube itself uses to drop the thumbs down half. There is no
-    // matching flag for the thumbs up half. So:
+    // matching flag for the thumbs up half.
     //
-    //   both hidden      remove the button, as before
-    //   thumbs down only set that flag, keep the button, thumbs up stays
-    //   thumbs up only   nothing can hide that half on its own, so both stay
-    //                    and the reason is logged rather than left a mystery
+    // So the two things that can be offered are offered, and the one that
+    // cannot is not a setting at all:
+    //
+    //   hidePlayerThumbsButtons   remove the button, both thumbs with it
+    //   hidePlayerDislikeButton   set the flag, keep the button, thumbs up stays
+    //
+    // hidePlayerLikeButton was a thumbs up option before this was understood.
+    // It is gone from the menu; a stored one is still read, and only in the
+    // combination that used to hide both, so an existing setting keeps doing
+    // what it did on screen.
     for (const signal of signals) {
         if (!isCombinedLike(signal)) continue;
-        const hideLike = enabled('hidePlayerLikeButton');
-        const hideDislike = enabled('hidePlayerDislikeButton');
-        if (hideLike && hideDislike) return 'likeDislike';
-        if (hideDislike) hideDislikeHalf(item);
-        else if (hideLike) {
-            sayOnce('player.thumbsUpAlone', {
+        const hideBoth = enabled('hidePlayerThumbsButtons')
+            || (enabled('hidePlayerLikeButton') && enabled('hidePlayerDislikeButton'));
+        if (hideBoth) return 'thumbs';
+        if (enabled('hidePlayerDislikeButton')) hideDislikeHalf(item);
+        else if (enabled('hidePlayerLikeButton')) {
+            sayOnce('player.retiredThumbsUpOption', {
+                key: 'hidePlayerLikeButton',
                 kept: 'both',
-                why: 'one button draws both thumbs and only its dislike half has a flag',
+                why: 'one button draws both thumbs; use hidePlayerThumbsButtons to hide them',
             });
         }
         return null;
@@ -228,10 +238,12 @@ function hiddenReason(item) {
     return null;
 }
 
-/** True when at least one of the five is hidden, so nothing is wrapped for nothing. */
+/** True when at least one button is hidden, so nothing is wrapped for nothing. */
 export function anyPlayerButtonHidden() {
     for (const button of BUTTONS) if (enabled(button.key)) return true;
-    return false;
+    // The retired thumbs up key hides nothing on its own, but a TV that still
+    // has it stored should reach the line that says so rather than stop here.
+    return enabled('hidePlayerLikeButton');
 }
 
 const seenShapes = [];
