@@ -129,6 +129,8 @@ const defaultConfig = {
   enableKeywordHider: false,
   hiddenTitleKeywords: [],
   hideMembersOnlyVideos: false,
+  hideViewCounts: false,
+  hideQualityBadges: false,
   hidePaidVideos: false,
   hideFreeWithAdsVideos: false,
   hideDuplicateVideos: false,

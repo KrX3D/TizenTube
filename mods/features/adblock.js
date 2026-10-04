@@ -34,6 +34,7 @@ import {
 import { applyLibraryTabHiding, applyLibraryShelfSpacing } from './libraryTabHider.js';
 import { filterHiddenSpecialPlaylistTiles, filterHiddenSpecialPlaylistShelves } from './specialPlaylistHider.js';
 import { filterBadgedVideos } from './badgedVideoHider.js';
+import { hideViewCountsAndBadges } from './viewCountHider.js';
 import { filterByKeyword } from './keywordHider.js';
 import { filterHiddenChannels } from './channelHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
@@ -787,6 +788,7 @@ function processResponsePayload(payload, detectedPage) {
     notePlaylistPage(arrayTopPlaylistRenderer);
     addLongPress(arrayTopPlaylistRenderer.contents);
   }
+  hideViewCountsAndBadges(payload);
   processTileArraysDeep(payload, detectedPage, 'arrayPayload', 0, filterShortsFromItems);
 }
 
@@ -951,6 +953,7 @@ JSON.parse = function () {
         r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
       }
       filterPlayerButtonsInResponse(r);
+      hideViewCountsAndBadges(r);
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
           if (window?.sponsorblock?.segments) {
@@ -1253,6 +1256,7 @@ JSON.parse = function () {
     }
 
     filterPlayerButtonsInResponse(r);
+    hideViewCountsAndBadges(r);
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {
         if (window?.sponsorblock?.segments) {

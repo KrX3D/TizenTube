@@ -372,7 +372,9 @@
                         "unhide": "Auswählen, um den Kanal wieder einzublenden",
                         "empty": "Es sind keine Kanäle ausgeblendet"
                     },
-                    "keywordHider": "Videos nach Titel-Stichwort ausblenden"
+                    "keywordHider": "Videos nach Titel-Stichwort ausblenden",
+                    "hideViewCounts": "Aufrufzahlen ausblenden",
+                    "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden"
                 }
             },
             "updater": {

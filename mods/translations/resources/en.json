@@ -372,7 +372,9 @@
                         "unhide": "Select to show this channel again",
                         "empty": "No channels are hidden"
                     },
-                    "keywordHider": "Hide Videos by Title Keyword"
+                    "keywordHider": "Hide Videos by Title Keyword",
+                    "hideViewCounts": "Hide View Counts",
+                    "hideQualityBadges": "Hide 4K/8K and Dubbed Badges"
                 }
             },
             "updater": {
