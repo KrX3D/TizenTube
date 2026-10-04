@@ -195,7 +195,21 @@ function hiddenReason(item) {
     // what was asked for, so it goes only when both are hidden.
     for (const signal of signals) {
         if (!isCombinedLike(signal)) continue;
-        return enabled('hidePlayerLikeButton') && enabled('hidePlayerDislikeButton') ? 'likeDislike' : null;
+        const both = enabled('hidePlayerLikeButton') && enabled('hidePlayerDislikeButton');
+        // Reported: with both hidden and then one switched off, both thumbs
+        // come back. That is this branch doing what it says — there is one
+        // button, so it is both or neither.
+        //
+        // Whether it has to stay that way depends on something we cannot see
+        // from here: if the renderer holds the two thumbs as separate
+        // children, one of them could be removed on its own. So when exactly
+        // one of the two is asked for, the button's own shape is recorded,
+        // once. A capture of that line is what decides whether half of it can
+        // be targeted or whether both-or-neither is the honest answer.
+        if (!both && (enabled('hidePlayerLikeButton') || enabled('hidePlayerDislikeButton'))) {
+            noteCombinedShape(item);
+        }
+        return both ? 'likeDislike' : null;
     }
 
     for (const button of BUTTONS) {
@@ -214,6 +228,35 @@ export function anyPlayerButtonHidden() {
 }
 
 const seenShapes = [];
+const seenCombined = [];
+
+/**
+ * Record the inner shape of the one button that draws both thumbs.
+ *
+ * Only the key names and the renderer it sits in, two levels deep — enough to
+ * see whether the two thumbs are separate children (which could be removed one
+ * at a time) or one indivisible control (which cannot). No values, since this
+ * carries a video's own metadata.
+ */
+function noteCombinedShape(item) {
+    try {
+        const describe = (node, depth) => {
+            if (!node || typeof node !== 'object' || depth > 2) return null;
+            if (Array.isArray(node)) return node.length ? ['[' + node.length + ']'] : [];
+            const out = {};
+            for (const key of Object.keys(node)) {
+                if (key === 'clickTrackingParams' || key === 'trackingParams' || key === 'parameters') continue;
+                const child = node[key];
+                out[key] = (child && typeof child === 'object') ? (describe(child, depth + 1) || '{…}') : typeof child;
+            }
+            return out;
+        };
+        const shape = JSON.stringify(describe(item, 0));
+        if (!shape || seenCombined.indexOf(shape) !== -1 || seenCombined.length >= 4) return;
+        seenCombined.push(shape);
+        appendFileOnlyLog('player.combinedThumbsShape', { shape });
+    } catch (e) { }
+}
 
 function noteShape(items, group) {
     const shape = items.map((item) => signalsOf(item).join('+') || '?').join(' | ');
