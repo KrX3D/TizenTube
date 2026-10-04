@@ -66,7 +66,17 @@ const QUALITY_LABELS = /^(4K|8K|HDR|UHD)$/i;
 // Dubbed badges are translated, so this is a word list too.
 const DUBBED_WORDS = ['dubbed', 'auto-dubbed', 'autodubbed', 'synchronisiert', 'doppiato', 'doblado', 'dublado', 'dublat', 'дубл'];
 
-const MAX_DEPTH = 10;
+// Deep enough to cross a tile, which is about nine levels from the tile down
+// to the text of a metadata line. NOT deep enough to cross a whole response:
+// on Home that same text sits twenty-three levels from the root, and the first
+// cut of this walked from there and gave up at ten — so it never reached a
+// single tile. Reported as "aufrufe and the badge 4k still are shown".
+//
+// The fix is not a bigger number. Walking every response that deep means tens
+// of thousands of property visits per payload on a TV, which is the cost this
+// repo has been bitten by before. The entry points below start at a tile, or
+// at a named subtree, so the walk stays short wherever it runs.
+const MAX_DEPTH = 12;
 
 function textOf(node) {
     if (!node || typeof node !== 'object') return '';
@@ -151,20 +161,51 @@ function wantBadges() {
  * never follows an action's parameters — this fork's long press entries keep a
  * copy of a whole video item there.
  */
-export function hideViewCountsAndBadges(node, depth = 0) {
+export function stripCountsFromItems(items, pageName = null) {
+    if (!Array.isArray(items) || !items.length) return items;
     const counts = wantCounts();
     const badges = wantBadges();
-    if (!counts && !badges) return node;
-    walk(node, counts, badges, 0);
-    return node;
+    if (!counts && !badges) return items;
+    let touched = 0;
+    for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        if (walk(item, counts, badges, 0)) touched++;
+    }
+    if (touched) appendFileOnlyLog('tiles.countsStripped', { page: pageName, items: items.length, touched });
+    return items;
 }
 
+/**
+ * The watch page, which keeps its counts in renderers of its own rather than
+ * in a tile array.
+ *
+ * Named subtrees rather than the whole response, so the walk stays short.
+ */
+export function hideViewCountsAndBadges(response) {
+    const counts = wantCounts();
+    const badges = wantBadges();
+    if (!counts && !badges) return response;
+    const roots = [
+        response?.contents?.singleColumnWatchNextResults,
+        response?.playerOverlays,
+        response?.transportControls,
+        response?.engagementPanels,
+        response?.videoDetails,
+    ];
+    for (const root of roots) walk(root, counts, badges, 0);
+    return response;
+}
+
+/** True when anything was actually removed, so the log can say so. */
 function walk(node, counts, badges, depth) {
-    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return;
+    if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return false;
+    let changed = false;
 
     if (Array.isArray(node)) {
-        for (const child of node) walk(child, counts, badges, depth + 1);
-        return;
+        for (const child of node) {
+            if (walk(child, counts, badges, depth + 1)) changed = true;
+        }
+        return changed;
     }
 
     for (const key of Object.keys(node)) {
@@ -172,15 +213,19 @@ function walk(node, counts, badges, depth) {
 
         if (counts && COUNT_FIELDS.indexOf(key) !== -1) {
             delete node[key];
+            changed = true;
             continue;
         }
 
         if (badges && key === 'badges' && Array.isArray(node[key])) {
+            const before = node[key].length;
             node[key] = node[key].filter((badge) => !isHiddenBadge(badge));
+            if (node[key].length !== before) changed = true;
             continue;
         }
         if (badges && key === 'badge' && node[key] && isHiddenBadge(node[key])) {
             delete node[key];
+            changed = true;
             continue;
         }
 
@@ -197,11 +242,14 @@ function walk(node, counts, badges, depth) {
             });
             if (filtered.length !== before) {
                 node[key] = cleanDividers(filtered, (item) => textOf(item?.lineItemRenderer || item?.lineRenderer || item));
+                changed = true;
             }
         }
 
-        walk(node[key], counts, badges, depth + 1);
+        if (walk(node[key], counts, badges, depth + 1)) changed = true;
     }
+
+    return changed;
 }
 
 export const _internals = { looksLikeViewCount, isHiddenBadge, cleanDividers, isDividerText };
