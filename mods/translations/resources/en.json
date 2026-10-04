@@ -190,7 +190,9 @@
                             "subscribe": "Hide Subscribe Button",
                             "like": "Hide Thumbs Up Button",
                             "dislike": "Hide Thumbs Down Button",
-                            "save": "Hide Save Button"
+                            "save": "Hide Save Button",
+                            "comments": "Hide Comments Button",
+                            "about": "Hide About Button"
                         }
                     },
                     "preferredVideoQuality": {
