@@ -69,11 +69,31 @@ const BUTTONS = [
         match: [/^COMMENTS?$/i, /^COMMENTS?_/i, /^commentsEndpoint$/i, /^showEngagementPanelEndpoint:comments/i],
     },
     {
+        // ABOUT_BUTTON is what the app calls it internally, but on screen it
+        // reads "Beschreibung" — reported after #777 shipped calling it Info.
+        // There is one button here, not two: the panel it opens is
+        // video-description-ep-identifier, which is why the separate
+        // description option this once had was the same button twice.
         key: 'hidePlayerAboutButton', name: 'about',
-        // ABOUT_BUTTON is the name the app uses; nothing else begins with it.
-        match: [/^ABOUT/i],
+        match: [/^ABOUT/i, /^DESCRIPTION/i, /^panel:video-description/i, /^descriptionEndpoint$/i],
+    },
+    {
+        key: 'hidePlayerPreviousButton', name: 'previous',
+        match: [/^SKIP_PREVIOUS/i, /^PREVIOUS/i, /^skipPreviousButton$/i],
+    },
+    {
+        key: 'hidePlayerNextButton', name: 'next',
+        match: [/^SKIP_NEXT/i, /^NEXT$/i, /^NEXT_/i, /^skipNextButton$/i],
     },
 ];
+
+// Previous and next are not entries in a button list at all: the app keeps
+// them in their own named slots, which is why they need removing by name as
+// well as matching by signal.
+const SLOT_FIELDS = {
+    hidePlayerPreviousButton: 'skipPreviousButton',
+    hidePlayerNextButton: 'skipNextButton',
+};
 
 // The renderers a button can be wrapped in, and the endpoint fields each can
 // carry. Read rather than searched: a deep walk here would reach the video
@@ -120,6 +140,13 @@ function signalsOf(item) {
                 }
                 signals.push(key);
                 if (typeof status === 'string') signals.push(key + ':' + status);
+                // An engagement panel endpoint says which panel it opens, and
+                // that identifier is not localised. It is the only way to tell
+                // the description button from any other panel button.
+                const panel = endpoint[key] && typeof endpoint[key] === 'object'
+                    ? (endpoint[key].panelIdentifier || endpoint[key].identifier?.tag)
+                    : null;
+                if (typeof panel === 'string') signals.push('panel:' + panel);
             }
         }
     }
@@ -260,6 +287,13 @@ export function filterPlayerButtonsInResponse(response) {
             for (const key of Object.keys(holder)) {
                 if (!looksLikeButtonList(holder[key])) continue;
                 holder[key] = filterPlayerButtons(holder[key], name + '.' + key);
+            }
+            // The two that live in a slot of their own rather than in a list.
+            for (const setting of Object.keys(SLOT_FIELDS)) {
+                const field = SLOT_FIELDS[setting];
+                if (holder[field] === undefined || !enabled(setting)) continue;
+                delete holder[field];
+                appendFileOnlyLog('player.buttonsHidden', { group: name, removed: field, before: 1, after: 0 });
             }
         }
     } catch (err) {

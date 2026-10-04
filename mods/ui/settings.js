@@ -708,20 +708,30 @@ export default function modernUI(update, parameters) {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.about'),
                                     icon: 'HELP',
                                     value: 'hidePlayerAboutButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.previous'),
+                                    icon: 'SKIP_PREVIOUS',
+                                    value: 'hidePlayerPreviousButton'
+                                },
+                                {
+                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.next'),
+                                    icon: 'SKIP_NEXT',
+                                    value: 'hidePlayerNextButton'
                                 }
                             ]
+                        },
+                        {
+                            name: t('settings.options.videoPlayer.options.remainingTime'),
+                            icon: 'TIMER',
+                            value: 'enableRemainingTime'
+                        },
+                        {
+                            name: t('settings.options.videoPlayer.options.finishTime'),
+                            icon: 'TIMER',
+                            value: 'enableFinishTime'
                         }
                     ]
-                },
-                {
-                    name: t('settings.options.videoPlayer.options.remainingTime'),
-                    icon: 'TIMER',
-                    value: 'enableRemainingTime'
-                },
-                {
-                    name: t('settings.options.videoPlayer.options.finishTime'),
-                    icon: 'TIMER',
-                    value: 'enableFinishTime'
                 },
                 {
                     name: t('settings.options.videoPlayer.options.preferredVideoQuality.title'),

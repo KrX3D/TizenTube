@@ -192,7 +192,9 @@
                             "dislike": "Hide Thumbs Down Button",
                             "save": "Hide Save Button",
                             "comments": "Hide Comments Button",
-                            "about": "Hide About Button"
+                            "about": "Hide Description Button",
+                            "previous": "Hide Previous Button",
+                            "next": "Hide Next Button"
                         }
                     },
                     "preferredVideoQuality": {
