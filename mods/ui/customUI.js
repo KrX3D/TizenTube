@@ -169,9 +169,14 @@ function applyPatches() {
             }
         }
 
-        if (patchingEnabled && configRead('enablePreviousNextButtons')) {
+        // Hiding wins over adding: enablePreviousNextButtons puts this fork's
+        // own buttons in those slots, and someone who asked for them gone did
+        // not mean ours instead.
+        const wantPrevious = !configRead('hidePlayerPreviousButton');
+        const wantNext = !configRead('hidePlayerNextButton');
+        if (patchingEnabled && configRead('enablePreviousNextButtons') && (wantPrevious || wantNext)) {
             if (!previousButtonName || !nextButtonName) return inst;
-            inst[previousButtonName] = function () {
+            if (wantPrevious) inst[previousButtonName] = function () {
                 return ButtonRenderer(
                     false,
                     t('player.previous'),
@@ -184,7 +189,7 @@ function applyPatches() {
                 )
             }
 
-            inst[nextButtonName] = function () {
+            if (wantNext) inst[nextButtonName] = function () {
                 return ButtonRenderer(
                     false,
                     t('player.next'),

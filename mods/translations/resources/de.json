@@ -192,7 +192,10 @@
                             "dislike": "Button \"Daumen runter\" ausblenden",
                             "save": "Button \"Speichern\" ausblenden",
                             "comments": "Button \"Kommentare\" ausblenden",
-                            "about": "Button \"Info\" ausblenden"
+                            "about": "Button \"Info\" ausblenden",
+                            "description": "Button \"Beschreibung\" ausblenden",
+                            "previous": "Button \"Zurück\" ausblenden",
+                            "next": "Button \"Weiter\" ausblenden"
                         }
                     },
                     "preferredVideoQuality": {
