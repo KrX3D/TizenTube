@@ -55,6 +55,33 @@ const barTypes = {
 
 const sponsorblockAPI = 'https://sponsor.ajay.app/api';
 
+// Several of the lines below sit on the timeupdate path, which fires about
+// four times a second: past the last segment, "No more segments" was printed
+// on every tick, and the on-screen console filled with it. Reported with a
+// capture showing two of them nine milliseconds apart.
+//
+// The information is worth keeping, the repetition is not. Each site says
+// its line when the line CHANGES and stays quiet while it does not, so a
+// state change still prints and a steady state prints once. Keyed per site
+// so one going quiet cannot silence another, and cleared per video.
+const _lastSaid = new Map();
+
+function say(key, ...args) {
+    const line = args.map((a) => {
+        if (a === null || a === undefined) return String(a);
+        if (typeof a !== 'object') return String(a);
+        try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }).join(' ');
+    if (_lastSaid.get(key) === line) return;
+    _lastSaid.set(key, line);
+    console.info(line);
+}
+
+/** A new video starts with nothing said, so its first state prints. */
+function forgetWhatWasSaid() {
+    _lastSaid.clear();
+}
+
 class SponsorBlockHandler {
   video = null;
   active = true;
@@ -176,12 +203,12 @@ class SponsorBlockHandler {
 
     this.video = document.querySelector('video');
     if (!this.video) {
-      console.info(this.videoID, 'No video yet...');
+      say('noVideo', this.videoID, 'No video yet...');
       this.attachVideoTimeout = setTimeout(() => this.attachVideo(), 100);
       return;
     }
 
-    console.info(this.videoID, 'Video found, binding...');
+    say('bound', this.videoID, 'Video found, binding...');
     this.video.addEventListener('play', this.scheduleSkipHandler);
     this.video.addEventListener('pause', this.scheduleSkipHandler);
     this.video.addEventListener('timeupdate', this.scheduleSkipHandler);
@@ -190,12 +217,12 @@ class SponsorBlockHandler {
 
   buildOverlay() {
     if (this.segmentsoverlay) {
-      console.info('Overlay already built');
+      say('overlayBuilt', 'Overlay already built');
       return;
     }
 
     if (!this.video || !this.video.duration) {
-      console.info('No video duration yet');
+      say('noDuration', 'No video duration yet');
       return;
     }
 
@@ -203,7 +230,7 @@ class SponsorBlockHandler {
       const videoDuration = this.video.duration;
       const slider = document.querySelector('div[idomkey="slider"]');
       if (!slider) {
-        console.info('[SponsorBlock] buildOverlay: slider not ready yet, retrying...');
+        say('sliderWait', '[SponsorBlock] buildOverlay: slider not ready yet, retrying...');
         this.buildOverlayTimeout = setTimeout(() => this.buildOverlay(), 100);
         return;
       }
@@ -238,7 +265,7 @@ class SponsorBlockHandler {
           elm.style.setProperty('width', `${segment.category === 'poi_highlight' ? 1 : widthPercent}%`, 'important');
           elm.style.setProperty('left', `${leftPercent}%`, 'important');
           elm.style.setProperty('position', 'absolute', 'important');
-          console.info('Generated element', elm, 'from', segment);
+          say('generated', 'Generated element', elm, 'from', segment);
           this.segmentsoverlay.appendChild(elm);
         } catch (segErr) {
           console.warn('[SponsorBlock] Failed to build segment overlay element:', segErr, segment);
@@ -251,7 +278,7 @@ class SponsorBlockHandler {
             if (m.removedNodes) {
               for (const node of m.removedNodes) {
                 if (node === this.segmentsoverlay) {
-                  console.info('bringing back segments overlay');
+                  say('overlayBack', 'bringing back segments overlay');
                   this.slider.appendChild(this.segmentsoverlay);
                 }
               }
@@ -296,12 +323,12 @@ class SponsorBlockHandler {
     this.nextSkipTimeout = null;
 
     if (!this.active) {
-      console.info(this.videoID, 'No longer active, ignoring...');
+      say('inactive', this.videoID, 'No longer active, ignoring...');
       return;
     }
 
     if (!this.video || this.video.paused) {
-      console.info(this.videoID, 'Currently paused or no video, ignoring...');
+      say('paused', this.videoID, 'Currently paused or no video, ignoring...');
       return;
     }
 
@@ -313,22 +340,22 @@ class SponsorBlockHandler {
     nextSegments.sort((s1, s2) => s1.segment[0] - s2.segment[0]);
 
     if (!nextSegments.length) {
-      console.info(this.videoID, 'No more segments');
+      say('noMore', this.videoID, 'No more segments');
       return;
     }
 
     const [segment] = nextSegments;
     const [start, end] = segment.segment;
-    console.info(this.videoID, 'Scheduling skip of', segment, 'in', start - this.video.currentTime);
+    say('scheduling', this.videoID, 'Scheduling skip of', segment, 'in', start - this.video.currentTime);
 
     this.nextSkipTimeout = setTimeout(() => {
       try {
         if (!this.video || this.video.paused) {
-          console.info(this.videoID, 'Currently paused, ignoring...');
+          say('pausedAtSkip', this.videoID, 'Currently paused, ignoring...');
           return;
         }
         if (!this.skippableCategories.includes(segment.category)) {
-          console.info(this.videoID, 'Segment', segment.category, 'is not skippable, ignoring...');
+          say('notSkippable', this.videoID, 'Segment', segment.category, 'is not skippable, ignoring...');
           return;
         }
 
@@ -385,6 +412,7 @@ class SponsorBlockHandler {
 
   destroy() {
     console.info(this.videoID, 'Destroying');
+    forgetWhatWasSaid();
     this.active = false;
 
     if (this.nextSkipTimeout)    { clearTimeout(this.nextSkipTimeout); this.nextSkipTimeout = null; }
