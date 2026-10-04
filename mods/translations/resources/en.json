@@ -155,7 +155,8 @@
                             "subtitle": "Choose the order your playlists appear in"
                         },
                         "title": "Long Press Menu"
-                    }
+                    },
+                    "bixbyMicFix": "Stop Bixby Interrupting Voice Search"
                 }
             },
             "subtitles": {

@@ -381,6 +381,11 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
+                    name: t('settings.options.misc.options.bixbyMicFix'),
+                    icon: 'BROADCAST',
+                    value: 'enableBixbyMicFix'
+                },
+                {
                     name: t('settings.options.misc.options.jumpToPercentage'),
                     value: 'enableJumpToPercentage'
                 },

@@ -147,6 +147,7 @@ const defaultConfig = {
   hideRelatedVideosPlayer: false,
   spoofViewport: 'disabled',
   enableReloadOnResume: false,
+  enableBixbyMicFix: false,
   enableInstantSeek: false,
   instantSeekDelayMs: 500,
   enableStopAtPlaylistEnd: false,

@@ -155,7 +155,8 @@
                             "subtitle": "Reihenfolge deiner Playlists festlegen"
                         },
                         "title": "Langdruck-Menü"
-                    }
+                    },
+                    "bixbyMicFix": "Bixby bei der Sprachsuche nicht dazwischenfunken lassen"
                 }
             },
             "subtitles": {
