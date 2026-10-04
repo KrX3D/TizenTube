@@ -35,6 +35,24 @@ import { lockupTitle } from './lockupViewModel.js';
 // is matched on word boundaries instead.
 const SHORT_WORD_MAX = 4;
 
+/**
+ * The list used when none has been set.
+ *
+ * There is no way to type a keyword on a TV, so a feature with an empty list
+ * and no text entry is a switch that does nothing. These are the AI-upload
+ * terms from krakenkall's fork, which is where the feature came from.
+ *
+ * Kept here rather than as the config default because of the upgrade: anyone
+ * who ran the build that shipped an empty list has that empty list written
+ * into their stored config, where a changed default would never reach them.
+ * An empty list therefore means this one, and a list with anything in it is
+ * taken as deliberate.
+ */
+export const DEFAULT_TITLE_KEYWORDS = [
+    'ai generated', 'ai-generated', 'ai voice', 'ai story',
+    'ai animation', 'ai movie', 'ai video',
+];
+
 function normalise(text) {
     return String(text || '').trim().toLowerCase();
 }
@@ -42,10 +60,10 @@ function normalise(text) {
 export function keywords() {
     try {
         const stored = configRead('hiddenTitleKeywords');
-        if (!Array.isArray(stored)) return [];
-        return stored.map(normalise).filter(Boolean);
+        const list = Array.isArray(stored) ? stored.map(normalise).filter(Boolean) : [];
+        return list.length ? list : DEFAULT_TITLE_KEYWORDS.slice();
     } catch (e) {
-        return [];
+        return DEFAULT_TITLE_KEYWORDS.slice();
     }
 }
 

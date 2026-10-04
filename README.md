@@ -78,7 +78,7 @@ options are described in the row rather than listed separately.
 | Hide Duplicate Videos **(fork)** | Removes a video from a page when it has already appeared higher up, keeping the first occurrence. Rows left empty by this are dropped too. Never applied on the watch page or inside a playlist, where repeats are meaningful |
 | Hide the Combined Subscriptions Row **(fork)** | Subscriptions opens with one long row ("Relevanteste") holding videos that also appear in the per-channel rows below it. Because the duplicate filter keeps the first copy, that row would win every tie and the rows below it would empty out, collapsing the page into one row. This removes the combined row instead, so the per-channel rows survive. Identified by the overlap between rows, not by its title, which is localised |
 | Hide the Music Row **(fork)** | Removes the YouTube Music row on Home ("Noch mal anhören" with its "Mehr Musik" link), identified by where it points rather than by its title |
-| Hide Videos by Title Keyword **(fork)** | Hides videos whose title contains one of your keywords. The list starts empty — see "Title keyword filter" below for how to set it and a suggested starting list. Matched case-insensitively anywhere in the title, except a single short word, which is matched on word boundaries so "ai" does not hide "Thailand" |
+| Hide Videos by Title Keyword **(fork)** | Hides videos whose title contains one of the keywords. Ships with a list aimed at AI-generated uploads — see "Title keyword filter" below — and you can replace it with your own. Matched case-insensitively anywhere in the title, except a single short word, which is matched on word boundaries so "ai" does not hide "Thailand" |
 | Hide View Counts **(fork)** | Takes the view count off every tile, and cleans up the separator it leaves behind. Matched on the response fields rather than on the word "views", so it works in any language |
 | Hide 4K/8K and Dubbed Badges **(fork)** | Removes the resolution and auto-dubbed badges from tiles. A badge it does not recognise is logged with its wording, so an unlisted one can be added |
 | Hide Special Playlists **(fork)** | Hides Liked Videos and/or Watch Later from the Library and Playlists pages |
@@ -106,7 +106,7 @@ options are described in the row rather than listed separately.
 | Number Keys Jump to Percentage | Pressing `1`–`9` jumps to that percentage of the video, `0` jumps to the start |
 | Reload Player After TV Wakes **(fork)** | Rebuilds the player after standby, fixing the frozen first frame |
 | Player UI patching | Optional Previous/Next, Super Thanks, Ask, and Speed Controls buttons |
-| Hide Player Buttons **(fork)** | Removes buttons from the action row under the player: Join/Membership, Subscribe, Thumbs Up, Thumbs Down, Save, Comments, About, Description, Previous and Next. Each one is a separate toggle. Matched on the button types and the endpoints they run rather than on the labels, which are localised — the description button is found by the panel it opens. Where YouTube sends one combined thumbs button, it goes only when both thumbs are hidden. Hiding Previous/Next wins over the setting that adds them |
+| Hide Player Buttons **(fork)** | Removes buttons from the action row under the player: Join/Membership, Subscribe, Thumbs Up, Thumbs Down, Save, Comments, Description, Previous and Next. Each one is a separate toggle. Matched on the button types and the endpoints they run rather than on the labels, which are localised — the Description button is matched by the panel it opens, since the app calls it ABOUT_BUTTON internally while the screen reads "Beschreibung". Where YouTube sends one combined thumbs button, it goes only when both thumbs are hidden. Hiding Previous/Next wins over the setting that adds them |
 | Show Time Remaining **(fork)** | Adds how much of the video is left to the player’s own duration readout: `42:17 · -12:04` |
 | Show When the Video Will End **(fork)** | Adds the clock time the video finishes at: `42:17 · →14:35`. Follows the playback speed, and uses the same 12/24-hour setting as the on-screen clock. Both readouts together give `42:17 · -12:04 · →14:35` — the minus means time left, the arrow means "until" |
 | Instant Seek **(fork)** | The seek bar keeps moving while you hold left or right instead of waiting for OK on every step; the seek commits by itself once you stop. The delay is configurable (250–1500 ms) |
@@ -193,44 +193,41 @@ Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
 
 # Title keyword filter
 
-**The keyword list ships empty.** Turning *Hide Videos by Title Keyword* on
-does nothing until you put words in it, which is deliberate: what counts as
-noise is not the same for two people, and a list of defaults would hide
-things you never asked to lose.
+*Hide Videos by Title Keyword* ships with a list, because a TV has no way to
+type one in: a switch with an empty list behind it would do nothing. The
+built-in list targets AI-generated uploads, which is what the feature was
+written for:
 
-A TV has no free-text entry, so the list is edited the way the log server’s
-host is — through the config. From the debug console (yellow button) or a
-Tampermonkey session:
+```js
+'ai generated', 'ai-generated', 'ai voice', 'ai story',
+'ai animation', 'ai movie', 'ai video'
+```
+
+Switching the setting on is all that is needed. The list lives in
+`mods/features/keywordHider.js`, not in the config defaults, so that it
+reaches a TV whose stored config already holds an empty list from an earlier
+build.
+
+## Using your own keywords instead
+
+Set `hiddenTitleKeywords` and it replaces the built-in list entirely —
+anything you put there is taken as deliberate. From the debug console
+(yellow button) or a Tampermonkey session:
 
 ```js
 const c = JSON.parse(localStorage['ytaf-configuration']);
-c.hiddenTitleKeywords = ['ai generated', 'ai voice', 'ai story'];
+c.hiddenTitleKeywords = ['ai voice', 'reaction', 'tier list'];
 c.enableKeywordHider = true;
 localStorage['ytaf-configuration'] = JSON.stringify(c);
 ```
 
-Then restart the app.
-
-## A suggested starting list
-
-This is the list krakenkall’s fork hardcodes, which is where the feature came
-from. It targets AI-generated uploads and a few drama tropes:
-
-```js
-c.hiddenTitleKeywords = [
-    'ai generated', 'ai-generated', 'ai voice', 'ai story',
-    'ai animation', 'ai movie', 'ai video',
-    'cung đấu', 'cung dau',      // palace-intrigue drama
-    'tổng tài', 'tong tai',      // "CEO" romance drama
-    'chủ tịch', 'chu tich',      // "chairman" drama
-];
-```
+Then restart the app. Setting it back to `[]` restores the built-in list.
 
 ## How a keyword is matched
 
 | Keyword | Matches | Does not match |
 | --- | --- | --- |
-| `ai generated` | "How I made an **AI generated** film" | "AI-generated" (different punctuation — add both) |
+| `ai generated` | "How I made an **AI generated** film" | "AI-generated" — which is why both spellings are in the list |
 | `ai` | "Made with **AI**", "(**AI**) slop" | "She s**ai**d nothing", "Th**ai**land" |
 | `generation` | "**Generations** of pasta" | — |
 | `c++` | "What a **c++** video" | — (regex characters are taken literally) |
