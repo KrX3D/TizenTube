@@ -182,6 +182,10 @@ function initVisualConsole() {
     }
   };
 
+  // Anything written through console.* from here on reaches the visual
+  // console, the log file and the log server. appendVisibleLog reads this
+  // so it does not also write its own file copy of the same line.
+  try { window.__ttConsoleCaptured = true; } catch (_) { }
   console.log = (...args) => { original.log.apply(console, args); addLog('log', args); };
   console.info = (...args) => { original.info.apply(console, args); addLog('info', args); };
   console.warn = (...args) => { original.warn.apply(console, args); addLog('warn', args); };
