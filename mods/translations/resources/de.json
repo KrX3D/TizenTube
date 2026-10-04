@@ -206,7 +206,7 @@
                         "title": "Geschwindigkeitsstufen",
                         "subtitle": "Lege die Schritte für Anpassungen der Wiedergabegeschwindigkeit fest"
                     },
-                    "remainingTime": "Restzeit neben der Gesamtzeit anzeigen",
+                    "remainingTime": "Restzeit anzeigen",
                     "hideRelatedVideosPlayer": "Ähnliche Videos im Player ausblenden",
                     "preferredVideoCodec": {
                         "title": "Bevorzugter Videocodec",
@@ -218,7 +218,8 @@
                         "subtitle": "Lege fest, wie lange (in Sekunden) das Video pausiert wird, wenn die Bildrate angepasst wird"
                     },
                     "codecAny": "Beliebig",
-                    "qualityAuto": "Automatisch"
+                    "qualityAuto": "Automatisch",
+                    "finishTime": "Endzeit des Videos anzeigen"
                 }
             },
             "time": {

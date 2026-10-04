@@ -135,6 +135,7 @@ const defaultConfig = {
   spoofViewport: 'disabled',
   enableReloadOnResume: false,
   enableRemainingTime: false,
+  enableFinishTime: false,
 };
 
 let localConfig;
