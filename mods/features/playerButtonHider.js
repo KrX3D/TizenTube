@@ -190,26 +190,33 @@ function hiddenReason(item) {
     // Ours, and it starts with the same letters as the membership button.
     for (const signal of signals) if (signal.indexOf('SPONSORBLOCK') === 0) return null;
 
-    // Some builds send one segmented button for both thumbs. Removing it on
-    // "hide thumbs up" alone would take the thumbs down with it, which is not
-    // what was asked for, so it goes only when both are hidden.
+    // One button draws both thumbs: the app sends a single LIKE_BUTTON and
+    // has no dislike type at all. Removing it hides both, which is why
+    // switching one of the two options off brought both thumbs back.
+    //
+    // A capture from a TV settled what can be done about that. The button's
+    // likeButtonRenderer carries, among the like and dislike counts,
+    // `likesAllowed` and — the useful one — `hideDislikeButton`, which is the
+    // flag YouTube itself uses to drop the thumbs down half. There is no
+    // matching flag for the thumbs up half. So:
+    //
+    //   both hidden      remove the button, as before
+    //   thumbs down only set that flag, keep the button, thumbs up stays
+    //   thumbs up only   nothing can hide that half on its own, so both stay
+    //                    and the reason is logged rather than left a mystery
     for (const signal of signals) {
         if (!isCombinedLike(signal)) continue;
-        const both = enabled('hidePlayerLikeButton') && enabled('hidePlayerDislikeButton');
-        // Reported: with both hidden and then one switched off, both thumbs
-        // come back. That is this branch doing what it says — there is one
-        // button, so it is both or neither.
-        //
-        // Whether it has to stay that way depends on something we cannot see
-        // from here: if the renderer holds the two thumbs as separate
-        // children, one of them could be removed on its own. So when exactly
-        // one of the two is asked for, the button's own shape is recorded,
-        // once. A capture of that line is what decides whether half of it can
-        // be targeted or whether both-or-neither is the honest answer.
-        if (!both && (enabled('hidePlayerLikeButton') || enabled('hidePlayerDislikeButton'))) {
-            noteCombinedShape(item);
+        const hideLike = enabled('hidePlayerLikeButton');
+        const hideDislike = enabled('hidePlayerDislikeButton');
+        if (hideLike && hideDislike) return 'likeDislike';
+        if (hideDislike) hideDislikeHalf(item);
+        else if (hideLike) {
+            sayOnce('player.thumbsUpAlone', {
+                kept: 'both',
+                why: 'one button draws both thumbs and only its dislike half has a flag',
+            });
         }
-        return both ? 'likeDislike' : null;
+        return null;
     }
 
     for (const button of BUTTONS) {
@@ -228,34 +235,55 @@ export function anyPlayerButtonHidden() {
 }
 
 const seenShapes = [];
-const seenCombined = [];
+const _said = new Set();
+
+/** A line worth reading once, not once per response. */
+function sayOnce(label, payload) {
+    try {
+        const key = label + JSON.stringify(payload);
+        if (_said.has(key) || _said.size >= 20) return;
+        _said.add(key);
+        appendVisibleLog(label, payload);
+    } catch (e) { }
+}
 
 /**
- * Record the inner shape of the one button that draws both thumbs.
+ * The renderer inside the one button that draws both thumbs, or null.
  *
- * Only the key names and the renderer it sits in, two levels deep — enough to
- * see whether the two thumbs are separate children (which could be removed one
- * at a time) or one indivisible control (which cannot). No values, since this
- * carries a video's own metadata.
+ * Found by the fields it holds rather than by its key, so a build that renames
+ * `likeButtonRenderer` still works: whatever object carries the dislike half's
+ * own fields is the one that draws it.
  */
-function noteCombinedShape(item) {
-    try {
-        const describe = (node, depth) => {
-            if (!node || typeof node !== 'object' || depth > 2) return null;
-            if (Array.isArray(node)) return node.length ? ['[' + node.length + ']'] : [];
-            const out = {};
-            for (const key of Object.keys(node)) {
-                if (key === 'clickTrackingParams' || key === 'trackingParams' || key === 'parameters') continue;
-                const child = node[key];
-                out[key] = (child && typeof child === 'object') ? (describe(child, depth + 1) || '{…}') : typeof child;
-            }
-            return out;
-        };
-        const shape = JSON.stringify(describe(item, 0));
-        if (!shape || seenCombined.indexOf(shape) !== -1 || seenCombined.length >= 4) return;
-        seenCombined.push(shape);
-        appendVisibleLog('player.combinedThumbsShape', { shape });
-    } catch (e) { }
+function thumbsRenderer(item) {
+    for (const holder of [item, item?.button, item?.buttonViewModel]) {
+        if (!holder || typeof holder !== 'object') continue;
+        for (const key of Object.keys(holder)) {
+            const node = holder[key];
+            if (!node || typeof node !== 'object' || Array.isArray(node)) continue;
+            if ('hideDislikeButton' in node || 'dislikeCountText' in node) return node;
+        }
+    }
+    return null;
+}
+
+/**
+ * Take away the thumbs down half and leave the thumbs up in place.
+ *
+ * The flag has to be set on every response, since each one brings a fresh
+ * object; only the log is held to once.
+ */
+function hideDislikeHalf(item) {
+    const renderer = thumbsRenderer(item);
+    if (!renderer) {
+        sayOnce('player.dislikeHalf.noRenderer', { signals: signalsOf(item).join('+') || '?' });
+        return false;
+    }
+    // Absent means this build may not honour it. Setting it anyway costs
+    // nothing and is the only lever there is, but say which case it was so a
+    // "still shown" report can be told apart from a wiring problem.
+    sayOnce('player.dislikeHalfHidden', { flagPresent: 'hideDislikeButton' in renderer });
+    renderer.hideDislikeButton = true;
+    return true;
 }
 
 const seenHolders = [];
@@ -263,11 +291,12 @@ const seenHolders = [];
 /**
  * Where the player's button row actually is, on this build.
  *
- * Reported: with one thumb option on, nothing at all was logged — not on
- * screen, not through the log server. Every other diagnostic here only fires
- * once a button list has been found, so "nothing" means the row was not found
- * where this looks for it, and none of those lines could ever appear. That is
- * the one fact worth capturing, and it has to be captured unconditionally.
+ * Added when it looked like the row was not being found at all. A capture
+ * showed the opposite — transportControls holds skipPreviousButton,
+ * skipNextButton and the three starred lists promotedActions[4],
+ * engagementActions[4] and settingActions[11], all of which this filters — so
+ * it stays as the one line that tells a missing row apart from a button that
+ * was found and kept, and it has to be written unconditionally to do that.
  *
  * Key names only, one level, plus which keys held something that looked like a
  * list of buttons. Recorded once per distinct shape.

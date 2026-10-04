@@ -190,7 +190,7 @@
                         "options": {
                             "join": "Button \"Mitglied werden\" ausblenden",
                             "subscribe": "Button \"Abonnieren\" ausblenden",
-                            "like": "Button \"Daumen hoch\" ausblenden",
+                            "like": "Button \"Daumen hoch\" ausblenden (nur zusammen mit \"Daumen runter\")",
                             "dislike": "Button \"Daumen runter\" ausblenden",
                             "save": "Button \"Speichern\" ausblenden",
                             "comments": "Button \"Kommentare\" ausblenden",
