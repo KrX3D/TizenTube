@@ -9,9 +9,9 @@
 name: Upstream sync
 
 on:
-  schedule:
+  #schedule:
     # 04:20 UTC daily — outside the usual release window.
-    - cron: '20 4 * * *'
+    #- cron: '20 4 * * *'
   workflow_dispatch:
 
 concurrency:
