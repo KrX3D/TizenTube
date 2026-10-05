@@ -59,6 +59,83 @@
         var MAX_BUFFERED_LOGS = 100;
         var bufferedLogs = [];
 
+        // Every line above goes to the service, which means a service that never
+        // answers takes the account of its own failure with it — the reason the
+        // 6.5 failure has no capture. These breadcrumbs go to this page's own
+        // localStorage instead, which needs nothing and no one, and are handed
+        // over the next time the service does answer. So a start that dies
+        // silently is read back on the next start that works.
+        //
+        // This page's origin is the widget's own, so this storage is private to
+        // it and survives the TV being switched off. Reinstalling clears it,
+        // which is worth knowing: reinstall after a failure and the breadcrumbs
+        // go with it.
+        var BREADCRUMB_KEY = 'ttStartupBreadcrumbs';
+        var MAX_BREADCRUMBS = 40;
+        var startedAt = Date.now();
+
+        function breadcrumb(stage, detail) {
+            try {
+                var all = [];
+                try { all = JSON.parse(window.localStorage.getItem(BREADCRUMB_KEY) || '[]'); } catch (e) { all = []; }
+                if (!(all instanceof Array)) all = [];
+                all.push({ ts: new Date().toISOString(), at: Date.now() - startedAt, stage: String(stage), detail: detail === undefined ? null : detail });
+                while (all.length > MAX_BREADCRUMBS) all.shift();
+                window.localStorage.setItem(BREADCRUMB_KEY, JSON.stringify(all));
+            } catch (e) { }
+        }
+
+        // Stages a start is meant to end at. Anything else as the last entry
+        // means that start never got anywhere.
+        var TERMINAL_STAGES = ['cdp-handoff', 'proxy-nav'];
+
+        function reportPreviousStart() {
+            try {
+                var all = [];
+                try { all = JSON.parse(window.localStorage.getItem(BREADCRUMB_KEY) || '[]'); } catch (e) { return; }
+                if (!(all instanceof Array) || !all.length) return;
+                window.localStorage.removeItem(BREADCRUMB_KEY);
+                var last = all[all.length - 1];
+                var ended = TERMINAL_STAGES.indexOf(last.stage) !== -1;
+                sendLog(ended ? 'INFO' : 'ERROR',
+                    'previous start ' + (ended ? 'reached' : 'DIED AT') + ' "' + last.stage + '"'
+                    + ' after ' + last.at + 'ms (' + last.ts + '), ' + all.length + ' stages: '
+                    + JSON.stringify(all));
+            } catch (e) { }
+        }
+
+        // The service's own account of itself: uptime above all, which says
+        // whether this start is talking to a fresh process or to one that has
+        // been up for days. A request that never comes back is the finding.
+        function reportServiceHealth() {
+            var asked = Date.now();
+            var settled = false;
+            try {
+                var timer = setTimeout(function () {
+                    if (settled) return;
+                    settled = true;
+                    breadcrumb('health-timeout');
+                    sendLog('ERROR', 'health did not answer within 3000ms - the service holds the port but is not serving');
+                }, 3000);
+                fetch('http://localhost:8099/tizentube/health')
+                    .then(function (r) { return r.json(); })
+                    .then(function (h) {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        breadcrumb('health-ok', h.uptimeSec);
+                        sendLog('INFO', 'service health after ' + (Date.now() - asked) + 'ms: ' + JSON.stringify(h));
+                    })
+                    .catch(function (e) {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        breadcrumb('health-unreachable');
+                        sendLog('INFO', 'health unreachable (normal before the service is up): ' + (e && e.message || e));
+                    });
+            } catch (e) { }
+        }
+
         function postLog(entry) {
             return fetch('http://localhost:8099/tizentube/log', {
                 method: 'POST',
@@ -101,6 +178,8 @@
         }
 
         sendLog('INFO', 'index.html script started');
+        reportPreviousStart();
+        breadcrumb('script-started');
 
         tizen.tvinputdevice.registerKey("ColorF0Red");
         tizen.tvinputdevice.registerKey("ColorF1Green");
@@ -157,10 +236,12 @@
                     sendLog('INFO', 'getState resolved: ' + JSON.stringify(res));
                     if (res.canConnectToDaemon && !res.isConnecting) {
                         sendLog('INFO', 'Taking CDP-injection path, launching debugger and exiting');
+                        breadcrumb('cdp-handoff');
                         fetch(`http://localhost:8099/tizentube/debugger${args ? `?${args}` : ''}`);
                         tizen.application.getCurrentApplication().exit();
                     } else if (!res.canConnectToDaemon) {
                         sendLog('INFO', 'Taking proxy path, navigating to localhost:8099/tv');
+                        breadcrumb('proxy-nav');
                         location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
                     } else if (connectingPolls < MAX_CONNECTING_POLLS) {
                         // canConnectToDaemon && isConnecting: a connection attempt is
@@ -179,6 +260,7 @@
                         // fall back to the proxy instead of sitting on the splash
                         // screen indefinitely, which is what this state used to do.
                         sendLog('ERROR', 'isConnecting still true after ' + MAX_CONNECTING_POLLS + ' polls, falling back to proxy path');
+                        breadcrumb('proxy-nav', 'after isConnecting gave up');
                         location.href = `http://localhost:8099/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8095%2Fdial%2Fapps%2FYouTube${args ? `&${args}` : ''}`
                     }
                 }).catch((err) => {
@@ -196,6 +278,7 @@
                         return;
                     }
                     sendLog('ERROR', 'getState still failing after ' + MAX_STARTUP_RETRIES + ' retries, reloading: ' + (err && err.message || err));
+                    breadcrumb('getState-gave-up', String(err && err.message || err));
                     window.location.reload();
                 });
         }
@@ -322,11 +405,14 @@
 
         function launchService() {
             sendLog('INFO', 'Launching StandaloneService via launchAppControl');
+            breadcrumb('launch-service');
             tizen.application.launchAppControl(
                 new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
                 serviceId,
                 function () {
                     sendLog('INFO', 'launchAppControl success callback fired');
+                    breadcrumb('service-launched');
+                    reportServiceHealth();
                     waitForNetworkThen(useInjectorOrProxy);
                 },
                 function (e) {
@@ -337,6 +423,7 @@
                     // below which already retries automatically. User had
                     // to manually close/reopen the app to get past it.
                     // Retry the same way instead.
+                    breadcrumb('launch-failed', String(e && e.message || e));
                     sendLog('ERROR', 'launchAppControl failed, retrying in 1s: ' + e.message);
                     setTimeout(launchService, 1000);
                 }

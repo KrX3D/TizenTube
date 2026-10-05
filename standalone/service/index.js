@@ -418,7 +418,62 @@ function isAllowedProxyHost(hostname) {
     return ALLOWED_PROXY_HOSTS.some((host) => hostname === host || hostname.endsWith(`.${host}`));
 }
 
+// What this process has been doing, for the health line and endpoint below.
+//
+// Reported on Tizen 6.5 (WiFi): a video plays for seconds or minutes, then
+// everything stops loading — pages come back black, as if the network were
+// gone — and only reinstalling the app helps. On the proxy path every YouTube
+// request, video segments included, goes through this process, and so does
+// every log line the page and index.html produce. So when this process stops
+// answering, the failure erases its own evidence: that is why no capture of it
+// exists yet.
+//
+// These counters are the evidence. The uptime matters most: it says whether a
+// failing start is talking to a long-lived process that has gone bad or to a
+// fresh one. Note that powering a Samsung TV off is a suspend, not a reboot,
+// so this process can outlive what looks like a restart — while reinstalling
+// genuinely replaces it.
+let _served = 0;
+let _inFlight = 0;
+let _lastRequestAt = 0;
+let _peakInFlight = 0;
+const _startedAt = Date.now();
+
+function healthSnapshot() {
+    const mem = (() => { try { return process.memoryUsage(); } catch (e) { return {}; } })();
+    const mb = (n) => (typeof n === 'number' ? Math.round(n / 1048576) : null);
+    let handles = null;
+    // Not in every Node build, and internal where it is — the socket count is
+    // the first thing to look at for a process that stops accepting, so it is
+    // worth asking for behind a guard.
+    try { if (typeof process._getActiveHandles === 'function') handles = process._getActiveHandles().length; } catch (e) { }
+    return {
+        pid: process.pid,
+        uptimeSec: Math.round((Date.now() - _startedAt) / 1000),
+        served: _served,
+        inFlight: _inFlight,
+        peakInFlight: _peakInFlight,
+        lastRequestAgeSec: _lastRequestAt ? Math.round((Date.now() - _lastRequestAt) / 1000) : null,
+        rssMB: mb(mem.rss),
+        heapUsedMB: mb(mem.heapUsed),
+        handles,
+        listening: !!(typeof server !== 'undefined' && server && server.listening)
+    };
+}
+
 app.use((req, res, next) => {
+    _served++;
+    _inFlight++;
+    if (_inFlight > _peakInFlight) _peakInFlight = _inFlight;
+    _lastRequestAt = Date.now();
+    let done = false;
+    const finish = () => { if (done) return; done = true; _inFlight--; };
+    // Both, because a client that goes away mid-response emits 'close' without
+    // 'finish', and a segment request abandoned by the player does exactly
+    // that — miscounting those is how inFlight would drift upwards forever and
+    // make this diagnostic lie.
+    res.on('finish', finish);
+    res.on('close', finish);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
     res.setHeader('Access-Control-Allow-Headers', '*');
@@ -426,6 +481,13 @@ app.use((req, res, next) => {
         return res.status(200).end();
     }
     next();
+});
+
+// Asked by index.html at startup and answerable at any time. A request that
+// does not come back is itself the finding: this process is up but no longer
+// serving, which is the state that currently needs a reinstall.
+app.get('/tizentube/health', (req, res) => {
+    res.json(healthSnapshot());
 });
 
 app.get('/tizentube/getState', (req, res) => {
@@ -694,6 +756,23 @@ const server = app.listen(PORT, "127.0.0.1", () => {
 server.on('error', (err) => {
     logServiceEvent('ERROR', `app.listen failed: ${err && err.stack || err}`);
 });
+
+// One line a minute while there is traffic, so a capture taken before the
+// failure shows the trend that led to it — memory climbing, sockets never
+// coming back, requests still arriving or not. Silent while nothing is
+// happening, so an idle TV does not fill the log.
+const HEALTH_LOG_MS = 60000;
+let _lastHealthServed = -1;
+const healthTimer = setInterval(() => {
+    try {
+        const h = healthSnapshot();
+        if (h.served === _lastHealthServed) return;
+        _lastHealthServed = h.served;
+        logServiceEvent('INFO', `health ${JSON.stringify(h)}`);
+    } catch (e) { }
+}, HEALTH_LOG_MS);
+// Never the reason the process is kept alive.
+try { if (typeof healthTimer.unref === 'function') healthTimer.unref(); } catch (e) { }
 
 // dist/service.js's DIAL server generates UUIDs via the 'uuid' package, and
 // on-device logs showed it resolving to uuid's browser-targeted rng (needs
