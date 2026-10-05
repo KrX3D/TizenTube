@@ -699,11 +699,6 @@ export default function modernUI(update, parameters) {
                                     value: 'hidePlayerThumbsButtons'
                                 },
                                 {
-                                    name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.dislike'),
-                                    icon: 'EYE_OFF',
-                                    value: 'hidePlayerDislikeButton'
-                                },
-                                {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.save'),
                                     icon: 'BOOKMARK_BORDER',
                                     value: 'hidePlayerSaveButton'

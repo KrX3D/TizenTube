@@ -55,9 +55,10 @@ const defaultConfig = {
   hidePlayerJoinButton: false,
   hidePlayerSubscribeButton: false,
   hidePlayerThumbsButtons: false,
-  // Retired: there is one button for both thumbs, so a thumbs up option on
-  // its own could never work. Read only for settings stored before that was
-  // understood; hidePlayerThumbsButtons replaces it.
+  // Retired, both of them. One button draws both thumbs and the TVs ignore
+  // the renderer's hideDislikeButton flag, so neither half could be hidden
+  // on its own. Read only so a setting stored by an older build still hides
+  // the thumbs; hidePlayerThumbsButtons is the one that is offered.
   hidePlayerLikeButton: false,
   hidePlayerDislikeButton: false,
   hidePlayerSaveButton: false,

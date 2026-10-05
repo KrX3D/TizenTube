@@ -53,15 +53,16 @@ const BUTTONS = [
         match: [/^SUBSCRIBE/i, /^UNSUBSCRIBE/i, /^subscribeCommand$/i],
     },
     {
-        // Both thumbs together, which on this build is one button. A build
-        // that does send a separate thumbs up button has it hidden by this
-        // same setting, which is still what the label promises.
+        // Both thumbs, under one setting. Tested on Tizen 5.5 and 6.5: the
+        // renderer's own hideDislikeButton flag is ignored by the app, so the
+        // thumbs down half cannot be hidden on its own either, and there is
+        // nothing left to offer but both or neither. Every thumbs shape a
+        // build might send is matched here, so one setting covers all of them.
         key: 'hidePlayerThumbsButtons', name: 'thumbs',
-        match: [/^LIKE$/, /^LIKE_/, /^likeEndpoint:LIKE$/],
-    },
-    {
-        key: 'hidePlayerDislikeButton', name: 'dislike',
-        match: [/^DISLIKE/, /^likeEndpoint:DISLIKE$/],
+        // The two keys this setting replaced. A TV upgraded from a build that
+        // had them keeps hiding the thumbs without being re-toggled.
+        alsoKeys: ['hidePlayerLikeButton', 'hidePlayerDislikeButton'],
+        match: [/^LIKE$/, /^LIKE_/, /^DISLIKE/, /^likeEndpoint:/],
     },
     {
         key: 'hidePlayerSaveButton', name: 'save',
@@ -164,27 +165,6 @@ function enabled(key) {
     }
 }
 
-/**
- * True when the name covers thumbs up and thumbs down together.
- *
- * Two shapes mean that. A name holding both words, which is the obvious one:
- * DISLIKE contains LIKE, so the dislikes come out of the name first and a LIKE
- * left over is a second, separate button. And LIKE_BUTTON, which is not
- * obvious at all — it is the name the app gives the ONE button that draws both
- * thumbs, and there is no separate dislike type at all. siriusvoid's fork
- * labels that single type 'Hide Like and Dislike Buttons', which is how it
- * came to light here.
- *
- * Getting this wrong is not cosmetic: before, hiding the thumbs up alone
- * matched LIKE_BUTTON and took the thumbs down away with it.
- */
-function isCombinedLike(name) {
-    if (!name) return false;
-    if (/^LIKE_BUTTON/i.test(name)) return true;
-    if (name.indexOf('DISLIKE') === -1) return false;
-    return name.split('DISLIKE').join('').indexOf('LIKE') !== -1;
-}
-
 /** Which setting hides this button, or null to keep it. */
 function hiddenReason(item) {
     const signals = signalsOf(item);
@@ -193,44 +173,8 @@ function hiddenReason(item) {
     // Ours, and it starts with the same letters as the membership button.
     for (const signal of signals) if (signal.indexOf('SPONSORBLOCK') === 0) return null;
 
-    // One button draws both thumbs: the app sends a single LIKE_BUTTON and
-    // has no dislike type at all. Removing it hides both, which is why
-    // switching one of the two options off brought both thumbs back.
-    //
-    // A capture from a TV settled what can be done about that. The button's
-    // likeButtonRenderer carries, among the like and dislike counts,
-    // `likesAllowed` and — the useful one — `hideDislikeButton`, which is the
-    // flag YouTube itself uses to drop the thumbs down half. There is no
-    // matching flag for the thumbs up half.
-    //
-    // So the two things that can be offered are offered, and the one that
-    // cannot is not a setting at all:
-    //
-    //   hidePlayerThumbsButtons   remove the button, both thumbs with it
-    //   hidePlayerDislikeButton   set the flag, keep the button, thumbs up stays
-    //
-    // hidePlayerLikeButton was a thumbs up option before this was understood.
-    // It is gone from the menu; a stored one is still read, and only in the
-    // combination that used to hide both, so an existing setting keeps doing
-    // what it did on screen.
-    for (const signal of signals) {
-        if (!isCombinedLike(signal)) continue;
-        const hideBoth = enabled('hidePlayerThumbsButtons')
-            || (enabled('hidePlayerLikeButton') && enabled('hidePlayerDislikeButton'));
-        if (hideBoth) return 'thumbs';
-        if (enabled('hidePlayerDislikeButton')) hideDislikeHalf(item);
-        else if (enabled('hidePlayerLikeButton')) {
-            sayOnce('player.retiredThumbsUpOption', {
-                key: 'hidePlayerLikeButton',
-                kept: 'both',
-                why: 'one button draws both thumbs; use hidePlayerThumbsButtons to hide them',
-            });
-        }
-        return null;
-    }
-
     for (const button of BUTTONS) {
-        if (!enabled(button.key)) continue;
+        if (!buttonEnabled(button)) continue;
         for (const pattern of button.match) {
             for (const signal of signals) if (pattern.test(signal)) return button.name;
         }
@@ -240,62 +184,16 @@ function hiddenReason(item) {
 
 /** True when at least one button is hidden, so nothing is wrapped for nothing. */
 export function anyPlayerButtonHidden() {
-    for (const button of BUTTONS) if (enabled(button.key)) return true;
-    // The retired thumbs up key hides nothing on its own, but a TV that still
-    // has it stored should reach the line that says so rather than stop here.
-    return enabled('hidePlayerLikeButton');
+    for (const button of BUTTONS) if (buttonEnabled(button)) return true;
+    return false;
 }
 
 const seenShapes = [];
-const _said = new Set();
-
-/** A line worth reading once, not once per response. */
-function sayOnce(label, payload) {
-    try {
-        const key = label + JSON.stringify(payload);
-        if (_said.has(key) || _said.size >= 20) return;
-        _said.add(key);
-        appendVisibleLog(label, payload);
-    } catch (e) { }
-}
-
-/**
- * The renderer inside the one button that draws both thumbs, or null.
- *
- * Found by the fields it holds rather than by its key, so a build that renames
- * `likeButtonRenderer` still works: whatever object carries the dislike half's
- * own fields is the one that draws it.
- */
-function thumbsRenderer(item) {
-    for (const holder of [item, item?.button, item?.buttonViewModel]) {
-        if (!holder || typeof holder !== 'object') continue;
-        for (const key of Object.keys(holder)) {
-            const node = holder[key];
-            if (!node || typeof node !== 'object' || Array.isArray(node)) continue;
-            if ('hideDislikeButton' in node || 'dislikeCountText' in node) return node;
-        }
-    }
-    return null;
-}
-
-/**
- * Take away the thumbs down half and leave the thumbs up in place.
- *
- * The flag has to be set on every response, since each one brings a fresh
- * object; only the log is held to once.
- */
-function hideDislikeHalf(item) {
-    const renderer = thumbsRenderer(item);
-    if (!renderer) {
-        sayOnce('player.dislikeHalf.noRenderer', { signals: signalsOf(item).join('+') || '?' });
-        return false;
-    }
-    // Absent means this build may not honour it. Setting it anyway costs
-    // nothing and is the only lever there is, but say which case it was so a
-    // "still shown" report can be told apart from a wiring problem.
-    sayOnce('player.dislikeHalfHidden', { flagPresent: 'hideDislikeButton' in renderer });
-    renderer.hideDislikeButton = true;
-    return true;
+/** True when this button is to be hidden, by its own key or a retired one. */
+function buttonEnabled(button) {
+    if (enabled(button.key)) return true;
+    for (const key of button.alsoKeys || []) if (enabled(key)) return true;
+    return false;
 }
 
 const seenHolders = [];
