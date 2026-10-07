@@ -60,6 +60,11 @@ const OURS = new RegExp(
     + '|\\s*\\(' + MINUS + '[^)]*\\)\\s*$'
 );
 
+// How far the total on screen may sit from the video's own duration before it
+// is treated as a leftover from a previous video rather than a deliberate
+// wording. Rounding alone accounts for a second.
+const TOTAL_TOLERANCE_S = 2;
+
 let video = null;
 let desiredText = null;
 let nativeText = null;
@@ -74,6 +79,24 @@ function formatTime(totalSeconds) {
     const mm = hours > 0 ? String(minutes).padStart(2, '0') : String(minutes);
     const ss = String(rest).padStart(2, '0');
     return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/**
+ * The seconds in an "m:ss" or "h:mm:ss" readout, or null when the text is not
+ * one — "LIVE", a chapter name, anything the app words its own way.
+ */
+function parseTime(text) {
+    const parts = String(text === undefined || text === null ? '' : text).trim().split(':');
+    if (parts.length < 2 || parts.length > 3) return null;
+    let seconds = 0;
+    for (let i = 0; i < parts.length; i++) {
+        // The leading field carries the hours and may be a single digit; the
+        // rest are always padded, so anything else is not a time.
+        const pattern = i === 0 ? /^\d{1,3}$/ : /^\d{2}$/;
+        if (!pattern.test(parts[i])) return null;
+        seconds = (seconds * 60) + Number(parts[i]);
+    }
+    return seconds;
 }
 
 function findDurationEl() {
@@ -140,8 +163,34 @@ export function finishTimeText(secondsLeft, now) {
  */
 function computeDesiredText(el) {
     if (!video || !video.duration || !isFinite(video.duration)) return null;
-    const total = (el.textContent || '').replace(OURS, '').trim();
+    const raw = el.textContent || '';
+    // Whether what is on screen is this feature's own earlier output.
+    const leftover = OURS.test(raw);
+    let total = raw.replace(OURS, '').trim();
     if (!total) return null;
+
+    // Reported: with the remaining time on, the length of the video stayed at
+    // the first video's 34:18 for every video after it, and switching the
+    // setting off showed the right length again.
+    //
+    // The total is read back from the very element this writes to, and the
+    // guard below used to write the cached string back over anything the app
+    // put there — so the app's new total for the next video was discarded
+    // before it could be read, and the old one was re-derived from our own
+    // text forever. Two things stop that: the guard now recomputes from what
+    // the app wrote (see attach), and a total that is our own leftover is
+    // checked against the video actually playing before it is trusted again.
+    //
+    // Only a leftover is checked. Text the app has just written is taken as
+    // it stands, whatever it says: the duration may not have settled for a
+    // video that is still loading, and the app's wording is the authority for
+    // a live stream or anything else that is not a plain time.
+    if (leftover) {
+        const shown = parseTime(total);
+        if (shown !== null && Math.abs(shown - video.duration) > TOTAL_TOLERANCE_S) {
+            total = formatTime(video.duration);
+        }
+    }
     nativeText = total;
 
     const secondsLeft = Math.max(0, video.duration - video.currentTime);
@@ -222,7 +271,21 @@ function attach() {
     guardObserver = new MutationObserver(() => {
         if (desiredText === null) return;
         const el = findDurationEl();
-        if (el && el.textContent !== desiredText) el.textContent = desiredText;
+        if (!el || el.textContent === desiredText) return;
+        // The app has written its own text back — about once a second during
+        // playback, and with a new total when the video changes. Recompute
+        // from it rather than forcing the cached string: forcing is what
+        // discarded the new total and left the previous video's length on
+        // screen for good.
+        const next = computeDesiredText(el);
+        if (next !== null) {
+            desiredText = next;
+            if (el.textContent !== desiredText) el.textContent = desiredText;
+            return;
+        }
+        // Nothing computable right now (duration not known yet, say): hold the
+        // line with what was last correct, as before.
+        el.textContent = desiredText;
     });
     guardObserver.observe(container, { characterData: true, childList: true, subtree: true });
 
