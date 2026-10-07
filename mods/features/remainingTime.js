@@ -86,7 +86,12 @@ function formatTime(totalSeconds) {
  * one — "LIVE", a chapter name, anything the app words its own way.
  */
 function parseTime(text) {
-    const parts = String(text === undefined || text === null ? '' : text).trim().split(':');
+    // No null guard: the one caller hands this the element's text after a
+    // replace and a trim, so it is always a string. CodeQL was right to call
+    // that branch unreachable (js/unneeded-defensive-code). The conversion
+    // stays, since it is what makes the contract explicit rather than a test
+    // that can never fire.
+    const parts = String(text).trim().split(':');
     if (parts.length < 2 || parts.length > 3) return null;
     let seconds = 0;
     for (let i = 0; i < parts.length; i++) {
@@ -283,8 +288,20 @@ function attach() {
             if (el.textContent !== desiredText) el.textContent = desiredText;
             return;
         }
-        // Nothing computable right now (duration not known yet, say): hold the
-        // line with what was last correct, as before.
+        // Nothing computable. Which of the two reasons it is matters:
+        //
+        //   Infinity  a live stream. There is no remainder to count down and
+        //             the app's wording is the authority, so stop holding our
+        //             text over it — otherwise going from a normal video to a
+        //             live one leaves the old video's readout on screen, which
+        //             is the same fault this change is about.
+        //   NaN or 0  the duration is not known yet, a moment that happens on
+        //             every video while it loads. Hold the line, or the
+        //             appended part flickers away and back each second.
+        if (video && video.duration === Infinity) {
+            desiredText = null;
+            return;
+        }
         el.textContent = desiredText;
     });
     guardObserver.observe(container, { characterData: true, childList: true, subtree: true });
