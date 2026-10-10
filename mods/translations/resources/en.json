@@ -82,6 +82,7 @@
                             "player": "Player, SponsorBlock, captions",
                             "other": "Everything else"
                         },
+                        "playbackDiagnostics": "Log Playback Stalls",
                         "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
                     },
                     "debugConsole": {

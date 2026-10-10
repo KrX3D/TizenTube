@@ -34,4 +34,5 @@ import "./features/playlistContinue.js";
 import "./ui/clock.js";
 import "./features/jumpToPercentage.js";
 import "./features/resumeAfterSuspend.js";
+import "./features/playbackHealth.js";
 import "./ui/sidebarModification.js";

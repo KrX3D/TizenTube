@@ -4,6 +4,7 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
+import { noteParseCost, playbackDiagnosticsEnabled } from './playbackHealth.js';
 import { stopAtPlaylistEnd } from './playlistEndStopper.js';
 import { stopForcedSubtitles } from './forcedSubtitleStopper.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
@@ -845,6 +846,11 @@ JSON.parse = function () {
   const r = origParse.apply(this, arguments);
   _parseDepth++;
   if (_parseDepth > 1) { _parseDepth--; return r; }
+  // Reported: a lot of buffering, and nothing in the log about it. Everything
+  // below runs on the same thread as the player, so how long it takes is worth
+  // knowing when a stall is being explained. Only measured while the playback
+  // diagnostic is on, and playbackHealth.js reports it next to each stall.
+  const _startedAt = playbackDiagnosticsEnabled() ? Date.now() : 0;
   try {
     const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
     window.__ttLastDetectedPage = detectedPage;
@@ -1292,6 +1298,7 @@ JSON.parse = function () {
     return r;
   } finally {
     _parseDepth--;
+    if (_startedAt) noteParseCost(Date.now() - _startedAt);
   }
 };
 

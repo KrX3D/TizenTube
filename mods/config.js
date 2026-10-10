@@ -156,6 +156,7 @@ const defaultConfig = {
   enableInstantSeek: false,
   instantSeekDelayMs: 500,
   enableStopAtPlaylistEnd: false,
+  enablePlaybackDiagnostics: false,
   enableRemainingTime: false,
   enableFinishTime: false,
 };

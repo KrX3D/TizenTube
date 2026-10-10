@@ -606,6 +606,11 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
+                            name: t('settings.options.misc.options.logging.playbackDiagnostics'),
+                            icon: 'PLAY_CIRCLE',
+                            value: 'enablePlaybackDiagnostics'
+                        },
+                        {
                             name: t('settings.options.misc.options.logging.diagSubscriptionsShelf'),
                             icon: 'SUBSCRIPTIONS',
                             value: 'diagSubscriptionsShelf'
