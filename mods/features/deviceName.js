@@ -87,9 +87,25 @@ export function deviceNameForSyslog() {
  * lines in half. Letters, digits, dot, dash and underscore, as there.
  */
 export function asHostField(value) {
-    const name = String(value === undefined || value === null ? '' : value)
-        .replace(/[^A-Za-z0-9._-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 255);
+    const reduced = String(value === undefined || value === null ? '' : value)
+        .replace(/[^A-Za-z0-9._-]+/g, '-');
+    const name = trimDashes(trimDashes(reduced).slice(0, 255));
     return name || null;
+}
+
+/**
+ * Dashes off both ends, by index rather than by pattern.
+ *
+ * The same reduction as the standalone service's, including this: /^-+|-+$/
+ * backtracks polynomially on a dash run that does not reach the end of the
+ * string, which on a TV is slow enough to matter. CodeQL reported it on the
+ * service's copy (js/polynomial-redos); this copy takes a name typed into the
+ * settings, which is the same shape of input by a shorter route.
+ */
+function trimDashes(text) {
+    let start = 0;
+    let end = text.length;
+    while (start < end && text.charCodeAt(start) === 45) start++;
+    while (end > start && text.charCodeAt(end - 1) === 45) end--;
+    return text.slice(start, end);
 }

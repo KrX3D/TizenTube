@@ -591,15 +591,37 @@ const SYSLOG_DEFAULT_FACILITY = 16;
  * model to, so both this process's frames and the page's name the same TV the
  * same way. Anything else is not worth carrying as far as the disk.
  */
+/**
+ * Dashes off both ends, by index rather than by pattern.
+ *
+ * /^-+|-+$/ on a value from the network is a polynomial backtracker
+ * (js/polynomial-redos, alert 139) and the numbers are not subtle. For a dash
+ * run that does not reach the end of the string — "a" + "-"*n + "x", which
+ * survives the reduction above untouched — the engine tries -+$ at every
+ * position in the run and backtracks through it each time. Measured on a
+ * desktop: 5k dashes 10ms, 20k 156ms, 50k 992ms. The TV's CPU is far slower
+ * than that, and on the proxy path this process is also serving video.
+ *
+ * Walking from each end is linear and was 0ms at every one of those sizes.
+ */
+function trimDashes(text) {
+    let start = 0;
+    let end = text.length;
+    while (start < end && text.charCodeAt(start) === 45) start++;
+    while (end > start && text.charCodeAt(end - 1) === 45) end--;
+    return text.slice(start, end);
+}
+
 function headerField(value, max) {
-    const out = String(value === undefined || value === null ? '' : value)
-        // A run becomes one dash rather than vanishing: "UE55 RU7179" reads as
-        // UE55-RU7179, which is also what the page makes of it, and the two
-        // have to agree or one TV is named twice in one file.
-        .replace(/[^A-Za-z0-9._-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, max)
-        .replace(/-+$/g, '');
+    // A run becomes one dash rather than vanishing: "UE55 RU7179" reads as
+    // UE55-RU7179, which is also what the page makes of it, and the two have
+    // to agree or one TV is named twice in one file. This replace is linear:
+    // one quantifier over a negated class, nothing to backtrack into.
+    const reduced = String(value === undefined || value === null ? '' : value)
+        .replace(/[^A-Za-z0-9._-]+/g, '-');
+    // Trimmed, cut to length, then trimmed again in case the cut left a dash
+    // at the end.
+    const out = trimDashes(trimDashes(reduced).slice(0, max));
     return out || '-';
 }
 // INFO, with the levels this logs mapped onto RFC 5424 severities.
