@@ -1,5 +1,5 @@
 import { configRead } from '../config.js';
-import { deviceNameForSyslog } from './deviceName.js';
+import { deviceNameForSyslog, asHostField } from './deviceName.js';
 
 /**
  * syslog.js — RFC 5424 output, independent of the existing log server.
@@ -84,8 +84,11 @@ function sanitize(value, max) {
  */
 function hostname() {
   try {
-    const configured = configRead('syslogHostname');
-    if (configured) return sanitize(configured, 255);
+    // Through the same reduction as the detected name and as the service's
+    // own, so a typed name cannot be the one thing that splits a TV's lines
+    // across two names in the same file.
+    const configured = asHostField(configRead('syslogHostname'));
+    if (configured) return configured;
   } catch (_) { }
   try {
     const device = deviceNameForSyslog();
