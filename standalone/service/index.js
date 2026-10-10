@@ -60,6 +60,57 @@ const UNAVAILABLE_COOLDOWN_MS = 15000;
 // being logged to an address nobody is listening on. The injector passes a
 // reporter that writes the message into the page's own console instead, where
 // the on-screen debug console shows it.
+// What the page's own frames are addressed to and formatted like, so this
+// process can send matching ones for its own lines.
+//
+// Asked for: syslog carried the userscript's logs only, and the service's
+// startup lines — the ones that say what happened before the page existed —
+// went to the HTTP receiver alone. Those are exactly the lines worth having in
+// syslog, because they are the ones about starting up.
+//
+// Nothing new is configured for this. Every frame the page hands over already
+// says where it is going and how it is addressed, so the target, the facility
+// and the TV's name are read back out of what is already passing through.
+let _syslogTarget = null;
+
+/** The facility and hostname a page frame was built with, or null. */
+function readFrameHeader(frame) {
+    try {
+        const text = String(frame);
+        // <PRI>VERSION SP TIMESTAMP SP HOSTNAME SP APP-NAME SP ...
+        const match = text.match(/^<(\d{1,3})>(\d)\s+(\S+)\s+(\S+)\s+(\S+)\s/);
+        if (!match) return null;
+        const priority = Number(match[1]);
+        if (!isFinite(priority) || priority < 0 || priority > 191) return null;
+        return {
+            facility: Math.floor(priority / 8),
+            hostname: match[4],
+            appName: match[5]
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+function noteSyslogTarget(host, port, frame) {
+    const octets = parseIpv4(host);
+    const canonical = ipv4FromOctets(octets);
+    const candidatePort = isValidPort(port) ? Number(port) : DEFAULT_SYSLOG_PORT;
+    if (!canonical || !isValidPort(candidatePort)) return;
+    const header = readFrameHeader(frame) || {};
+    const next = {
+        octets: octets,
+        host: canonical,
+        port: candidatePort,
+        facility: typeof header.facility === 'number' ? header.facility : SYSLOG_DEFAULT_FACILITY,
+        hostname: header.hostname && header.hostname !== '-' ? header.hostname : 'TizenTube',
+        appName: header.appName && header.appName !== '-' ? header.appName : 'TizenTube'
+    };
+    const changed = !_syslogTarget || JSON.stringify(next) !== JSON.stringify(_syslogTarget);
+    _syslogTarget = next;
+    if (changed) persistReceiver();
+}
+
 function relaySyslog(frame, host, port, report) {
     function problem(message) {
         logServiceEvent('ERROR', message);
@@ -347,9 +398,31 @@ function readPersistedReceiver(file) {
         // that then becomes a request target. A file written by an older build
         // held a host string instead; it is parsed the same way rather than
         // trusted, so upgrading keeps the address instead of silently losing it.
+        // The syslog half, which may be stored without the other.
+        const sys = saved.syslog;
+        if (sys) {
+            const sysOctets = Array.isArray(sys.octets) ? sys.octets : parseIpv4(sys.host);
+            const sysHost = ipv4FromOctets(sysOctets);
+            const facility = Number(sys.facility);
+            if (sysHost && isValidPort(sys.port)) {
+                _syslogTarget = {
+                    octets: sysOctets.slice(),
+                    host: sysHost,
+                    port: Number(sys.port),
+                    facility: (isFinite(facility) && facility >= 0 && facility <= 23) ? facility : SYSLOG_DEFAULT_FACILITY,
+                    // Through the same filter the frames use, since these two
+                    // go into a frame header verbatim.
+                    hostname: headerField(sys.hostname, 255),
+                    appName: headerField(sys.appName, 48)
+                };
+            }
+        }
+
         const octets = Array.isArray(saved.octets) ? saved.octets : parseIpv4(saved.host);
         const host = ipv4FromOctets(octets);
-        if (!host || !isValidPort(saved.port)) return false;
+        // A file holding only a syslog target is still a file worth having
+        // read, so the search for a readable one stops here.
+        if (!host || !isValidPort(saved.port)) return !!_syslogTarget;
         _learnedOctets = octets.slice();
         _learnedHost = host;
         _learnedPort = Number(saved.port);
@@ -363,9 +436,23 @@ function readPersistedReceiver(file) {
 }
 
 function persistReceiver() {
-    if (!ipv4FromOctets(_learnedOctets) || !isValidPort(_learnedPort)) return;
+    const haveReceiver = !!ipv4FromOctets(_learnedOctets) && isValidPort(_learnedPort);
+    // Either output is worth storing on its own: a TV with syslog configured
+    // and no log server would otherwise keep nothing, and its startup lines
+    // are the ones this is for.
+    if (!haveReceiver && !_syslogTarget) return;
     // Numbers, not the string that arrived over the network.
-    const contents = JSON.stringify({ octets: _learnedOctets, port: _learnedPort });
+    const contents = JSON.stringify({
+        octets: haveReceiver ? _learnedOctets : undefined,
+        port: haveReceiver ? _learnedPort : undefined,
+        syslog: _syslogTarget ? {
+            octets: _syslogTarget.octets,
+            port: _syslogTarget.port,
+            facility: _syslogTarget.facility,
+            hostname: _syslogTarget.hostname,
+            appName: _syslogTarget.appName
+        } : undefined
+    });
     // Already proven writable: just write. Not doing this is a bug waiting to
     // happen — the probe below returns the remembered path without writing, so
     // routing every later save through it would quietly drop a changed address.
@@ -453,8 +540,59 @@ function relayLog(entry, host, port) {
     } catch (e) { }
 }
 
+const SYSLOG_DEFAULT_FACILITY = 16;
+
+/** A value fit for an RFC 5424 header field: printable ASCII, no spaces. */
+function headerField(value, max) {
+    const out = String(value === undefined || value === null ? '' : value)
+        .replace(/[^\x21-\x7E]/g, '').replace(/[\]="]/g, '');
+    return out ? out.slice(0, max) : '-';
+}
+// INFO, with the levels this logs mapped onto RFC 5424 severities.
+const SYSLOG_SEVERITY = { ERROR: 3, WARN: 4, INFO: 6, DEBUG: 7 };
+
+// Keeps the service's own lines out of an endless loop: a syslog send that
+// fails reports the failure through logServiceEvent, which would try to send
+// that report the same way.
+let _inServiceSyslog = false;
+
+/**
+ * One of this process's own log lines, as an RFC 5424 frame.
+ *
+ * Built to match what the page sends — same facility, same hostname, same
+ * app-name — so both streams read as one source on the receiver rather than
+ * two. Only the MSGID differs, because the context does.
+ */
+function serviceSyslogFrame(level, message, target) {
+    const severity = SYSLOG_SEVERITY[level] === undefined ? SYSLOG_SEVERITY.INFO : SYSLOG_SEVERITY[level];
+    const priority = (target.facility * 8) + severity;
+    // A newline would end the frame early and everything after it would be
+    // read as a separate message, so the stack traces this logs are flattened.
+    const text = String(message).replace(/[\r\n]+/g, ' ');
+    return '<' + priority + '>1 ' + new Date().toISOString() + ' '
+        + headerField(target.hostname, 255) + ' ' + headerField(target.appName, 48)
+        + ' - StandaloneService - ' + text;
+}
+
+function sendServiceSyslog(level, message) {
+    if (!_syslogTarget || _inServiceSyslog) return;
+    _inServiceSyslog = true;
+    try {
+        relaySyslog(serviceSyslogFrame(level, message, _syslogTarget), _syslogTarget.host, _syslogTarget.port);
+    } catch (e) {
+        // Nowhere to report this that would not come straight back here.
+    } finally {
+        _inServiceSyslog = false;
+    }
+}
+
 function logServiceEvent(level, message) {
-    relayLog({ ts: new Date().toISOString(), level, context: 'StandaloneService', message });
+    const entry = { ts: new Date().toISOString(), level, context: 'StandaloneService', message };
+    relayLog(entry);
+    // Both outputs, independently, exactly as the page's own logging does:
+    // either can be configured without the other, and a dead syslog target
+    // must not stop the HTTP relay.
+    sendServiceSyslog(level, message);
 }
 
 process.on('uncaughtException', (err) => {
@@ -679,6 +817,7 @@ app.post('/tizentube/log', express.json(), (req, res) => {
 app.post('/tizentube/syslog', express.json(), (req, res) => {
     const { host, port, frame } = req.body || {};
     if (!frame) return res.status(400).end();
+    noteSyslogTarget(host, port, frame);
     relaySyslog(frame, host, port);
     res.status(204).end();
 });
