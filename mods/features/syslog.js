@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { deviceNameForSyslog } from './deviceName.js';
 
 /**
  * syslog.js — RFC 5424 output, independent of the existing log server.
@@ -69,15 +70,28 @@ function sanitize(value, max) {
   return out.slice(0, max);
 }
 
+/**
+ * The HOSTNAME field: which TV this came from.
+ *
+ * Reported: a syslog server names its files after this field, and it was
+ * sending the page's own host — so everything landed in one file called
+ * syslog-www.youtube.com.log, which says neither which TV nor that it is one.
+ *
+ * The TV's model is what a person would call it, and the page can usually
+ * reach it (see deviceName.js). Anything the user typed in the settings wins
+ * over that, and the app's name is the last resort — still better than the
+ * host of a page that is the same on every TV in the house.
+ */
 function hostname() {
   try {
     const configured = configRead('syslogHostname');
     if (configured) return sanitize(configured, 255);
   } catch (_) { }
-  // No reliable device name is exposed to the page; the host part of the
-  // page URL is the closest stable identifier available.
-  try { return sanitize(window.location.hostname || 'tizentube', 255); } catch (_) { }
-  return 'tizentube';
+  try {
+    const device = deviceNameForSyslog();
+    if (device) return sanitize(device, 255);
+  } catch (_) { }
+  return 'TizenTube';
 }
 
 function structuredData(entry, part, totalParts) {
