@@ -60,19 +60,8 @@
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",
                     "guestSignInReminder": "Gast-Anmeldeerinnerung anzeigen",
                     "reloadHomeOnStartup": "Startseite beim Start neu laden",
-                    "debugConsole": {
-                        "title": "Debug-Konsole",
-                        "enable": "Debug-Konsole aktivieren",
-                        "enableLogging": "Hintergrund-Debug-Protokollierung aktivieren",
-                        "position": "Konsolenposition",
-                        "positions": {
-                            "topLeft": "Oben links",
-                            "topRight": "Oben rechts",
-                            "bottomLeft": "Unten links",
-                            "bottomRight": "Unten rechts",
-                            "center": "Mitte"
-                        },
-                        "height": "Konsolenhöhe",
+                    "logging": {
+                        "title": "Protokollierung",
                         "verbosity": {
                             "title": "Detailgrad der Protokolle",
                             "subtitle": "Einfach protokolliert nur, was passiert ist; detailliert enthält die vollständigen Daten",
@@ -94,6 +83,20 @@
                             "other": "Alles Übrige"
                         },
                         "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
+                    },
+                    "debugConsole": {
+                        "title": "Debug-Konsole",
+                        "enable": "Debug-Konsole aktivieren",
+                        "enableLogging": "Hintergrund-Debug-Protokollierung aktivieren",
+                        "position": "Konsolenposition",
+                        "positions": {
+                            "topLeft": "Oben links",
+                            "topRight": "Oben rechts",
+                            "bottomLeft": "Unten links",
+                            "bottomRight": "Unten rechts",
+                            "center": "Mitte"
+                        },
+                        "height": "Konsolenhöhe"
                     },
                     "logServer": {
                         "title": "Fernprotokoll-Server",
