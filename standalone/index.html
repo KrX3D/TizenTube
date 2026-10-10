@@ -85,9 +85,20 @@
             } catch (e) { }
         }
 
-        // Stages a start is meant to end at. Anything else as the last entry
-        // means that start never got anywhere.
+        // Stages a start is meant to end at.
         var TERMINAL_STAGES = ['cdp-handoff', 'proxy-nav'];
+
+        // Below this, a start that stopped short of a decision is the platform
+        // replacing the page, not a fault.
+        //
+        // This read "DIED AT" for any start that did not reach a terminal
+        // stage, and a capture showed why that is too eager: a start lasting
+        // 741ms and ending at health-ok, twice, in the same minute as one that
+        // reached cdp-handoff. That is the documented auto-relaunch — the app
+        // hands off, exits, and Tizen starts the launcher again — so the run
+        // ends before any decision is recorded and nothing is wrong. Calling
+        // that a death would bury the real hang, which sits for minutes.
+        var SHORT_START_MS = 10000;
 
         function reportPreviousStart() {
             try {
@@ -96,11 +107,19 @@
                 if (!(all instanceof Array) || !all.length) return;
                 window.localStorage.removeItem(BREADCRUMB_KEY);
                 var last = all[all.length - 1];
-                var ended = TERMINAL_STAGES.indexOf(last.stage) !== -1;
-                sendLog(ended ? 'INFO' : 'ERROR',
-                    'previous start ' + (ended ? 'reached' : 'DIED AT') + ' "' + last.stage + '"'
-                    + ' after ' + last.at + 'ms (' + last.ts + '), ' + all.length + ' stages: '
-                    + JSON.stringify(all));
+                var trail = ', ' + all.length + ' stages: ' + JSON.stringify(all);
+                if (TERMINAL_STAGES.indexOf(last.stage) !== -1) {
+                    sendLog('INFO', 'previous start reached "' + last.stage + '" after ' + last.at + 'ms ('
+                        + last.ts + ')' + trail);
+                    return;
+                }
+                if (last.at < SHORT_START_MS) {
+                    sendLog('INFO', 'previous start ended at "' + last.stage + '" after only ' + last.at
+                        + 'ms (' + last.ts + '), which is the app being relaunched rather than a fault' + trail);
+                    return;
+                }
+                sendLog('ERROR', 'previous start STALLED AT "' + last.stage + '" for ' + last.at + 'ms ('
+                    + last.ts + ') without reaching a decision' + trail);
             } catch (e) { }
         }
 
@@ -331,6 +350,10 @@
         function waitForNetworkThen(next) {
             var started = Date.now();
             var attempts = 0;
+            // On screen this is "Warte auf das Netzwerk…", which is what a
+            // stalled start looks like to the user, so the trail says whether
+            // it was waiting and for how long.
+            breadcrumb('network-wait');
             var delay = 1000;
 
             if (navigator.onLine !== false) {
@@ -390,6 +413,7 @@
                         finished = true;
                         clearTimeout(timer);
                         sendLog('INFO', 'Network ready after ' + (Date.now() - started) + 'ms, ' + attempts + ' check(s)');
+                        breadcrumb('network-ready', Date.now() - started);
                         next();
                     })
                     .catch(function (e) {
