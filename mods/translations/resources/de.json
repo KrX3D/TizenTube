@@ -82,6 +82,7 @@
                             "player": "Player, SponsorBlock, Untertitel",
                             "other": "Alles Übrige"
                         },
+                        "playbackDiagnostics": "Wiedergabe-Aussetzer protokollieren",
                         "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
                     },
                     "debugConsole": {
