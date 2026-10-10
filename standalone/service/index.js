@@ -92,6 +92,12 @@ function readFrameHeader(frame) {
     }
 }
 
+/** A name field from the frame, or the app's own name when there is none. */
+function namedOr(value, max) {
+    const name = headerField(value, max);
+    return (name && name !== '-') ? name : 'TizenTube';
+}
+
 function noteSyslogTarget(host, port, frame) {
     const octets = parseIpv4(host);
     const canonical = ipv4FromOctets(octets);
@@ -103,8 +109,11 @@ function noteSyslogTarget(host, port, frame) {
         host: canonical,
         port: candidatePort,
         facility: typeof header.facility === 'number' ? header.facility : SYSLOG_DEFAULT_FACILITY,
-        hostname: header.hostname && header.hostname !== '-' ? header.hostname : 'TizenTube',
-        appName: header.appName && header.appName !== '-' ? header.appName : 'TizenTube'
+        // Filtered on the way in, so nothing unconstrained reaches the store
+        // or a frame: what is kept is what headerField allows, and a name that
+        // survives none of it falls back to the app's own.
+        hostname: namedOr(header.hostname, 255),
+        appName: namedOr(header.appName, 48)
     };
     const changed = !_syslogTarget || JSON.stringify(next) !== JSON.stringify(_syslogTarget);
     _syslogTarget = next;
@@ -567,11 +576,31 @@ function relayLog(entry, host, port) {
 
 const SYSLOG_DEFAULT_FACILITY = 16;
 
-/** A value fit for an RFC 5424 header field: printable ASCII, no spaces. */
+/**
+ * A value fit for an RFC 5424 name field — HOSTNAME or APP-NAME.
+ *
+ * An allowlist, not a denylist. These two arrive inside a syslog frame posted
+ * over HTTP, are written to the store on disk and are later put back into a
+ * frame, which CodeQL reported as network data reaching the file system
+ * (js/http-to-file-access, alerts 137 and 138) and was right to: the previous
+ * filter removed the characters that would break a frame and let everything
+ * else through, including anything of any length in any script.
+ *
+ * Letters, digits, dot, dash and underscore cover every TV model and every
+ * name anyone would type, and match what the page already reduces its detected
+ * model to, so both this process's frames and the page's name the same TV the
+ * same way. Anything else is not worth carrying as far as the disk.
+ */
 function headerField(value, max) {
     const out = String(value === undefined || value === null ? '' : value)
-        .replace(/[^\x21-\x7E]/g, '').replace(/[\]="]/g, '');
-    return out ? out.slice(0, max) : '-';
+        // A run becomes one dash rather than vanishing: "UE55 RU7179" reads as
+        // UE55-RU7179, which is also what the page makes of it, and the two
+        // have to agree or one TV is named twice in one file.
+        .replace(/[^A-Za-z0-9._-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, max)
+        .replace(/-+$/g, '');
+    return out || '-';
 }
 // INFO, with the levels this logs mapped onto RFC 5424 severities.
 const SYSLOG_SEVERITY = { ERROR: 3, WARN: 4, INFO: 6, DEBUG: 7 };

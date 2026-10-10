@@ -75,8 +75,20 @@ export function tvModelForDisplay() {
 export function deviceNameForSyslog() {
     const model = detectTvModel();
     if (!model) return null;
-    const name = String(model)
-        .replace(/[^A-Za-z0-9.-]+/g, '-')
+    return asHostField(model);
+}
+
+/**
+ * The same reduction the standalone service applies to a name field.
+ *
+ * Both sides have to agree, or one TV is named two ways in one syslog file:
+ * the service reads this field back out of the frames the page sends and uses
+ * it for its own, so a name the two filter differently would split a TV's
+ * lines in half. Letters, digits, dot, dash and underscore, as there.
+ */
+export function asHostField(value) {
+    const name = String(value === undefined || value === null ? '' : value)
+        .replace(/[^A-Za-z0-9._-]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 255);
     return name || null;
