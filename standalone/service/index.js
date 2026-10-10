@@ -221,13 +221,102 @@ function isValidPort(port) {
 // pattern CodeQL flags: another process could pre-create or symlink the path and
 // redirect where this service sends its logs. If the app directory cannot be
 // determined the address simply stays in memory for the life of the process.
-const RECEIVER_STORE = (function () {
+const RECEIVER_STORE_FILE = 'tt-log-receiver.json';
+
+// Where the learned address may live, in the order these are tried.
+//
+// Reported: the service's startup lines stopped arriving at the receiver until
+// the page had loaded and logging had been switched on in the settings — and a
+// capture proved it: 37 lines stamped 15:03 arrived interleaved with live
+// 15:50 lines, which is a flush, not live logging. So the address was not
+// known at startup, which means it had never been stored.
+//
+// It had not, for two reasons, and both are firmware-dependent, which is why
+// this now tries several places and verifies rather than assuming one:
+//
+//   /opt/usr/apps/<pkg>/ is the installed application directory and is
+//   read-only from Tizen 4 onwards — writable application data moved to
+//   <home>/apps_rw/<pkg>/data. That was the only path tried.
+//
+//   fs.mkdirSync(dir, { recursive: true }) needs Node 10.12. One TV's service
+//   runtime is Node v4.4.3, where the options object is not understood and
+//   nothing nested can be created at all.
+function receiverStoreCandidates() {
+    const out = [];
     try {
         const appId = tizenAppId();
-        if (appId) return require('path').join('/opt/usr/apps', appId, 'data', 'tt-log-receiver.json');
+        if (!appId) return out;
+        const path = require('path');
+        // The app's own home, when the runtime says where it is.
+        const home = process.env.HOME;
+        if (home) out.push(path.join(home, 'apps_rw', appId, 'data', RECEIVER_STORE_FILE));
+        out.push(path.join('/opt/usr/home/owner/apps_rw', appId, 'data', RECEIVER_STORE_FILE));
+        // Correct on firmware old enough to still keep application data here,
+        // and harmless where it is read-only: the probe below finds out.
+        out.push(path.join('/opt/usr/apps', appId, 'data', RECEIVER_STORE_FILE));
     } catch (e) { }
+    return out;
+}
+
+// The one that answered, so the choice is made once per run.
+let _receiverStorePath = null;
+let _receiverStoreReported = false;
+
+/** mkdir -p, without the options object Node 4 does not understand. */
+function mkdirpSync(fs, dir) {
+    const parts = String(dir).split('/');
+    let built = String(dir).charAt(0) === '/' ? '' : '.';
+    for (let i = 0; i < parts.length; i++) {
+        if (!parts[i]) continue;
+        built += '/' + parts[i];
+        // Already there, or not ours to create: the write decides, not this.
+        try { fs.mkdirSync(built, 0o700); } catch (e) { }
+    }
+}
+
+/**
+ * The first candidate this process can actually write and read back, or null.
+ *
+ * A round trip rather than a bare write: a path can accept a write and still
+ * not keep it, and a store that silently does not persist is what cost the
+ * startup logs in the first place.
+ */
+function chooseReceiverStore(contents) {
+    if (_receiverStorePath) return _receiverStorePath;
+    const fs = require('fs');
+    const path = require('path');
+    const failures = [];
+    const candidates = receiverStoreCandidates();
+    for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        try {
+            mkdirpSync(fs, path.dirname(candidate));
+            fs.writeFileSync(candidate, contents, { mode: 0o600 });
+            if (fs.readFileSync(candidate, 'utf8') !== contents) {
+                failures.push(candidate + ': written but read back different');
+                continue;
+            }
+            _receiverStorePath = candidate;
+            if (!_receiverStoreReported) {
+                _receiverStoreReported = true;
+                logServiceEvent('INFO', `log receiver address stored at ${candidate}`
+                    + (failures.length ? ` (after ${failures.join('; ')})` : ''));
+            }
+            return _receiverStorePath;
+        } catch (e) {
+            failures.push(candidate + ': ' + (e && e.message || e));
+        }
+    }
+    if (!_receiverStoreReported) {
+        _receiverStoreReported = true;
+        // Held like every other line until an address is known, so it arrives
+        // with the next flush — which is exactly when it is wanted.
+        logServiceEvent('ERROR', 'the log receiver address cannot be stored anywhere, so '
+            + 'every start will hold its logs until the page reports it again. Tried: '
+            + (failures.length ? failures.join('; ') : 'nowhere — the package id could not be read'));
+    }
     return null;
-})();
+}
 
 function tizenAppId() {
     // /opt/usr/apps/<pkgId>/res/wgt/service/dist — walk back to <pkgId>.
@@ -237,36 +326,56 @@ function tizenAppId() {
 }
 
 function loadPersistedReceiver() {
-    if (!RECEIVER_STORE) return;
+    const candidates = receiverStoreCandidates();
+    for (let i = 0; i < candidates.length; i++) {
+        // Deliberately not remembered as the place to write: being readable
+        // says nothing about being writable, and the legacy location is both
+        // readable and read-only on current firmware. The probe decides where
+        // saves go, and it tries the writable locations first, so a stale file
+        // in the old one is never preferred.
+        if (readPersistedReceiver(candidates[i])) return;
+    }
+}
+
+/** True when this file held a usable address. */
+function readPersistedReceiver(file) {
     try {
-        const raw = require('fs').readFileSync(RECEIVER_STORE, 'utf8');
+        const raw = require('fs').readFileSync(file, 'utf8');
         const saved = JSON.parse(raw);
-        if (!saved) return;
+        if (!saved) return false;
         // Octets are stored as numbers, so nothing read back here is a string
         // that then becomes a request target. A file written by an older build
         // held a host string instead; it is parsed the same way rather than
         // trusted, so upgrading keeps the address instead of silently losing it.
         const octets = Array.isArray(saved.octets) ? saved.octets : parseIpv4(saved.host);
         const host = ipv4FromOctets(octets);
-        if (!host || !isValidPort(saved.port)) return;
+        if (!host || !isValidPort(saved.port)) return false;
         _learnedOctets = octets.slice();
         _learnedHost = host;
         _learnedPort = Number(saved.port);
+        return true;
     } catch (e) {
-        // Absent on first run, or unreadable — neither is worth reporting,
-        // since reporting it would itself need a receiver.
+        // Absent, which every candidate but one is, or unreadable. Not worth
+        // reporting on its own: what matters is whether any of them answered,
+        // and chooseReceiverStore reports that when it next writes.
+        return false;
     }
 }
 
 function persistReceiver() {
-    if (!RECEIVER_STORE || !ipv4FromOctets(_learnedOctets) || !isValidPort(_learnedPort)) return;
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        try { fs.mkdirSync(path.dirname(RECEIVER_STORE), { recursive: true, mode: 0o700 }); } catch (e) { }
-        // Numbers, not the string that arrived over the network.
-        fs.writeFileSync(RECEIVER_STORE, JSON.stringify({ octets: _learnedOctets, port: _learnedPort }), { mode: 0o600 });
-    } catch (e) { }
+    if (!ipv4FromOctets(_learnedOctets) || !isValidPort(_learnedPort)) return;
+    // Numbers, not the string that arrived over the network.
+    const contents = JSON.stringify({ octets: _learnedOctets, port: _learnedPort });
+    // Already proven writable: just write. Not doing this is a bug waiting to
+    // happen — the probe below returns the remembered path without writing, so
+    // routing every later save through it would quietly drop a changed address.
+    if (_receiverStorePath) {
+        try { require('fs').writeFileSync(_receiverStorePath, contents, { mode: 0o600 }); } catch (e) { }
+        return;
+    }
+    // First save of this run: the write is the probe, since chooseReceiverStore
+    // stores these very contents and reads them back.
+    chooseReceiverStore(contents);
 }
 
 function noteReceiver(host, port) {
@@ -439,6 +548,17 @@ let _lastRequestAt = 0;
 let _peakInFlight = 0;
 const _startedAt = Date.now();
 
+/** Whether the HTTP server is accepting, on any Node this runs on. */
+function listeningState() {
+    try {
+        if (typeof server === 'undefined' || !server) return false;
+        if (typeof server.listening === 'boolean') return server.listening;
+        return server.address() !== null && server.address() !== undefined;
+    } catch (e) {
+        return false;
+    }
+}
+
 function healthSnapshot() {
     const mem = (() => { try { return process.memoryUsage(); } catch (e) { return {}; } })();
     const mb = (n) => (typeof n === 'number' ? Math.round(n / 1048576) : null);
@@ -457,7 +577,10 @@ function healthSnapshot() {
         rssMB: mb(mem.rss),
         heapUsedMB: mb(mem.heapUsed),
         handles,
-        listening: !!(typeof server !== 'undefined' && server && server.listening)
+        // server.listening needs Node 5.7; one TV runs v4.4.3, where it is
+        // undefined and this read "listening": false while the service was
+        // plainly serving requests. address() answers on every version.
+        listening: listeningState()
     };
 }
 
