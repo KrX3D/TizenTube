@@ -111,6 +111,31 @@ function noteSyslogTarget(host, port, frame) {
     if (changed) persistReceiver();
 }
 
+/**
+ * Text as a UTF-8 Buffer, on every runtime this has to serve.
+ *
+ * Reported: syslog never arrived. The frame reached here and the send threw
+ * "utf8 is not a function", captured on-device.
+ *
+ * Buffer.from arrived in Node 4.5, and one TV's service runtime is v4.4.3.
+ * There the name still resolves — to the inherited Uint8Array.from, whose
+ * second argument is a map function. So Buffer.from(text, 'utf8') called the
+ * string 'utf8' as a function and threw, which is why not one frame ever left
+ * that TV however correctly everything upstream was configured.
+ *
+ * Comparing the two is what tells the inherited one from a real Buffer.from;
+ * a version check would need a parser and would still be a guess about which
+ * runtime shipped what.
+ */
+function utf8Buffer(text) {
+    const value = String(text);
+    if (typeof Buffer.from === 'function' && Buffer.from !== Uint8Array.from) {
+        return Buffer.from(value, 'utf8');
+    }
+    // Deprecated, and the only constructor 4.4.3 has.
+    return new Buffer(value, 'utf8');
+}
+
 function relaySyslog(frame, host, port, report) {
     function problem(message) {
         logServiceEvent('ERROR', message);
@@ -142,7 +167,7 @@ function relaySyslog(frame, host, port, report) {
     // listening must never disturb playback.
     socket.on('error', () => { try { socket.close(); } catch (e) { } });
     try {
-        const buf = Buffer.from(String(frame), 'utf8');
+        const buf = utf8Buffer(frame);
         socket.send(buf, 0, buf.length, targetPort, targetHost, (err) => {
             if (err) {
                 // No `err &&` guard: err is the reason this branch was taken,

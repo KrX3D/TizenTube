@@ -2,44 +2,10 @@ import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
 import { sendRemotePayload, isEnabled as isLogServerEnabled } from './logServer.js';
+import { tvModelForDisplay } from './deviceName.js';
 
 const APP_VERSION_LABEL = 'TizenTube';
 const APP_VERSION = rootPkg.version;
-
-function detectTvModel() {
-  let modelName = null;
-  let modelCode = null;
-
-  try {
-    const h5vccModel = window?.h5vcc?.system?.getDeviceInfo?.()?.modelName;
-    if (h5vccModel) modelName = String(h5vccModel);
-  } catch (_) { }
-
-  try {
-    const webapisModel = window?.webapis?.productinfo?.getModel?.();
-    if (webapisModel) modelName = String(webapisModel);
-  } catch (_) { }
-
-  try {
-    const webapisRealModel = window?.webapis?.productinfo?.getRealModel?.();
-    if (webapisRealModel) modelName = String(webapisRealModel);
-  } catch (_) { }
-
-  try {
-    const maybeCode = window?.webapis?.productinfo?.getModelCode?.();
-    if (maybeCode) modelCode = String(maybeCode);
-  } catch (_) { }
-
-  try {
-    const ua = String(navigator.userAgent || '');
-    const match = ua.match(/\(([^)]*?TV[^)]*?)\)/i);
-    if (!modelName && match?.[1]) modelName = match[1];
-  } catch (_) { }
-
-  if (!modelName && !modelCode) return 'unknown';
-  if (modelName && modelCode) return `${modelName} (${modelCode})`;
-  return modelName || modelCode;
-}
 
 function initVisualConsole() {
   const positions = {
@@ -231,7 +197,7 @@ function initVisualConsole() {
   console.log('[Console] ========================================');
   console.log('[Console] Use TizenTube settings to configure position/height');
   console.log(`[Console] Visual Console ${APP_VERSION_LABEL} v${APP_VERSION}`);
-  console.log(`[Console] TV Model: ${detectTvModel()}`);
+  console.log(`[Console] TV Model: ${tvModelForDisplay()}`);
   console.log(`[Console] User-Agent: ${navigator.userAgent}`);
   console.log('[Console] ========================================');
 

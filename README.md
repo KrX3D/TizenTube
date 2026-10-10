@@ -186,7 +186,7 @@ it. The options live on their own settings page under Miscellaneous.
 | Log Detail Level **(fork)** | Basic keeps each line short; Detailed keeps the full payloads |
 | Log Categories **(fork)** | Choose which parts log at all: navigation, ad blocking, Shorts, hide-watched, playlist loading, filters, shelves and tiles, thumbnails, player, and everything else |
 | Log Subscriptions Shelf Layout **(fork)** | One-off diagnostic that records how the Subscriptions page is laid out, for chasing a layout problem on a specific TV |
-| Syslog Output **(fork)** | Sends the same logs to a syslog server (an unRAID box, a router, anything that listens), with its own IP, port and connection test. Independent of the log server below, so one can be used without the other |
+| Syslog Output **(fork)** | Sends the same logs to a syslog server (an unRAID box, a router, anything that listens), with its own IP, port and connection test. Frames are RFC 5424, with the TV's model as the HOSTNAME field and `TizenTube` as APP-NAME, so a server that files by host writes one file per TV rather than one called after the page. A name typed into the settings overrides the model. Independent of the log server below, so one can be used without the other |
 | Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
 
 Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
