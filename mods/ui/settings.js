@@ -410,191 +410,205 @@ export default function modernUI(update, parameters) {
                     value: 'reloadHomeOnStartup'
                 },
                 {
-                    name: t('settings.options.misc.options.debugConsole.title'),
-                    icon: 'BUG_REPORT',
+                    // Reported: the three outputs and the three options that apply
+                    // to all of them sat side by side under Sonstiges, and the
+                    // options were inside the debug console's own submenu as though
+                    // they belonged to it. Verbosity, the category list and the
+                    // subscriptions-shelf diagnostic govern every output, so they
+                    // belong a level up, beside the outputs rather than inside one.
+                    name: t('settings.options.misc.options.logging.title'),
+                    icon: 'ARTICLE',
                     value: null,
-                    menuId: 'tt-debug-console-settings',
+                    menuId: 'tt-logging-settings',
                     options: [
                         {
-                            name: t('settings.options.misc.options.debugConsole.enable'),
+                            name: t('settings.options.misc.options.debugConsole.title'),
                             icon: 'BUG_REPORT',
-                            value: 'enableDebugConsole'
-                        },
-                        {
-                            name: t('settings.options.misc.options.debugConsole.enableLogging'),
-                            icon: 'ARTICLE',
-                            value: 'enableDebugLogging'
-                        },
-                        {
-                            name: t('settings.options.misc.options.debugConsole.position'),
                             value: null,
-                            menuId: 'tt-debug-console-position',
+                            menuId: 'tt-debug-console-settings',
                             options: [
-                                { name: t('settings.options.misc.options.debugConsole.positions.topLeft'), key: 'debugConsolePosition', value: 'top-left' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.topRight'), key: 'debugConsolePosition', value: 'top-right' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.bottomLeft'), key: 'debugConsolePosition', value: 'bottom-left' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.bottomRight'), key: 'debugConsolePosition', value: 'bottom-right' },
-                                { name: t('settings.options.misc.options.debugConsole.positions.center'), key: 'debugConsolePosition', value: 'center' }
+                                {
+                                    name: t('settings.options.misc.options.debugConsole.enable'),
+                                    icon: 'BUG_REPORT',
+                                    value: 'enableDebugConsole'
+                                },
+                                {
+                                    name: t('settings.options.misc.options.debugConsole.enableLogging'),
+                                    icon: 'ARTICLE',
+                                    value: 'enableDebugLogging'
+                                },
+                                {
+                                    name: t('settings.options.misc.options.debugConsole.position'),
+                                    value: null,
+                                    menuId: 'tt-debug-console-position',
+                                    options: [
+                                        { name: t('settings.options.misc.options.debugConsole.positions.topLeft'), key: 'debugConsolePosition', value: 'top-left' },
+                                        { name: t('settings.options.misc.options.debugConsole.positions.topRight'), key: 'debugConsolePosition', value: 'top-right' },
+                                        { name: t('settings.options.misc.options.debugConsole.positions.bottomLeft'), key: 'debugConsolePosition', value: 'bottom-left' },
+                                        { name: t('settings.options.misc.options.debugConsole.positions.bottomRight'), key: 'debugConsolePosition', value: 'bottom-right' },
+                                        { name: t('settings.options.misc.options.debugConsole.positions.center'), key: 'debugConsolePosition', value: 'center' }
+                                    ]
+                                },
+                                {
+                                    name: t('settings.options.misc.options.debugConsole.height'),
+                                    value: null,
+                                    menuId: 'tt-debug-console-height',
+                                    options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
+                                        return {
+                                            name: `${height}px`,
+                                            key: 'debugConsoleHeight',
+                                            value: height
+                                        }
+                                    })
+                                },
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.height'),
+                            name: t('settings.options.misc.options.syslog.title'),
+                            icon: 'SEND',
                             value: null,
-                            menuId: 'tt-debug-console-height',
-                            options: [300, 400, 500, 600, 700, 800, 1054].map((height) => {
-                                return {
-                                    name: `${height}px`,
-                                    key: 'debugConsoleHeight',
-                                    value: height
+                            menuId: 'tt-syslog-settings',
+                            subtitle: t('settings.options.misc.options.syslog.receiverSubtitle', {
+                                host: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                                port: configRead('syslogPort')
+                            }),
+                            options: [
+                                {
+                                    name: t('settings.options.misc.options.syslog.enable'),
+                                    icon: 'WIFI',
+                                    value: 'syslogEnabled'
+                                },
+                                {
+                                    // Its own address, deliberately separate from the log
+                                    // server's: a syslog daemon rarely lives on the same
+                                    // machine as the PC receiver script.
+                                    name: t('settings.options.misc.options.syslog.host'),
+                                    subtitle: () => configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
+                                    icon: 'LOCATION_POINT',
+                                    customAction: {
+                                        action: 'NUMERIC_EDITOR_SHOW',
+                                        parameters: {
+                                            configKey: 'syslogHost',
+                                            kind: 'ipv4',
+                                            title: t('settings.options.misc.options.syslog.host')
+                                        }
+                                    }
+                                },
+                                {
+                                    name: t('settings.options.misc.options.syslog.port'),
+                                    subtitle: () => String(configRead('syslogPort') || ''),
+                                    icon: 'WIFI',
+                                    customAction: {
+                                        action: 'NUMERIC_EDITOR_SHOW',
+                                        parameters: {
+                                            configKey: 'syslogPort',
+                                            kind: 'port',
+                                            title: t('settings.options.misc.options.syslog.port')
+                                        }
+                                    }
+                                },
+                                {
+                                    name: t('settings.options.misc.options.syslog.test'),
+                                    subtitle: t('settings.options.misc.options.syslog.testSubtitle'),
+                                    icon: 'SEND',
+                                    customAction: {
+                                        action: 'SYSLOG_TEST'
+                                    }
                                 }
-                            })
+                            ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.verbosity.title'),
+                            name: t('settings.options.misc.options.logServer.title'),
+                            icon: 'SEND',
+                            value: null,
+                            menuId: 'tt-log-server-settings',
+                            subtitle: t('settings.options.misc.options.logServer.receiverSubtitle', {
+                                host: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                                port: configRead('logServerPort')
+                            }),
+                            options: [
+                                {
+                                    name: t('settings.options.misc.options.logServer.enable'),
+                                    icon: 'WIFI',
+                                    value: 'logServerEnabled'
+                                },
+                                {
+                                    name: t('settings.options.misc.options.logServer.host'),
+                                    subtitle: () => configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
+                                    icon: 'LOCATION_POINT',
+                                    customAction: {
+                                        action: 'NUMERIC_EDITOR_SHOW',
+                                        parameters: {
+                                            configKey: 'logServerHost',
+                                            kind: 'ipv4',
+                                            title: t('settings.options.misc.options.logServer.host')
+                                        }
+                                    }
+                                },
+                                {
+                                    name: t('settings.options.misc.options.logServer.port'),
+                                    subtitle: () => String(configRead('logServerPort') || ''),
+                                    icon: 'WIFI',
+                                    customAction: {
+                                        action: 'NUMERIC_EDITOR_SHOW',
+                                        parameters: {
+                                            configKey: 'logServerPort',
+                                            kind: 'port',
+                                            title: t('settings.options.misc.options.logServer.port')
+                                        }
+                                    }
+                                },
+                                {
+                                    name: t('settings.options.misc.options.logServer.test'),
+                                    subtitle: t('settings.options.misc.options.logServer.testSubtitle'),
+                                    icon: 'SEND',
+                                    customAction: {
+                                        action: 'LOG_SERVER_TEST_PING'
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            name: t('settings.options.misc.options.logging.verbosity.title'),
                             icon: 'ARTICLE',
                             value: null,
                             menuId: 'tt-log-verbosity',
                             menuHeader: {
-                                title: t('settings.options.misc.options.debugConsole.verbosity.title'),
-                                subtitle: t('settings.options.misc.options.debugConsole.verbosity.subtitle')
+                                title: t('settings.options.misc.options.logging.verbosity.title'),
+                                subtitle: t('settings.options.misc.options.logging.verbosity.subtitle')
                             },
                             options: [
-                                { name: t('settings.options.misc.options.debugConsole.verbosity.basic'), key: 'logVerbosity', value: 'basic' },
-                                { name: t('settings.options.misc.options.debugConsole.verbosity.detailed'), key: 'logVerbosity', value: 'detailed' }
+                                { name: t('settings.options.misc.options.logging.verbosity.basic'), key: 'logVerbosity', value: 'basic' },
+                                { name: t('settings.options.misc.options.logging.verbosity.detailed'), key: 'logVerbosity', value: 'detailed' }
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.categories.title'),
+                            name: t('settings.options.misc.options.logging.categories.title'),
                             icon: 'BUG_REPORT',
                             value: null,
                             arrayToEdit: 'logCategories',
                             menuId: 'tt-log-categories',
                             menuHeader: {
-                                title: t('settings.options.misc.options.debugConsole.categories.title'),
-                                subtitle: t('settings.options.misc.options.debugConsole.categories.subtitle')
+                                title: t('settings.options.misc.options.logging.categories.title'),
+                                subtitle: t('settings.options.misc.options.logging.categories.subtitle')
                             },
                             options: [
-                                { name: t('settings.options.misc.options.debugConsole.categories.nav'), icon: 'WHAT_TO_WATCH', value: 'nav' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.ads'), icon: 'DOLLAR_SIGN', value: 'ads' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'shorts' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.watched'), icon: 'VISIBILITY_OFF', value: 'watched' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.playlist'), icon: 'PLAYLIST_PLAY', value: 'playlist' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.filters'), icon: 'PRIVACY_UNLISTED', value: 'filters' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.shelves'), icon: 'MENU', value: 'shelves' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
-                                { name: t('settings.options.misc.options.debugConsole.categories.other'), icon: 'ARTICLE', value: 'other' }
+                                { name: t('settings.options.misc.options.logging.categories.nav'), icon: 'WHAT_TO_WATCH', value: 'nav' },
+                                { name: t('settings.options.misc.options.logging.categories.ads'), icon: 'DOLLAR_SIGN', value: 'ads' },
+                                { name: t('settings.options.misc.options.logging.categories.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'shorts' },
+                                { name: t('settings.options.misc.options.logging.categories.watched'), icon: 'VISIBILITY_OFF', value: 'watched' },
+                                { name: t('settings.options.misc.options.logging.categories.playlist'), icon: 'PLAYLIST_PLAY', value: 'playlist' },
+                                { name: t('settings.options.misc.options.logging.categories.filters'), icon: 'PRIVACY_UNLISTED', value: 'filters' },
+                                { name: t('settings.options.misc.options.logging.categories.shelves'), icon: 'MENU', value: 'shelves' },
+                                { name: t('settings.options.misc.options.logging.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
+                                { name: t('settings.options.misc.options.logging.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
+                                { name: t('settings.options.misc.options.logging.categories.other'), icon: 'ARTICLE', value: 'other' }
                             ]
                         },
                         {
-                            name: t('settings.options.misc.options.debugConsole.diagSubscriptionsShelf'),
+                            name: t('settings.options.misc.options.logging.diagSubscriptionsShelf'),
                             icon: 'SUBSCRIPTIONS',
                             value: 'diagSubscriptionsShelf'
-                        }
-                    ]
-                },
-                {
-                    name: t('settings.options.misc.options.syslog.title'),
-                    icon: 'SEND',
-                    value: null,
-                    menuId: 'tt-syslog-settings',
-                    subtitle: t('settings.options.misc.options.syslog.receiverSubtitle', {
-                        host: configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
-                        port: configRead('syslogPort')
-                    }),
-                    options: [
-                        {
-                            name: t('settings.options.misc.options.syslog.enable'),
-                            icon: 'WIFI',
-                            value: 'syslogEnabled'
-                        },
-                        {
-                            // Its own address, deliberately separate from the log
-                            // server's: a syslog daemon rarely lives on the same
-                            // machine as the PC receiver script.
-                            name: t('settings.options.misc.options.syslog.host'),
-                            subtitle: () => configRead('syslogHost') || t('settings.options.misc.options.syslog.receiverNotSet'),
-                            icon: 'LOCATION_POINT',
-                            customAction: {
-                                action: 'NUMERIC_EDITOR_SHOW',
-                                parameters: {
-                                    configKey: 'syslogHost',
-                                    kind: 'ipv4',
-                                    title: t('settings.options.misc.options.syslog.host')
-                                }
-                            }
-                        },
-                        {
-                            name: t('settings.options.misc.options.syslog.port'),
-                            subtitle: () => String(configRead('syslogPort') || ''),
-                            icon: 'WIFI',
-                            customAction: {
-                                action: 'NUMERIC_EDITOR_SHOW',
-                                parameters: {
-                                    configKey: 'syslogPort',
-                                    kind: 'port',
-                                    title: t('settings.options.misc.options.syslog.port')
-                                }
-                            }
-                        },
-                        {
-                            name: t('settings.options.misc.options.syslog.test'),
-                            subtitle: t('settings.options.misc.options.syslog.testSubtitle'),
-                            icon: 'SEND',
-                            customAction: {
-                                action: 'SYSLOG_TEST'
-                            }
-                        }
-                    ]
-                },
-                {
-                    name: t('settings.options.misc.options.logServer.title'),
-                    icon: 'SEND',
-                    value: null,
-                    menuId: 'tt-log-server-settings',
-                    subtitle: t('settings.options.misc.options.logServer.receiverSubtitle', {
-                        host: configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
-                        port: configRead('logServerPort')
-                    }),
-                    options: [
-                        {
-                            name: t('settings.options.misc.options.logServer.enable'),
-                            icon: 'WIFI',
-                            value: 'logServerEnabled'
-                        },
-                        {
-                            name: t('settings.options.misc.options.logServer.host'),
-                            subtitle: () => configRead('logServerHost') || t('settings.options.misc.options.logServer.receiverNotSet'),
-                            icon: 'LOCATION_POINT',
-                            customAction: {
-                                action: 'NUMERIC_EDITOR_SHOW',
-                                parameters: {
-                                    configKey: 'logServerHost',
-                                    kind: 'ipv4',
-                                    title: t('settings.options.misc.options.logServer.host')
-                                }
-                            }
-                        },
-                        {
-                            name: t('settings.options.misc.options.logServer.port'),
-                            subtitle: () => String(configRead('logServerPort') || ''),
-                            icon: 'WIFI',
-                            customAction: {
-                                action: 'NUMERIC_EDITOR_SHOW',
-                                parameters: {
-                                    configKey: 'logServerPort',
-                                    kind: 'port',
-                                    title: t('settings.options.misc.options.logServer.port')
-                                }
-                            }
-                        },
-                        {
-                            name: t('settings.options.misc.options.logServer.test'),
-                            subtitle: t('settings.options.misc.options.logServer.testSubtitle'),
-                            icon: 'SEND',
-                            customAction: {
-                                action: 'LOG_SERVER_TEST_PING'
-                            }
                         }
                     ]
                 }

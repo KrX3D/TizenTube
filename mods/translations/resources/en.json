@@ -60,19 +60,8 @@
                     "ttWelcomeMsg": "Show TT Welcome Message",
                     "guestSignInReminder": "Show Guest Sign In Reminder",
                     "reloadHomeOnStartup": "Reload Home on Startup",
-                    "debugConsole": {
-                        "title": "Debug Console",
-                        "enable": "Enable Debug Console",
-                        "enableLogging": "Enable Background Debug Logging",
-                        "position": "Console Position",
-                        "positions": {
-                            "topLeft": "Top Left",
-                            "topRight": "Top Right",
-                            "bottomLeft": "Bottom Left",
-                            "bottomRight": "Bottom Right",
-                            "center": "Center"
-                        },
-                        "height": "Console Height",
+                    "logging": {
+                        "title": "Logging",
                         "verbosity": {
                             "title": "Log Detail Level",
                             "subtitle": "Basic logs what happened; detailed adds the full payload",
@@ -94,6 +83,20 @@
                             "other": "Everything else"
                         },
                         "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
+                    },
+                    "debugConsole": {
+                        "title": "Debug Console",
+                        "enable": "Enable Debug Console",
+                        "enableLogging": "Enable Background Debug Logging",
+                        "position": "Console Position",
+                        "positions": {
+                            "topLeft": "Top Left",
+                            "topRight": "Top Right",
+                            "bottomLeft": "Bottom Left",
+                            "bottomRight": "Bottom Right",
+                            "center": "Center"
+                        },
+                        "height": "Console Height"
                     },
                     "logServer": {
                         "title": "Remote Log Server",
