@@ -942,6 +942,76 @@ if (typeof Object.hasOwn !== 'function') {
     });
 }
 
+// TextDecoder is a Node 11 global (util.TextDecoder from 8.3). Tizen 5.5's
+// service runtime is Node v4.4.3, where a dependency reaching for it threw
+// during DIAL startup, captured on-device:
+//
+//     DIAL service (dist/service.js) failed to load:
+//         ReferenceError: TextDecoder is not defined
+//
+// Fourth in the same chain, each only visible once the one before it was
+// fixed: crypto.getRandomValues, then Object.hasOwn, then the node: imports
+// and un-inlined XML, now this. Babel transpiles syntax, not runtime APIs, so
+// a shim is the only way.
+//
+// Only UTF-8 is implemented, which is all the DIAL code decodes, and anything
+// else is refused rather than silently mis-decoded. Built on Buffer, since
+// Buffer.from is itself Node 4.5 and this has to run on 4.4.3.
+if (typeof global.TextDecoder !== 'function') {
+    const bufferFrom = function (source, length) {
+        const out = new Buffer(length);
+        for (let i = 0; i < length; i++) out[i] = source[i];
+        return out;
+    };
+    const asBuffer = function (input) {
+        if (input === undefined || input === null) return new Buffer(0);
+        if (Buffer.isBuffer(input)) return input;
+        // An ArrayBuffer, or any view over one: read through a byte view so
+        // the view's own offset and length are respected rather than the
+        // whole underlying buffer.
+        if (typeof ArrayBuffer === 'function' && input instanceof ArrayBuffer) {
+            const whole = new Uint8Array(input);
+            return bufferFrom(whole, whole.length);
+        }
+        if (input.buffer && typeof Uint8Array === 'function') {
+            const view = new Uint8Array(input.buffer, input.byteOffset || 0,
+                input.byteLength === undefined ? input.length : input.byteLength);
+            return bufferFrom(view, view.length);
+        }
+        return bufferFrom(input, input.length || 0);
+    };
+    const TextDecoderShim = function (encoding) {
+        const label = String(encoding === undefined || encoding === null ? 'utf-8' : encoding).toLowerCase();
+        if (label !== 'utf-8' && label !== 'utf8' && label !== 'unicode-1-1-utf-8') {
+            throw new RangeError('TextDecoder shim supports utf-8 only, asked for ' + label);
+        }
+        this.encoding = 'utf-8';
+        this.fatal = false;
+        this.ignoreBOM = false;
+    };
+    TextDecoderShim.prototype.decode = function (input) {
+        const text = asBuffer(input).toString('utf8');
+        // A leading byte order mark is dropped, as the real one does unless
+        // ignoreBOM is asked for.
+        return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+    };
+    global.TextDecoder = TextDecoderShim;
+}
+
+// Its counterpart, for the same reason: a dependency that decodes usually
+// encodes somewhere too, and finding that out one crash at a time is what
+// this chain has been.
+if (typeof global.TextEncoder !== 'function') {
+    const TextEncoderShim = function () { this.encoding = 'utf-8'; };
+    TextEncoderShim.prototype.encode = function (input) {
+        const buf = new Buffer(String(input === undefined ? '' : input), 'utf8');
+        const out = new Uint8Array(buf.length);
+        for (let i = 0; i < buf.length; i++) out[i] = buf[i];
+        return out;
+    };
+    global.TextEncoder = TextEncoderShim;
+}
+
 // Start the DIAL server
 global.isTizenTube = true;
 try {
