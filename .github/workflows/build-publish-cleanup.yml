@@ -919,6 +919,57 @@ jobs:
           
           echo "Individual purge attempts complete"
 
+      # The purge above is fire-and-forget: jsDelivr answers "pending" and that
+      # is the end of it. Nothing checked the result, and a capture showed what
+      # that costs — the unversioned URL, which is the one the TV actually
+      # fetches, kept serving the previous release for hours after a publish
+      # (x-cache HIT, age 15039, the bundle inside it a version behind). Every
+      # TV was loading that, so a diagnostic merged that afternoon was simply
+      # not running, and its absence read as the feature being broken.
+      #
+      # So the last word belongs to the URL the TV uses, read the way the TV
+      # reads it. The version string has to be inside the bundle itself: a
+      # 200 proves nothing when the stale object is also a 200.
+      #
+      # One caveat worth stating: jsDelivr serves from many points of presence
+      # and this checks the one that answers here. It cannot prove every edge
+      # is current. What it does prove is that the origin resolves this
+      # package's unversioned path to the version just published — which is the
+      # failure that was actually seen, and the one that affects every edge.
+      - name: Verify the CDN serves this version
+        if: steps.confirm_publish.outputs.confirmed == 'true'
+        env:
+          PKG: ${{ env.PACKAGE_NAME }}
+        run: |
+          set -euo pipefail
+          VER=$(cat /tmp/current_version.txt)
+          URL="https://cdn.jsdelivr.net/npm/${PKG}/dist/userScript.js"
+          echo "Checking ${URL} for ${VER} ..."
+
+          for i in $(seq 1 10); do
+            if curl -fsSL -H 'Cache-Control: no-cache' "$URL" -o /tmp/cdn_bundle.js; then
+              if grep -q "$VER" /tmp/cdn_bundle.js; then
+                echo "attempt ${i}: the CDN serves ${VER}."
+                exit 0
+              fi
+              FOUND=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' /tmp/cdn_bundle.js | sort -u | tail -1 || true)
+              echo "attempt ${i}: still serving ${FOUND:-an unknown version}"
+            else
+              echo "attempt ${i}: the CDN could not be read"
+            fi
+
+            # Ask again rather than only waiting: the first purge can land
+            # before npm's latest has propagated, in which case jsDelivr
+            # re-resolves the old version and caches that instead.
+            curl -s -X POST -H 'Content-Type: application/json' \
+              --data "{\"path\":[\"/npm/${PKG}/dist/userScript.js\",\"/npm/${PKG}/dist/service.js\",\"/npm/${PKG}@latest/dist/userScript.js\",\"/npm/${PKG}@latest/dist/service.js\"]}" \
+              https://purge.jsdelivr.net/ > /dev/null || true
+            sleep 20
+          done
+
+          echo "::error::The CDN is still not serving ${VER} at ${URL} after ten attempts. Every TV will keep loading the previous bundle until this clears, which looks exactly like the new build not working. Purge it by hand (https://www.jsdelivr.com/tools/purge) or re-run this workflow."
+          exit 1
+
       - name: Cache purge complete
         if: steps.confirm_publish.outputs.confirmed == 'true'
 
