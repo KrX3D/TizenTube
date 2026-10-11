@@ -728,6 +728,10 @@ try {
     throw err;
 }
 
+// The unversioned path, kept as the fallback the page falls back to. The
+// pinned one is preferred for the reason injector.js's userScriptSource
+// explains: this URL is only as current as jsDelivr's twelve-hour idea of
+// which version is latest, and a capture caught it four hours behind.
 const TIZENTUBE_CDN_URL = 'https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js';
 const TIZENTUBE_CDN_FALLBACK_URL = 'https://unpkg.com/@krx3d/tizentube2/dist/userScript.js';
 const standaloneVersion = tizen.application.getAppInfo().version;
@@ -1027,7 +1031,21 @@ app.all('*', (req, res) => {
                         // too late; inserting right after <body> opens ensures it executes
                         // before YouTube's own scripts do. Falls back to a second CDN if the
                         // primary one is unreachable.
-                        const userScript = `<script>window.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};</script><script src="${TIZENTUBE_CDN_URL}?ver=${Date.now()}" onerror="this.onerror=null;this.src='${TIZENTUBE_CDN_FALLBACK_URL}'"></script>`;
+                        // Pinned when the version is already known from a
+                        // previous lookup; otherwise the unversioned URL, which
+                        // is what this always used. Deliberately not awaited:
+                        // this response is on the path of every page load and
+                        // must not wait on the registry.
+                        const pinned = injector && typeof injector.userScriptSource === 'function'
+                            ? injector.userScriptSource() : null;
+                        if (pinned && typeof pinned.then === 'function') {
+                            pinned.then((src) => {
+                                if (src && src.pinned) logServiceEvent('INFO', `userscript resolved to ${src.version} for the next page load`);
+                            }).catch(() => { });
+                        }
+                        const primary = (injector && injector.lastPinnedUserScriptUrl && injector.lastPinnedUserScriptUrl())
+                            || `${TIZENTUBE_CDN_URL}?ver=${Date.now()}`;
+                        const userScript = `<script>window.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};</script><script src="${primary}" onerror="this.onerror=null;this.src='${TIZENTUBE_CDN_FALLBACK_URL}'"></script>`;
                         if (/<body[^>]*>/i.test(text)) {
                             text = text.replace(/<body[^>]*>/i, (bodyTag) => `${bodyTag}${userScript}`);
                         } else {
