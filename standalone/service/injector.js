@@ -144,6 +144,86 @@ function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     setTimeout(() => startDebugger(args, relayLog, sessionId, attempt + 1), RETRY_DELAY_MS);
 }
 
+// Which userscript to inject, and why it is not simply "the latest one".
+//
+// This fetched https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js
+// — the unversioned path — and that URL is only as current as jsDelivr's own
+// resolution of "latest", which it caches for twelve hours (s-maxage=43200).
+//
+// Captured: four hours after a publish that URL was still serving the release
+// before it, so every TV loaded a userscript a version behind. Diagnostics
+// merged that afternoon were not running on any of them, and their absence
+// read as the features being broken rather than as never having arrived.
+// Two sessions went into looking for faults in code that was not on the
+// device. The proxy path at least appends ?ver= to defeat the TV's own cache;
+// that does nothing about this, because the staleness is in the CDN's idea of
+// which version latest is.
+//
+// So the version is asked of the registry, which has no such cache, and the
+// bundle is then fetched from a pinned path. A pinned path is immutable: once
+// resolved it cannot be stale. If the registry cannot be reached the
+// unversioned URL is used exactly as before, since injecting a slightly old
+// userscript is far better than injecting none.
+const USERSCRIPT_PKG = '@krx3d/tizentube2';
+const USERSCRIPT_UNPINNED = 'https://cdn.jsdelivr.net/npm/' + USERSCRIPT_PKG + '/dist/userScript.js';
+const VERSION_LOOKUP_TIMEOUT_MS = 5000;
+// Re-asked at most this often: once per app launch is the useful rate, and a
+// long-running service should not poll the registry.
+const VERSION_CACHE_MS = 600000;
+
+let _pinnedUrl = null;
+let _pinnedVersion = null;
+let _pinnedAt = 0;
+
+/**
+ * The URL to fetch the userscript from, pinned to a version when possible.
+ *
+ * Returns an object rather than a string so the caller can log which version
+ * it injected — the absence of that one line is what made a version skew take
+ * two sessions to notice.
+ */
+function userScriptSource() {
+    if (_pinnedUrl && (Date.now() - _pinnedAt) < VERSION_CACHE_MS) {
+        return Promise.resolve({ url: _pinnedUrl, version: _pinnedVersion, pinned: true });
+    }
+    const unpinned = { url: USERSCRIPT_UNPINNED, version: null, pinned: false };
+    let settled = false;
+    return new Promise((resolve) => {
+        const giveUp = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            resolve(unpinned);
+        }, VERSION_LOOKUP_TIMEOUT_MS);
+
+        fetch('https://registry.npmjs.org/' + USERSCRIPT_PKG + '/latest', {
+            headers: { accept: 'application/json', 'cache-control': 'no-cache' }
+        })
+            .then((res) => (res && res.ok ? res.json() : null))
+            .then((doc) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(giveUp);
+                const version = doc && typeof doc.version === 'string' ? doc.version : '';
+                // Anything that is not a plain version becomes part of a URL
+                // this then fetches, so it is checked rather than trusted.
+                if (!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)) {
+                    resolve(unpinned);
+                    return;
+                }
+                _pinnedVersion = version;
+                _pinnedUrl = 'https://cdn.jsdelivr.net/npm/' + USERSCRIPT_PKG + '@' + version + '/dist/userScript.js';
+                _pinnedAt = Date.now();
+                resolve({ url: _pinnedUrl, version: version, pinned: true });
+            })
+            .catch(() => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(giveUp);
+                resolve(unpinned);
+            });
+    });
+}
+
 const CONNECT_PROBE_MAX_ATTEMPTS = 20;
 const CONNECT_PROBE_RETRY_DELAY_MS = 100;
 
@@ -324,7 +404,20 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // id"), losing the race — worse on slower hardware (5.5).
             // Started immediately (not lazily on first context) so it's
             // already in flight/cached by the time any context appears.
-            const modFilePromise = fetch('https://cdn.jsdelivr.net/npm/@krx3d/tizentube2/dist/userScript.js').then(res => res.text());
+            const modFilePromise = userScriptSource().then((src) => {
+                return fetch(src.url).then((res) => res.text()).then((text) => {
+                    // The one line whose absence cost two sessions: what was
+                    // actually injected, and from where.
+                    if (typeof relayLog === 'function') {
+                        relayLog({
+                            ts: new Date().toISOString(), level: 'INFO', context: 'Injector',
+                            message: 'userscript ' + (src.version || 'unpinned') + ' fetched from '
+                                + src.url + ' (' + text.length + ' bytes)'
+                        });
+                    }
+                    return text;
+                });
+            });
 
             client.on('Runtime.executionContextCreated', m => {
                 // Matches TizenBrew's own debugger.js: only inject into the
@@ -771,6 +864,9 @@ function startDebugger(args, relayLog, sessionId, attempt) {
 
 module.exports = {
     setSyslogRelay,
+    userScriptSource,
+    // The pinned URL if one has been resolved, for callers that cannot wait.
+    lastPinnedUserScriptUrl: function () { return _pinnedUrl; },
     startDebugger,
     canConnectToDaemon
 };
