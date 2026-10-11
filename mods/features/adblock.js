@@ -4,7 +4,7 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
-import { noteParseCost, noteParseShape, playbackDiagnosticsEnabled } from './playbackHealth.js';
+import { noteParseCost, noteParseShape, timeFilter, playbackDiagnosticsEnabled } from './playbackHealth.js';
 import { stopAtPlaylistEnd } from './playlistEndStopper.js';
 import { stopForcedSubtitles } from './forcedSubtitleStopper.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
@@ -680,13 +680,13 @@ function processResponsePayload(payload, detectedPage) {
   if (payload?.contents?.sectionListRenderer?.contents) {
     const slr = payload.contents.sectionListRenderer;
     processShelves(slr.contents, true, detectedPage);
-    consolidateShelves(slr.contents, 'arrayPayload.sectionList', detectedPage, !!slr.continuations, filterShortsFromItems);
+    timeFilter('shelves', () => consolidateShelves(slr.contents, 'arrayPayload.sectionList', detectedPage, !!slr.continuations, filterShortsFromItems));
   }
   addChannelSidebarButton(payload);
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer?.contents) {
     const tvBrowseSlr = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.sectionListRenderer;
     processShelves(tvBrowseSlr.contents, true, detectedPage);
-    consolidateShelves(tvBrowseSlr.contents, 'arrayPayload.tvBrowse.sectionList', detectedPage, !!tvBrowseSlr.continuations, filterShortsFromItems);
+    timeFilter('shelves', () => consolidateShelves(tvBrowseSlr.contents, 'arrayPayload.tvBrowse.sectionList', detectedPage, !!tvBrowseSlr.continuations, filterShortsFromItems));
   }
   if (payload?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
     const grid = payload.contents.tvBrowseRenderer.content.tvSurfaceContentRenderer.content.gridRenderer;
@@ -736,13 +736,13 @@ function processResponsePayload(payload, detectedPage) {
   if (payload?.continuationContents?.sectionListContinuation?.contents) {
     const slc = payload.continuationContents.sectionListContinuation;
     processShelves(slc.contents, true, detectedPage);
-    consolidateShelves(slc.contents, 'arrayPayload.continuation.sectionList', detectedPage, !!slc.continuations, filterShortsFromItems);
+    timeFilter('shelves', () => consolidateShelves(slc.contents, 'arrayPayload.continuation.sectionList', detectedPage, !!slc.continuations, filterShortsFromItems));
   }
   if (payload?.continuationContents?.tvSurfaceContentContinuation?.content?.sectionListRenderer?.contents) {
     const tvSlc = payload.continuationContents.tvSurfaceContentContinuation.content.sectionListRenderer;
     clearCarryover();
     processShelves(tvSlc.contents, true, detectedPage);
-    consolidateShelves(tvSlc.contents, 'arrayPayload.continuation.tvSurface.sectionList', detectedPage, !!tvSlc.continuations, filterShortsFromItems);
+    timeFilter('shelves', () => consolidateShelves(tvSlc.contents, 'arrayPayload.continuation.tvSurface.sectionList', detectedPage, !!tvSlc.continuations, filterShortsFromItems));
   }
   if (payload?.continuationContents?.horizontalListContinuation?.items) {
     const continuation = payload.continuationContents.horizontalListContinuation;
@@ -904,8 +904,8 @@ JSON.parse = function () {
       applyLibraryShelfSpacing();
     }
 
-    noteVideoLength(r);
-    updateProgressCache(r);
+    timeFilter('videoLength', () => noteVideoLength(r));
+    timeFilter('progressCache', () => updateProgressCache(r));
     if (detectedPage !== 'watch' && r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
       if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
       for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
@@ -963,11 +963,11 @@ JSON.parse = function () {
       } else if (r?.playerOverlays?.playerOverlayRenderer) {
         r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
       }
-      filterPlayerButtonsInResponse(r);
-      stopAtPlaylistEnd(r);
+      timeFilter('playerButtons', () => filterPlayerButtonsInResponse(r));
+      timeFilter('playlistEnd', () => stopAtPlaylistEnd(r));
       stopForcedSubtitles(r);
-      hideViewCountsAndBadges(r);
-      addDislikes(r);
+      timeFilter('viewCounts', () => hideViewCountsAndBadges(r));
+      timeFilter('dislikes', () => addDislikes(r));
       if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
         try {
           if (window?.sponsorblock?.segments) {
@@ -985,7 +985,7 @@ JSON.parse = function () {
           const watchNextSlr = r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer;
           if (!signinReminderEnabled) watchNextSlr.contents = watchNextSlr.contents.filter(elm => !elm.alertWithActionsRenderer);
           processShelves(watchNextSlr.contents, false, detectedPage);
-          consolidateShelves(watchNextSlr.contents, 'watchNext', detectedPage, !!watchNextSlr.continuations, filterShortsFromItems);
+          timeFilter('shelves', () => consolidateShelves(watchNextSlr.contents, 'watchNext', detectedPage, !!watchNextSlr.continuations, filterShortsFromItems));
           if (window.queuedVideos.videos.length > 0) {
             const queuedVideosClone = window.queuedVideos.videos.slice();
             queuedVideosClone.unshift(TileRenderer('Clear Queue', { customAction: { action: 'CLEAR_QUEUE' } }));
@@ -996,7 +996,7 @@ JSON.parse = function () {
       if (r?.continuationContents?.sectionListContinuation?.contents) {
         const wNextSlc = r.continuationContents.sectionListContinuation;
         processShelves(wNextSlc.contents, false, detectedPage);
-        consolidateShelves(wNextSlc.contents, 'watchNext.continuation.sectionList', detectedPage, !!wNextSlc.continuations, filterShortsFromItems);
+        timeFilter('shelves', () => consolidateShelves(wNextSlc.contents, 'watchNext.continuation.sectionList', detectedPage, !!wNextSlc.continuations, filterShortsFromItems));
       }
       if (r?.continuationContents?.horizontalListContinuation?.items) {
         const continuation = r.continuationContents.horizontalListContinuation;
@@ -1007,7 +1007,7 @@ JSON.parse = function () {
       if (r?.continuationContents?.pivotContinuation?.contents) {
         const wNextPivot = r.continuationContents.pivotContinuation;
         processShelves(wNextPivot.contents, false, detectedPage);
-        consolidateShelves(wNextPivot.contents, 'watchNext.continuation.pivot', detectedPage, !!wNextPivot.continuations, filterShortsFromItems);
+        timeFilter('shelves', () => consolidateShelves(wNextPivot.contents, 'watchNext.continuation.pivot', detectedPage, !!wNextPivot.continuations, filterShortsFromItems));
       }
       return r;
     }
@@ -1039,7 +1039,7 @@ JSON.parse = function () {
         }
       }
       processShelves(tvBrowseMainSlr.contents, true, detectedPage);
-      consolidateShelves(tvBrowseMainSlr.contents, 'tvBrowse.sectionList', detectedPage, !!tvBrowseMainSlr.continuations, filterShortsFromItems);
+      timeFilter('shelves', () => consolidateShelves(tvBrowseMainSlr.contents, 'tvBrowse.sectionList', detectedPage, !!tvBrowseMainSlr.continuations, filterShortsFromItems));
     }
 
     if (r.endscreen && configRead('enableHideEndScreenCards')) r.endscreen = null;
@@ -1049,7 +1049,7 @@ JSON.parse = function () {
 
     if (r?.contents?.sectionListRenderer?.contents) {
       processShelves(r.contents.sectionListRenderer.contents, true, detectedPage);
-      consolidateShelves(r.contents.sectionListRenderer.contents, 'sectionList', detectedPage, !!r.contents.sectionListRenderer.continuations, filterShortsFromItems);
+      timeFilter('shelves', () => consolidateShelves(r.contents.sectionListRenderer.contents, 'sectionList', detectedPage, !!r.contents.sectionListRenderer.continuations, filterShortsFromItems));
     }
 
     if (r?.contents?.tvBrowseRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items) {
@@ -1113,21 +1113,21 @@ JSON.parse = function () {
     if (r?.continuationContents?.sectionListContinuation?.contents) {
       const contSlc = r.continuationContents.sectionListContinuation;
       processShelves(contSlc.contents, false, detectedPage);
-      consolidateShelves(contSlc.contents, 'continuation.sectionList', detectedPage, !!contSlc.continuations, filterShortsFromItems);
+      timeFilter('shelves', () => consolidateShelves(contSlc.contents, 'continuation.sectionList', detectedPage, !!contSlc.continuations, filterShortsFromItems));
     }
 
     if (r?.continuationContents?.tvSurfaceContentContinuation?.content?.sectionListRenderer?.contents) {
       const tvSlc = r.continuationContents.tvSurfaceContentContinuation.content.sectionListRenderer;
       clearCarryover();
       processShelves(tvSlc.contents, false, detectedPage);
-      consolidateShelves(tvSlc.contents, 'continuation.tvSurface.sectionList', detectedPage, !!tvSlc.continuations, filterShortsFromItems);
+      timeFilter('shelves', () => consolidateShelves(tvSlc.contents, 'continuation.tvSurface.sectionList', detectedPage, !!tvSlc.continuations, filterShortsFromItems));
     }
 
     if (r?.continuationContents?.pivotContinuation?.contents) {
       const contPivot = r.continuationContents.pivotContinuation;
       appendFileOnlyLog('pivot.continuation.hit', { count: contPivot.contents.length });
       processShelves(contPivot.contents, false, detectedPage);
-      consolidateShelves(contPivot.contents, 'continuation.pivot', detectedPage, !!contPivot.continuations, filterShortsFromItems);
+      timeFilter('shelves', () => consolidateShelves(contPivot.contents, 'continuation.pivot', detectedPage, !!contPivot.continuations, filterShortsFromItems));
     }
 
     if (r?.continuationContents?.horizontalListContinuation?.items) {
@@ -1199,7 +1199,7 @@ JSON.parse = function () {
             const tabSlr = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.sectionListRenderer;
             if (tabSlr && Array.isArray(tabSlr.contents)) {
               processShelves(tabSlr.contents, true, tabPage);
-              consolidateShelves(tabSlr.contents, tabPath, tabPage, !!tabSlr.continuations, filterShortsFromItems);
+              timeFilter('shelves', () => consolidateShelves(tabSlr.contents, tabPath, tabPage, !!tabSlr.continuations, filterShortsFromItems));
             }
             const tabGridItems = tab?.tabRenderer?.content?.tvSurfaceContentRenderer?.content?.gridRenderer?.items;
             if (Array.isArray(tabGridItems)) {
@@ -1231,7 +1231,7 @@ JSON.parse = function () {
         const nonWatchWnSlr = r.contents.singleColumnWatchNextResults.pivot.sectionListRenderer;
         if (!signinReminderEnabled) nonWatchWnSlr.contents = nonWatchWnSlr.contents.filter(elm => !elm.alertWithActionsRenderer);
         processShelves(nonWatchWnSlr.contents, false, detectedPage);
-        consolidateShelves(nonWatchWnSlr.contents, 'watchNext', detectedPage, !!nonWatchWnSlr.continuations, filterShortsFromItems);
+        timeFilter('shelves', () => consolidateShelves(nonWatchWnSlr.contents, 'watchNext', detectedPage, !!nonWatchWnSlr.continuations, filterShortsFromItems));
         if (window.queuedVideos.videos.length > 0) {
           const queuedVideosClone = window.queuedVideos.videos.slice();
           queuedVideosClone.unshift(TileRenderer('Clear Queue', { customAction: { action: 'CLEAR_QUEUE' } }));
@@ -1271,11 +1271,11 @@ JSON.parse = function () {
       r.playerOverlays.playerOverlayRenderer.timelyActionRenderers = [];
     }
 
-    filterPlayerButtonsInResponse(r);
-    stopAtPlaylistEnd(r);
+    timeFilter('playerButtons', () => filterPlayerButtonsInResponse(r));
+    timeFilter('playlistEnd', () => stopAtPlaylistEnd(r));
     stopForcedSubtitles(r);
-    hideViewCountsAndBadges(r);
-    addDislikes(r);
+    timeFilter('viewCounts', () => hideViewCountsAndBadges(r));
+    timeFilter('dislikes', () => addDislikes(r));
     if (r?.transportControls?.transportControlsRenderer?.promotedActions && configRead('enableSponsorBlockHighlight')) {
       try {
         if (window?.sponsorblock?.segments) {
@@ -1287,7 +1287,7 @@ JSON.parse = function () {
       } catch (_) { }
     }
 
-    processTileArraysDeep(r, detectedPage, 'response', 0, filterShortsFromItems);
+    timeFilter('tilesDeep', () => processTileArraysDeep(r, detectedPage, 'response', 0, filterShortsFromItems));
     return r;
   } catch (error) {
     appendFileOnlyLog('parse.error', { msg: String(error), stack: String(error?.stack || '').slice(0, 200) });
