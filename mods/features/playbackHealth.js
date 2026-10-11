@@ -42,6 +42,15 @@ let attachRetry = null;
 let stallStartedAt = 0;
 let stallPosition = 0;
 
+// The furthest the playhead was seen to reach.
+//
+// The summary read video.currentTime at teardown and reported watchedSec 0 on
+// video after video, including one where the heartbeat had said 6519 seconds a
+// moment earlier: by the time the page navigates, the element has been reset.
+// A diagnostic that reports zero for a video somebody watched for an hour is
+// not a small blemish — every figure beside it becomes suspect.
+let furthestPosition = 0;
+
 // Reported: a video took far longer than usual to start, showed black, and
 // then played at 360p until it was changed by hand. Neither the delay nor the
 // resolution was anywhere in the log, so neither could be confirmed, let alone
@@ -203,6 +212,35 @@ export function noteParseShape(ms, detectedPage, response) {
     }, takeWork(), takeSpent()));
 }
 
+/**
+ * The element that is playing, which is not always the one bound at attach.
+ *
+ * The same fault the remaining-time readout had: the app rebuilds the player
+ * without a hashchange, and a captured reference then reports on an element
+ * nothing is playing on. For a diagnostic that is worse than for a readout —
+ * it does not look broken, it looks like evidence.
+ *
+ * Also prefers the element that is actually playing when a page carries more
+ * than one, since a watch page can have an inline-preview video besides the
+ * player.
+ */
+function pickVideo() {
+    let fallback = null;
+    try {
+        const all = document.querySelectorAll('video');
+        for (let i = 0; i < all.length; i++) {
+            const el = all[i];
+            if (!el) continue;
+            const usable = isFinite(el.duration) && el.duration > 0;
+            if (usable && !el.paused && el.readyState > 0) return el;
+            if (usable && !fallback) fallback = el;
+            if (!fallback) fallback = el;
+        }
+    } catch (e) { }
+    if (fallback) return fallback;
+    try { return document.querySelector('video'); } catch (e) { return null; }
+}
+
 function enabled() {
     try {
         return configRead('enablePlaybackDiagnostics') === true;
@@ -248,8 +286,10 @@ function bufferedAhead(el) {
 }
 
 function snapshot(el) {
+    const now = el.currentTime || 0;
+    if (now > furthestPosition) furthestPosition = now;
     const out = {
-        at: Math.round(el.currentTime || 0),
+        at: Math.round(now),
         bufferedAhead: bufferedAhead(el),
         readyState: el.readyState,
         rate: el.playbackRate,
@@ -279,6 +319,7 @@ function takeParseCost() {
 
 function onWaiting() {
     if (!video || stallStartedAt) return;
+    if (video.currentTime > furthestPosition) furthestPosition = video.currentTime;
     stallStartedAt = Date.now();
     stallPosition = video.currentTime || 0;
 }
@@ -363,8 +404,10 @@ function reportSummary(reason) {
         firstFrameMs: firstPlayingMs || null,
         sizes: qualities.join(' -> ') || null,
         // The share of watching spent waiting, which is what "a lot of
-        // buffering" means in a number.
-        watchedSec: video ? Math.round(video.currentTime || 0) : null,
+        // buffering" means in a number. Taken from the furthest the playhead
+        // was seen to reach, not from the element, which by now has been
+        // reset.
+        watchedSec: Math.round(furthestPosition) || null,
     });
     stalls = 0;
     stalledMs = 0;
@@ -372,7 +415,17 @@ function reportSummary(reason) {
 }
 
 function beat() {
-    if (!video || !enabled()) return;
+    if (!enabled()) return;
+    // The app may have swapped the player since the last beat; beating on the
+    // element it replaced is how a diagnostic comes to describe nothing.
+    const found = pickVideo();
+    if (found && found !== video) {
+        unlisten(video);
+        video = found;
+        listen(video);
+        lastBeatPosition = video.currentTime || 0;
+    }
+    if (!video) return;
     const at = video.currentTime || 0;
     const moved = Math.round((at - lastBeatPosition) * 10) / 10;
     lastBeatPosition = at;
@@ -395,6 +448,27 @@ function beat() {
     beatParses = 0;
 }
 
+const VIDEO_EVENTS = [
+    ['waiting', () => onWaiting],
+    ['playing', () => onPlaying],
+    ['seeked', () => onResumed],
+    ['stalled', () => onStalled],
+    ['error', () => onError],
+    ['ended', () => onEnded],
+    ['loadedmetadata', () => onQuality],
+    ['resize', () => onQuality],
+];
+
+function listen(el) {
+    if (!el) return;
+    for (const pair of VIDEO_EVENTS) el.addEventListener(pair[0], pair[1]());
+}
+
+function unlisten(el) {
+    if (!el) return;
+    for (const pair of VIDEO_EVENTS) el.removeEventListener(pair[0], pair[1]());
+}
+
 function detach(reason) {
     clearTimeout(attachRetry);
     attachRetry = null;
@@ -404,14 +478,7 @@ function detach(reason) {
     }
     if (video) {
         reportSummary(reason || 'left');
-        video.removeEventListener('waiting', onWaiting);
-        video.removeEventListener('playing', onPlaying);
-        video.removeEventListener('loadedmetadata', onQuality);
-        video.removeEventListener('resize', onQuality);
-        video.removeEventListener('seeked', onResumed);
-        video.removeEventListener('stalled', onStalled);
-        video.removeEventListener('error', onError);
-        video.removeEventListener('ended', onEnded);
+        unlisten(video);
     }
     video = null;
     stallStartedAt = 0;
@@ -425,7 +492,7 @@ function attach() {
     detach('navigated');
     if (!enabled()) return;
 
-    video = document.querySelector('video');
+    video = pickVideo();
     if (!video) {
         attachRetry = setTimeout(attach, 500);
         return;
@@ -434,23 +501,16 @@ function attach() {
     stalls = 0;
     stalledMs = 0;
     logged = 0;
+    furthestPosition = 0;
     slowParseLines = 0;
     startedWatchingAt = Date.now();
     firstPlayingMs = 0;
     qualities = [];
     takeParseCost();
 
-    video.addEventListener('waiting', onWaiting);
-    // Either of these ends a wait. 'seeked' is here because a seek also clears
-    // it, and leaving the stall open would charge the next one with this one's
-    // time.
-    video.addEventListener('playing', onPlaying);
-    video.addEventListener('loadedmetadata', onQuality);
-    video.addEventListener('resize', onQuality);
-    video.addEventListener('seeked', onResumed);
-    video.addEventListener('stalled', onStalled);
-    video.addEventListener('error', onError);
-    video.addEventListener('ended', onEnded);
+    // 'playing' and 'seeked' both end a wait: a seek clears it too, and
+    // leaving the stall open would charge the next one with this one's time.
+    listen(video);
 
     lastBeatPosition = video.currentTime || 0;
     beatsSinceLine = 0;
