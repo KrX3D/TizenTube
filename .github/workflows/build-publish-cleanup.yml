@@ -507,7 +507,13 @@ jobs:
         run: |
           set -euo pipefail
           echo "Fetching the registry document for ${PKG} ..."
-          curl -fsSL "https://registry.npmjs.org/${PKG}" -o /tmp/packument.json
+          # ?write=true is served from the origin rather than the CDN in front
+          # of it. Without it this read can predate the publish that just
+          # happened: a run that had waited 76 seconds for its own version to
+          # become readable then read dist-tags here that still said the
+          # version before it, which is the value the keep-set is built from.
+          curl -fsSL -H 'Cache-Control: no-cache' \
+            "https://registry.npmjs.org/${PKG}?write=true" -o /tmp/packument.json
           node -e '
           const fs = require("fs");
           const doc = JSON.parse(fs.readFileSync("/tmp/packument.json","utf8"));
@@ -727,17 +733,24 @@ jobs:
       # --------------------
       # Final wait + verify final state
       # --------------------
-      - name: Wait before final verify
-        if: steps.confirm_publish.outputs.confirmed == 'true'
-        run: |
-          echo "Short wait to let registry propagate final state..."
-          sleep 8
-
       # The cleanup steps above rewrite the whole package document, so the last
       # thing this job does is check that the version it published is still the
       # one npm hands out. Without this the job reported success while `latest`
       # had silently fallen back a release, and the first sign of it was a TV
       # loading a userscript older than its own app.
+      #
+      # It has to be patient, which it was not. A run failed here reporting the
+      # version it had just published as gone, while npm was in fact serving it
+      # as latest the whole time. The registry had taken 76 seconds to make
+      # that publish readable — the confirm step above needed six attempts for
+      # it — and this read the document once, eight seconds after that, off a
+      # CDN replica still carrying the state from before. The guard was right
+      # to exist and wrong about this run.
+      #
+      # So: the same patience as the step that waits for the publish, reading
+      # from the origin rather than the cache in front of it, and failing only
+      # once the state has stayed wrong for long enough that propagation cannot
+      # be the explanation.
       - name: Verify final state
         if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
@@ -748,23 +761,45 @@ jobs:
           npm view "${PKG}" versions --json
           echo ""
 
-          # Read through the registry rather than `npm view`, whose cache is
-          # what made the original breakage invisible here.
-          curl -fsSL "https://registry.npmjs.org/${PKG}" -o /tmp/packument_final.json
+          WANT=$(cat /tmp/current_version.txt)
+          for i in $(seq 1 20); do
+            # ?write=true bypasses the CDN; npm view is avoided entirely, since
+            # its own HTTP cache is what made the original breakage invisible.
+            if curl -fsSL -H 'Cache-Control: no-cache' \
+                 "https://registry.npmjs.org/${PKG}?write=true" -o /tmp/packument_final.json; then
+              VERDICT=$(node -e '
+              const fs = require("fs");
+              const doc = JSON.parse(fs.readFileSync("/tmp/packument_final.json","utf8"));
+              const want = fs.readFileSync("/tmp/current_version.txt","utf8").trim();
+              const latest = (doc["dist-tags"] || {}).latest;
+              const live = !!(doc.versions || {})[want];
+              const deprecated = live && !!doc.versions[want].deprecated;
+              if (deprecated) { console.log("deprecated"); }
+              else if (live && latest === want) { console.log("ok"); }
+              else { console.log("waiting " + (live ? "live" : "absent") + " latest=" + latest); }
+              ')
+              echo "attempt ${i}: ${VERDICT}"
+              case "$VERDICT" in
+                ok) echo "npm latest matches the version this run published."; exit 0 ;;
+                deprecated) echo "::error::${WANT} was published deprecated."; exit 1 ;;
+              esac
+            else
+              echo "attempt ${i}: the registry document could not be read"
+            fi
+            sleep 15
+          done
+
+          # Five minutes of the wrong answer is no longer propagation.
           node -e '
           const fs = require("fs");
           const doc = JSON.parse(fs.readFileSync("/tmp/packument_final.json","utf8"));
           const want = fs.readFileSync("/tmp/current_version.txt","utf8").trim();
           const latest = (doc["dist-tags"] || {}).latest;
           const live = !!(doc.versions || {})[want];
-          const deprecated = live && !!doc.versions[want].deprecated;
           console.log("published: " + want + ", latest tag: " + latest + ", still live: " + live);
-          let failed = false;
-          if (!live) { console.log("::error::" + want + " is no longer on npm. A cleanup write removed the version this run published."); failed = true; }
-          if (latest !== want) { console.log("::error::npm latest is " + latest + ", not " + want + ". The CDN will serve the wrong bundle to every TV."); failed = true; }
-          if (deprecated) { console.log("::error::" + want + " was published deprecated."); failed = true; }
-          if (failed) process.exit(1);
-          console.log("npm latest matches the version this run published.");
+          if (!live) console.log("::error::" + want + " is no longer on npm after five minutes. A cleanup write removed the version this run published.");
+          if (latest !== want) console.log("::error::npm latest is " + latest + ", not " + want + ", after five minutes. The CDN will serve the wrong bundle to every TV.");
+          process.exit(1);
           '
 
       # --------------------
