@@ -104,6 +104,41 @@ function parseTime(text) {
     return seconds;
 }
 
+/**
+ * The video element the readout should follow.
+ *
+ * Reported: the remaining time stopped counting down while the length beside
+ * it stayed correct. Reproduced: the app rebuilds the player without a
+ * hashchange, so a new <video> appears, and this module kept the one it bound
+ * at attach time. Its currentTime never moves again, so the countdown freezes
+ * on the old video's remainder while the app's own writes keep the new total
+ * fresh — exactly the half-updating readout that was described.
+ *
+ * The duration element is already re-queried on every check for the same
+ * class of reason (it is torn down on a seek); the video element was not.
+ *
+ * Which one, when there are several: a watch page can carry an inline-preview
+ * element besides the player, and querySelector returns whichever comes first
+ * in the document. The one that is playing and has a real duration is the one
+ * the readout is about.
+ */
+function pickVideo() {
+    let fallback = null;
+    try {
+        const all = document.querySelectorAll('video');
+        for (let i = 0; i < all.length; i++) {
+            const el = all[i];
+            if (!el) continue;
+            const usable = isFinite(el.duration) && el.duration > 0;
+            if (usable && !el.paused && el.readyState > 0) return el;
+            if (usable && !fallback) fallback = el;
+            if (!fallback) fallback = el;
+        }
+    } catch (e) { }
+    if (fallback) return fallback;
+    try { return document.querySelector('video'); } catch (e) { return null; }
+}
+
 function findDurationEl() {
     return document.querySelector(DURATION_SELECTOR);
 }
@@ -211,7 +246,10 @@ function computeDesiredText(el) {
 }
 
 function apply() {
-    if (!video || !enabled()) return;
+    if (!enabled()) return;
+    // Before anything is read: the element may have been replaced since the
+    // last call, and reading the old one is how the countdown froze.
+    if (!liveVideo()) return;
     const el = findDurationEl();
     if (!el) return;
     const next = computeDesiredText(el);
@@ -229,6 +267,43 @@ function restoreNative() {
     if (stripped && el.textContent !== stripped) el.textContent = stripped;
 }
 
+// The events that move the readout. Listed once, because they are added and
+// removed in three places now and a list that drifts leaks listeners.
+const VIDEO_EVENTS = ['timeupdate', 'durationchange', 'seeking', 'seeked', 'ratechange'];
+
+function listen(el) {
+    if (!el) return;
+    for (const name of VIDEO_EVENTS) el.addEventListener(name, apply);
+}
+
+function unlisten(el) {
+    if (!el) return;
+    // Removed rather than left behind: attach runs again on every hashchange,
+    // and the video element is often the same one, so adding without removing
+    // would stack another set of listeners per video.
+    for (const name of VIDEO_EVENTS) el.removeEventListener(name, apply);
+}
+
+/**
+ * Follow the element that is playing now, whichever that is.
+ *
+ * Returns the element to read, having moved the listeners onto it if the app
+ * replaced the one this was bound to.
+ */
+function liveVideo() {
+    const found = pickVideo();
+    if (found && found !== video) {
+        unlisten(video);
+        video = found;
+        listen(video);
+        // Our own text describes the video that has gone; recomputing from it
+        // would keep its total. Let the app's next write provide the new one.
+        desiredText = null;
+        nativeText = null;
+    }
+    return video;
+}
+
 function detach() {
     clearTimeout(attachRetryTimeout);
     attachRetryTimeout = null;
@@ -236,16 +311,7 @@ function detach() {
         guardObserver.disconnect();
         guardObserver = null;
     }
-    if (video) {
-        // Removed rather than left behind: attach runs again on every
-        // hashchange, and the video element is often the same one, so adding
-        // without removing would stack another four listeners per video.
-        video.removeEventListener('timeupdate', apply);
-        video.removeEventListener('durationchange', apply);
-        video.removeEventListener('seeking', apply);
-        video.removeEventListener('seeked', apply);
-        video.removeEventListener('ratechange', apply);
-    }
+    unlisten(video);
     video = null;
 }
 
@@ -253,7 +319,7 @@ function attach() {
     detach();
     if (!enabled()) return;
 
-    video = document.querySelector('video');
+    video = pickVideo();
     const container = findGuardContainer();
 
     if (!video || !container || !findDurationEl()) {
@@ -265,18 +331,22 @@ function attach() {
     desiredText = null;
     nativeText = null;
 
-    video.addEventListener('timeupdate', apply);
-    video.addEventListener('durationchange', apply);
-    video.addEventListener('seeking', apply);
-    video.addEventListener('seeked', apply);
-    // Changing the speed moves the finish time, and nothing else would notice
-    // until the next second ticked.
-    video.addEventListener('ratechange', apply);
+    // timeupdate drives the countdown; durationchange, seeking and seeked
+    // cover the cases where the position jumps; ratechange moves the finish
+    // time, and nothing else would notice until the next second ticked.
+    listen(video);
 
     guardObserver = new MutationObserver(() => {
-        if (desiredText === null) return;
+        // Same reason as in apply: the app may have swapped the player since
+        // the last mutation, and this path runs about once a second.
+        liveVideo();
         const el = findDurationEl();
-        if (!el || el.textContent === desiredText) return;
+        if (!el) return;
+        // Nothing of ours on screen yet — the first mutation of a video, or
+        // the first after the player was swapped. Compute rather than return:
+        // returning here left the new video showing a bare total until the
+        // next timeupdate happened to arrive.
+        if (desiredText !== null && el.textContent === desiredText) return;
         // The app has written its own text back — about once a second during
         // playback, and with a new total when the video changes. Recompute
         // from it rather than forcing the cached string: forcing is what
@@ -302,7 +372,8 @@ function attach() {
             desiredText = null;
             return;
         }
-        el.textContent = desiredText;
+        // And with nothing of ours to hold either, leave the app's text alone.
+        if (desiredText !== null) el.textContent = desiredText;
     });
     guardObserver.observe(container, { characterData: true, childList: true, subtree: true });
 
