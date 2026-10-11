@@ -4,7 +4,7 @@ import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
 import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
-import { noteParseCost, playbackDiagnosticsEnabled } from './playbackHealth.js';
+import { noteParseCost, noteParseShape, playbackDiagnosticsEnabled } from './playbackHealth.js';
 import { stopAtPlaylistEnd } from './playlistEndStopper.js';
 import { stopForcedSubtitles } from './forcedSubtitleStopper.js';
 import { PatchSettings } from '../ui/customYTSettings.js';
@@ -1298,7 +1298,13 @@ JSON.parse = function () {
     return r;
   } finally {
     _parseDepth--;
-    if (_startedAt) noteParseCost(Date.now() - _startedAt);
+    if (_startedAt) {
+      const _took = Date.now() - _startedAt;
+      noteParseCost(_took);
+      // The aggregate says how much; this says which response, which is the
+      // part that can be acted on.
+      noteParseShape(_took, window.__ttLastDetectedPage, r);
+    }
   }
 };
 

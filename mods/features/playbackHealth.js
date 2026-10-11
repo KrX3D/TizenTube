@@ -41,6 +41,38 @@ let attachRetry = null;
 
 let stallStartedAt = 0;
 let stallPosition = 0;
+
+// Reported: a video took far longer than usual to start, showed black, and
+// then played at 360p until it was changed by hand. Neither the delay nor the
+// resolution was anywhere in the log, so neither could be confirmed, let alone
+// explained. Both are recorded now.
+let startedWatchingAt = 0;
+let firstPlayingMs = 0;
+let qualities = [];
+
+// The hang, and why nothing was recorded during it.
+//
+// Captured: a video wedged for eleven minutes with not one line logged, then a
+// summary the instant the page was navigated away from — three stalls, 29s
+// stalled, and currentTime back at 0 after having reached 13s. So the player
+// emitted nothing at all for those eleven minutes: a player that is buffering
+// fires waiting and stalled, one that is wedged fires neither. No parses
+// either, so nothing was arriving to parse.
+//
+// What that cannot say is whether the page's own code was alive and idle or
+// had stopped running, and those are different faults with different fixes.
+// Silence answers neither. A beat does: if it keeps arriving through a hang,
+// the page is alive and the media pipeline is stuck, and each beat says what
+// the player was doing; if the beats stop too, the page or the CDP drain that
+// carries them died.
+//
+// One line a minute while a video is playing normally, and one every beat
+// while the playhead is not moving — which is the case worth watching.
+const BEAT_MS = 10000;
+const QUIET_BEATS = 6;
+let beatTimer = null;
+let lastBeatPosition = 0;
+let beatsSinceLine = 0;
 let stalls = 0;
 let stalledMs = 0;
 let logged = 0;
@@ -49,6 +81,87 @@ let logged = 0;
 let parseMs = 0;
 let parseCount = 0;
 let parseWorstMs = 0;
+
+// A second set for the heartbeat. One set read by both would have the beat
+// empty the figures a stall was about to report, and the other way round —
+// each reader resets what it reads, so each needs its own.
+let beatParseMs = 0;
+let beatParses = 0;
+
+// A single response taking this long is worth a line of its own.
+//
+// A capture showed one at 484ms, inside a 3.6s stall: half a second of the
+// thread the player runs on, spent in one response. The aggregate said that
+// much but could not say WHICH response, so there was nothing to act on. This
+// is the missing half.
+const SLOW_PARSE_MS = 120;
+const MAX_SLOW_PARSE_LINES = 20;
+let slowParseLines = 0;
+
+// What the filters did during the parse being measured, so a slow one can be
+// attributed rather than guessed at.
+const work = {};
+
+/** Counted by whichever filter did the walking; reset per parse. */
+export function noteFilterWork(name, howMany) {
+    if (!enabled()) return;
+    work[name] = (work[name] || 0) + (howMany > 0 ? howMany : 1);
+}
+
+function takeWork() {
+    const out = {};
+    for (const name of Object.keys(work)) {
+        out[name] = work[name];
+        delete work[name];
+    }
+    return out;
+}
+
+/**
+ * One response that cost more than it should have.
+ *
+ * The page it was for and its top-level keys are enough to recognise it, and
+ * the filter counts say which of this fork's walkers was in it. No values: a
+ * response carries a person's own feed.
+ */
+export function noteParseShape(ms, detectedPage, response) {
+    if (!enabled()) {
+        takeWork();
+        return;
+    }
+    if (ms < SLOW_PARSE_MS) {
+        takeWork();
+        return;
+    }
+    if (slowParseLines >= MAX_SLOW_PARSE_LINES) {
+        takeWork();
+        return;
+    }
+    slowParseLines++;
+    let keys = [];
+    let items = null;
+    try {
+        if (Array.isArray(response)) {
+            keys = ['[' + response.length + ']'];
+        } else if (response && typeof response === 'object') {
+            keys = Object.keys(response).slice(0, 12);
+        }
+    } catch (e) { }
+    try {
+        // The number of things the walkers had to walk, which is the figure
+        // that explains a slow parse more often than anything else.
+        items = work.tiles || null;
+    } catch (e) { }
+    // player., not parse.: the prefix picks the log category, parse.* belongs
+    // to nav, and this is read next to the stalls. Named parse.slow it would
+    // be filtered out by the very narrowing that was done to watch playback.
+    appendFileOnlyLog('player.slowParse', Object.assign({
+        ms: Math.round(ms),
+        page: detectedPage || null,
+        keys,
+        items,
+    }, takeWork()));
+}
 
 function enabled() {
     try {
@@ -69,6 +182,8 @@ export function noteParseCost(ms) {
     parseMs += ms;
     parseCount++;
     if (ms > parseWorstMs) parseWorstMs = ms;
+    beatParseMs += ms;
+    beatParses++;
 }
 
 /** True when this fork's parse cost is worth measuring at all. */
@@ -128,6 +243,38 @@ function onWaiting() {
     stallPosition = video.currentTime || 0;
 }
 
+/** The frame size the player settled on, as it changes. */
+function onQuality() {
+    if (!video || !enabled()) return;
+    const height = video.videoHeight || 0;
+    const width = video.videoWidth || 0;
+    if (!height) return;
+    const label = width + 'x' + height;
+    if (qualities.length && qualities[qualities.length - 1] === label) return;
+    qualities.push(label);
+    appendFileOnlyLog('player.quality', {
+        size: label,
+        // Which change this is: the first is what the player chose on its own,
+        // and that is the one worth knowing when it chose badly.
+        change: qualities.length,
+        at: Math.round(video.currentTime || 0),
+        sinceStartMs: startedWatchingAt ? Date.now() - startedWatchingAt : null,
+    });
+}
+
+function onPlaying() {
+    if (video && enabled() && !firstPlayingMs && startedWatchingAt) {
+        firstPlayingMs = Date.now() - startedWatchingAt;
+        appendFileOnlyLog('player.firstFrame', {
+            // "Took longer than normal", as a number.
+            tookMs: firstPlayingMs,
+            size: (video.videoWidth || 0) + 'x' + (video.videoHeight || 0),
+            bufferedAhead: bufferedAhead(video),
+        });
+    }
+    onResumed();
+}
+
 function onResumed() {
     if (!video || !stallStartedAt) return;
     const lasted = Date.now() - stallStartedAt;
@@ -171,6 +318,10 @@ function reportSummary(reason) {
         reason,
         stalls,
         stalledMs,
+        // Everything about this video in one line: how long it took to start,
+        // and every frame size it went through.
+        firstFrameMs: firstPlayingMs || null,
+        sizes: qualities.join(' -> ') || null,
         // The share of watching spent waiting, which is what "a lot of
         // buffering" means in a number.
         watchedSec: video ? Math.round(video.currentTime || 0) : null,
@@ -180,13 +331,43 @@ function reportSummary(reason) {
     logged = 0;
 }
 
+function beat() {
+    if (!video || !enabled()) return;
+    const at = video.currentTime || 0;
+    const moved = Math.round((at - lastBeatPosition) * 10) / 10;
+    lastBeatPosition = at;
+    let paused = false;
+    try { paused = !!video.paused; } catch (e) { }
+    // Not moving while not paused is the shape of the hang; anything else is
+    // ordinary and does not need a line every ten seconds.
+    const stuck = moved <= 0 && !paused;
+    beatsSinceLine++;
+    if (!stuck && beatsSinceLine < QUIET_BEATS) return;
+    beatsSinceLine = 0;
+    appendFileOnlyLog('player.heartbeat', Object.assign(snapshot(video), {
+        movedSec: moved,
+        stuck,
+        paused,
+        parseMsSinceBeat: Math.round(beatParseMs),
+        parsesSinceBeat: beatParses,
+    }));
+    beatParseMs = 0;
+    beatParses = 0;
+}
+
 function detach(reason) {
     clearTimeout(attachRetry);
     attachRetry = null;
+    if (beatTimer) {
+        clearInterval(beatTimer);
+        beatTimer = null;
+    }
     if (video) {
         reportSummary(reason || 'left');
         video.removeEventListener('waiting', onWaiting);
-        video.removeEventListener('playing', onResumed);
+        video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('loadedmetadata', onQuality);
+        video.removeEventListener('resize', onQuality);
         video.removeEventListener('seeked', onResumed);
         video.removeEventListener('stalled', onStalled);
         video.removeEventListener('error', onError);
@@ -213,17 +394,29 @@ function attach() {
     stalls = 0;
     stalledMs = 0;
     logged = 0;
+    slowParseLines = 0;
+    startedWatchingAt = Date.now();
+    firstPlayingMs = 0;
+    qualities = [];
     takeParseCost();
 
     video.addEventListener('waiting', onWaiting);
     // Either of these ends a wait. 'seeked' is here because a seek also clears
     // it, and leaving the stall open would charge the next one with this one's
     // time.
-    video.addEventListener('playing', onResumed);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('loadedmetadata', onQuality);
+    video.addEventListener('resize', onQuality);
     video.addEventListener('seeked', onResumed);
     video.addEventListener('stalled', onStalled);
     video.addEventListener('error', onError);
     video.addEventListener('ended', onEnded);
+
+    lastBeatPosition = video.currentTime || 0;
+    beatsSinceLine = 0;
+    beatParseMs = 0;
+    beatParses = 0;
+    beatTimer = setInterval(beat, BEAT_MS);
 }
 
 window.addEventListener('hashchange', attach, false);
