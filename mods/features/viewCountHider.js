@@ -1,4 +1,5 @@
 import { configRead } from '../config.js';
+import { noteFilterWork } from './playbackHealth.js';
 import { appendFileOnlyLog, appendVisibleLog } from './hideWatched.js';
 
 /**
@@ -162,6 +163,10 @@ function wantBadges() {
  * copy of a whole video item there.
  */
 export function stripCountsFromItems(items, pageName = null) {
+    // This walks every tile of every response to a fixed depth, which makes it
+    // the first thing to suspect in a slow parse. Counted so a slow one can
+    // name it instead of pointing vaguely at this fork.
+    try { noteFilterWork('tiles', Array.isArray(items) ? items.length : 1); } catch (e) { }
     if (!Array.isArray(items) || !items.length) return items;
     const counts = wantCounts();
     const badges = wantBadges();
