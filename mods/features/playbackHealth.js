@@ -108,6 +108,44 @@ export function noteFilterWork(name, howMany) {
     work[name] = (work[name] || 0) + (howMany > 0 ? howMany : 1);
 }
 
+// Milliseconds per named filter within the parse being measured.
+const spent = {};
+
+/**
+ * Run one of this fork's filters and remember what it cost.
+ *
+ * The slow-parse line said a /watch response took 511ms and that 30 tiles
+ * went through it, which was enough to know the cost is real and not enough
+ * to know whose it is: a dozen filters run over that response, one of them
+ * walking the whole tree. Guessing which from the outside was the obvious
+ * temptation and the wrong move — a benchmark written against the likeliest
+ * suspect measured 0.1ms, because that function only walks named subtrees and
+ * the cost is somewhere else entirely.
+ *
+ * So each heavy filter is timed where it is called, and the slow-parse line
+ * carries the breakdown. Off, this is one branch and a call.
+ */
+export function timeFilter(name, run) {
+    if (!enabled()) return run();
+    const startedAt = Date.now();
+    try {
+        return run();
+    } finally {
+        spent[name] = (spent[name] || 0) + (Date.now() - startedAt);
+    }
+}
+
+function takeSpent() {
+    const out = {};
+    for (const name of Object.keys(spent)) {
+        // Only what is worth reading: a filter that cost nothing measurable
+        // would bury the one that did.
+        if (spent[name] > 0) out[name + 'Ms'] = spent[name];
+        delete spent[name];
+    }
+    return out;
+}
+
 function takeWork() {
     const out = {};
     for (const name of Object.keys(work)) {
@@ -131,10 +169,12 @@ export function noteParseShape(ms, detectedPage, response) {
     }
     if (ms < SLOW_PARSE_MS) {
         takeWork();
+        takeSpent();
         return;
     }
     if (slowParseLines >= MAX_SLOW_PARSE_LINES) {
         takeWork();
+        takeSpent();
         return;
     }
     slowParseLines++;
@@ -160,7 +200,7 @@ export function noteParseShape(ms, detectedPage, response) {
         page: detectedPage || null,
         keys,
         items,
-    }, takeWork()));
+    }, takeWork(), takeSpent()));
 }
 
 function enabled() {
