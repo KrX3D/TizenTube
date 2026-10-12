@@ -329,11 +329,13 @@
         var STATUS_TEXT = {
             en: {
                 waiting: 'Waiting for the network\u2026 ({s}s)',
-                continuing: 'Still no network, starting anyway\u2026'
+                continuing: 'Still no network, starting anyway\u2026',
+                dns: 'Network is up but names cannot be resolved (DNS). Waiting\u2026 ({s}s)'
             },
             de: {
                 waiting: 'Warte auf das Netzwerk\u2026 ({s}s)',
-                continuing: 'Immer noch kein Netzwerk, starte trotzdem\u2026'
+                continuing: 'Immer noch kein Netzwerk, starte trotzdem\u2026',
+                dns: 'Netzwerk da, aber Namen k\u00f6nnen nicht aufgel\u00f6st werden (DNS). Warte\u2026 ({s}s)'
             }
         };
 
@@ -347,6 +349,40 @@
             } catch (e) { }
         }
 
+        // Whether the link is up but names cannot be resolved.
+        //
+        // Captured on the 6.5: a video froze with its buffer drained to zero
+        // while the page itself kept running, every page then failed, and a
+        // restart landed on the webview's own error page reading
+        // ERR_NAME_NOT_RESOLVED with an untranslated Tizen string id. The TV
+        // had lost DNS. navigator.onLine stays true for that — the link is
+        // there — so the check below was skipped and this page handed over to
+        // YouTube, which could only fail.
+        //
+        // An address needs no resolving, so a probe to one tells the two apart:
+        // if the IP answers and the name does not, it is DNS, and that has a
+        // specific remedy (a static DNS server on the TV or in the router)
+        // which "no network" does not.
+        var DNS_PROBE_URL = 'http://1.1.1.1/';
+        var DNS_PROBE_TIMEOUT_MS = 3000;
+
+        function probeByAddress(whenDone) {
+            var settled = false;
+            function finish(reachable) {
+                if (settled) return;
+                settled = true;
+                whenDone(reachable);
+            }
+            try {
+                var timer = setTimeout(function () { finish(false); }, DNS_PROBE_TIMEOUT_MS);
+                fetch(DNS_PROBE_URL, { mode: 'no-cors', cache: 'no-store' })
+                    .then(function () { clearTimeout(timer); finish(true); })
+                    .catch(function () { clearTimeout(timer); finish(false); });
+            } catch (e) {
+                finish(false);
+            }
+        }
+
         function waitForNetworkThen(next) {
             var started = Date.now();
             var attempts = 0;
@@ -355,11 +391,8 @@
             // it was waiting and for how long.
             breadcrumb('network-wait');
             var delay = 1000;
-
-            if (navigator.onLine !== false) {
-                next();
-                return;
-            }
+            // Set once the address answers while the name does not.
+            var looksLikeDns = false;
             sendLog('INFO', 'Started offline, waiting for the network before loading YouTube');
             setStatus('waiting', 0);
 
@@ -372,9 +405,19 @@
                     next();
                     return;
                 }
-                setStatus('waiting', Math.round((Date.now() - started) / 1000));
+                setStatus(looksLikeDns ? 'dns' : 'waiting', Math.round((Date.now() - started) / 1000));
                 if (attempts === 1 || attempts % 5 === 0) {
                     sendLog('INFO', 'Waiting for network (' + reason + ', attempt ' + attempts + ')');
+                    // Asked once the name probe has failed, and only then: on a
+                    // normal start nothing here runs at all.
+                    probeByAddress(function (reachable) {
+                        if (!reachable || looksLikeDns) return;
+                        looksLikeDns = true;
+                        breadcrumb('dns-failure');
+                        sendLog('ERROR', 'The network is up (' + DNS_PROBE_URL + ' answered) but names cannot be resolved. '
+                            + 'This is DNS, not connectivity: the player starves as its segment hosts stop resolving, and a '
+                            + 'restart lands on ERR_NAME_NOT_RESOLVED. Set a static DNS server on the TV or in the router.');
+                    });
                 }
                 // Whichever comes first — the delay or the link coming back —
                 // runs the next attempt, and cancels the other. Leaving the
