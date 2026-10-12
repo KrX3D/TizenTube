@@ -628,6 +628,19 @@ function trimDashes(text) {
 const NAME_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-';
 const NAME_DASH = NAME_ALPHABET.charAt(NAME_ALPHABET.length - 1);
 
+// How much of the caller's string is ever looked at.
+//
+// The loop below used the string's own length as its bound, and that string
+// arrives in a request body (js/loop-bound-injection, alert 143). A name of a
+// megabyte would have been walked a character at a time to produce the same
+// 255 at most — so the bound is a constant now, and charAt past the end
+// returns '' which ends the loop early for every real name.
+//
+// Four times the longest name that can come out of it, which is room enough
+// for a run of punctuation before the part worth keeping, and far short of
+// anything that costs measurable time.
+const MAX_NAME_INPUT = 1024;
+
 function headerField(value, max) {
     const text = String(value === undefined || value === null ? '' : value);
     const limit = (typeof max === 'number' && max > 0) ? max : 255;
@@ -637,8 +650,12 @@ function headerField(value, max) {
     // two have to agree or one TV is named twice in the same file.
     let rebuilt = '';
     let inRun = false;
-    for (let i = 0; i < text.length; i++) {
-        const at = NAME_ALPHABET.indexOf(text.charAt(i));
+    // Bounded by a constant rather than by the caller: charAt past the end is
+    // '', which is not in the alphabet and ends the string here.
+    for (let i = 0; i < MAX_NAME_INPUT; i++) {
+        const ch = text.charAt(i);
+        if (ch === '') break;
+        const at = NAME_ALPHABET.indexOf(ch);
         if (at === -1) {
             if (!inRun) {
                 rebuilt += NAME_DASH;
