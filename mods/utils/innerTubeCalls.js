@@ -171,13 +171,39 @@ function getUserPlaylists() {
     return _playlists;
 }
 
+/**
+ * The app's own InnerTube client, once it exists.
+ *
+ * window._yttv is filled in by the app as it boots, so for the first seconds
+ * after this script runs there is nothing here to ask. Exposed because the
+ * difference between "not ready yet" and "asked and got nothing" decides
+ * whether waiting longer is worth anything.
+ */
+function innerTubeClient() {
+    try {
+        const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+        return mappings?.get('KabukiInnerTubeClient') || null;
+    } catch (err) {
+        return null;
+    }
+}
+
+/** True once a request would actually go somewhere. */
+function innerTubeReady() {
+    return !!innerTubeClient();
+}
+
+/** How many playlists are cached, without triggering anything. */
+function cachedPlaylistCount() {
+    return _playlists.length;
+}
+
 function refreshUserPlaylists() {
     if (_playlistsInFlight) return Promise.resolve(_playlists);
     _playlistsInFlight = true;
     return new Promise((resolve) => {
         try {
-            const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
-            const KabukiInnerTubeClient = mappings?.get('KabukiInnerTubeClient');
+            const KabukiInnerTubeClient = innerTubeClient();
             if (!KabukiInnerTubeClient) {
                 _playlistsInFlight = false;
                 return resolve(_playlists);
@@ -304,5 +330,7 @@ export {
     sendFeedbackToken,
     getUserPlaylists,
     refreshUserPlaylists,
+    innerTubeReady,
+    cachedPlaylistCount,
     addVideoToPlaylist
 }
