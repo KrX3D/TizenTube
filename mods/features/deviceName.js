@@ -86,8 +86,17 @@ export function deviceNameForSyslog() {
  * it for its own, so a name the two filter differently would split a TV's
  * lines in half. Letters, digits, dot, dash and underscore, as there.
  */
+// The same cap the standalone service applies before it looks at a name.
+//
+// Both sides have to see the same input or they stop producing the same name,
+// and the service's loop is bounded by a constant because the string reaches
+// it from a request body (js/loop-bound-injection). Nothing real comes near
+// this: the longest name that can come out is 255 characters.
+const MAX_NAME_INPUT = 1024;
+
 export function asHostField(value) {
     const reduced = String(value === undefined || value === null ? '' : value)
+        .slice(0, MAX_NAME_INPUT)
         .replace(/[^A-Za-z0-9._-]+/g, '-');
     const name = trimDashes(trimDashes(reduced).slice(0, 255));
     return name || null;

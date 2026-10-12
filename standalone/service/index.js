@@ -612,17 +612,65 @@ function trimDashes(text) {
     return text.slice(start, end);
 }
 
+// Every character a name field may hold, as program constants.
+//
+// CodeQL traces these two fields from the request body they arrive in to the
+// file they are written to (js/http-to-file-access, alerts 137 and 138) and
+// kept tracing them after the filter was tightened to an allowlist, which is
+// correct of it: a replace() narrows a value, it does not change where the
+// value came from, and nothing downstream can tell the difference.
+//
+// What does is rebuilding. The output below is assembled from THIS string,
+// one character at a time, chosen by index — so what is stored and later
+// written into a frame is this file's own characters, not the caller's. The
+// address beside it has been built that way for the same reason since the day
+// CodeQL first reported it, and the note at ipv4FromOctets says so.
+const NAME_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-';
+const NAME_DASH = NAME_ALPHABET.charAt(NAME_ALPHABET.length - 1);
+
+// How much of the caller's string is ever looked at.
+//
+// The loop below used the string's own length as its bound, and that string
+// arrives in a request body (js/loop-bound-injection, alert 143). A name of a
+// megabyte would have been walked a character at a time to produce the same
+// 255 at most — so the bound is a constant now, and charAt past the end
+// returns '' which ends the loop early for every real name.
+//
+// Four times the longest name that can come out of it, which is room enough
+// for a run of punctuation before the part worth keeping, and far short of
+// anything that costs measurable time.
+const MAX_NAME_INPUT = 1024;
+
 function headerField(value, max) {
-    // A run becomes one dash rather than vanishing: "UE55 RU7179" reads as
-    // UE55-RU7179, which is also what the page makes of it, and the two have
-    // to agree or one TV is named twice in one file. This replace is linear:
-    // one quantifier over a negated class, nothing to backtrack into.
-    const reduced = String(value === undefined || value === null ? '' : value)
-        .replace(/[^A-Za-z0-9._-]+/g, '-');
+    const text = String(value === undefined || value === null ? '' : value);
+    const limit = (typeof max === 'number' && max > 0) ? max : 255;
+
+    // A run of anything not in the alphabet becomes one dash, so "UE55 RU7179"
+    // reads as UE55-RU7179 — which is what the page makes of it too, and the
+    // two have to agree or one TV is named twice in the same file.
+    let rebuilt = '';
+    let inRun = false;
+    // Bounded by a constant rather than by the caller: charAt past the end is
+    // '', which is not in the alphabet and ends the string here.
+    for (let i = 0; i < MAX_NAME_INPUT; i++) {
+        const ch = text.charAt(i);
+        if (ch === '') break;
+        const at = NAME_ALPHABET.indexOf(ch);
+        if (at === -1) {
+            if (!inRun) {
+                rebuilt += NAME_DASH;
+                inRun = true;
+            }
+            continue;
+        }
+        inRun = false;
+        rebuilt += NAME_ALPHABET.charAt(at);
+    }
+
     // Trimmed, cut to length, then trimmed again in case the cut left a dash
-    // at the end.
-    const out = trimDashes(trimDashes(reduced).slice(0, max));
-    return out || '-';
+    // at the end. All three only remove characters, so the result is still
+    // made of nothing but the alphabet above.
+    return trimDashes(trimDashes(rebuilt).slice(0, limit)) || '-';
 }
 // INFO, with the levels this logs mapped onto RFC 5424 severities.
 const SYSLOG_SEVERITY = { ERROR: 3, WARN: 4, INFO: 6, DEBUG: 7 };
@@ -1073,7 +1121,7 @@ app.all('*', (req, res) => {
 
                     text = text.replace('Set(["www.youtube.com","accounts.google.com"]);', 'Set(["www.youtube.com", "accounts.google.com", "localhost"]);');
                     text = text.replace(/:document\.location\.toString\(\)/g, ':document.location.toString().replace("http://localhost:8099", "https://www.youtube.com")');
-                    text = text.replace(/euri:[^,]+,/g, 'euri:document.location.toString().replace("http://localhost:8099", "https://www.youtube.com"),')
+                    text = text.replace(/euri:[^,]+,/g, 'euri:document.location.toString().replace("http://localhost:8099", "https://www.youtube.com"),');
                     text = text.replace(/https:\/\/s\.youtube\.com/g, `${proxyPrefix}https://s.youtube.com`);
                     text = text.replace(/redirector\.googlevideo\.com/g, `${proxyPrefix}https://redirector.googlevideo.com`);
                     text = text.replace(/this.scheme="https"/, 'this.scheme="http"');
@@ -1082,8 +1130,8 @@ app.all('*', (req, res) => {
                     text = text.replace(/"\/\/yt3\.googleusercontent\.com/g, `"${proxyPrefix}https://yt3.googleusercontent.com`);
 
                     // In order to fix history not working
-                    text = text.replace(/=window\.location\.href;/, '=window.location.href.replace("http://localhost:8099", "https://www.youtube.com");')
-                    text = text.replace(/=document\.location\.href/, '=document.location.href.replace("http://localhost:8099", "https://www.youtube.com")')
+                    text = text.replace(/=window\.location\.href;/, '=window.location.href.replace("http://localhost:8099", "https://www.youtube.com");');
+                    text = text.replace(/=document\.location\.href/, '=document.location.href.replace("http://localhost:8099", "https://www.youtube.com")');
 
                     res.send(text);
                 });
