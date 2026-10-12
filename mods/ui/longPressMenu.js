@@ -1,6 +1,7 @@
 import { configRead } from '../config.js';
 import { MenuServiceItemRenderer, MenuNavigationItemRenderer } from './ytUI.js';
-import { getUserPlaylists, refreshUserPlaylists } from '../utils/innerTubeCalls.js';
+import { getUserPlaylists, refreshUserPlaylists, innerTubeReady, cachedPlaylistCount } from '../utils/innerTubeCalls.js';
+import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { channelNameOf } from '../features/channelHider.js';
 import { detectCurrentPage } from '../features/hideWatched.js';
 import { currentPlaylistEditable } from '../features/playlistOwnership.js';
@@ -288,15 +289,79 @@ export function longPressData(data) {
     };
 }
 
-// Fetched once shortly after startup, so the FIRST long press already has the
-// playlist entries rather than the one after it. Deferred rather than
-// immediate: the page is still assembling itself at load, and this is the
-// least urgent request the app makes.
+// Fetched before the first long press, which needs waiting for the app rather
+// than guessing how long it takes.
+//
+// Reported: on the first start of the app, a long press on the home page
+// showed only "Zum Kanal" — no playlists — on every tile and every shelf, and
+// going to the subscriptions page and back made them appear. That is this
+// prefetch missing its window.
+//
+// It used to be a single shot at eight seconds. refreshUserPlaylists does
+// nothing at all when the app's InnerTube client is not in window._yttv yet,
+// and on these TVs eight seconds is often still inside the boot — so the one
+// shot was spent on nothing, and nothing retried until the menu itself asked,
+// by which time it was being built. Hence: nothing on the first press,
+// everything on the next.
+//
+// So this waits for the client instead. The poll is a property lookup and
+// sends nothing; only once there is something to ask does a request go out.
+// An empty answer is tried again a few times, because being signed in is its
+// own kind of not-ready-yet, and an empty result is deliberately not cached as
+// success.
+const PLAYLIST_WARM_POLL_MS = 1000;
+const PLAYLIST_WARM_MAX_WAIT_MS = 120000;
+// After the client appears: the delays at which an empty answer is retried.
+const PLAYLIST_WARM_RETRIES_MS = [4000, 12000, 30000];
+
+function warmPlaylists() {
+    let waited = 0;
+    let retry = 0;
+
+    const askAgain = () => {
+        if (cachedPlaylistCount() > 0) {
+            logWarm('ready', { playlists: cachedPlaylistCount(), afterMs: waited });
+            return;
+        }
+        if (retry >= PLAYLIST_WARM_RETRIES_MS.length) {
+            logWarm('gave_up', { afterMs: waited });
+            return;
+        }
+        const delay = PLAYLIST_WARM_RETRIES_MS[retry];
+        retry++;
+        setTimeout(() => {
+            waited += delay;
+            refreshUserPlaylists().then(askAgain, askAgain);
+        }, delay);
+    };
+
+    const waitForClient = () => {
+        if (innerTubeReady()) {
+            logWarm('client_ready', { afterMs: waited });
+            refreshUserPlaylists().then(askAgain, askAgain);
+            return;
+        }
+        waited += PLAYLIST_WARM_POLL_MS;
+        if (waited >= PLAYLIST_WARM_MAX_WAIT_MS) {
+            logWarm('client_never_appeared', { afterMs: waited });
+            return;
+        }
+        setTimeout(waitForClient, PLAYLIST_WARM_POLL_MS);
+    };
+
+    waitForClient();
+}
+
+// Named so it lands in the catch-all log category rather than the playlist
+// one: someone looking into "the menu was empty on the first press" has no
+// reason to have turned the playlist category on.
+function logWarm(what, detail) {
+    try { appendFileOnlyLog('longPress.playlistWarm.' + what, detail); } catch (_) { }
+}
+
 if (!window.__ttPlaylistPrefetchScheduled) {
     window.__ttPlaylistPrefetchScheduled = true;
     try {
-        setTimeout(() => {
-            try { if (configRead('longPressShowPlaylists')) refreshUserPlaylists(); } catch (_) { }
-        }, 8000);
+        if (configRead('longPressShowPlaylists')) warmPlaylists();
     } catch (_) { }
 }
