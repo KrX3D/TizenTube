@@ -1161,6 +1161,62 @@ server.on('error', (err) => {
     logServiceEvent('ERROR', `app.listen failed: ${err && err.stack || err}`);
 });
 
+// Whether names still resolve, watched from here rather than from the splash.
+//
+// The splash grew a label for this and it was the wrong place twice over: it
+// appeared on every start whether or not anything was wrong, and it can only
+// look at the moment the app happens to be starting. The failure that matters
+// arrives mid-playback — a buffer draining from a hundred seconds to nothing
+// while the page itself keeps running, which is what losing DNS looks like
+// from inside a player rotating segment hosts.
+//
+// This process is alive for all of it and has a resolver, so it can simply
+// ask. Nothing is shown anywhere: a line is logged when the answer CHANGES,
+// which is one line when DNS goes and one when it returns. Deliberately not
+// folded into the health line below — that one is silent while no requests
+// are arriving, which is exactly the state a DNS failure produces.
+const DNS_WATCH_MS = 60000;
+const DNS_WATCH_NAME = 'www.youtube.com';
+let _dnsOk = null;
+
+function watchDns() {
+    let lookup;
+    try {
+        lookup = require('dns').lookup;
+    } catch (e) {
+        return;
+    }
+    const check = () => {
+        const startedAt = Date.now();
+        try {
+            lookup(DNS_WATCH_NAME, (err, address) => {
+                const ok = !err && !!address;
+                const took = Date.now() - startedAt;
+                if (ok === _dnsOk) return;
+                // A first check that works is the baseline, not news: saying
+                // "resolves again" before it has ever failed reads as though
+                // something had just recovered.
+                const firstAndWell = _dnsOk === null && ok;
+                _dnsOk = ok;
+                if (firstAndWell) return;
+                if (ok) {
+                    logServiceEvent('INFO', `dns resolves again: ${DNS_WATCH_NAME} -> ${address} in ${took}ms`);
+                } else {
+                    logServiceEvent('ERROR', `dns cannot resolve ${DNS_WATCH_NAME} (${err && err.code || 'no address'}) after ${took}ms. `
+                        + 'A player rotating segment hosts starves on this: the buffer drains while the page keeps running, '
+                        + 'then every page fails and a restart lands on ERR_NAME_NOT_RESOLVED. A static DNS server on the TV '
+                        + 'or in the router is what stops it recurring.');
+                }
+            });
+        } catch (e) { }
+    };
+    check();
+    const timer = setInterval(check, DNS_WATCH_MS);
+    try { if (typeof timer.unref === 'function') timer.unref(); } catch (e) { }
+}
+
+watchDns();
+
 // One line a minute while there is traffic, so a capture taken before the
 // failure shows the trend that led to it — memory climbing, sockets never
 // coming back, requests still arriving or not. Silent while nothing is
