@@ -343,6 +343,8 @@
             try {
                 var el = document.getElementById('tt-status');
                 if (!el) return;
+                // null clears it, which is how a wait that ended removes its
+                // own line instead of leaving a number frozen on screen.
                 if (!key) { el.textContent = ''; return; }
                 var lang = String(navigator.language || 'en').toLowerCase().indexOf('de') === 0 ? 'de' : 'en';
                 el.textContent = STATUS_TEXT[lang][key].replace('{s}', String(seconds || 0));
@@ -383,29 +385,66 @@
             }
         }
 
+        // How long a wait has to last before it is worth putting on screen.
+        //
+        // Reported: a network label with "0s" appeared on every start and on
+        // every resume, and never showed anything but 0s. Both halves were one
+        // mistake of mine — the early return below went missing when the DNS
+        // probe was added, so every start entered this wait, announced itself,
+        // and then handed over a moment later with the counter never having
+        // been updated.
+        //
+        // Nothing is shown now until the wait has actually lasted, and while
+        // it lasts the number is ticked every second rather than only when an
+        // attempt happens to end.
+        var STATUS_AFTER_MS = 2000;
+        var statusTicker = null;
+
+        function stopStatusTicker() {
+            if (statusTicker === null) return;
+            clearInterval(statusTicker);
+            statusTicker = null;
+            setStatus(null);
+        }
+
         function waitForNetworkThen(next) {
             var started = Date.now();
             var attempts = 0;
+            var delay = 1000;
+            // Set once the address answers while the name does not.
+            var looksLikeDns = false;
+
+            // The ordinary case: the link is there, so there is nothing to
+            // wait for, nothing to say, and nothing to probe. Deliberately
+            // before everything else — a check that misbehaved on some
+            // firmware must not be able to slow down a normal start.
+            if (navigator.onLine !== false) {
+                next();
+                return;
+            }
+
             // On screen this is "Warte auf das Netzwerk…", which is what a
             // stalled start looks like to the user, so the trail says whether
             // it was waiting and for how long.
             breadcrumb('network-wait');
-            var delay = 1000;
-            // Set once the address answers while the name does not.
-            var looksLikeDns = false;
             sendLog('INFO', 'Started offline, waiting for the network before loading YouTube');
-            setStatus('waiting', 0);
+            statusTicker = setInterval(function () {
+                var waited = Date.now() - started;
+                if (waited < STATUS_AFTER_MS) return;
+                setStatus(looksLikeDns ? 'dns' : 'waiting', Math.round(waited / 1000));
+            }, 1000);
 
             function retry(reason) {
                 if (Date.now() - started >= NETWORK_WAIT_MAX_MS) {
                     // Past this point waiting further is not helping; proceed and
                     // let the existing paths do what they did before this check.
                     sendLog('ERROR', 'Network still not ready after ' + (Date.now() - started) + 'ms (' + reason + '), continuing anyway');
+                    clearInterval(statusTicker);
+                    statusTicker = null;
                     setStatus('continuing');
                     next();
                     return;
                 }
-                setStatus(looksLikeDns ? 'dns' : 'waiting', Math.round((Date.now() - started) / 1000));
                 if (attempts === 1 || attempts % 5 === 0) {
                     sendLog('INFO', 'Waiting for network (' + reason + ', attempt ' + attempts + ')');
                     // Asked once the name probe has failed, and only then: on a
@@ -457,6 +496,7 @@
                         clearTimeout(timer);
                         sendLog('INFO', 'Network ready after ' + (Date.now() - started) + 'ms, ' + attempts + ' check(s)');
                         breadcrumb('network-ready', Date.now() - started);
+                        stopStatusTicker();
                         next();
                     })
                     .catch(function (e) {
