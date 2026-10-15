@@ -16,6 +16,7 @@ import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
 import showHideWatchedExemptions from './ui/hideWatchedExemptionsSettings.js';
+import { markVideoWatched } from './features/markWatched.js';
 import {
     toggleChannelNameExemption,
     toggleChannelPageExemption,
@@ -391,6 +392,20 @@ function customAction(action, parameters) {
             showToast('TizenTube', nowExempt
                 ? t('toasts.hideWatchedChannelExempt', { name })
                 : t('toasts.hideWatchedChannelHidingAgain', { name }));
+            break;
+        }
+        case 'MARK_WATCHED': {
+            const videoId = parameters?.videoId;
+            if (!videoId) break;
+            // The toast waits for the answer rather than claiming success up
+            // front: whether this reached the account is exactly the thing
+            // worth knowing, since reaching it is the point of the feature.
+            showToast('TizenTube', t('toasts.markWatchedWorking'));
+            markVideoWatched(videoId).then((how) => {
+                if (how === 'account') showToast('TizenTube', t('toasts.markWatchedOnAccount'));
+                else if (how === 'local') showToast('TizenTube', t('toasts.markWatchedLocalOnly'));
+                else showToast('TizenTube', t('toasts.markWatchedFailed'));
+            }, () => showToast('TizenTube', t('toasts.markWatchedFailed')));
             break;
         }
         case 'SHOW_HIDE_WATCHED_EXEMPTIONS':

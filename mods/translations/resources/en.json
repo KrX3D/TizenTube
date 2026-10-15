@@ -542,7 +542,8 @@
         "showWatchedChannelEverywhere": "Show This Channel’s Watched Videos Everywhere",
         "hideWatchedChannelEverywhereAgain": "Hide This Channel’s Watched Videos Again",
         "playlistMenuSubtitle": "Playlist",
-        "channelMenuSubtitle": "Channel"
+        "channelMenuSubtitle": "Channel",
+        "markWatched": "Mark As Watched"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",
@@ -574,7 +575,11 @@
         "hideWatchedChannelPageHidingAgain": "Watched videos are hidden on this channel’s page again.",
         "hideWatchedChannelExempt": "“{{name}}” keeps its watched videos everywhere.",
         "hideWatchedChannelHidingAgain": "“{{name}}” has its watched videos hidden again.",
-        "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again."
+        "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again.",
+        "markWatchedWorking": "Telling YouTube this has been watched…",
+        "markWatchedOnAccount": "Marked as watched on your account — it will be watched on other devices too.",
+        "markWatchedLocalOnly": "Hidden on this TV only — YouTube did not accept it, so it is still unwatched elsewhere.",
+        "markWatchedFailed": "Could not mark this as watched."
     },
     "general": {
         "dislikes": "Dislikes",
