@@ -2,6 +2,7 @@ import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
 import { sendRemotePayload, isEnabled as isLogServerEnabled } from './logServer.js';
+import { sendSyslog, isSyslogEnabled } from './syslog.js';
 import { tvModelForDisplay } from './deviceName.js';
 
 const APP_VERSION_LABEL = 'TizenTube';
@@ -58,6 +59,9 @@ function initVisualConsole() {
   document.addEventListener('DOMContentLoaded', mount);
 
   let logs = [];
+  // Set while a console line is being handed to syslog, because syslog's own
+  // diagnostics are console lines.
+  let _inSyslogFromConsole = false;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   const original = {
     log: console.log,
@@ -107,7 +111,12 @@ function initVisualConsole() {
     // (which still control only the on-screen accumulation/rendering).
     const wantsVisual = !!configRead('enableDebugConsole') || !!configRead('enableDebugLogging');
     const wantsRemote = isLogServerEnabled();
-    if (!wantsVisual && !wantsRemote) return;
+    // Syslog counts as a reason to do this work, which it did not before.
+    // With only syslog switched on, this returned here and every console line
+    // was dropped — one of the two reasons syslog carried less than the log
+    // server did.
+    const wantsSyslog = isSyslogEnabled();
+    if (!wantsVisual && !wantsRemote && !wantsSyslog) return;
 
     const msg = args.map((a) => {
       if (typeof a === 'string') return a;
@@ -135,16 +144,41 @@ function initVisualConsole() {
       }
     }
 
-    if (wantsRemote) {
+    if (wantsRemote || wantsSyslog) {
       const ts = new Date().toISOString();
       const level = type === 'error' ? 'ERROR' : type === 'warn' ? 'WARN' : 'INFO';
-      sendRemotePayload(null, {
-        ts,
-        level,
-        context: 'TizenTube',
-        message: msg,
-        _formatted: `[${ts}] [${level}] [TizenTube] ${msg}`,
-      });
+      if (wantsRemote) {
+        sendRemotePayload(null, {
+          ts,
+          level,
+          context: 'TizenTube',
+          message: msg,
+          _formatted: `[${ts}] [${level}] [TizenTube] ${msg}`,
+        });
+      }
+      // The other reason the two outputs disagreed. appendFileOnlyLog sends to
+      // syslog itself, so everything written through it arrived — but anything
+      // written through console.* only ever reached the log server from here,
+      // and that is a large share of it: every appendVisibleLog line (which
+      // deliberately does not write its own file copy once the console is
+      // captured), every plain console.warn in this fork, and everything
+      // YouTube's own code logs.
+      //
+      // Labelled 'console' so the MSGID says where a line came from, since
+      // these have no label of their own the way appendFileOnlyLog's do.
+      if (wantsSyslog && !_inSyslogFromConsole) {
+        // syslog.js reports its own delivery path through console.info once
+        // per page load, and warns through console.warn when no host is set.
+        // Both land back here, so the guard makes the recursion impossible
+        // rather than relying on their one-shot flags to stop it.
+        _inSyslogFromConsole = true;
+        try {
+          sendSyslog({ ts, level, context: 'TizenTube', label: 'console', message: msg });
+        } catch (_) {
+        } finally {
+          _inSyslogFromConsole = false;
+        }
+      }
     }
   };
 
