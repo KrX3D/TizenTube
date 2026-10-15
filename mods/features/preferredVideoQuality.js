@@ -78,7 +78,24 @@ class PreferredQualityHandler {
             const quality = this.#determineQuality(preferredQuality);
 
             if (quality) {
-              this.#player.setPlaybackQualityRange(quality, quality)
+              // A range, not a single value. Passing the same quality as both
+              // ends pins the player to exactly one resolution and takes away
+              // its ability to adapt, so a connection that dips has nowhere to
+              // go: instead of dropping to 720p it keeps asking for the pinned
+              // one and starves.
+              //
+              // Captured on a 5.5 TV: four stalls in the first 100 seconds of a
+              // video, the last lasting 40.7s with the buffer at 0.1s and
+              // readyState 2, no dropped frames, and our own parsing costing
+              // 21ms across the whole stall. Not one player.quality line in any
+              // session reported a second resolution — the player never
+              // adapted, in a session where adapting is exactly what it needed
+              // to do.
+              //
+              // 'tiny' as the floor makes the setting a ceiling, which is what
+              // a "preferred quality" asks for: never go above this, and go
+              // below it rather than stop.
+              this.#player.setPlaybackQualityRange('tiny', quality)
             }
         } catch (e) {
             console.warn('[PreferredQuality] Failed to apply quality:', e);
