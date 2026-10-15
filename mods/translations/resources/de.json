@@ -275,6 +275,16 @@
                                 "history": "Bibliothek → Verlauf",
                                 "more": "Mehr",
                                 "watch": "Video anschauen"
+                            },
+                            "exemptions": {
+                                "title": "Ausnahmen",
+                                "subtitle": "Playlists und Kanäle, die ihre gesehenen Videos behalten",
+                                "empty": "Keine Ausnahmen — im Langdruck-Menü eines Videos festlegen",
+                                "kinds": {
+                                    "playlist": "Playlist — auswählen, um hier wieder auszublenden",
+                                    "channelPage": "Kanalseite — auswählen, um hier wieder auszublenden",
+                                    "channelName": "Kanal, überall — auswählen, um wieder auszublenden"
+                                }
                             }
                         }
                     },
@@ -524,7 +534,13 @@
         "share": "Teilen (QR-Code)",
         "playNext": "Als Nächstes abspielen",
         "removeFromPlaylist": "Aus dieser Playlist entfernen",
-        "hideChannel": "Diesen Kanal ausblenden"
+        "hideChannel": "Diesen Kanal ausblenden",
+        "showWatchedPlaylist": "Gesehene Videos in dieser Playlist anzeigen",
+        "hideWatchedPlaylistAgain": "Gesehene Videos in dieser Playlist wieder ausblenden",
+        "showWatchedChannelPage": "Gesehene Videos in diesem Kanal anzeigen",
+        "hideWatchedChannelPageAgain": "Gesehene Videos in diesem Kanal wieder ausblenden",
+        "showWatchedChannelEverywhere": "Gesehene Videos dieses Kanals überall anzeigen",
+        "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals wieder ausblenden"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
@@ -549,7 +565,14 @@
         "channelShownAgain": "„{{name}}“ wird wieder angezeigt.",
         "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört.",
         "savedToPlaylist": "In „{{name}}“ gespeichert.",
-        "saveToPlaylistFailed": "Konnte nicht in „{{name}}“ gespeichert werden."
+        "saveToPlaylistFailed": "Konnte nicht in „{{name}}“ gespeichert werden.",
+        "hideWatchedPlaylistExempt": "Gesehene Videos bleiben in dieser Playlist sichtbar.",
+        "hideWatchedPlaylistHidingAgain": "Gesehene Videos werden in dieser Playlist wieder ausgeblendet.",
+        "hideWatchedChannelPageExempt": "Gesehene Videos bleiben auf der Seite dieses Kanals sichtbar.",
+        "hideWatchedChannelPageHidingAgain": "Gesehene Videos werden auf der Seite dieses Kanals wieder ausgeblendet.",
+        "hideWatchedChannelExempt": "„{{name}}“ behält gesehene Videos überall.",
+        "hideWatchedChannelHidingAgain": "Gesehene Videos von „{{name}}“ werden wieder ausgeblendet.",
+        "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus."
     },
     "general": {
         "dislikes": "Dislikes",

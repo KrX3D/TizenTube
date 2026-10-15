@@ -5,6 +5,14 @@ import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { channelNameOf } from '../features/channelHider.js';
 import { detectCurrentPage } from '../features/hideWatched.js';
 import { currentPlaylistEditable } from '../features/playlistOwnership.js';
+import {
+    currentChannelId,
+    currentPlaylistId,
+    isChannelNameExempt,
+    isChannelPageExempt,
+    isPlaylistExempt,
+    normalisePlaylistId,
+} from '../features/hideWatchedExemptions.js';
 import { t } from 'i18next';
 
 /**
@@ -26,7 +34,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel'];
+export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -43,6 +51,13 @@ export const ENTRY_LABELS = {
     hideChannel: 'videoMenu.hideChannel',
     notInterested: 'videoMenu.notInterested',
     dontRecommendChannel: 'videoMenu.dontRecommendChannel',
+    // The three exemption toggles. Their labels in the menu flip to say what
+    // the press will do; these are the fixed names the settings screen lists
+    // them under, which cannot flip or the list would reword itself depending
+    // on which playlist you last looked at.
+    showWatchedPlaylist: 'videoMenu.showWatchedPlaylist',
+    showWatchedChannelPage: 'videoMenu.showWatchedChannelPage',
+    showWatchedChannelEverywhere: 'videoMenu.showWatchedChannelEverywhere',
 };
 
 // A long press menu is a list on a TV screen; past a point it is faster to open
@@ -232,6 +247,87 @@ function channelEntry(data) {
     }))];
 }
 
+/**
+ * The exemption toggles: this playlist, this channel's page, this channel
+ * everywhere.
+ *
+ * All three are pointless with hiding switched off, so none appear then. The
+ * first two need to know which playlist or channel is being looked at, which
+ * only its own page says, so they appear only there; the third reads the
+ * channel off the tile like "Hide this channel" does and so can appear
+ * anywhere a tile names its channel.
+ *
+ * Each label says what pressing it will do rather than what the state is — the
+ * menu has no room for a checkbox, and "Show watched videos" next to a tick
+ * would be ambiguous about which way round it reads.
+ */
+function hideWatchedEntries(data) {
+    if (!configRead('enableHideWatchedVideos')) return [];
+    const entries = [];
+    try {
+        const page = detectCurrentPage();
+
+        if (page === 'playlist') {
+            // The tile's own playlist first: it is the playlist the video is
+            // actually in, and on a page showing one playlist the two agree.
+            // The page is the fallback for a tile that carries no playlist.
+            const playlistId = normalisePlaylistId(data.watchEndpointData?.playlistId) || currentPlaylistId();
+            if (playlistId) {
+                const exempt = isPlaylistExempt(playlistId);
+                entries.push(tagMenuItem('showWatchedPlaylist', MenuServiceItemRenderer(
+                    exempt ? t('videoMenu.hideWatchedPlaylistAgain') : t('videoMenu.showWatchedPlaylist'),
+                    {
+                        clickTrackingParams: null,
+                        playlistEditEndpoint: {
+                            customAction: {
+                                action: 'TOGGLE_HIDE_WATCHED_PLAYLIST',
+                                parameters: { playlistId }
+                            }
+                        }
+                    }
+                )));
+            }
+        }
+
+        if (page === 'channel') {
+            const browseId = currentChannelId();
+            if (browseId) {
+                const exempt = isChannelPageExempt(browseId);
+                entries.push(tagMenuItem('showWatchedChannelPage', MenuServiceItemRenderer(
+                    exempt ? t('videoMenu.hideWatchedChannelPageAgain') : t('videoMenu.showWatchedChannelPage'),
+                    {
+                        clickTrackingParams: null,
+                        playlistEditEndpoint: {
+                            customAction: {
+                                action: 'TOGGLE_HIDE_WATCHED_CHANNEL_PAGE',
+                                parameters: { browseId, title: channelNameOf(data.item) }
+                            }
+                        }
+                    }
+                )));
+            }
+        }
+
+        const name = channelNameOf(data.item);
+        if (name) {
+            const exempt = isChannelNameExempt(name);
+            entries.push(tagMenuItem('showWatchedChannelEverywhere', MenuServiceItemRenderer(
+                exempt ? t('videoMenu.hideWatchedChannelEverywhereAgain') : t('videoMenu.showWatchedChannelEverywhere'),
+                {
+                    clickTrackingParams: null,
+                    playlistEditEndpoint: {
+                        customAction: {
+                            action: 'TOGGLE_HIDE_WATCHED_CHANNEL',
+                            parameters: { name }
+                        }
+                    }
+                }
+            )));
+        }
+    } catch (_) { }
+    return entries;
+}
+
 /** Every entry this fork adds, before the user's order and hiding are applied. */
 function baseEntries(data) {
     return [
@@ -267,6 +363,7 @@ function baseEntries(data) {
             playlistEditEndpoint: { customAction: { action: 'HIDE_CHANNEL', parameters: { name: channelNameOf(data.item) } } }
         })),
         ...channelEntry(data),
+        ...hideWatchedEntries(data),
     ];
 }
 

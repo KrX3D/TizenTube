@@ -69,6 +69,12 @@ const defaultConfig = {
   enablePreviews: false,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,
+  // Exceptions to hiding watched videos — see hideWatchedExemptions.js. Each
+  // holds {id, title} entries; the title is only ever for the settings screen
+  // to have something readable to show.
+  hideWatchedExemptPlaylists: [],
+  hideWatchedExemptChannelPages: [],
+  hideWatchedExemptChannelNames: [],
   hideWatchedVideosPages: [
       'home',
       'search',

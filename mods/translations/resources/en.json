@@ -275,6 +275,16 @@
                                 "history": "Library → History",
                                 "more": "More",
                                 "watch": "Watch"
+                            },
+                            "exemptions": {
+                                "title": "Exceptions",
+                                "subtitle": "Playlists and channels that keep their watched videos",
+                                "empty": "No exceptions — set one from a video’s long press menu",
+                                "kinds": {
+                                    "playlist": "Playlist — select to hide watched videos here again",
+                                    "channelPage": "Channel page — select to hide watched videos here again",
+                                    "channelName": "Channel, everywhere — select to hide watched videos again"
+                                }
                             }
                         }
                     },
@@ -524,7 +534,13 @@
         "share": "Share (QR Code)",
         "playNext": "Play Next",
         "removeFromPlaylist": "Remove From This Playlist",
-        "hideChannel": "Hide This Channel"
+        "hideChannel": "Hide This Channel",
+        "showWatchedPlaylist": "Show Watched Videos In This Playlist",
+        "hideWatchedPlaylistAgain": "Hide Watched Videos In This Playlist Again",
+        "showWatchedChannelPage": "Show Watched Videos On This Channel",
+        "hideWatchedChannelPageAgain": "Hide Watched Videos On This Channel Again",
+        "showWatchedChannelEverywhere": "Show This Channel’s Watched Videos Everywhere",
+        "hideWatchedChannelEverywhereAgain": "Hide This Channel’s Watched Videos Again"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",
@@ -549,7 +565,14 @@
         "channelShownAgain": "“{{name}}” is shown again.",
         "channelHideFailed": "This tile does not say which channel it belongs to.",
         "savedToPlaylist": "Saved to “{{name}}”.",
-        "saveToPlaylistFailed": "Could not save to “{{name}}”."
+        "saveToPlaylistFailed": "Could not save to “{{name}}”.",
+        "hideWatchedPlaylistExempt": "Watched videos stay visible in this playlist.",
+        "hideWatchedPlaylistHidingAgain": "Watched videos are hidden in this playlist again.",
+        "hideWatchedChannelPageExempt": "Watched videos stay visible on this channel’s page.",
+        "hideWatchedChannelPageHidingAgain": "Watched videos are hidden on this channel’s page again.",
+        "hideWatchedChannelExempt": "“{{name}}” keeps its watched videos everywhere.",
+        "hideWatchedChannelHidingAgain": "“{{name}}” has its watched videos hidden again.",
+        "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again."
     },
     "general": {
         "dislikes": "Dislikes",

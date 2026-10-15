@@ -947,6 +947,16 @@ export default function modernUI(update, parameters) {
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.more'), icon: 'TAB_MORE', value: 'more' },
                                 { name: t('settings.options.uiSettings.options.hideWatchedVideos.options.pages.watch'), icon: 'PLAY_ARROW', value: 'watch' }
                             ]
+                        },
+                        {
+                            name: t('settings.options.uiSettings.options.hideWatchedVideos.options.exemptions.title'),
+                            icon: 'STAR',
+                            value: null,
+                            action: {
+                                customAction: {
+                                    action: 'SHOW_HIDE_WATCHED_EXEMPTIONS'
+                                }
+                            }
                         }
                     ]
                 },

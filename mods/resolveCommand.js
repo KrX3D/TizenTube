@@ -15,6 +15,12 @@ import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
+import showHideWatchedExemptions from './ui/hideWatchedExemptionsSettings.js';
+import {
+    toggleChannelNameExemption,
+    toggleChannelPageExemption,
+    togglePlaylistExemption,
+} from './features/hideWatchedExemptions.js';
 import { lockupVideoId } from './features/lockupViewModel.js';
 import { appendFileOnlyLog } from './features/hideWatched.js';
 import { t } from 'i18next';
@@ -352,6 +358,46 @@ function customAction(action, parameters) {
         }
         case 'SHOW_HIDDEN_CHANNELS':
             showHiddenChannels('hiddenChannels');
+            break;
+        // The three exemptions from hiding watched videos. Each toggles, and
+        // the toast has to say which way it went, so the toggle reports back
+        // whether the thing is now exempt rather than the caller assuming.
+        case 'TOGGLE_HIDE_WATCHED_PLAYLIST': {
+            const nowExempt = togglePlaylistExemption(parameters?.playlistId, parameters?.title);
+            if (nowExempt === null) break;
+            showToast('TizenTube', nowExempt
+                ? t('toasts.hideWatchedPlaylistExempt')
+                : t('toasts.hideWatchedPlaylistHidingAgain'));
+            break;
+        }
+        case 'TOGGLE_HIDE_WATCHED_CHANNEL_PAGE': {
+            const nowExempt = toggleChannelPageExemption(parameters?.browseId, parameters?.title);
+            if (nowExempt === null) break;
+            showToast('TizenTube', nowExempt
+                ? t('toasts.hideWatchedChannelPageExempt')
+                : t('toasts.hideWatchedChannelPageHidingAgain'));
+            break;
+        }
+        case 'TOGGLE_HIDE_WATCHED_CHANNEL': {
+            const name = String(parameters?.name || '').trim();
+            if (!name) {
+                // The same dead end "Hide this channel" guards against: nothing
+                // on the tile said which channel it belongs to.
+                showToast('TizenTube', t('toasts.channelHideFailed'));
+                break;
+            }
+            const nowExempt = toggleChannelNameExemption(name);
+            if (nowExempt === null) break;
+            showToast('TizenTube', nowExempt
+                ? t('toasts.hideWatchedChannelExempt', { name })
+                : t('toasts.hideWatchedChannelHidingAgain', { name }));
+            break;
+        }
+        case 'SHOW_HIDE_WATCHED_EXEMPTIONS':
+            showHideWatchedExemptions('hideWatchedExemptions');
+            break;
+        case 'REMOVE_HIDE_WATCHED_EXEMPTION':
+            showHideWatchedExemptions('REMOVE_HIDE_WATCHED_EXEMPTION', parameters);
             break;
         case 'UNHIDE_CHANNEL':
             showHiddenChannels('UNHIDE_CHANNEL', parameters);
