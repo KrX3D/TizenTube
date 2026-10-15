@@ -1,0 +1,136 @@
+name: Sync from GitHub
+
+# Brings whatever changed on github.com/KrX3D/TizenTube into this mirror as a
+# single pull request, and leaves that pull request to be reviewed and merged
+# rather than writing to main itself.
+#
+# One pull request, not one per run: the sync branch is reused and force-moved
+# to GitHub's current tip, and a run that finds the pull request already open
+# updates the branch and says so instead of opening another.
+#
+# Lives in .gitea/workflows rather than .github/workflows deliberately. The
+# second is synced from GitHub and holds that repository's own workflows —
+# including the one that publishes to npm, which must never run here. See
+# runs-on below for how that is kept from happening.
+#
+# It is nonetheless committed on GitHub as well, where it does nothing: GitHub
+# Actions reads .github/workflows and only that, so this file is never parsed
+# there and never appears in the Actions tab. It is here so that the mirror
+# holds no commit GitHub lacks. When it lived only on the mirror, the mirror's
+# main was permanently one commit ahead, so every sync was a real merge and
+# left two more merge commits behind it. With the file on both sides the two
+# branches are identical and each sync fast-forwards.
+
+on:
+  schedule:
+    # Hourly, offset off the hour so it does not land with everything else.
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    # Deliberately not ubuntu-latest. This repository carries the GitHub
+    # workflows too, and they all ask for ubuntu-latest — so a runner
+    # registered with this label alone can run this workflow and none of
+    # those. The Actions tab can also disable them one by one, which is worth
+    # doing as well; this is the part that holds without anyone remembering.
+    runs-on: gitea-sync
+    steps:
+      - name: Bring GitHub's changes onto the sync branch and open one pull request
+        env:
+          # A personal access token with write access to this repository.
+          # Falls back to the token Gitea Actions provides, which is enough to
+          # push but may not be allowed to open a pull request depending on the
+          # instance's settings — hence the preference.
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+          AUTO_TOKEN: ${{ secrets.GITEA_TOKEN }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          SOURCE: https://github.com/KrX3D/TizenTube.git
+          SYNC_BRANCH: github-sync
+          BASE_BRANCH: main
+        run: |
+          set -eu
+
+          TOKEN="${SYNC_TOKEN:-${AUTO_TOKEN:-}}"
+          if [ -z "$TOKEN" ]; then
+            echo "No token available. Add a repository secret named SYNC_TOKEN"
+            echo "holding a personal access token with write access."
+            exit 1
+          fi
+
+          # The scheme is kept rather than assumed: this instance is plain http
+          # today and may not be tomorrow.
+          case "$SERVER_URL" in
+            https://*) SCHEME=https; HOSTPART="${SERVER_URL#https://}" ;;
+            *)         SCHEME=http;  HOSTPART="${SERVER_URL#http://}"  ;;
+          esac
+          HOSTPART="${HOSTPART%/}"
+          PUSH_URL="$SCHEME://$TOKEN@$HOSTPART/$REPO.git"
+          API="$SCHEME://$HOSTPART/api/v1/repos/$REPO"
+
+          # Only the base branch: this mirror carries 154 branches and cloning
+          # all of them to compare one would cost minutes per run.
+          git clone --quiet --single-branch --branch "$BASE_BRANCH" "$PUSH_URL" work
+          cd work
+          git config user.name "Gitea Actions"
+          git config user.email "actions@local"
+
+          git remote add github "$SOURCE"
+          git fetch --quiet --tags github "$BASE_BRANCH"
+          TIP=$(git rev-parse "github/$BASE_BRANCH")
+          echo "GitHub $BASE_BRANCH is at $TIP"
+
+          # Already contained: nothing changed since the last merge, so there is
+          # nothing to open a pull request about.
+          if git merge-base --is-ancestor "$TIP" "origin/$BASE_BRANCH"; then
+            echo "This mirror already contains it. Nothing to do."
+            exit 0
+          fi
+
+          AHEAD=$(git rev-list --count "origin/$BASE_BRANCH..$TIP")
+          echo "$AHEAD commit(s) to bring over"
+
+          # Force, because the branch is a pointer at GitHub's tip and nothing
+          # else: anything that was on it has either been merged or superseded.
+          git push --quiet --force "$PUSH_URL" "$TIP:refs/heads/$SYNC_BRANCH"
+          # Tags come along for free and are worth having in a mirror.
+          git push --quiet --tags "$PUSH_URL" || echo "(tags unchanged or rejected, continuing)"
+
+          # One pull request: if one is already open from this branch, the push
+          # above has just updated it.
+          OPEN=$(curl -sf -H "Authorization: token $TOKEN" \
+            "$API/pulls?state=open&limit=50" \
+            | tr '}' '\n' | grep -c "\"ref\":\"$SYNC_BRANCH\"" || true)
+          if [ "${OPEN:-0}" -gt 0 ]; then
+            echo "A pull request from $SYNC_BRANCH is already open; its branch now points at $TIP."
+            exit 0
+          fi
+
+          # The commit list goes in the body, escaped for JSON and joined with
+          # literal newline escapes so no multi-line quoting is needed.
+          LIST=$(git log --oneline --no-decorate "origin/$BASE_BRANCH..$TIP" \
+            | head -40 \
+            | sed 's/\\/\\\\/g; s/"/\\"/g' \
+            | sed ':a;N;$!ba;s/\n/\\n/g')
+          TITLE="Sync $AHEAD commit(s) from GitHub"
+          BODY="Brings $AHEAD commit(s) from github.com/KrX3D/TizenTube up to \`$TIP\`.\\n\\nThis mirror is a backup; merging keeps it current without touching GitHub.\\n\\n$LIST"
+
+          printf '{"head":"%s","base":"%s","title":"%s","body":"%s"}' \
+            "$SYNC_BRANCH" "$BASE_BRANCH" "$TITLE" "$BODY" > /tmp/pr.json
+
+          HTTP=$(curl -s -o /tmp/pr-out.json -w '%{http_code}' \
+            -X POST -H "Authorization: token $TOKEN" -H "Content-Type: application/json" \
+            "$API/pulls" --data @/tmp/pr.json)
+          echo "create pull request -> HTTP $HTTP"
+          if [ "$HTTP" = "409" ]; then
+            echo "Gitea says such a pull request already exists; the branch is updated."
+            exit 0
+          fi
+          if [ "$HTTP" != "201" ]; then
+            head -c 400 /tmp/pr-out.json
+            echo
+            echo "The branch $SYNC_BRANCH is updated regardless; the pull request can be opened by hand."
+            exit 1
+          fi
+          echo "Opened a pull request for $AHEAD commit(s)."
