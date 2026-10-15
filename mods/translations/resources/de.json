@@ -542,7 +542,8 @@
         "showWatchedChannelEverywhere": "Gesehene Videos dieses Kanals anderswo anzeigen",
         "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals anderswo wieder ausblenden",
         "playlistMenuSubtitle": "Playlist",
-        "channelMenuSubtitle": "Kanal"
+        "channelMenuSubtitle": "Kanal",
+        "markWatched": "Als gesehen markieren"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
@@ -574,7 +575,11 @@
         "hideWatchedChannelPageHidingAgain": "Gesehene Videos werden auf der Seite dieses Kanals wieder ausgeblendet.",
         "hideWatchedChannelExempt": "„{{name}}“ behält gesehene Videos außerhalb der eigenen Kanalseite.",
         "hideWatchedChannelHidingAgain": "Gesehene Videos von „{{name}}“ werden außerhalb der eigenen Kanalseite wieder ausgeblendet.",
-        "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus."
+        "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus.",
+        "markWatchedWorking": "YouTube wird mitgeteilt, dass dies gesehen wurde…",
+        "markWatchedOnAccount": "Im Konto als gesehen markiert — gilt auch auf anderen Geräten.",
+        "markWatchedLocalOnly": "Nur auf diesem TV ausgeblendet — YouTube hat es nicht übernommen, anderswo gilt es weiter als ungesehen.",
+        "markWatchedFailed": "Konnte nicht als gesehen markiert werden."
     },
     "general": {
         "dislikes": "Dislikes",
