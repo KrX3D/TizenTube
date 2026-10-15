@@ -118,6 +118,10 @@ function noteSyslogTarget(host, port, frame) {
     const changed = !_syslogTarget || JSON.stringify(next) !== JSON.stringify(_syslogTarget);
     _syslogTarget = next;
     if (changed) persistReceiver();
+    // This frame came from the page, so it carries the name this process could
+    // not work out for itself. Anything held back goes now, into the TV's own
+    // file rather than one named after nothing.
+    if (haveRealName()) flushServiceLogBuffer();
 }
 
 /**
@@ -444,10 +448,17 @@ function readPersistedReceiver(file) {
                     host: sysHost,
                     port: Number(sys.port),
                     facility: (isFinite(facility) && facility >= 0 && facility <= 23) ? facility : SYSLOG_DEFAULT_FACILITY,
-                    // Through the same filter the frames use, since these two
-                    // go into a frame header verbatim.
-                    hostname: headerField(sys.hostname, 255),
-                    appName: headerField(sys.appName, 48)
+                    // namedOr, not headerField, and that is the whole of the
+                    // syslog--.log bug. noteSyslogTarget has always used
+                    // namedOr, which falls back to a name rather than keeping
+                    // an empty one; this path used the bare filter, so a store
+                    // holding no name restored no name, every frame went out
+                    // with - for HOSTNAME and APP-NAME, and the receiver filed
+                    // them under no name at all. Worse, persistReceiver then
+                    // wrote that empty name back, so once in that state it
+                    // stayed there across restarts.
+                    hostname: namedOr(sys.hostname, 255),
+                    appName: namedOr(sys.appName, 48)
                 };
             }
         }
@@ -687,27 +698,98 @@ let _inServiceSyslog = false;
  * app-name — so both streams read as one source on the receiver rather than
  * two. Only the MSGID differs, because the context does.
  */
-function serviceSyslogFrame(level, message, target) {
+function serviceSyslogFrame(level, message, target, when) {
     const severity = SYSLOG_SEVERITY[level] === undefined ? SYSLOG_SEVERITY.INFO : SYSLOG_SEVERITY[level];
     const priority = (target.facility * 8) + severity;
     // A newline would end the frame early and everything after it would be
     // read as a separate message, so the stack traces this logs are flattened.
     const text = String(message).replace(/[\r\n]+/g, ' ');
-    return '<' + priority + '>1 ' + new Date().toISOString() + ' '
+    // `when` is set for a line that was held back waiting for the TV's name,
+    // so it reports when it was written rather than when it was finally sent.
+    return '<' + priority + '>1 ' + (when || new Date().toISOString()) + ' '
         + headerField(target.hostname, 255) + ' ' + headerField(target.appName, 48)
         + ' - StandaloneService - ' + text;
 }
 
-function sendServiceSyslog(level, message) {
+/**
+ * The name both sides fall back to when they cannot work out the TV's.
+ *
+ * Knowing a name is generic is what makes the buffer below possible: lines
+ * written before the page has said which TV this is would otherwise be filed
+ * under this instead of with the rest of the TV's lines.
+ */
+const GENERIC_NAME = 'TizenTube';
+
+// The service starts well before the page, and the TV's real name only exists
+// in the page — it comes from the user agent and the Tizen APIs, neither of
+// which this process has. So the early lines wait for it.
+//
+// Reported: closing the app, reinstalling and opening it again produced a
+// syslog--.log holding the whole of one startup — the process line, the dns
+// fallback lines, express, the listen — before anything appeared in the TV's
+// own file. Those are exactly the lines worth having when a launch goes wrong,
+// and they were in the one file nobody looks at.
+const SERVICE_LOG_BUFFER_MAX = 300;
+const SERVICE_NAME_WAIT_MS = 90000;
+let _serviceLogBuffer = [];
+let _serviceNameTimer = null;
+
+function haveRealName() {
+    return !!(_syslogTarget && _syslogTarget.hostname && _syslogTarget.hostname !== GENERIC_NAME);
+}
+
+function emitServiceSyslog(level, message, when) {
     if (!_syslogTarget || _inServiceSyslog) return;
     _inServiceSyslog = true;
     try {
-        relaySyslog(serviceSyslogFrame(level, message, _syslogTarget), _syslogTarget.host, _syslogTarget.port);
+        relaySyslog(serviceSyslogFrame(level, message, _syslogTarget, when), _syslogTarget.host, _syslogTarget.port);
     } catch (e) {
         // Nowhere to report this that would not come straight back here.
     } finally {
         _inServiceSyslog = false;
     }
+}
+
+/**
+ * Send everything held back, under whatever name is known by now.
+ *
+ * Each line keeps the timestamp it was written at rather than the time it was
+ * finally sent, so the startup sequence reads in the order it happened even
+ * though it arrives in one burst a few seconds later.
+ */
+function flushServiceLogBuffer() {
+    if (_serviceNameTimer) {
+        try { clearTimeout(_serviceNameTimer); } catch (e) { }
+        _serviceNameTimer = null;
+    }
+    if (!_serviceLogBuffer.length) return;
+    const held = _serviceLogBuffer;
+    _serviceLogBuffer = [];
+    for (let i = 0; i < held.length; i++) {
+        emitServiceSyslog(held[i].level, held[i].message, held[i].when);
+    }
+}
+
+function sendServiceSyslog(level, message) {
+    if (!_syslogTarget || _inServiceSyslog) return;
+
+    if (!haveRealName()) {
+        // Dropping the oldest rather than the newest: a launch that fails has
+        // its reason near the end, and the cap is far above a normal startup.
+        if (_serviceLogBuffer.length >= SERVICE_LOG_BUFFER_MAX) _serviceLogBuffer.shift();
+        _serviceLogBuffer.push({ level: level, message: message, when: new Date().toISOString() });
+        if (!_serviceNameTimer) {
+            // The page may never tell us — syslog can be off in its settings,
+            // or it may not get far enough to send anything. Held lines are
+            // worth more under the generic name than not at all.
+            _serviceNameTimer = setTimeout(flushServiceLogBuffer, SERVICE_NAME_WAIT_MS);
+            try { if (typeof _serviceNameTimer.unref === 'function') _serviceNameTimer.unref(); } catch (e) { }
+        }
+        return;
+    }
+
+    flushServiceLogBuffer();
+    emitServiceSyslog(level, message, null);
 }
 
 function logServiceEvent(level, message) {
