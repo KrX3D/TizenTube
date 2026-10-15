@@ -283,7 +283,7 @@
                                 "kinds": {
                                     "playlist": "Playlist — auswählen, um hier wieder auszublenden",
                                     "channelPage": "Kanalseite — auswählen, um hier wieder auszublenden",
-                                    "channelName": "Kanal, überall — auswählen, um wieder auszublenden"
+                                    "channelName": "Kanal, außerhalb der eigenen Seite — auswählen, um wieder auszublenden"
                                 }
                             }
                         }
@@ -539,8 +539,8 @@
         "hideWatchedPlaylistAgain": "Gesehene Videos in dieser Playlist wieder ausblenden",
         "showWatchedChannelPage": "Gesehene Videos in diesem Kanal anzeigen",
         "hideWatchedChannelPageAgain": "Gesehene Videos in diesem Kanal wieder ausblenden",
-        "showWatchedChannelEverywhere": "Gesehene Videos dieses Kanals überall anzeigen",
-        "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals wieder ausblenden",
+        "showWatchedChannelEverywhere": "Gesehene Videos dieses Kanals anderswo anzeigen",
+        "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals anderswo wieder ausblenden",
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Kanal"
     },
@@ -572,8 +572,8 @@
         "hideWatchedPlaylistHidingAgain": "Gesehene Videos werden in dieser Playlist wieder ausgeblendet.",
         "hideWatchedChannelPageExempt": "Gesehene Videos bleiben auf der Seite dieses Kanals sichtbar.",
         "hideWatchedChannelPageHidingAgain": "Gesehene Videos werden auf der Seite dieses Kanals wieder ausgeblendet.",
-        "hideWatchedChannelExempt": "„{{name}}“ behält gesehene Videos überall.",
-        "hideWatchedChannelHidingAgain": "Gesehene Videos von „{{name}}“ werden wieder ausgeblendet.",
+        "hideWatchedChannelExempt": "„{{name}}“ behält gesehene Videos außerhalb der eigenen Kanalseite.",
+        "hideWatchedChannelHidingAgain": "Gesehene Videos von „{{name}}“ werden außerhalb der eigenen Kanalseite wieder ausgeblendet.",
         "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus."
     },
     "general": {

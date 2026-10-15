@@ -267,9 +267,20 @@ function pageExemption(pageName) {
  *
  * This is the by-name list, and it is checked per tile precisely because it has
  * to work on pages that mix channels together.
+ *
+ * It deliberately stops at the channel's own page, which is not where it
+ * started: it used to apply there too, so setting it made the channel page
+ * exemption redundant. Asked for the other way round, and it is the better
+ * way round — the two lists now answer two separate questions and neither
+ * overrules the other. The channel's own page is governed by
+ * hideWatchedExemptChannelPages and nothing else, so showing a channel's
+ * watched videos truly everywhere means setting both. One consequence worth
+ * knowing: with only this one set, a channel's videos reappear on home and in
+ * search but are still hidden when you open the channel.
  */
-function itemExemption(item) {
+function itemExemption(item, pageName) {
     try {
+        if (pageName === 'channel') return null;
         // Cheapest possible early out: with no names on the list this runs for
         // every tile of every response and must cost nothing.
         if (!readList(CHANNEL_NAMES).length) return null;

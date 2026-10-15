@@ -1774,10 +1774,26 @@ function addLongPress(items) {
           const browseMenu = browseTileLongPressData(browseInfo);
           if (browseMenu) {
             item.tileRenderer.onLongPressCommand = browseMenu;
+            // Reported: these menus attach — 110 playlist tiles in one
+            // capture — and long pressing a playlist in the library still
+            // shows nothing, while the same menu on a channel tile and the
+            // video menu on a video both work. So the attachment is not the
+            // question any more and the tile is. The style is the first
+            // suspect, since the video path only ever ran for
+            // TILE_STYLE_YTLR_DEFAULT and VERTICAL_LIST, and a capture has
+            // shown library tiles in SQUARE and ROUND as well — a style whose
+            // component never binds the gesture would look exactly like this.
+            // Logged with the page and whether the thumbnail came through,
+            // because an empty thumbnail is the other way the dialog could
+            // fail to draw.
             appendFileOnlyLog('addLongPress.browseTile', {
               kind: browseInfo.kind,
               id: browseInfo.id,
               entries: browseMenu.showMenuCommand.menu.menuRenderer.items.length,
+              style: item.tileRenderer.style || null,
+              page: detectCurrentPage(),
+              thumbs: (browseInfo.thumbnails || []).length,
+              select: Object.keys(item.tileRenderer.onSelectCommand || {}),
             });
           }
           continue;

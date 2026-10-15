@@ -283,7 +283,7 @@
                                 "kinds": {
                                     "playlist": "Playlist — select to hide watched videos here again",
                                     "channelPage": "Channel page — select to hide watched videos here again",
-                                    "channelName": "Channel, everywhere — select to hide watched videos again"
+                                    "channelName": "Channel, away from its own page — select to hide watched videos again"
                                 }
                             }
                         }
@@ -539,8 +539,8 @@
         "hideWatchedPlaylistAgain": "Hide Watched Videos In This Playlist Again",
         "showWatchedChannelPage": "Show Watched Videos On This Channel",
         "hideWatchedChannelPageAgain": "Hide Watched Videos On This Channel Again",
-        "showWatchedChannelEverywhere": "Show This Channel’s Watched Videos Everywhere",
-        "hideWatchedChannelEverywhereAgain": "Hide This Channel’s Watched Videos Again",
+        "showWatchedChannelEverywhere": "Show This Channel’s Watched Videos Elsewhere",
+        "hideWatchedChannelEverywhereAgain": "Hide This Channel’s Watched Videos Elsewhere Again",
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Channel"
     },
@@ -572,8 +572,8 @@
         "hideWatchedPlaylistHidingAgain": "Watched videos are hidden in this playlist again.",
         "hideWatchedChannelPageExempt": "Watched videos stay visible on this channel’s page.",
         "hideWatchedChannelPageHidingAgain": "Watched videos are hidden on this channel’s page again.",
-        "hideWatchedChannelExempt": "“{{name}}” keeps its watched videos everywhere.",
-        "hideWatchedChannelHidingAgain": "“{{name}}” has its watched videos hidden again.",
+        "hideWatchedChannelExempt": "“{{name}}” keeps its watched videos outside its own page.",
+        "hideWatchedChannelHidingAgain": "“{{name}}” has its watched videos hidden again outside its own page.",
         "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again."
     },
     "general": {
