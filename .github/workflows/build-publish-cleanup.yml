@@ -119,6 +119,8 @@ on:
     paths-ignore:
       - 'dist/**'
       - 'package.json'
+      # Read by the Gitea mirror, ignored by GitHub Actions entirely.
+      - '.gitea/**'
   push:
     branches:
       - main
@@ -130,6 +132,11 @@ on:
       - 'LICENSE'
       - 'AGENTS.md'
       - 'README.md'
+      # The mirror's own workflow lives here. GitHub never runs it, and it is
+      # not in the published package, so a change to it must not publish a new
+      # version — which is exactly what it did once: #827 touched nothing but
+      # .gitea/workflows/sync-from-github.yml and bumped 1.30.710 to 1.30.720.
+      - '.gitea/**'
       - 'package.json'
       - 'tizen.log'
       - 'dist/**'
@@ -921,21 +928,32 @@ jobs:
 
       # The purge above is fire-and-forget: jsDelivr answers "pending" and that
       # is the end of it. Nothing checked the result, and a capture showed what
-      # that costs — the unversioned URL, which is the one the TV actually
-      # fetches, kept serving the previous release for hours after a publish
-      # (x-cache HIT, age 15039, the bundle inside it a version behind). Every
-      # TV was loading that, so a diagnostic merged that afternoon was simply
-      # not running, and its absence read as the feature being broken.
+      # that costs — a publish whose bundle did not reach the TVs for hours,
+      # which read as the new feature being broken rather than as never having
+      # arrived.
       #
-      # So the last word belongs to the URL the TV uses, read the way the TV
-      # reads it. The version string has to be inside the bundle itself: a
-      # 200 proves nothing when the stale object is also a 200.
+      # What is worth checking changed when injector.js started pinning. This
+      # step used to read the unversioned path and fail the build over it,
+      # because that was the URL the TV fetched. The injector now asks the npm
+      # registry for the version and fetches an immutable @version path, and
+      # falls back to the unversioned URL only if the registry cannot be
+      # reached. So the two are no longer equally serious:
       #
-      # One caveat worth stating: jsDelivr serves from many points of presence
-      # and this checks the one that answers here. It cannot prove every edge
-      # is current. What it does prove is that the origin resolves this
-      # package's unversioned path to the version just published — which is the
-      # failure that was actually seen, and the one that affects every edge.
+      #   @version path    what every TV actually loads. Immutable, so if it
+      #                    does not carry this version then the publish itself
+      #                    is broken, not a cache. Hard failure.
+      #
+      #   unversioned      the fallback, and jsDelivr caches its resolution of
+      #   alias            "latest" for twelve hours (s-maxage=43200). It lags a
+      #                    publish by design, and a purge issued before npm's
+      #                    latest has propagated makes it worse by re-caching
+      #                    the old answer. A warning: failing here blocks the
+      #                    .wgt release over something that reaches no TV.
+      #
+      # Either way the version string has to be inside the bundle itself — a
+      # 200 proves nothing when the stale object is also a 200. jsDelivr serves
+      # from many points of presence and this reads whichever answers here, so
+      # it cannot prove every edge is current.
       - name: Verify the CDN serves this version
         if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
@@ -943,32 +961,72 @@ jobs:
         run: |
           set -euo pipefail
           VER=$(cat /tmp/current_version.txt)
-          URL="https://cdn.jsdelivr.net/npm/${PKG}/dist/userScript.js"
-          echo "Checking ${URL} for ${VER} ..."
+          PINNED="https://cdn.jsdelivr.net/npm/${PKG}@${VER}/dist/userScript.js"
+          ALIAS="https://cdn.jsdelivr.net/npm/${PKG}/dist/userScript.js"
 
-          for i in $(seq 1 10); do
-            if curl -fsSL -H 'Cache-Control: no-cache' "$URL" -o /tmp/cdn_bundle.js; then
-              if grep -q "$VER" /tmp/cdn_bundle.js; then
-                echo "attempt ${i}: the CDN serves ${VER}."
+          # Two things this got wrong before, both of which turned a correct
+          # verdict into an unreadable one.
+          #
+          # -a, because the bundle is minified and counts as binary: without it
+          # grep writes "binary file matches" to stderr and no match to stdout,
+          # which is why a run that had correctly found the alias stale could
+          # only report "an unknown version".
+          #
+          # And the major from this version rather than any three numbers. A
+          # bundle carries its dependencies' versions too, so the generic
+          # pattern plus "sort | tail -1" reported the highest-sorting of those
+          # — measured: 8.8.278 for a bundle whose own version was 1.30.710.
+          # Anchored to the major there is exactly one match, which is the
+          # package's own. All of them are printed rather than the last, so a
+          # bundle that somehow carried two cannot be described as having one.
+          MAJOR="${VER%%.*}"
+          served_version() {
+            grep -aoE "${MAJOR}\.[0-9]+\.[0-9]+" "$1" | sort -u | tr '\n' ' ' || true
+          }
+
+          echo "== the path every TV loads: ${PINNED}"
+          if ! curl -fsSL -H 'Cache-Control: no-cache' "$PINNED" -o /tmp/cdn_pinned.js; then
+            echo "::error::The CDN will not serve ${PINNED} at all, so the publish did not land."
+            exit 1
+          fi
+          if ! grep -aq "$VER" /tmp/cdn_pinned.js; then
+            echo "::error::${PINNED} exists but the bundle in it says $(served_version /tmp/cdn_pinned.js), not ${VER}. An immutable path cannot go stale, so this is a broken publish rather than a cache."
+            exit 1
+          fi
+          echo "the pinned path serves ${VER} — which is what injector.js injects."
+
+          # Then the alias, which is allowed to lag.
+          echo "== the fallback alias: ${ALIAS}"
+          for i in $(seq 1 6); do
+            if curl -fsSL -H 'Cache-Control: no-cache' "$ALIAS" -o /tmp/cdn_alias.js; then
+              if grep -aq "$VER" /tmp/cdn_alias.js; then
+                echo "attempt ${i}: the alias serves ${VER} too, so there is nothing left to wait for."
                 exit 0
               fi
-              FOUND=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' /tmp/cdn_bundle.js | sort -u | tail -1 || true)
-              echo "attempt ${i}: still serving ${FOUND:-an unknown version}"
+              echo "attempt ${i}: the alias still serves $(served_version /tmp/cdn_alias.js)"
             else
-              echo "attempt ${i}: the CDN could not be read"
+              echo "attempt ${i}: the alias could not be read"
             fi
 
-            # Ask again rather than only waiting: the first purge can land
-            # before npm's latest has propagated, in which case jsDelivr
-            # re-resolves the old version and caches that instead.
-            curl -s -X POST -H 'Content-Type: application/json' \
+            # Ask again rather than only waiting, and this time watch the
+            # request: the purge API is asynchronous and answers "pending", so
+            # the previous blind sleep could not tell a finished purge from a
+            # queued one.
+            PURGE=$(curl -s -X POST -H 'Content-Type: application/json' \
               --data "{\"path\":[\"/npm/${PKG}/dist/userScript.js\",\"/npm/${PKG}/dist/service.js\",\"/npm/${PKG}@latest/dist/userScript.js\",\"/npm/${PKG}@latest/dist/service.js\"]}" \
-              https://purge.jsdelivr.net/ > /dev/null || true
-            sleep 20
+              https://purge.jsdelivr.net/ || true)
+            PURGE_ID=$(printf '%s' "$PURGE" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+            echo "  purge requested: ${PURGE_ID:-no id returned}"
+            for _ in $(seq 1 5); do
+              sleep 6
+              [ -n "$PURGE_ID" ] || break
+              STATUS=$(curl -s "https://purge.jsdelivr.net/status/${PURGE_ID}" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+              echo "  purge ${PURGE_ID}: ${STATUS:-unknown}"
+              [ "$STATUS" = "pending" ] || break
+            done
           done
 
-          echo "::error::The CDN is still not serving ${VER} at ${URL} after ten attempts. Every TV will keep loading the previous bundle until this clears, which looks exactly like the new build not working. Purge it by hand (https://www.jsdelivr.com/tools/purge) or re-run this workflow."
-          exit 1
+          echo "::warning::${ALIAS} is still serving $(served_version /tmp/cdn_alias.js) rather than ${VER}. That is the fallback path only: injector.js pins to ${PINNED}, verified above, and uses the alias just when the npm registry is unreachable. jsDelivr caches its idea of \"latest\" for up to twelve hours and this clears on its own; purge by hand at https://www.jsdelivr.com/tools/purge to hurry it."
 
       - name: Cache purge complete
         if: steps.confirm_publish.outputs.confirmed == 'true'
