@@ -82,6 +82,12 @@ on:
   workflow_run:
     workflows: ['Build, publish and cleanup old npm versions']
     types: [completed]
+    # The branch the triggering run was on, which for a pull-request build is
+    # the feature branch. Without this, every pull request started a run here
+    # that the job-level `if` below immediately skipped: real runs, listed in
+    # the Actions tab, queued and accounted for, that could never do anything.
+    # Filtering at the trigger means they are never created.
+    branches: ['main']
   push:
     tags:
       - 'v*.*.*'
@@ -100,8 +106,10 @@ jobs:
     # Only proceed on a successful npm-publish run that was itself triggered by
     # a push to main (build-publish-cleanup.yml's job is skipped entirely for
     # pull_request runs, which can still report an overall "success" — checking
-    # .workflow_run.event too avoids firing off of those). Tag pushes and
-    # manual dispatch always proceed.
+    # .workflow_run.event too avoids firing off of those). The branches filter
+    # on the trigger now stops those runs from being created at all; this stays
+    # as the second check, since it also covers a publish run dispatched by
+    # hand off main. Tag pushes and manual dispatch always proceed.
     if: >
       github.event_name != 'workflow_run' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')

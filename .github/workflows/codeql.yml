@@ -1,9 +1,20 @@
 name: "CodeQL"
 
 on:
+  # Pushes to main and the weekly sweep, but deliberately not pull_request.
+  #
+  # Every change arrives through a pull request that is then fast-forwarded
+  # onto main, so analysing both meant analysing the same tree twice: half of
+  # this repository's CodeQL runs were duplicates of the other half.
+  #
+  # Keeping the push side rather than the pull_request side is the deliberate
+  # half of that choice. Code scanning treats analyses of the default branch
+  # as the state of the project, which is what the Security tab lists and what
+  # gets fixed from; a pull_request-only setup leaves that state to the weekly
+  # cron. The cost is that a newly introduced alert shows up just after a merge
+  # instead of just before, which is how the alerts in this repository have
+  # actually been found and fixed.
   push:
-    branches: ["main"]
-  pull_request:
     branches: ["main"]
   schedule:
     - cron: '23 3 * * 1'
