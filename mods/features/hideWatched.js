@@ -233,8 +233,8 @@ function pageExempt(pageName) {
     try { return _exemption ? _exemption.page(pageName) : null; } catch (_) { return null; }
 }
 
-function itemExempt(item) {
-    try { return _exemption ? _exemption.item(item) : null; } catch (_) { return null; }
+function itemExempt(item, pageName) {
+    try { return _exemption ? _exemption.item(item, pageName) : null; } catch (_) { return null; }
 }
 
 // ── hideVideo ─────────────────────────────────────────────────────────────────
@@ -283,7 +283,7 @@ export function hideVideo(items, pageHint = null) {
       // too. Checked here rather than above the continuation bookkeeping, so
       // an exempt tile still clears the markers it would otherwise leave on
       // the item for the next parse to find.
-      const exemptItem = itemExempt(item);
+      const exemptItem = itemExempt(item, pageName);
       if (exemptItem) return true;
       const pct = getWatchPercent(item);
       if (pct === null) {
