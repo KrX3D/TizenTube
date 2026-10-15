@@ -736,6 +736,18 @@ logServiceEvent('INFO', `Standalone service process starting (node ${process.ver
 // already: it briefly broke every launch on Tizen 6.5 with "Cannot find
 // module 'express'").
 
+// Before anything opens a connection by name, because this replaces the
+// dns.lookup that express, node-fetch and the proxy all end up calling. See
+// dnsFallback.js: on some TVs getaddrinfo in this process never returns, and
+// every proxied request then waits until Cobalt gives up. Installing it is
+// cheap and changes nothing on a TV whose resolver works — that one keeps
+// answering and keeps being used.
+try {
+    require('./dnsFallback.js').installDnsFallback(logServiceEvent);
+} catch (err) {
+    logServiceEvent('WARN', `dns fallback not installed: ${err && err.stack || err}`);
+}
+
 let express;
 try {
     express = require('express');
@@ -1193,6 +1205,14 @@ server.on('error', (err) => {
 // are arriving, which is exactly the state a DNS failure produces.
 const DNS_WATCH_MS = 60000;
 const DNS_WATCH_NAME = 'www.youtube.com';
+// A lookup that has not answered in this long is treated as a failure for the
+// purpose of this line. Without it, the one failure mode where a resolver
+// stops answering ENTIRELY — reisxd/TizenTube#702, where getaddrinfo on some
+// TVs never returns at all, not even for localhost — was the one this watcher
+// could not report: the callback never ran, so nothing was ever logged, and
+// every minute started another lookup that would also never return. The
+// watcher was silent in exactly the case it exists for.
+const DNS_WATCH_TIMEOUT_MS = 10000;
 let _dnsOk = null;
 
 function watchDns() {
@@ -1202,30 +1222,65 @@ function watchDns() {
     } catch (e) {
         return;
     }
+
+    const report = (err, address, took, hung) => {
+        const ok = !err && !!address;
+        if (ok === _dnsOk) return;
+        // A first check that works is the baseline, not news: saying
+        // "resolves again" before it has ever failed reads as though
+        // something had just recovered.
+        const firstAndWell = _dnsOk === null && ok;
+        _dnsOk = ok;
+        if (firstAndWell) return;
+
+        if (ok) {
+            logServiceEvent('INFO', `dns resolves again: ${DNS_WATCH_NAME} -> ${address} in ${took}ms`);
+        } else if (hung) {
+            // Told apart from a refusal on purpose. A resolver that answers
+            // "no" and one that never answers look the same from the player —
+            // the buffer drains either way — but they are fixed differently,
+            // and only one of them is #702.
+            logServiceEvent('ERROR', `dns did not answer at all for ${DNS_WATCH_NAME} within ${took}ms. `
+                + 'getaddrinfo is hanging rather than failing, which is reisxd/TizenTube#702: on some TVs the '
+                + 'system resolver never returns, not even for localhost. dnsFallback.js resolves around this, '
+                + 'so playback can still work while this line appears. A static DNS server on the TV or in the '
+                + 'router is the lasting fix.');
+        } else {
+            logServiceEvent('ERROR', `dns cannot resolve ${DNS_WATCH_NAME} (${err && err.code || 'no address'}) after ${took}ms. `
+                + 'A player rotating segment hosts starves on this: the buffer drains while the page keeps running, '
+                + 'then every page fails and a restart lands on ERR_NAME_NOT_RESOLVED. A static DNS server on the TV '
+                + 'or in the router is what stops it recurring.');
+        }
+    };
+
     const check = () => {
         const startedAt = Date.now();
+        // One answer per check, whichever arrives first. The lookup is not
+        // cancellable, so a late answer after the timeout is simply dropped
+        // rather than reported as a recovery that did not happen.
+        let answered = false;
+        const settle = (err, address, hung) => {
+            if (answered) return;
+            answered = true;
+            report(err, address, Date.now() - startedAt, hung);
+        };
+
+        const giveUp = setTimeout(() => {
+            settle(new Error(`no answer in ${DNS_WATCH_TIMEOUT_MS}ms`), null, true);
+        }, DNS_WATCH_TIMEOUT_MS);
+        try { if (typeof giveUp.unref === 'function') giveUp.unref(); } catch (e) { }
+
         try {
             lookup(DNS_WATCH_NAME, (err, address) => {
-                const ok = !err && !!address;
-                const took = Date.now() - startedAt;
-                if (ok === _dnsOk) return;
-                // A first check that works is the baseline, not news: saying
-                // "resolves again" before it has ever failed reads as though
-                // something had just recovered.
-                const firstAndWell = _dnsOk === null && ok;
-                _dnsOk = ok;
-                if (firstAndWell) return;
-                if (ok) {
-                    logServiceEvent('INFO', `dns resolves again: ${DNS_WATCH_NAME} -> ${address} in ${took}ms`);
-                } else {
-                    logServiceEvent('ERROR', `dns cannot resolve ${DNS_WATCH_NAME} (${err && err.code || 'no address'}) after ${took}ms. `
-                        + 'A player rotating segment hosts starves on this: the buffer drains while the page keeps running, '
-                        + 'then every page fails and a restart lands on ERR_NAME_NOT_RESOLVED. A static DNS server on the TV '
-                        + 'or in the router is what stops it recurring.');
-                }
+                clearTimeout(giveUp);
+                settle(err, address, false);
             });
-        } catch (e) { }
+        } catch (e) {
+            clearTimeout(giveUp);
+            settle(e, null, false);
+        }
     };
+
     check();
     const timer = setInterval(check, DNS_WATCH_MS);
     try { if (typeof timer.unref === 'function') timer.unref(); } catch (e) { }
