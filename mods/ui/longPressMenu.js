@@ -34,7 +34,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
+export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -55,6 +55,7 @@ export const ENTRY_LABELS = {
     // the press will do; these are the fixed names the settings screen lists
     // them under, which cannot flip or the list would reword itself depending
     // on which playlist you last looked at.
+    markWatched: 'videoMenu.markWatched',
     showWatchedPlaylist: 'videoMenu.showWatchedPlaylist',
     showWatchedChannelPage: 'videoMenu.showWatchedChannelPage',
     showWatchedChannelEverywhere: 'videoMenu.showWatchedChannelEverywhere',
@@ -415,6 +416,34 @@ export function browseTileLongPressData(info) {
     };
 }
 
+/**
+ * "Mark as watched", on the subscriptions page and nowhere else.
+ *
+ * Asked for there specifically: the subscriptions shelf is where a video you
+ * have already seen elsewhere, or decided to skip, otherwise sits forever.
+ * Everywhere else there is no need for it, and an entry in every menu on every
+ * page is a cost of its own on a list this long. It still has an id, so it can
+ * be moved or hidden with the rest.
+ *
+ * Only offered when hiding watched videos is on, since marking a video watched
+ * would otherwise change nothing anyone can see.
+ */
+function markWatchedEntry(data) {
+    try {
+        if (!configRead('enableHideWatchedVideos')) return [];
+        if (detectCurrentPage() !== 'subscriptions') return [];
+        if (!data.videoId) return [];
+    } catch (_) {
+        return [];
+    }
+    return [tagMenuItem('markWatched', MenuServiceItemRenderer(t('videoMenu.markWatched'), {
+        clickTrackingParams: null,
+        playlistEditEndpoint: {
+            customAction: { action: 'MARK_WATCHED', parameters: { videoId: data.videoId } }
+        }
+    }))];
+}
+
 /** Every entry this fork adds, before the user's order and hiding are applied. */
 function baseEntries(data) {
     return [
@@ -450,6 +479,7 @@ function baseEntries(data) {
             playlistEditEndpoint: { customAction: { action: 'HIDE_CHANNEL', parameters: { name: channelNameOf(data.item) } } }
         })),
         ...channelEntry(data),
+        ...markWatchedEntry(data),
         ...hideWatchedEntries(data),
     ];
 }
