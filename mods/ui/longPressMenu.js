@@ -251,15 +251,80 @@ function channelEntry(data) {
  * The exemption toggles: this playlist, this channel's page, this channel
  * everywhere.
  *
- * All three are pointless with hiding switched off, so none appear then. The
+ * Each label says what pressing it will do rather than what the state is — the
+ * menu has no room for a checkbox, and "Show watched videos" next to a tick
+ * would be ambiguous about which way round it reads. Pressing it again on
+ * something already exempted is how you put it back, so the label has to flip:
+ * the exemption screen in the settings is the second way to reach that, not
+ * the only one.
+ *
+ * Built one entry per function because two menus need them. A video's menu
+ * offers whichever the page makes sense of, and a playlist or channel tile's
+ * menu offers the ones its own id answers for. Sharing the builders is what
+ * stops the two wording or keying the same toggle differently.
+ */
+function playlistExemptionEntry(playlistId) {
+    const id = normalisePlaylistId(playlistId);
+    if (!id) return [];
+    const exempt = isPlaylistExempt(id);
+    return [tagMenuItem('showWatchedPlaylist', MenuServiceItemRenderer(
+        exempt ? t('videoMenu.hideWatchedPlaylistAgain') : t('videoMenu.showWatchedPlaylist'),
+        {
+            clickTrackingParams: null,
+            playlistEditEndpoint: {
+                customAction: {
+                    action: 'TOGGLE_HIDE_WATCHED_PLAYLIST',
+                    parameters: { playlistId: id }
+                }
+            }
+        }
+    ))];
+}
+
+function channelPageExemptionEntry(browseId, title) {
+    const id = String(browseId || '').trim();
+    if (!id) return [];
+    const exempt = isChannelPageExempt(id);
+    return [tagMenuItem('showWatchedChannelPage', MenuServiceItemRenderer(
+        exempt ? t('videoMenu.hideWatchedChannelPageAgain') : t('videoMenu.showWatchedChannelPage'),
+        {
+            clickTrackingParams: null,
+            playlistEditEndpoint: {
+                customAction: {
+                    action: 'TOGGLE_HIDE_WATCHED_CHANNEL_PAGE',
+                    parameters: { browseId: id, title: title || '' }
+                }
+            }
+        }
+    ))];
+}
+
+function channelNameExemptionEntry(name) {
+    const channel = String(name || '').trim();
+    if (!channel) return [];
+    const exempt = isChannelNameExempt(channel);
+    return [tagMenuItem('showWatchedChannelEverywhere', MenuServiceItemRenderer(
+        exempt ? t('videoMenu.hideWatchedChannelEverywhereAgain') : t('videoMenu.showWatchedChannelEverywhere'),
+        {
+            clickTrackingParams: null,
+            playlistEditEndpoint: {
+                customAction: {
+                    action: 'TOGGLE_HIDE_WATCHED_CHANNEL',
+                    parameters: { name: channel }
+                }
+            }
+        }
+    ))];
+}
+
+/**
+ * The exemption toggles for a video's menu.
+ *
+ * All of them are pointless with hiding switched off, so none appear then. The
  * first two need to know which playlist or channel is being looked at, which
  * only its own page says, so they appear only there; the third reads the
  * channel off the tile like "Hide this channel" does and so can appear
  * anywhere a tile names its channel.
- *
- * Each label says what pressing it will do rather than what the state is — the
- * menu has no room for a checkbox, and "Show watched videos" next to a tick
- * would be ambiguous about which way round it reads.
  */
 function hideWatchedEntries(data) {
     if (!configRead('enableHideWatchedVideos')) return [];
@@ -271,61 +336,83 @@ function hideWatchedEntries(data) {
             // The tile's own playlist first: it is the playlist the video is
             // actually in, and on a page showing one playlist the two agree.
             // The page is the fallback for a tile that carries no playlist.
-            const playlistId = normalisePlaylistId(data.watchEndpointData?.playlistId) || currentPlaylistId();
-            if (playlistId) {
-                const exempt = isPlaylistExempt(playlistId);
-                entries.push(tagMenuItem('showWatchedPlaylist', MenuServiceItemRenderer(
-                    exempt ? t('videoMenu.hideWatchedPlaylistAgain') : t('videoMenu.showWatchedPlaylist'),
-                    {
-                        clickTrackingParams: null,
-                        playlistEditEndpoint: {
-                            customAction: {
-                                action: 'TOGGLE_HIDE_WATCHED_PLAYLIST',
-                                parameters: { playlistId }
-                            }
-                        }
-                    }
-                )));
-            }
+            for (const entry of playlistExemptionEntry(
+                normalisePlaylistId(data.watchEndpointData?.playlistId) || currentPlaylistId()
+            )) entries.push(entry);
         }
 
         if (page === 'channel') {
-            const browseId = currentChannelId();
-            if (browseId) {
-                const exempt = isChannelPageExempt(browseId);
-                entries.push(tagMenuItem('showWatchedChannelPage', MenuServiceItemRenderer(
-                    exempt ? t('videoMenu.hideWatchedChannelPageAgain') : t('videoMenu.showWatchedChannelPage'),
-                    {
-                        clickTrackingParams: null,
-                        playlistEditEndpoint: {
-                            customAction: {
-                                action: 'TOGGLE_HIDE_WATCHED_CHANNEL_PAGE',
-                                parameters: { browseId, title: channelNameOf(data.item) }
-                            }
-                        }
-                    }
-                )));
+            for (const entry of channelPageExemptionEntry(currentChannelId(), channelNameOf(data.item))) {
+                entries.push(entry);
             }
         }
 
-        const name = channelNameOf(data.item);
-        if (name) {
-            const exempt = isChannelNameExempt(name);
-            entries.push(tagMenuItem('showWatchedChannelEverywhere', MenuServiceItemRenderer(
-                exempt ? t('videoMenu.hideWatchedChannelEverywhereAgain') : t('videoMenu.showWatchedChannelEverywhere'),
-                {
-                    clickTrackingParams: null,
-                    playlistEditEndpoint: {
-                        customAction: {
-                            action: 'TOGGLE_HIDE_WATCHED_CHANNEL',
-                            parameters: { name }
-                        }
-                    }
-                }
-            )));
-        }
+        for (const entry of channelNameExemptionEntry(channelNameOf(data.item))) entries.push(entry);
     } catch (_) { }
     return entries;
+}
+
+/**
+ * The menu for a playlist tile or a channel tile — the ones in the library,
+ * and in the channel and playlist shelves.
+ *
+ * This is the whole point of the feature rather than a convenience: a playlist
+ * you have watched through has no videos left to long-press once they are
+ * hidden, so the only place to say "show them again" is the playlist itself.
+ * Reported that way, and it is why the menu on a video inside the playlist is
+ * not enough on its own.
+ *
+ * Deliberately not the video menu. adblock.js refuses to give these tiles that
+ * menu, because a playlist opens with a browseEndpoint and has no video id, so
+ * every entry built from one would act on the wrong thing — a History page
+ * once showed exactly that. This builds a menu of only the entries that make
+ * sense for a whole playlist or a whole channel.
+ *
+ * Returns null when there is nothing to offer, so the caller can leave the tile
+ * without a menu rather than attaching one that opens empty.
+ */
+export function browseTileLongPressData(info) {
+    if (!configRead('enableHideWatchedVideos')) return null;
+    const title = String(info?.title || '').trim();
+    let items = [];
+    try {
+        if (info?.kind === 'playlist') {
+            items = playlistExemptionEntry(info.id);
+        } else if (info?.kind === 'channel') {
+            // Both scopes, since a channel tile answers for both: its id is
+            // exact for its own page, and its title is the channel name the
+            // filter matches on everywhere else. Those two are the same string
+            // from YouTube — the name under a video tile and the name on the
+            // channel's own tile — which is what makes the second one work
+            // from here at all.
+            items = channelPageExemptionEntry(info.id, title).concat(channelNameExemptionEntry(title));
+        }
+    } catch (_) {
+        return null;
+    }
+    if (!items.length) return null;
+    const ordered = applyMenuPreferences(items);
+    if (!ordered.length) return null;
+    return {
+        clickTrackingParams: null,
+        showMenuCommand: {
+            contentId: info.id,
+            thumbnail: { thumbnails: info.thumbnails || [] },
+            title: { simpleText: title || info.id },
+            subtitle: {
+                simpleText: info.kind === 'playlist'
+                    ? t('videoMenu.playlistMenuSubtitle')
+                    : t('videoMenu.channelMenuSubtitle')
+            },
+            menu: {
+                menuRenderer: {
+                    items: ordered,
+                    trackingParams: null,
+                    accessibility: { accessibilityData: { label: 'Options' } }
+                }
+            }
+        }
+    };
 }
 
 /** Every entry this fork adds, before the user's order and hiding are applied. */

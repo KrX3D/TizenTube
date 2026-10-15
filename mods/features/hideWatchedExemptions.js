@@ -73,11 +73,25 @@ export function normalisePlaylistId(value) {
     return /^VL/i.test(id) ? id.slice(2) : id;
 }
 
-/** The playlist whose page is open, or ''. */
+/**
+ * The playlist whose page is open, or ''.
+ *
+ * Only a browse id that really names one playlist counts, which is narrower
+ * than "the page is of kind playlist". detectCurrentPage also answers
+ * 'playlist' for FEmy_youtube, and that is not a playlist id — taking it as
+ * one offered to exempt a thing called FEmy_youtube, which would have stored
+ * an entry that could never match anything and shown the toggle on a page it
+ * does not belong on. Caught by the tile test, which runs on that page.
+ *
+ * Same rule as adblock.js's browseTileInfo applies to a tile: VL-prefixed, or
+ * Watch Later and Liked, which appear bare.
+ */
 export function currentPlaylistId() {
-    const id = normalisePlaylistId(currentBrowseId());
-    // A channel page's browse id would otherwise come back as a playlist id.
-    return /^UC/i.test(id) ? '' : id;
+    const raw = currentBrowseId().trim();
+    const upper = raw.toUpperCase();
+    if (/^VL./.test(upper)) return normalisePlaylistId(raw);
+    if (upper === 'WL' || upper === 'LL') return upper;
+    return '';
 }
 
 /** The channel whose page is open, or ''. */

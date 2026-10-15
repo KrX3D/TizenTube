@@ -2,7 +2,7 @@ import { configRead } from '../config.js';
 import Chapters from '../ui/chapters.js';
 import resolveCommand from '../resolveCommand.js';
 import { timelyAction, MenuServiceItemRenderer, ShelfRenderer, TileRenderer, ButtonRenderer } from '../ui/ytUI.js';
-import { longPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
+import { longPressData, browseTileLongPressData, tagMenuItem, applyMenuPreferences } from '../ui/longPressMenu.js';
 import { filterPlayerButtonsInResponse } from './playerButtonHider.js';
 import { noteParseCost, noteParseShape, timeFilter, playbackDiagnosticsEnabled } from './playbackHealth.js';
 import { stopAtPlaylistEnd } from './playlistEndStopper.js';
@@ -1667,6 +1667,53 @@ function finishLongPressMenu(item, menuItems) {
 
 let _lastLoggedNonVideoTileKeys = null;
 
+/**
+ * A playlist tile or a channel tile, told apart by what opens it.
+ *
+ * Both open with a browseEndpoint rather than a watchEndpoint, which is why
+ * neither has ever been given a long press menu here. The id says which is
+ * which: a channel's is UC…, a playlist's browse id is its playlist id with VL
+ * in front, and Watch Later and Liked appear as plain WL and LL on the tile's
+ * contentId.
+ *
+ * Both endpoint shapes seen on device are read. A capture from both TVs showed
+ * non-video tiles arriving as either {clickTrackingParams, browseEndpoint} or
+ * {clickTrackingParams, commandExecutorCommand} — channelShelfHider.js already
+ * reads the second for the same reason.
+ *
+ * Anything else — a topic tile, a Shorts tile, FEsubscriptions — comes back
+ * null and falls through to the existing handling untouched. Round topic tiles
+ * ("Palworld – Thema") in particular must not be mistaken for channels, which
+ * is why this keys on the id and not on the tile's round style.
+ */
+function browseTileInfo(item) {
+  const tile = item?.tileRenderer;
+  if (!tile) return null;
+  const select = tile.onSelectCommand;
+  // A video is never one of these, and asking first is not just an early out.
+  // The id falls back to contentId for tiles that carry it there, and a video's
+  // contentId is its video id — an 11-character id that happens to begin with
+  // VL would otherwise be read as a playlist and handed the wrong menu.
+  if (select?.watchEndpoint || select?.reelWatchEndpoint) return null;
+  const commands = select?.commandExecutorCommand?.commands;
+  const browseId = select?.browseEndpoint?.browseId
+    || (Array.isArray(commands) ? commands.map(c => c?.browseEndpoint?.browseId).find(Boolean) : null)
+    || tile.contentId
+    || '';
+  const id = String(browseId).trim();
+  if (!id) return null;
+  const title = tile.metadata?.tileMetadataRenderer?.title?.simpleText || '';
+  const thumbnails = tile.header?.tileHeaderRenderer?.thumbnail?.thumbnails || [];
+
+  if (/^UC[\w-]{10,}$/.test(id)) return { kind: 'channel', id, title, thumbnails };
+  // VL-prefixed, or the two special playlists as they appear on a tile.
+  const upper = id.toUpperCase();
+  if (/^VL./.test(upper) || upper === 'WL' || upper === 'LL') {
+    return { kind: 'playlist', id, title, thumbnails };
+  }
+  return null;
+}
+
 function addLongPress(items) {
   if (!Array.isArray(items)) return;
   for (const item of items) {
@@ -1715,6 +1762,26 @@ function addLongPress(items) {
           }
         }
         continue;
+      }
+      // A playlist or channel tile gets its own small menu, before the style
+      // check: a channel avatar is a round tile, which that check turns away.
+      // Only when the tile has no menu of its own — YouTube's own menu is left
+      // alone here as everywhere else — and only when there is something to
+      // put in it, so a tile never gains a menu that opens empty.
+      if (configRead('enableLongPress') && !item.tileRenderer.onLongPressCommand) {
+        const browseInfo = browseTileInfo(item);
+        if (browseInfo) {
+          const browseMenu = browseTileLongPressData(browseInfo);
+          if (browseMenu) {
+            item.tileRenderer.onLongPressCommand = browseMenu;
+            appendFileOnlyLog('addLongPress.browseTile', {
+              kind: browseInfo.kind,
+              id: browseInfo.id,
+              entries: browseMenu.showMenuCommand.menu.menuRenderer.items.length,
+            });
+          }
+          continue;
+        }
       }
       if (item.tileRenderer.style !== 'TILE_STYLE_YTLR_DEFAULT' && item.tileRenderer.style !== 'TILE_STYLE_YTLR_VERTICAL_LIST') {
         // Diagnostic: reported promoted/sponsored video tiles (label +

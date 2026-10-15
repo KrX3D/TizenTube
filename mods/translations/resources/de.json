@@ -540,7 +540,9 @@
         "showWatchedChannelPage": "Gesehene Videos in diesem Kanal anzeigen",
         "hideWatchedChannelPageAgain": "Gesehene Videos in diesem Kanal wieder ausblenden",
         "showWatchedChannelEverywhere": "Gesehene Videos dieses Kanals überall anzeigen",
-        "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals wieder ausblenden"
+        "hideWatchedChannelEverywhereAgain": "Gesehene Videos dieses Kanals wieder ausblenden",
+        "playlistMenuSubtitle": "Playlist",
+        "channelMenuSubtitle": "Kanal"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",
