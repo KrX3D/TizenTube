@@ -769,8 +769,24 @@ let injector;
 try {
     injector = require('./injector.js');
     logServiceEvent('INFO', "require('./injector.js') OK");
-    // Lets the CDP path deliver syslog frames the page could not send itself.
-    if (injector && typeof injector.setSyslogRelay === 'function') injector.setSyslogRelay(relaySyslog);
+    // Lets the CDP path deliver syslog frames the page could not send itself,
+    // and — the part that was missing — teaches this process where they are
+    // going while they pass through.
+    //
+    // noteSyslogTarget was wired into the HTTP handler alone, which only the
+    // proxy path uses. Developer mode pointed at 127.0.0.1 means the CDP path,
+    // and on the CDP path the page cannot reach localhost at all: it queues
+    // frames and this drain carries them. So on both TVs the target was never
+    // learned, and every line this process logs about itself had nowhere to go
+    // — no startup, no health, no DNS, through every investigation that needed
+    // them. Four days of syslog on two TVs contain not one StandaloneService
+    // line, which is how it was finally noticed.
+    if (injector && typeof injector.setSyslogRelay === 'function') {
+        injector.setSyslogRelay(function (frame, host, port, report) {
+            noteSyslogTarget(host, port, frame);
+            relaySyslog(frame, host, port, report);
+        });
+    }
 } catch (err) {
     logServiceEvent('ERROR', `require('./injector.js') FAILED: ${err && err.stack || err}`);
     throw err;
