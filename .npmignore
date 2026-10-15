@@ -1,3 +1,7 @@
 node_modules
 mods
 service
+
+# The Gitea mirror's own workflow. GitHub ignores it, npm has no use
+# for it, and it turned up inside the published tarball.
+.gitea
