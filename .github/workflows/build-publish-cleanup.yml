@@ -984,16 +984,38 @@ jobs:
             grep -aoE "${MAJOR}\.[0-9]+\.[0-9]+" "$1" | sort -u | tr '\n' ' ' || true
           }
 
+          # The pinned path is retried, which the first version of this step
+          # did not do — and that cost a release. A publish of 1.30.740 failed
+          # here on a single curl: (22) 503. jsDelivr had to fetch a version
+          # seconds old from npm, its own metadata API was answering 502 for
+          # that version at the same time, and minutes later every URL was 200
+          # with the alias already on the new version. Nothing was wrong with
+          # the publish; one transient answer failed the build and took the
+          # .wgt release with it.
+          #
+          # A wrong version inside the file is still an immediate failure: an
+          # immutable path cannot go stale, so that one cannot be transient.
+          # Only "not there yet" is retried.
           echo "== the path every TV loads: ${PINNED}"
-          if ! curl -fsSL -H 'Cache-Control: no-cache' "$PINNED" -o /tmp/cdn_pinned.js; then
-            echo "::error::The CDN will not serve ${PINNED} at all, so the publish did not land."
+          PINNED_OK=
+          for i in $(seq 1 10); do
+            CODE=$(curl -s -o /tmp/cdn_pinned.js -w '%{http_code}' -H 'Cache-Control: no-cache' "$PINNED" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              if grep -aq "$VER" /tmp/cdn_pinned.js; then
+                PINNED_OK=yes
+                echo "attempt ${i}: the pinned path serves ${VER} — which is what injector.js injects."
+                break
+              fi
+              echo "::error::${PINNED} returned 200 but the bundle in it says $(served_version /tmp/cdn_pinned.js), not ${VER}. An immutable path cannot go stale, so this is a broken publish rather than a cache."
+              exit 1
+            fi
+            echo "attempt ${i}: HTTP ${CODE} — jsDelivr has not pulled this version from npm yet"
+            sleep 20
+          done
+          if [ -z "$PINNED_OK" ]; then
+            echo "::error::${PINNED} never became readable, after ten attempts over three minutes. npm has the version (checked earlier in this run), so either jsDelivr is having an outage — check https://www.jsdelivrstatus.com — or it cannot read this package. Re-running this workflow is safe and is the first thing to try."
             exit 1
           fi
-          if ! grep -aq "$VER" /tmp/cdn_pinned.js; then
-            echo "::error::${PINNED} exists but the bundle in it says $(served_version /tmp/cdn_pinned.js), not ${VER}. An immutable path cannot go stale, so this is a broken publish rather than a cache."
-            exit 1
-          fi
-          echo "the pinned path serves ${VER} — which is what injector.js injects."
 
           # Then the alias, which is allowed to lag.
           echo "== the fallback alias: ${ALIAS}"
