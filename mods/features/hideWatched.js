@@ -214,6 +214,29 @@ export function getWatchPercent(item) {
   }
 }
 
+// ── Exemptions ────────────────────────────────────────────────────────────────
+
+// Playlists and channels that keep their watched videos, supplied by
+// hideWatchedExemptions.js rather than imported from it. This file holds
+// appendFileOnlyLog, which some thirty-five modules import, so importing
+// anything that imports this back would make a cycle rollup warns about on
+// every build. Nothing is exempt until that module registers itself.
+let _exemption = null;
+
+export function setHideWatchedExemption(check) {
+    _exemption = check && typeof check.page === 'function' && typeof check.item === 'function'
+        ? check
+        : null;
+}
+
+function pageExempt(pageName) {
+    try { return _exemption ? _exemption.page(pageName) : null; } catch (_) { return null; }
+}
+
+function itemExempt(item) {
+    try { return _exemption ? _exemption.item(item) : null; } catch (_) { return null; }
+}
+
 // ── hideVideo ─────────────────────────────────────────────────────────────────
 
 export function hideVideo(items, pageHint = null) {
@@ -229,6 +252,14 @@ export function hideVideo(items, pageHint = null) {
   // a fresh response or a re-shown copy of the old one.
   window.__ttPageRenderedAt = { page: pageName, at: Date.now() };
   if (!pages.includes(pageName)) return items;
+  // This whole playlist or channel was exempted. Checked before the per-tile
+  // work rather than inside it: nothing on the page is to be hidden, so there
+  // is no reason to read progress off every tile to decide that.
+  const exemptPage = pageExempt(pageName);
+  if (exemptPage) {
+    appendFileOnlyLog('hideVideo.exempt.page', { pageName, because: exemptPage, items: items.length });
+    return items;
+  }
   return items.filter(item => {
     try {
       // Search results are lockupViewModel rather than tileRenderer; without
@@ -248,6 +279,12 @@ export function hideVideo(items, pageHint = null) {
         delete item.__ttKeepOneForContinuationLabel;
         delete item.__ttKeepOneForContinuationParseSeq;
       }
+      // A channel exempted everywhere keeps its watched videos on this page
+      // too. Checked here rather than above the continuation bookkeeping, so
+      // an exempt tile still clears the markers it would otherwise leave on
+      // the item for the next parse to find.
+      const exemptItem = itemExempt(item);
+      if (exemptItem) return true;
       const pct = getWatchPercent(item);
       if (pct === null) {
         appendFileOnlyLog('hideVideo.noProgress', { pageName, videoId });
