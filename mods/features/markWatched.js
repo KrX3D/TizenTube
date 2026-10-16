@@ -66,6 +66,77 @@ function identityService() {
 }
 
 /**
+ * The params for a video, asked of /next when the tile has none.
+ *
+ * A subscriptions tile turned out to carry no params at all — the capture said
+ * so outright:
+ *
+ *   markWatched.noTracking {"videoId":"MSD1WLg1l5s","trackingKeys":[],
+ *     "status":"UNPLAYABLE","reason":"Die Seite muss neu geladen werden.",
+ *     "hadParams":false}
+ *
+ * So they have to come from somewhere, and /next is the one request in this
+ * codebase known to work from here: requestNextAndNavigateChannel has been
+ * asking it for the channel behind a video for a while. Its response carries
+ * the endpoint for the video it was asked about, and that endpoint has the
+ * params a player request wants.
+ *
+ * playerParams is preferred over params where both exist, because they are not
+ * the same token: params is what /next takes and playerParams is what /player
+ * takes, and sending one where the other belongs is a plausible reading of
+ * "Die Seite muss neu geladen werden".
+ *
+ * Resolves to a string or null. A failure here is not fatal — the player
+ * request is still made, just as poorly as before, which is no worse than not
+ * trying.
+ */
+function paramsFromNext(videoId, identity) {
+    return new Promise((resolve) => {
+        const client = innerTubeClient();
+        if (!client) return resolve(null);
+        const request = {
+            path: '/youtubei/v1/next',
+            payload: {
+                videoId: videoId,
+                racyCheckOk: true,
+                contentCheckOk: true,
+                playbackContext: {
+                    lactMilliseconds: Math.floor(Math.random() * 2000),
+                    isLyricsMode: false
+                },
+                autonavState: 'STATE_NONE'
+            },
+            clickTracking: { clickTrackingParams: null }
+        };
+        if (identity) request.identity = identity;
+        try {
+            client.fetch(request).subscribe(function (response) {
+                let found = null;
+                let where = null;
+                try {
+                    const endpoint = response?.currentVideoEndpoint?.watchEndpoint;
+                    if (endpoint?.playerParams) {
+                        found = String(endpoint.playerParams);
+                        where = 'currentVideoEndpoint.playerParams';
+                    } else if (endpoint?.params) {
+                        found = String(endpoint.params);
+                        where = 'currentVideoEndpoint.params';
+                    }
+                } catch (_) { }
+                appendFileOnlyLog('markWatched.paramsFromNext', { videoId: videoId, found: !!found, where: where });
+                resolve(found);
+            }, function (err) {
+                appendFileOnlyLog('markWatched.paramsFromNext.failed', { videoId: videoId, message: err && err.message || String(err) });
+                resolve(null);
+            });
+        } catch (err) {
+            appendFileOnlyLog('markWatched.paramsFromNext.failed', { videoId: videoId, message: err && err.message || String(err) });
+            resolve(null);
+        }
+    });
+}
+
+/**
  * The player response for one video, through the app's authenticated client.
  *
  * The first version of this sent { videoId } and nothing else, and YouTube
@@ -94,16 +165,21 @@ function playerResponse(videoId, watchParams) {
             videoId: videoId,
             racyCheckOk: true,
             contentCheckOk: true,
+            // A player-shaped playbackContext, not the /next-shaped one this
+            // sent before. /next takes { lactMilliseconds, isLyricsMode };
+            // /player takes a contentPlaybackContext, and the previous version
+            // handed it the wrong one. Another plausible reading of "Die Seite
+            // muss neu geladen werden".
             playbackContext: {
-                // As the app sends it, so the request does not stand out as
-                // the one with a suspiciously round number in it.
-                lactMilliseconds: Math.floor(Math.random() * 2000),
-                isLyricsMode: false
+                contentPlaybackContext: {
+                    html5Preference: 'HTML5_PREF_WANTS',
+                    lactMilliseconds: Math.floor(Math.random() * 2000)
+                }
             }
         };
-        if (watchParams) payload.params = watchParams;
 
-        const send = (identity) => {
+        const send = (identity, params) => {
+            if (params) payload.params = params;
             try {
                 const request = { path: '/youtubei/v1/player', payload: payload, clickTracking: { clickTrackingParams: null } };
                 if (identity) request.identity = identity;
@@ -113,17 +189,26 @@ function playerResponse(videoId, watchParams) {
             }
         };
 
+        // The tile's own params when it has them, /next's when it does not.
+        const withParamsThenSend = (identity) => {
+            if (watchParams) return send(identity, watchParams);
+            paramsFromNext(videoId, identity).then(
+                (fetched) => send(identity, fetched),
+                () => send(identity, null)
+            );
+        };
+
         // The identity is what makes this the signed-in account's request
         // rather than an anonymous one, which is the difference between
         // something appearing in your history and nowhere. Asked for the same
         // way the working /next call asks, and the request still goes without
         // it rather than not at all.
         const identityApi = identityService();
-        if (!identityApi || typeof identityApi.get !== 'function') return send(null);
+        if (!identityApi || typeof identityApi.get !== 'function') return withParamsThenSend(null);
         try {
-            identityApi.get().then(send, () => send(null));
+            identityApi.get().then(withParamsThenSend, () => withParamsThenSend(null));
         } catch (_) {
-            send(null);
+            withParamsThenSend(null);
         }
     });
 }
