@@ -80,6 +80,43 @@ export function patchResolveCommand() {
 
             const ogResolve = window._yttv[key].instance.resolveCommand;
             window._yttv[key].instance.resolveCommand = function (cmd, _) {
+                // Every long press the app opens a menu for comes through
+                // here, which is what makes this the one place that can answer
+                // the question two guesses have now failed to.
+                //
+                // Reported three times: long pressing a playlist in the
+                // library shows nothing. The menus are attached — a capture
+                // has 110 of them — and the enriched diagnostic ruled out both
+                // of my theories: the tiles are TILE_STYLE_YTLR_DEFAULT, the
+                // same style the working video menu uses, with a thumbnail and
+                // one entry. So the attachment is right and the remaining
+                // question is whether the TV fires the gesture at all for a
+                // tile that is not a video.
+                //
+                // This line distinguishes the three possibilities outright:
+                //   nothing logged on a long press  the gesture is never bound
+                //                                   for these tiles, and no
+                //                                   menu we attach can help
+                //   logged with our id present      the menu opens and fails
+                //                                   to draw
+                //   logged without our id           something removes it
+                //                                   between us and the dialog
+                if (cmd?.showMenuCommand) {
+                    try {
+                        const menuItems = cmd.showMenuCommand?.menu?.menuRenderer?.items || [];
+                        appendFileOnlyLog('longPress.menuOpened', {
+                            contentId: cmd.showMenuCommand.contentId || null,
+                            title: cmd.showMenuCommand.title?.simpleText || null,
+                            entries: menuItems.length,
+                            // The tag longPressMenu.js puts on our entries,
+                            // read directly rather than through its
+                            // menuItemId: importing that would close a cycle
+                            // through innerTubeCalls.js, which imports this
+                            // file.
+                            ids: menuItems.map((entry) => (entry && entry.__ttMenuId) || null),
+                        });
+                    } catch (_) { }
+                }
                 if (cmd.setClientSettingEndpoint) {
                     // Command to change client settings. Use TizenTube configuration to change settings.
                     for (const settings of cmd.setClientSettingEndpoint.settingDatas) {
