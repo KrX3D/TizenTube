@@ -578,8 +578,7 @@
         "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again.",
         "markWatchedWorking": "Telling YouTube this has been watched…",
         "markWatchedOnAccount": "Marked as watched on your account — it will be watched on other devices too.",
-        "markWatchedLocalOnly": "Hidden on this TV only — YouTube did not accept it, so it is still unwatched elsewhere.",
-        "markWatchedFailed": "Could not mark this as watched."
+        "markWatchedFailed": "YouTube would not accept this, so nothing was hidden — it stays as it is here and on your other devices."
     },
     "general": {
         "dislikes": "Dislikes",

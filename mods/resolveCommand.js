@@ -438,9 +438,11 @@ function customAction(action, parameters) {
             // front: whether this reached the account is exactly the thing
             // worth knowing, since reaching it is the point of the feature.
             showToast('TizenTube', t('toasts.markWatchedWorking'));
-            markVideoWatched(videoId).then((how) => {
+            markVideoWatched(videoId, parameters?.params).then((how) => {
+                // Two outcomes now, not three: either YouTube took it and the
+                // video is hidden everywhere, or it did not and the video is
+                // hidden nowhere.
                 if (how === 'account') showToast('TizenTube', t('toasts.markWatchedOnAccount'));
-                else if (how === 'local') showToast('TizenTube', t('toasts.markWatchedLocalOnly'));
                 else showToast('TizenTube', t('toasts.markWatchedFailed'));
             }, () => showToast('TizenTube', t('toasts.markWatchedFailed')));
             break;
