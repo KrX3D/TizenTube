@@ -543,7 +543,8 @@
         "hideWatchedChannelEverywhereAgain": "Hide This Channel’s Watched Videos Elsewhere Again",
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Channel",
-        "markWatched": "Mark As Watched"
+        "markWatched": "Mark As Watched",
+        "openPlaylist": "Open Playlist"
     },
     "toasts": {
         "feedbackSent": "Feedback sent.",
