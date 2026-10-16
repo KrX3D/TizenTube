@@ -397,7 +397,28 @@ export function browseTileLongPressData(info) {
     return {
         clickTrackingParams: null,
         showMenuCommand: {
-            contentId: info.id,
+            // No contentId, and that is the point of this version.
+            //
+            // The gesture was never the problem. A capture of the app's own
+            // resolveCommand shows the menu opening for a playlist tile and
+            // carrying our entry:
+            //
+            //   longPress.menuOpened {"contentId":"VLPLhUcIRiMP5gi...",
+            //     "title":"Watch","entries":1,"ids":["showWatchedPlaylist"]}
+            //
+            // against a working video menu fifteen seconds earlier:
+            //
+            //   longPress.menuOpened {"contentId":"Lc11bmjXW30", ...
+            //     "ids":["playlists","playlists","channel","markWatched"]}
+            //
+            // So the command arrives intact and the dialog then draws nothing,
+            // and the one structural difference between the two is this field:
+            // a video id in the menu that works, a playlist browse id in the
+            // one that does not. A dialog that looks a content id up to build
+            // its header would get nothing back for VLPL… and have nothing to
+            // draw. The header does not need it from us — the thumbnail, title
+            // and subtitle are all passed explicitly below — so it is left out
+            // rather than filled with something that is not a video.
             thumbnail: { thumbnails: info.thumbnails || [] },
             title: { simpleText: title || info.id },
             subtitle: {
