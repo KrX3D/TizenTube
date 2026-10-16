@@ -56,16 +56,74 @@ function innerTubeClient() {
     }
 }
 
-/** The player response for one video, through the app's authenticated client. */
-function playerResponse(videoId) {
+function identityService() {
+    try {
+        const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+        return mappings?.get('CurrentIdentityService') || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+/**
+ * The player response for one video, through the app's authenticated client.
+ *
+ * The first version of this sent { videoId } and nothing else, and YouTube
+ * answered with no playback tracking at all:
+ *
+ *   markWatched.noTracking {"videoId":"MSD1WLg1l5s","trackingKeys":[],
+ *     "status":"UNPLAYABLE"}
+ *
+ * UNPLAYABLE with an empty tracking block is what a player request that is not
+ * really a player request gets. The app's own calls do not look like that —
+ * requestNextAndNavigateChannel sends the identity, the signed params off the
+ * tile's watchEndpoint, the two check flags and a playbackContext, and that
+ * one works. This now sends the same things, because the whole point of going
+ * through the app's client is to make a request YouTube treats as the app's.
+ *
+ * `params` matters most of the three: it is the signed token the tile carries
+ * for opening that exact video, and a player request without it is asking
+ * about a video the caller cannot show it has any business playing.
+ */
+function playerResponse(videoId, watchParams) {
     return new Promise((resolve, reject) => {
         const client = innerTubeClient();
         if (!client) return reject(new Error('KabukiInnerTubeClient unavailable'));
+
+        const payload = {
+            videoId: videoId,
+            racyCheckOk: true,
+            contentCheckOk: true,
+            playbackContext: {
+                // As the app sends it, so the request does not stand out as
+                // the one with a suspiciously round number in it.
+                lactMilliseconds: Math.floor(Math.random() * 2000),
+                isLyricsMode: false
+            }
+        };
+        if (watchParams) payload.params = watchParams;
+
+        const send = (identity) => {
+            try {
+                const request = { path: '/youtubei/v1/player', payload: payload, clickTracking: { clickTrackingParams: null } };
+                if (identity) request.identity = identity;
+                client.fetch(request).subscribe(resolve, reject);
+            } catch (err) {
+                reject(err);
+            }
+        };
+
+        // The identity is what makes this the signed-in account's request
+        // rather than an anonymous one, which is the difference between
+        // something appearing in your history and nowhere. Asked for the same
+        // way the working /next call asks, and the request still goes without
+        // it rather than not at all.
+        const identityApi = identityService();
+        if (!identityApi || typeof identityApi.get !== 'function') return send(null);
         try {
-            client.fetch({ path: '/youtubei/v1/player', payload: { videoId } })
-                .subscribe(resolve, reject);
-        } catch (err) {
-            reject(err);
+            identityApi.get().then(send, () => send(null));
+        } catch (_) {
+            send(null);
         }
     });
 }
@@ -142,21 +200,23 @@ function recordLocally(videoId) {
 /**
  * Mark one video watched.
  *
- * Resolves to what actually happened, so the toast can tell the truth rather
- * than claim success for a ping YouTube refused:
- *   'account' — history was told, and the local cache updated as well
- *   'local'   — only the local cache; the video hides here but not on a PC
+ * Resolves to what actually happened:
+ *   'account' — YouTube accepted it, and it is recorded here as well
+ *   'none'    — YouTube did not, and nothing was hidden anywhere
+ *
+ * Nothing is written locally until YouTube has accepted it, and that is a
+ * deliberate reversal. The first version hid the video here first so the tile
+ * left the shelf immediately whatever happened, which turned out to be exactly
+ * wrong: a video hidden only on the TV is the thing this feature exists to
+ * avoid. Asked for in those words — if it cannot be hidden for YouTube, so it
+ * is also hidden on a PC, then do not hide it. So a refusal now leaves the
+ * video where it was, and the toast says so.
  */
-export function markVideoWatched(videoId) {
+export function markVideoWatched(videoId, watchParams) {
     const id = String(videoId || '').trim();
     if (!id) return Promise.resolve('none');
 
-    // Locally first, and deliberately not conditional on the rest. The video
-    // should leave the shelf whether or not YouTube cooperates, and the request
-    // below takes a moment that the person is watching an unchanged screen for.
-    const localOk = recordLocally(id);
-
-    return playerResponse(id).then((response) => {
+    return playerResponse(id, watchParams).then((response) => {
         const tracking = response?.playbackTracking || {};
         const playbackUrl = tracking.videostatsPlaybackUrl?.baseUrl;
         const watchtimeUrl = tracking.videostatsWatchtimeUrl?.baseUrl;
@@ -167,10 +227,14 @@ export function markVideoWatched(videoId) {
                 videoId: id,
                 trackingKeys: Object.keys(tracking),
                 // Named so a capture shows whether the response was refused
-                // outright rather than simply shaped differently.
+                // outright rather than simply shaped differently. This is what
+                // identified the near-empty request: UNPLAYABLE, with nothing
+                // in the tracking block at all.
                 status: response?.playabilityStatus?.status || null,
+                reason: response?.playabilityStatus?.reason || null,
+                hadParams: !!watchParams,
             });
-            return localOk ? 'local' : 'none';
+            return 'none';
         }
 
         const cpn = makeCpn();
@@ -179,11 +243,12 @@ export function markVideoWatched(videoId) {
         const playback = withParams(playbackUrl, { ver: 2, cpn: cpn, final: 1 });
 
         return ping(playback, 'playback').then((playbackOk) => {
-            if (!playbackOk) return localOk ? 'local' : 'none';
+            if (!playbackOk) return 'none';
             if (!watchtimeUrl || !(lengthSeconds > 0)) {
                 // History has the entry, which is the part that reaches a PC;
                 // without a duration there is no honest watchtime to claim.
                 appendFileOnlyLog('markWatched.noWatchtime', { videoId: id, lengthSeconds, hasUrl: !!watchtimeUrl });
+                recordLocally(id);
                 return 'account';
             }
             // st/et are the span played, as a pair of lists, and YouTube wants
@@ -198,10 +263,15 @@ export function markVideoWatched(videoId) {
                 state: 'paused',
                 final: 1,
             });
-            return ping(watchtime, 'watchtime').then(() => 'account');
+            return ping(watchtime, 'watchtime').then(() => {
+                // Only now, once YouTube has it, is it remembered here — so
+                // the tile leaving the shelf always means the same thing.
+                recordLocally(id);
+                return 'account';
+            });
         });
     }).catch((err) => {
         appendFileOnlyLog('markWatched.failed', { videoId: id, message: err && err.message || String(err) });
-        return localOk ? 'local' : 'none';
+        return 'none';
     });
 }

@@ -439,7 +439,13 @@ function markWatchedEntry(data) {
     return [tagMenuItem('markWatched', MenuServiceItemRenderer(t('videoMenu.markWatched'), {
         clickTrackingParams: null,
         playlistEditEndpoint: {
-            customAction: { action: 'MARK_WATCHED', parameters: { videoId: data.videoId } }
+            // The signed params off the tile's own watchEndpoint go with it.
+            // Without them the player request comes back UNPLAYABLE with no
+            // tracking block, which is what made this fail the first time.
+            customAction: {
+                action: 'MARK_WATCHED',
+                parameters: { videoId: data.videoId, params: data.watchEndpointData?.params || null }
+            }
         }
     }))];
 }

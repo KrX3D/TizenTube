@@ -578,8 +578,7 @@
         "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus.",
         "markWatchedWorking": "YouTube wird mitgeteilt, dass dies gesehen wurde…",
         "markWatchedOnAccount": "Im Konto als gesehen markiert — gilt auch auf anderen Geräten.",
-        "markWatchedLocalOnly": "Nur auf diesem TV ausgeblendet — YouTube hat es nicht übernommen, anderswo gilt es weiter als ungesehen.",
-        "markWatchedFailed": "Konnte nicht als gesehen markiert werden."
+        "markWatchedFailed": "YouTube hat das nicht übernommen, daher wurde nichts ausgeblendet — es bleibt hier und auf anderen Geräten unverändert."
     },
     "general": {
         "dislikes": "Dislikes",
