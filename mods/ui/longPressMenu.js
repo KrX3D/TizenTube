@@ -34,7 +34,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
+export const DEFAULT_ORDER = ['play', 'openPlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -55,6 +55,7 @@ export const ENTRY_LABELS = {
     // the press will do; these are the fixed names the settings screen lists
     // them under, which cannot flip or the list would reword itself depending
     // on which playlist you last looked at.
+    openPlaylist: 'videoMenu.openPlaylist',
     markWatched: 'videoMenu.markWatched',
     showWatchedPlaylist: 'videoMenu.showWatchedPlaylist',
     showWatchedChannelPage: 'videoMenu.showWatchedChannelPage',
@@ -354,6 +355,36 @@ function hideWatchedEntries(data) {
 }
 
 /**
+ * "Open playlist" / "Go to channel", which is also what makes the menu draw.
+ *
+ * A capture of every menu the app opened sorts perfectly by one number:
+ *
+ *   entries=4  ids=["playlists","playlists","channel","markWatched"]   drew
+ *   entries=5  ids=[... ,"channel","showWatchedPlaylist"]              drew
+ *   entries=1  ids=["showWatchedPlaylist"]                             did not
+ *
+ * Three times, the same single-entry menu, nothing on screen — while the
+ * five-entry menu containing that very same entry drew it fine. So the entry
+ * is not the problem and neither is the gesture, the tile style, the thumbnail
+ * or the content id: a menu of one item is what does not render.
+ *
+ * Rather than pad it, the second entry is one worth having — the thing you
+ * would most want from a long press on a playlist after the toggle is to open
+ * it. It navigates by browse id, which is exactly what selecting the tile
+ * does, and it is tagged so it can be reordered or hidden like everything
+ * else. Hiding it would put the menu back to one entry, which is a reason to
+ * leave it alone rather than a reason not to offer the choice.
+ */
+function openBrowseEntry(id, label, browseId) {
+    const target = String(browseId || '').trim();
+    if (!target) return [];
+    return [tagMenuItem(id, MenuNavigationItemRenderer(label, {
+        clickTrackingParams: null,
+        browseEndpoint: { browseId: target }
+    }))];
+}
+
+/**
  * The menu for a playlist tile or a channel tile — the ones in the library,
  * and in the channel and playlist shelves.
  *
@@ -378,7 +409,8 @@ export function browseTileLongPressData(info) {
     let items = [];
     try {
         if (info?.kind === 'playlist') {
-            items = playlistExemptionEntry(info.id);
+            items = openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id)
+                .concat(playlistExemptionEntry(info.id));
         } else if (info?.kind === 'channel') {
             // Both scopes, since a channel tile answers for both: its id is
             // exact for its own page, and its title is the channel name the
@@ -386,7 +418,9 @@ export function browseTileLongPressData(info) {
             // from YouTube — the name under a video tile and the name on the
             // channel's own tile — which is what makes the second one work
             // from here at all.
-            items = channelPageExemptionEntry(info.id, title).concat(channelNameExemptionEntry(title));
+            items = openBrowseEntry('channel', t('videoMenu.goToChannel'), info.id)
+                .concat(channelPageExemptionEntry(info.id, title))
+                .concat(channelNameExemptionEntry(title));
         }
     } catch (_) {
         return null;
