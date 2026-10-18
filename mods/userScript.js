@@ -35,6 +35,7 @@ import "./ui/clock.js";
 import "./features/jumpToPercentage.js";
 import "./features/resumeAfterSuspend.js";
 import "./features/playbackHealth.js";
+import "./features/playbackUnwedge.js";
 // Imported for its side effect: it registers itself with hideWatched.js, which
 // cannot import it back without making a cycle. Nothing is exempt from hiding
 // watched videos until this has run.

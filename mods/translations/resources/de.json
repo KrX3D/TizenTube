@@ -403,7 +403,8 @@
                     "keywordHider": "Videos nach Titel-Stichwort ausblenden",
                     "hideViewCounts": "Aufrufzahlen ausblenden",
                     "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden",
-                    "returnYoutubeDislike": "Return YouTube Dislike (sendet Video-IDs an returnyoutubedislike.com)"
+                    "returnYoutubeDislike": "Return YouTube Dislike (sendet Video-IDs an returnyoutubedislike.com)",
+                    "unwedgePlayer": "Eingefrorenen Player automatisch wiederherstellen"
                 }
             },
             "updater": {
