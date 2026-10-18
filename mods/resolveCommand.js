@@ -171,7 +171,13 @@ export function patchResolveCommand() {
                     // Patch the playback settings popup to use TizenTube speed settings
                     const items = cmd.openPopupAction.popup.overlaySectionRenderer.overlay.overlayTwoPanelRenderer.actionPanel.overlayPanelRenderer.content.overlayPanelItemListRenderer.items;
                     for (const item of items) {
-                        if (item?.compactLinkRenderer?.icon?.iconType === 'SLOW_MOTION_VIDEO') {
+                        // Both names, because YouTube renamed this icon and
+                        // the speed menu stopped being found by the old one
+                        // (upstream 1bf5a67e, reisxd/TizenTube#697). Matching
+                        // either means it keeps working on whichever build of
+                        // the app a TV happens to be served.
+                        const iconType = item?.compactLinkRenderer?.icon?.iconType;
+                        if (iconType === 'SLOW_MOTION_VIDEO' || iconType === 'SPEEDOMETER') {
                             item.compactLinkRenderer.subtitle && (item.compactLinkRenderer.subtitle.simpleText = t('player.withTizenTube'));
                             item.compactLinkRenderer.serviceEndpoint = {
                                 clickTrackingParams: "null",
