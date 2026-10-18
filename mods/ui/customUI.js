@@ -137,7 +137,11 @@ function applyPatches() {
                         buttonRenderer: ButtonRenderer(
                             false,
                             t('player.playbackSpeed.button'),
-                            'SLOW_MOTION_VIDEO',
+                            // The current name for this icon; see the matcher
+                            // in resolveCommand.js for why it changed. Unlike
+                            // that one this is a single value and has to pick,
+                            // so it follows upstream and the app as it is now.
+                            'SPEEDOMETER',
                             {
                                 customAction:
                                 {
