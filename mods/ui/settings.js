@@ -949,6 +949,11 @@ export default function modernUI(update, parameters) {
                             ]
                         },
                         {
+                            name: t('settings.options.uiSettings.options.unwedgePlayer'),
+                            icon: 'SLOW_MOTION_VIDEO',
+                            value: 'enablePlaybackUnwedge'
+                        },
+                        {
                             name: t('settings.options.uiSettings.options.hideWatchedVideos.options.exemptions.title'),
                             icon: 'STAR',
                             value: null,

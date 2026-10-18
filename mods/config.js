@@ -67,6 +67,10 @@ const defaultConfig = {
   hidePlayerPreviousButton: false,
   hidePlayerNextButton: false,
   enablePreviews: false,
+  // Nudge a player that has stopped with data already buffered — see
+  // playbackUnwedge.js. On by default because the alternative, measured on
+  // device, is a freeze that only a manual app restart clears.
+  enablePlaybackUnwedge: true,
   enableHideWatchedVideos: true,
   hideWatchedVideosThreshold: 5,
   // Exceptions to hiding watched videos — see hideWatchedExemptions.js. Each

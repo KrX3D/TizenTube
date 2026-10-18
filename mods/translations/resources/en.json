@@ -403,7 +403,8 @@
                     "keywordHider": "Hide Videos by Title Keyword",
                     "hideViewCounts": "Hide View Counts",
                     "hideQualityBadges": "Hide 4K/8K and Dubbed Badges",
-                    "returnYoutubeDislike": "Return YouTube Dislike (sends video ids to returnyoutubedislike.com)"
+                    "returnYoutubeDislike": "Return YouTube Dislike (sends video ids to returnyoutubedislike.com)",
+                    "unwedgePlayer": "Recover a frozen player automatically"
                 }
             },
             "updater": {
