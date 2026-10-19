@@ -49,6 +49,48 @@ function buildFormatted(entry, message) {
     return `[${ts}] [${level}] [${context}] ${message}`;
 }
 
+// The same deferral syslog.js explains at length: nothing about the transport
+// runs on the thread that asked for the log line. Kept separate from that queue
+// rather than shared, because either output must work with the other switched
+// off, which is the property the two have been built around throughout.
+const PROXY_FLUSH_MS = 250;
+const PROXY_PER_TICK = 10;
+const MAX_PROXY_QUEUE = 200;
+
+let _proxyLogQueue = [];
+let _proxyLogTimer = null;
+
+function flushProxyLogQueue() {
+    _proxyLogTimer = null;
+    const batch = _proxyLogQueue.splice(0, PROXY_PER_TICK);
+    for (let i = 0; i < batch.length; i++) {
+        const item = batch[i];
+        try {
+            fetch('http://localhost:8099/tizentube/log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ host: item.host, port: item.port, entry: item.entry }),
+            }).catch(function () { });
+        } catch (_) { }
+    }
+    if (_proxyLogQueue.length) scheduleProxyLogFlush();
+}
+
+function scheduleProxyLogFlush() {
+    if (_proxyLogTimer) return;
+    try {
+        _proxyLogTimer = setTimeout(flushProxyLogQueue, PROXY_FLUSH_MS);
+    } catch (_) {
+        _proxyLogTimer = null;
+    }
+}
+
+function queueProxyLog(item) {
+    if (_proxyLogQueue.length >= MAX_PROXY_QUEUE) _proxyLogQueue.shift();
+    _proxyLogQueue.push(item);
+    scheduleProxyLogFlush();
+}
+
 function sendOne(_url, entry) {
     if (window.location.hostname === 'localhost' || window.__ttStandalone === true) {
         // Standalone mode: no TizenBrew present. Two sub-paths, delivered
@@ -62,13 +104,10 @@ function sendOne(_url, entry) {
             // origin, plain HTTP → plain HTTP, no restrictions. Relay
             // directly through the local standalone service, which
             // forwards to the PC receiver.
-            try {
-                fetch('http://localhost:8099/tizentube/log', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ host, port, entry }),
-                }).catch(function () { });
-            } catch (_) { }
+            // Queued, not sent here. See the note on the queue below: a
+            // request built on the caller's thread was costing this TV
+            // 180-300ms, inside the response processing that asked for it.
+            queueProxyLog({ host: host, port: port, entry: entry });
         } else {
             // CDP-injection path (injector.js): page is real
             // https://youtube.com — a fetch to http://localhost:8099 from
