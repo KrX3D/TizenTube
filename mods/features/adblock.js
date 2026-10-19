@@ -819,6 +819,10 @@ function _deArrowEnqueue(taskFn) { _deArrowQueue.push(taskFn); _deArrowRunNext()
 
 // ===== JSON.parse Patch =====
 
+// How many mutation payloads one response gets deep-scanned for progress. See
+// the loop that uses it for why there is a limit at all.
+const MAX_DEEP_SCANNED_MUTATIONS = 200;
+
 const origParse = JSON.parse;
 // JSON.parse is patched globally, so this line runs on every JSON.parse
 // call anywhere on the page — not just on navigation. YouTube TV's own
@@ -843,6 +847,12 @@ let _lastLoggedHomeKeySet = null;
 let _lastLoggedNonTileKeySet = null;
 let _lastLoggedNonShelfKeySet = null;
 JSON.parse = function () {
+  // Before the native parse, not after. The clock used to start on the line
+  // below, so every number this file has ever reported excluded JSON.parse
+  // itself — which made "a parse took four seconds" ambiguous between our work
+  // and the platform's, and sent two investigations after the wrong thing. One
+  // Date.now() on the hot path is worth not repeating that.
+  const _enteredAt = Date.now();
   const r = origParse.apply(this, arguments);
   _parseDepth++;
   if (_parseDepth > 1) { _parseDepth--; return r; }
@@ -906,15 +916,51 @@ JSON.parse = function () {
 
     timeFilter('videoLength', () => noteVideoLength(r));
     timeFilter('progressCache', () => updateProgressCache(r));
+    // This is the one piece of per-response work that was never attributed,
+    // and it is the most expensive shape of work in the file: a recursive walk
+    // to depth ten of every mutation payload, with a fresh output array and a
+    // fresh WeakSet allocated per mutation, on top of the pass
+    // updateProgressCache has already made over the same mutations.
+    //
+    // Why it matters, from a capture where the player froze: one parse cost
+    // 4343ms of 4373ms total, and another 3930ms, with no filter attribution
+    // on either — and the slow ones were on home and library, never on watch,
+    // which is exactly the condition below. Everything else here is inside a
+    // timeFilter and so was ruled out by its own numbers; this was invisible.
+    //
+    // Three changes, no behaviour lost:
+    //   timeFilter    it can never be invisible again
+    //   shared seen   one WeakSet for the whole batch instead of one per
+    //                 mutation. Mutations in a batch share sub-objects, so
+    //                 this also stops re-walking the same nodes; skipping a
+    //                 repeat is harmless when the only thing collected is
+    //                 {id, percent} and an id is written once.
+    //   a cap         a batch far larger than this is where the cost lives,
+    //                 and the marginal value of the two-hundredth mutation is
+    //                 nil. Logged when it bites, so the number can be judged
+    //                 from a capture rather than guessed at twice.
     if (detectedPage !== 'watch' && r?.frameworkUpdates?.entityBatchUpdate?.mutations) {
-      if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
-      for (const mutation of r.frameworkUpdates.entityBatchUpdate.mutations) {
-        try {
-          for (const entry of collectWatchProgressEntries(mutation?.payload || {})) {
-            if (window._ttVideoProgressCache[entry.id] === undefined) window._ttVideoProgressCache[entry.id] = Number(entry.percent);
-          }
-        } catch (_) { }
-      }
+      timeFilter('progressDeep', () => {
+        if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
+        const mutations = r.frameworkUpdates.entityBatchUpdate.mutations;
+        const seen = new WeakSet();
+        const limit = Math.min(mutations.length, MAX_DEEP_SCANNED_MUTATIONS);
+        for (let i = 0; i < limit; i++) {
+          try {
+            const entries = collectWatchProgressEntries(mutations[i]?.payload || {}, [], 0, seen);
+            for (const entry of entries) {
+              if (window._ttVideoProgressCache[entry.id] === undefined) window._ttVideoProgressCache[entry.id] = Number(entry.percent);
+            }
+          } catch (_) { }
+        }
+        if (mutations.length > limit) {
+          // player., not progressDeep.: an unlisted prefix lands in 'other',
+          // and this is read beside the stalls. parse.slow was renamed for the
+          // same reason after it was filtered out by the very narrowing done
+          // to watch playback.
+          appendFileOnlyLog('player.progressDeepCapped', { page: detectedPage, mutations: mutations.length, scanned: limit });
+        }
+      });
     }
 
     // =========================================================
@@ -1302,8 +1348,9 @@ JSON.parse = function () {
       const _took = Date.now() - _startedAt;
       noteParseCost(_took);
       // The aggregate says how much; this says which response, which is the
-      // part that can be acted on.
-      noteParseShape(_took, window.__ttLastDetectedPage, r);
+      // part that can be acted on. nativeMs is how long JSON.parse itself
+      // took, so a slow line says which side of it was slow.
+      noteParseShape(_took, window.__ttLastDetectedPage, r, _startedAt - _enteredAt);
     }
   }
 };

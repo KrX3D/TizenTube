@@ -171,7 +171,7 @@ function takeWork() {
  * the filter counts say which of this fork's walkers was in it. No values: a
  * response carries a person's own feed.
  */
-export function noteParseShape(ms, detectedPage, response) {
+export function noteParseShape(ms, detectedPage, response, nativeMs) {
     if (!enabled()) {
         takeWork();
         return;
@@ -206,6 +206,11 @@ export function noteParseShape(ms, detectedPage, response) {
     // be filtered out by the very narrowing that was done to watch playback.
     appendFileOnlyLog('player.slowParse', Object.assign({
         ms: Math.round(ms),
+        // How much of the time above was JSON.parse itself rather than this
+        // fork's work on the result. Previously unmeasurable: the clock
+        // started after the native parse, so a slow line could not say which
+        // side of it was slow, and two investigations went the wrong way.
+        nativeMs: isFinite(nativeMs) ? Math.round(nativeMs) : null,
         page: detectedPage || null,
         keys,
         items,
