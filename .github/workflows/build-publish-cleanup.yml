@@ -996,9 +996,25 @@ jobs:
           # A wrong version inside the file is still an immediate failure: an
           # immutable path cannot go stale, so that one cannot be transient.
           # Only "not there yet" is retried.
+          # Ten attempts over three and a half minutes was not enough. The
+          # release of 1.30.930 answered 404 or 502 on every one of them and
+          # then caught up on its own shortly after, so the run failed over
+          # jsDelivr's ingestion lag while the publish itself was fine.
+          #
+          # Twenty attempts over roughly ten minutes now, and then a warning
+          # rather than a failure. The reasoning for not failing: npm has
+          # already been confirmed earlier in this run by its own step, so a
+          # pinned path that will not serve says something about jsDelivr's
+          # queue and nothing about this repository. Failing here also takes
+          # the .wgt release down with it, and injector.js now falls back to
+          # the unversioned URL for exactly this window instead of injecting
+          # the error page it used to.
+          #
+          # A wrong version inside a 200 is still a hard failure. An immutable
+          # path cannot go stale, so that one is never a lag.
           echo "== the path every TV loads: ${PINNED}"
           PINNED_OK=
-          for i in $(seq 1 10); do
+          for i in $(seq 1 20); do
             CODE=$(curl -s -o /tmp/cdn_pinned.js -w '%{http_code}' -H 'Cache-Control: no-cache' "$PINNED" || echo 000)
             if [ "$CODE" = "200" ]; then
               if grep -aq "$VER" /tmp/cdn_pinned.js; then
@@ -1010,11 +1026,10 @@ jobs:
               exit 1
             fi
             echo "attempt ${i}: HTTP ${CODE} — jsDelivr has not pulled this version from npm yet"
-            sleep 20
+            sleep 30
           done
           if [ -z "$PINNED_OK" ]; then
-            echo "::error::${PINNED} never became readable, after ten attempts over three minutes. npm has the version (checked earlier in this run), so either jsDelivr is having an outage — check https://www.jsdelivrstatus.com — or it cannot read this package. Re-running this workflow is safe and is the first thing to try."
-            exit 1
+            echo "::warning::${PINNED} was still not readable after twenty attempts over ten minutes, last HTTP ${CODE}. npm has the version — the step before this confirmed it — so this is jsDelivr's ingestion queue rather than a bad publish, and it usually clears on its own within minutes. Until it does, injector.js falls back to the unversioned URL, which may be a release behind. Worth a look at https://www.jsdelivrstatus.com if it persists."
           fi
 
           # Then the alias, which is allowed to lag.
