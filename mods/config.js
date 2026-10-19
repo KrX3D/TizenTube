@@ -120,6 +120,8 @@ const defaultConfig = {
   diagSubscriptionsShelf: false,
   // Every category on by default, so upgrading changes nothing until the
   // user narrows it down. 'basic' vs 'detailed' controls payload depth.
+  // sponsorblock is listed but deliberately NOT on by default: it was the
+  // loudest thing in the log by a wide margin, and nobody turned it on.
   logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
   logVerbosity: 'detailed',
   // syslog output, independent of the log server above.

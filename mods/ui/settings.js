@@ -602,6 +602,7 @@ export default function modernUI(update, parameters) {
                                 { name: t('settings.options.misc.options.logging.categories.shelves'), icon: 'MENU', value: 'shelves' },
                                 { name: t('settings.options.misc.options.logging.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
                                 { name: t('settings.options.misc.options.logging.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
+                                { name: t('settings.options.misc.options.logging.categories.sponsorblock'), icon: 'MONEY_HAND', value: 'sponsorblock' },
                                 { name: t('settings.options.misc.options.logging.categories.other'), icon: 'ARTICLE', value: 'other' }
                             ]
                         },

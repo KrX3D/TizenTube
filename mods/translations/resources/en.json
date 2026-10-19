@@ -80,7 +80,8 @@
                             "shelves": "Shelves and tiles",
                             "thumbs": "Thumbnails and DeArrow",
                             "player": "Player, SponsorBlock, captions",
-                            "other": "Everything else"
+                            "other": "Everything else",
+                            "sponsorblock": "SponsorBlock"
                         },
                         "playbackDiagnostics": "Log Playback Stalls",
                         "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"

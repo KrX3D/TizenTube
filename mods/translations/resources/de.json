@@ -80,7 +80,8 @@
                             "shelves": "Regale und Kacheln",
                             "thumbs": "Vorschaubilder und DeArrow",
                             "player": "Player, SponsorBlock, Untertitel",
-                            "other": "Alles Übrige"
+                            "other": "Alles Übrige",
+                            "sponsorblock": "SponsorBlock"
                         },
                         "playbackDiagnostics": "Wiedergabe-Aussetzer protokollieren",
                         "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
