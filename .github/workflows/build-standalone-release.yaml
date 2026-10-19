@@ -344,11 +344,95 @@ jobs:
         run: |
           bash .github/scripts/build-release-notes.sh             "${{ env.RELEASE_SHA }}"             "${{ env.RELEASE_VERSION }}"             "${{ env.APP_ID }}"             "${{ env.APP_NAME }}"             "$RUNNER_TEMP/release-notes.md"
 
+      # Was softprops/action-gh-release@v1, replaced after a 403 that could
+      # neither be diagnosed nor recovered from. Three faults, all the step's
+      # rather than GitHub's:
+      #
+      #   it printed "undefined" as the error body, so a rate limit, a
+      #   permission problem and a validation error all looked the same
+      #
+      #   it retried three times inside 1.2 seconds (09:41:34.5, :35.3, :35.7)
+      #   and called that too many retries. An undocumented 403 on a token
+      #   that worked thirteen hours earlier is a secondary rate limit more
+      #   often than anything else, and those want tens of seconds
+      #
+      #   it was not idempotent, so a re-run after a partial success had no
+      #   defined behaviour
+      #
+      # The .wgt is uploaded as an artifact by the step above, before any of
+      # this runs, so a failure here never loses the build.
       - name: Release TizenTube Standalone
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.RELEASE_VERSION }}
-          target_commitish: ${{ env.RELEASE_SHA }}
-          body_path: ${{ runner.temp }}/release-notes.md
-          files: |
-            standalone/release/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ env.RELEASE_VERSION }}
+          TARGET: ${{ env.RELEASE_SHA }}
+          NOTES: ${{ runner.temp }}/release-notes.md
+        run: |
+          set -uo pipefail
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}"
+          AUTH="Authorization: Bearer ${GH_TOKEN}"
+          JSON="Accept: application/vnd.github+json"
+          ID_OF='import json,sys; d=json.load(sys.stdin); print((d.get("id") if isinstance(d,dict) else "") or "")'
+
+          # Reuse the release if it is already there. That is what makes a
+          # re-run safe: an earlier attempt may have created it before failing.
+          ID=$(curl -s -H "$AUTH" -H "$JSON" "$API/releases/tags/${TAG}" | python3 -c "$ID_OF" 2>/dev/null || echo '')
+
+          if [ -n "$ID" ]; then
+            echo "release ${TAG} already exists (id ${ID}); its assets will be replaced"
+          else
+            python3 -c 'import json,io,os,sys; p=sys.argv[3]; b=io.open(p,encoding="utf-8").read() if os.path.exists(p) else ""; print(json.dumps({"tag_name":sys.argv[1],"target_commitish":sys.argv[2],"name":sys.argv[1],"body":b}))' "$TAG" "$TARGET" "$NOTES" > /tmp/release.json
+            for delay in 0 15 45 90; do
+              if [ "$delay" != "0" ]; then echo "waiting ${delay}s before retrying"; sleep "$delay"; fi
+              CODE=$(curl -s -o /tmp/release-out.json -w '%{http_code}' -X POST -H "$AUTH" -H "$JSON" "$API/releases" --data @/tmp/release.json)
+              echo "create release ${TAG} -> HTTP ${CODE}"
+              if [ "$CODE" = "201" ]; then
+                ID=$(python3 -c 'import json;print(json.load(open("/tmp/release-out.json"))["id"])')
+                break
+              fi
+              # 422 means the tag or release turned up meanwhile; take it.
+              if [ "$CODE" = "422" ]; then
+                ID=$(curl -s -H "$AUTH" -H "$JSON" "$API/releases/tags/${TAG}" | python3 -c "$ID_OF" 2>/dev/null || echo '')
+                if [ -n "$ID" ]; then echo "it already existed; reusing id ${ID}"; break; fi
+              fi
+              # Unlike the action this replaces, say what GitHub actually said.
+              head -c 500 /tmp/release-out.json; echo
+            done
+          fi
+
+          if [ -z "$ID" ]; then
+            echo "::error::Could not create or find release ${TAG}. GitHub's own message is printed above. A 403 here, with a token that worked on earlier releases, is usually a secondary rate limit — re-running this job later is the first thing to try. The .wgt is attached to this run as an artifact either way, so nothing is lost."
+            exit 1
+          fi
+
+          UPLOAD="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${ID}/assets"
+          ASSET_ID='import json,sys; print(next((str(a["id"]) for a in json.load(sys.stdin) if a["name"]==sys.argv[1]), ""))'
+          FAILED=0
+          for file in standalone/release/*; do
+            if [ ! -f "$file" ]; then continue; fi
+            NAME=$(basename "$file")
+
+            # Replace rather than fail: an asset of this name may already be
+            # attached from an earlier attempt at this same release.
+            OLD=$(curl -s -H "$AUTH" -H "$JSON" "$API/releases/${ID}/assets?per_page=100" | python3 -c "$ASSET_ID" "$NAME" 2>/dev/null || echo '')
+            if [ -n "$OLD" ]; then
+              echo "removing the existing ${NAME} (asset ${OLD})"
+              curl -s -o /dev/null -X DELETE -H "$AUTH" -H "$JSON" "$API/releases/assets/${OLD}"
+            fi
+
+            CODE=000
+            for delay in 0 15 45; do
+              if [ "$delay" != "0" ]; then echo "waiting ${delay}s before retrying ${NAME}"; sleep "$delay"; fi
+              CODE=$(curl -s -o /tmp/asset-out.json -w '%{http_code}' -X POST -H "$AUTH" -H "Content-Type: application/octet-stream" --data-binary @"$file" "${UPLOAD}?name=${NAME}")
+              echo "upload ${NAME} ($(stat -c%s "$file") bytes) -> HTTP ${CODE}"
+              if [ "$CODE" = "201" ]; then break; fi
+              head -c 300 /tmp/asset-out.json; echo
+            done
+            if [ "$CODE" != "201" ]; then FAILED=1; fi
+          done
+
+          if [ "$FAILED" != "0" ]; then
+            echo "::error::Release ${TAG} exists but at least one asset did not upload. The .wgt is attached to this run as an artifact, and re-running this job replaces the assets rather than duplicating them."
+            exit 1
+          fi
+          echo "release ${TAG} is complete"
