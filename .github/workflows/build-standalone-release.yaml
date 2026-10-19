@@ -210,17 +210,58 @@ jobs:
       # ----------------------------
       # Sign and package the standalone app with Tizen Studio
       # ----------------------------
+      # Kept across runs, so one successful download is enough and an outage
+      # on Tizen's server cannot block a release on its own. Run 39221552892
+      # failed here with nothing but "curl: (22) 404", which read as a problem
+      # with this repository — it was not. Checked at the time: /releases/ on
+      # the same host answered 200 while everything under /sdk/ answered 404,
+      # including the Latest/ folder that search engines have indexed as
+      # holding files dated November 2025. There was no working URL to move to.
+      - name: Restore the Tizen Studio installer from cache
+        id: tizen_cache
+        uses: actions/cache@v4
+        with:
+          path: tizen-installer
+          key: tizen-installer-${{ env.TIZEN_STUDIO_VER }}-ubuntu-64
+
       - name: Download Tizen Studio CLI
+        if: steps.tizen_cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          curl -fL -o tizen-installer "https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
-          chmod +x tizen-installer
+          URL="https://download.tizen.org/sdk/Installer/tizen-studio_${TIZEN_STUDIO_VER}/web-cli_Tizen_Studio_${TIZEN_STUDIO_VER}_ubuntu-64.bin"
+          echo "Fetching ${URL}"
+
+          # Retried, because a download of this size from this host fails
+          # transiently often enough to be worth it. A 404 will not improve on
+          # retry, so that case breaks out immediately and is reported as what
+          # it is rather than as six identical failures.
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -sSL -o tizen-installer -w '%{http_code}' "$URL" || echo 000)
+            if [ "$CODE" = "200" ] && [ -s tizen-installer ]; then
+              echo "attempt ${i}: downloaded $(stat -c%s tizen-installer) bytes"
+              chmod +x tizen-installer
+              exit 0
+            fi
+            echo "attempt ${i}: HTTP ${CODE}"
+            if [ "$CODE" = "404" ]; then break; fi
+            sleep 15
+          done
+
+          # Say which side is broken, so nobody looks here first again. The
+          # host is probed separately: an unreachable host and a missing file
+          # are different faults with different responses.
+          ROOT=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://download.tizen.org/ || echo 000)
+          echo "::error::Could not download the Tizen Studio CLI from ${URL} (last HTTP ${CODE}). download.tizen.org itself answered ${ROOT}, so if that is 200 and this is 404 then the SDK tree is broken or has moved on Tizen's side and there is nothing to fix in this repository — check https://download.tizen.org/sdk/Installer/ by hand and re-run when it returns. The installer is cached once a download succeeds, so this cannot block a release twice for the same reason."
+          exit 1
 
       - name: Install Tizen Studio CLI
         run: |
           set -euo pipefail
+          chmod +x ./tizen-installer
           ./tizen-installer --accept-license "${GITHUB_WORKSPACE}/tizen-studio"
-          rm ./tizen-installer
+          # Deliberately not deleted any more: actions/cache saves this path at
+          # the end of the job, and removing it here meant there was never
+          # anything to save.
           echo "${GITHUB_WORKSPACE}/tizen-studio/tools/ide/bin" >> $GITHUB_PATH
 
       - name: Configure certificate profile
