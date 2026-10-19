@@ -1740,6 +1740,8 @@ function finishLongPressMenu(item, menuItems) {
 }
 
 let _lastLoggedNonVideoTileKeys = null;
+// Once per page: the shape is what is worth knowing, not the count.
+let _loggedTileWithoutLines = false;
 
 /**
  * A playlist tile or a channel tile, told apart by what opens it.
@@ -1907,7 +1909,27 @@ function addLongPress(items) {
         }
         continue;
       }
-      const subtitle = item.tileRenderer.metadata.tileMetadataRenderer.lines[0].lineRenderer.items[0].lineItemRenderer.text;
+      // Reached blind before, and some tiles carry no metadata lines at all:
+      //
+      //   addLongPress.item.error {"message":"Cannot read property '0' of undefined"}
+      //
+      // Six of those inside one second in a capture. The throw was caught and
+      // the tile skipped, which was the right outcome, but it was reached by
+      // way of an exception and a log line — and a log line emitted inside a
+      // response costs this TV real time. Checking is cheaper than catching.
+      const subtitleNode = item.tileRenderer.metadata.tileMetadataRenderer.lines?.[0]
+        ?.lineRenderer?.items?.[0]?.lineItemRenderer?.text;
+      if (!subtitleNode) {
+        if (!_loggedTileWithoutLines) {
+          _loggedTileWithoutLines = true;
+          appendFileOnlyLog('tile.noMetadataLines', {
+            style: item.tileRenderer.style || null,
+            metadataKeys: Object.keys(item.tileRenderer.metadata.tileMetadataRenderer || {}),
+          });
+        }
+        continue;
+      }
+      const subtitle = subtitleNode;
       const data = longPressData({ videoId: item.tileRenderer.contentId, thumbnails: item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails, title: item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText, subtitle: subtitle.runs ? subtitle.runs[0].text : subtitle.simpleText, watchEndpointData: item.tileRenderer.onSelectCommand.watchEndpoint, item });
       finishLongPressMenu(item, data.showMenuCommand.menu.menuRenderer.items);
       item.tileRenderer.onLongPressCommand = data;

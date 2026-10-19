@@ -22,8 +22,33 @@
  * guarded and the whole thing can come back empty.
  */
 
+// Asked once per page, and the answer kept even when it is null.
+//
+// This was being asked per syslog frame, through hostname(), and on a TV
+// without the productinfo privilege each ask throws three times:
+//
+//   [productinfo.js] getModel      error code 18
+//   [productinfo.js] getRealModel  error code 18
+//   [productinfo.js] getModelCode  error code 18
+//
+// Code 18 is Tizen's SECURITY_ERR. The throws are caught here, but Tizen logs
+// each one itself, the console interceptor picks those lines up, and every one
+// becomes a log line of its own — so logging was producing errors that
+// produced more logging. config.xml declares no productinfo privilege, so this
+// can never succeed on the standalone app and the user agent fallback is what
+// supplies the name either way.
+//
+// A TV does not change model while the page is open, so one ask is enough.
+let _model;
+
 /** The model as it reads for a person: "UE55RU7179 (RU7179)", or null. */
 export function detectTvModel() {
+    if (_model !== undefined) return _model;
+    _model = probeTvModel();
+    return _model;
+}
+
+function probeTvModel() {
     let modelName = null;
     let modelCode = null;
 
