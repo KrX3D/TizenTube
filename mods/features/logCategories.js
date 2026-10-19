@@ -39,13 +39,20 @@ const PREFIX_CATEGORY = {
 
   dearrow: 'thumbs', thumbs: 'thumbs',
 
-  resume: 'player', screenOff: 'player', sponsorblock: 'player',
+  resume: 'player', screenOff: 'player',
   captionStyle: 'player', player: 'player',
+
+  // Its own category rather than folded into 'player', because the volumes
+  // are nothing alike. One capture held 7302 SponsorBlock lines against 29942
+  // in the whole file, while the player diagnostics the same person was
+  // reading came to a few dozen — so switching the noise off used to mean
+  // switching off the thing being looked at.
+  sponsorblock: 'sponsorblock',
 };
 
 export const LOG_CATEGORIES = [
   'nav', 'ads', 'shorts', 'watched', 'playlist',
-  'filters', 'shelves', 'thumbs', 'player', 'other',
+  'filters', 'shelves', 'thumbs', 'player', 'sponsorblock', 'other',
 ];
 
 export function categoryForLabel(label) {

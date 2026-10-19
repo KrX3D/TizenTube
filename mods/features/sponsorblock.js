@@ -3,6 +3,7 @@ import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { showToast } from '../ui/ytUI.js';
 import { t } from 'i18next';
+import { isCategoryEnabled } from './logCategories.js';
 
 // Copied from https://github.com/ajayyy/SponsorBlock/blob/da1a535de784540ee10166a75a3eb8537073838c/src/config.ts#L113-L134
 const barTypes = {
@@ -67,6 +68,14 @@ const sponsorblockAPI = 'https://sponsor.ajay.app/api';
 const _lastSaid = new Map();
 
 function say(key, ...args) {
+    // Categories are enforced inside appendFileOnlyLog, and this file has
+    // never gone through it — say() writes straight to console.info, so these
+    // lines could not be switched off at all. Asked for: a way to hide them.
+    //
+    // Checked before the line is even built, so a disabled category costs
+    // nothing: no stringify of the segment, no console call, and so nothing
+    // for the console interceptor to ship to syslog and the log server.
+    if (!isCategoryEnabled('sponsorblock')) return;
     const line = args.map((a) => {
         if (a === null || a === undefined) return String(a);
         if (typeof a !== 'object') return String(a);
