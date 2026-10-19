@@ -404,20 +404,74 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // id"), losing the race — worse on slower hardware (5.5).
             // Started immediately (not lazily on first context) so it's
             // already in flight/cached by the time any context appears.
-            const modFilePromise = userScriptSource().then((src) => {
-                return fetch(src.url).then((res) => res.text()).then((text) => {
-                    // The one line whose absence cost two sessions: what was
-                    // actually injected, and from where.
-                    if (typeof relayLog === 'function') {
-                        relayLog({
-                            ts: new Date().toISOString(), level: 'INFO', context: 'Injector',
-                            message: 'userscript ' + (src.version || 'unpinned') + ' fetched from '
-                                + src.url + ' (' + text.length + ' bytes)'
-                        });
+            // A pinned URL can 404, and this used to inject the 404.
+            //
+            // The version comes from the npm registry, which has it the moment
+            // it is published. jsDelivr has to pull it from npm afterwards, and
+            // that is not instant: measured on one release, the pinned path
+            // answered 404 or 502 for every attempt across three and a half
+            // minutes before catching up. For that whole window this TV asks
+            // npm, is told 1.30.930, builds the pinned URL, and gets an error
+            // page.
+            //
+            // res.ok was never checked, so res.text() handed back the body of
+            // that error page and it was injected as the userscript. Not a
+            // failed injection — a successful injection of nothing useful,
+            // which looks from the sofa like TizenTube simply not loading.
+            //
+            // So the response is checked, and a pinned URL that will not serve
+            // falls back to the unversioned one. That is slightly stale by
+            // design — jsDelivr caches its idea of "latest" for twelve hours —
+            // and slightly stale is worth far more than an error page.
+            const fetchUserScript = (src, allowFallback) => {
+                return fetch(src.url).then((res) => {
+                    if (!res || !res.ok) {
+                        const status = res ? res.status : 'no response';
+                        if (allowFallback && src.pinned) {
+                            if (typeof relayLog === 'function') {
+                                relayLog({
+                                    ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
+                                    message: 'pinned userscript ' + src.version + ' gave HTTP ' + status
+                                        + ' at ' + src.url + ' — jsDelivr has probably not pulled it from npm yet.'
+                                        + ' Falling back to the unversioned URL, which may be a release behind.'
+                                });
+                            }
+                            return fetchUserScript({ url: USERSCRIPT_UNPINNED, version: null, pinned: false }, false);
+                        }
+                        throw new Error('userscript fetch failed with HTTP ' + status + ' at ' + src.url);
                     }
-                    return text;
+                    return res.text().then((text) => {
+                        // An error page is not always an error status. Anything
+                        // this short is not the bundle, which is megabytes.
+                        if (!text || text.length < 10000) {
+                            if (allowFallback && src.pinned) {
+                                if (typeof relayLog === 'function') {
+                                    relayLog({
+                                        ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
+                                        message: 'pinned userscript ' + src.version + ' returned only '
+                                            + (text ? text.length : 0) + ' bytes, which cannot be the bundle.'
+                                            + ' Falling back to the unversioned URL.'
+                                    });
+                                }
+                                return fetchUserScript({ url: USERSCRIPT_UNPINNED, version: null, pinned: false }, false);
+                            }
+                            throw new Error('userscript body was only ' + (text ? text.length : 0) + ' bytes');
+                        }
+                        // The one line whose absence cost two sessions: what was
+                        // actually injected, and from where.
+                        if (typeof relayLog === 'function') {
+                            relayLog({
+                                ts: new Date().toISOString(), level: 'INFO', context: 'Injector',
+                                message: 'userscript ' + (src.version || 'unpinned') + ' fetched from '
+                                    + src.url + ' (' + text.length + ' bytes)'
+                            });
+                        }
+                        return text;
+                    });
                 });
-            });
+            };
+
+            const modFilePromise = userScriptSource().then((src) => fetchUserScript(src, true));
 
             client.on('Runtime.executionContextCreated', m => {
                 // Matches TizenBrew's own debugger.js: only inject into the
