@@ -44,17 +44,27 @@ const CHECK_MS = 10000;
 // the wedge lasting tens of seconds while a single slow beat is common.
 const STUCK_BEATS_BEFORE_ACTING = 2;
 
-// Per video. Each one is a bigger push than the last, and after the third the
-// problem is not one a nudge can fix.
-const MAX_ATTEMPTS = 3;
+// Per video. Two now rather than three: a third attempt has never been the one
+// that worked, and every attempt costs buffer.
+const MAX_ATTEMPTS = 2;
 
-// How far the seeks jump. The first is the smallest move that still counts as
-// a seek; the second is far enough to clear a bad segment boundary.
-const SMALL_SEEK_S = 0.1;
-const LARGER_SEEK_S = 0.5;
+// One jump, and a whole second of it. The first version nudged by 0.1s, which
+// was wrong twice over: it lands mid-audio-frame, which drops sound until the
+// next sync point, and it cannot cross to the next segment, which is the only
+// thing a seek can usefully do about a frame the decoder will not pass.
+const SEEK_S = 1;
+
+// Above HAVE_CURRENT_DATA the player has what it needs at the playhead, so a
+// seek is not what is missing. See the readyState note in check().
+const WEDGED_READY_STATE = 2;
+
+// A buffer that fell by more than this since the last look is draining, which
+// is starvation or a recovery in progress rather than a wedge.
+const DRAIN_TOLERANCE_S = 1;
 
 let timer = null;
 let lastPosition = null;
+let lastAhead = null;
 let stuckBeats = 0;
 let attempts = 0;
 let lastVideoId = null;
@@ -141,8 +151,7 @@ function act(video, attempt, detail) {
         appendFileOnlyLog('unwedge.play', detail);
         return;
     }
-    const by = attempt === 2 ? SMALL_SEEK_S : LARGER_SEEK_S;
-    const target = seekTarget(video, by);
+    const target = seekTarget(video, SEEK_S);
     try {
         video.currentTime = target;
         try { video.play(); } catch (_) { }
@@ -162,6 +171,7 @@ function check() {
     if (key !== lastVideoId) {
         lastVideoId = key;
         lastPosition = null;
+        lastAhead = null;
         stuckBeats = 0;
         attempts = 0;
     }
@@ -180,6 +190,9 @@ function check() {
     const at = Number(video.currentTime) || 0;
     const moved = lastPosition === null ? null : at - lastPosition;
     lastPosition = at;
+    const ahead = bufferedAhead(video);
+    const previousAhead = lastAhead;
+    lastAhead = ahead;
 
     // Anything the viewer asked for is not a wedge.
     if (paused || seeking || !(rate > 0)) {
@@ -191,13 +204,71 @@ function check() {
         return;
     }
 
-    const ahead = bufferedAhead(video);
+    // The playhead went backwards, so something else is driving this player —
+    // and it is almost certainly the player recovering on its own. Captured on
+    // 19 October: it oscillated 1012 -> 1009 -> 1012 -> 1009 around a frame it
+    // could not pass, and because a backwards move satisfies "has not
+    // advanced", this file read each swing as a fresh wedge and seeked into
+    // the middle of someone else's retry. Standing well back is the only
+    // useful thing to do here.
+    if (moved < -0.05) {
+        stuckBeats = 0;
+        attempts = 0;
+        appendFileOnlyLog('unwedge.selfRecovering', {
+            at: Math.round(at * 10) / 10,
+            movedSec: Math.round(moved * 10) / 10,
+            bufferedAhead: Math.round(ahead * 10) / 10,
+            readyState,
+        });
+        return;
+    }
+
     if (ahead <= 0.5) {
         // Nothing to play. This is the other failure — the buffer drained —
         // and a seek cannot conjure data. Counted but never acted on, so a
         // capture still shows it was considered.
         stuckBeats = 0;
         appendFileOnlyLog('unwedge.starved', { at: Math.round(at), bufferedAhead: Math.round(ahead * 10) / 10, readyState });
+        return;
+    }
+
+    // Draining rather than wedged. In the same capture the buffer went 31.8 ->
+    // 8.2 -> 7.8 while the position sat still, and a seek during that took
+    // another twenty-three seconds of margin out of a player that was already
+    // short of it.
+    if (previousAhead !== null && ahead < previousAhead - DRAIN_TOLERANCE_S) {
+        stuckBeats = 0;
+        appendFileOnlyLog('unwedge.draining', {
+            at: Math.round(at),
+            bufferedAhead: Math.round(ahead * 10) / 10,
+            wasAhead: Math.round(previousAhead * 10) / 10,
+            readyState,
+        });
+        return;
+    }
+
+    // The discriminator between the two captures, and the reason this file
+    // exists at all:
+    //
+    //   18 Oct  readyState 1, 8.2s buffered, frozen past twenty seconds, and
+    //           only an app restart cleared it. The player did not have data
+    //           at the playhead although it held plenty just past it, which is
+    //           what a seek is actually for.
+    //
+    //   19 Oct  readyState 4, buffer healthy, looping over one frame. The
+    //           player had everything it needed at that position and still
+    //           could not pass it, so the fault is in decoding that frame and
+    //           no seek of any size addresses it. Nudging only cost buffer and
+    //           dropped the sound.
+    //
+    // So acting is limited to the first shape.
+    if (readyState >= WEDGED_READY_STATE) {
+        stuckBeats = 0;
+        appendFileOnlyLog('unwedge.hasDataButStuck', {
+            at: Math.round(at),
+            bufferedAhead: Math.round(ahead * 10) / 10,
+            readyState,
+        });
         return;
     }
 
