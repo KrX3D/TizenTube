@@ -346,7 +346,24 @@ class SponsorBlockHandler {
 
     const [segment] = nextSegments;
     const [start, end] = segment.segment;
-    say('scheduling', this.videoID, 'Scheduling skip of', segment, 'in', start - this.video.currentTime);
+    // No countdown in this line, and that is the whole point of the change.
+    //
+    // say() prints only when its line CHANGES, which is why "No more segments"
+    // appears once in a capture rather than four times a second. This line
+    // ended with start - currentTime, a number that is different on every
+    // tick, so it never matched the previous line and never deduped: 7302 of
+    // them in one capture, a quarter of every line in the file, four a second
+    // for as long as a segment lay ahead.
+    //
+    // That was the SponsorBlock freeze. Before log sends were moved off the
+    // caller's thread each line cost this TV 180-300ms, so four a second was
+    // most of a second in every second, spent on a line saying the same thing
+    // as the one before it.
+    //
+    // The segment is still named, which is the information worth having. How
+    // long until it starts is derivable from it and the position, and was
+    // never worth four lines a second.
+    say('scheduling', this.videoID, 'Scheduling skip of', segment);
 
     this.nextSkipTimeout = setTimeout(() => {
       try {
