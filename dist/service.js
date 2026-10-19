@@ -8,14 +8,14 @@ var require$$3$2 = require('fs');
 var require$$1$3 = require('path');
 var require$$7$1 = require('http');
 var require$$8 = require('url');
-var require$$1$4 = require('string_decoder');
 var require$$4$1 = require('timers');
-var require$$1$5 = require('assert');
+var require$$1$4 = require('assert');
 var require$$0$5 = require('tty');
 var require$$4$2 = require('net');
-var require$$1$6 = require('stream');
+var require$$1$5 = require('stream');
 var require$$3$3 = require('zlib');
 var require$$0$6 = require('buffer');
+var require$$1$6 = require('string_decoder');
 var require$$8$1 = require('querystring');
 var require$$0$7 = require('crypto');
 
@@ -1010,7 +1010,7 @@ var utils$4 = {};
  * limitations under the License.
  *
 */
-(function (exports$1) {
+(function (exports) {
 
   var regExpChars = /[|\\{}()[\]^$+*?.]/g;
   var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -1028,7 +1028,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.escapeRegExpChars = function (string) {
+  exports.escapeRegExpChars = function (string) {
     // istanbul ignore if
     if (!string) {
       return '';
@@ -1070,7 +1070,7 @@ var utils$4 = {};
    * @private
    */
 
-  exports$1.escapeXML = function (markup) {
+  exports.escapeXML = function (markup) {
     return markup == undefined ? '' : String(markup).replace(_MATCH_HTML, encode_char);
   };
   function escapeXMLToString() {
@@ -1082,12 +1082,12 @@ var utils$4 = {};
       // cannot have the property changed using an assignment. If using strict mode, attempting that will cause an error. If not using strict
       // mode, attempting that will be silently ignored.
       // However, we can still explicitly shadow the prototype's "toString" property by defining a new "toString" property on this object.
-      Object.defineProperty(exports$1.escapeXML, 'toString', {
+      Object.defineProperty(exports.escapeXML, 'toString', {
         value: escapeXMLToString
       });
     } else {
       // If Object.defineProperty() doesn't exist, attempt to shadow this property using the assignment operator.
-      exports$1.escapeXML.toString = escapeXMLToString;
+      exports.escapeXML.toString = escapeXMLToString;
     }
   } catch (err) {
     console.warn('Unable to set escapeXML.toString (is the Function prototype frozen?)');
@@ -1104,7 +1104,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.shallowCopy = function (to, from) {
+  exports.shallowCopy = function (to, from) {
     from = from || {};
     if (to !== null && to !== undefined) {
       for (var p in from) {
@@ -1132,7 +1132,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.shallowCopyFromList = function (to, from, list) {
+  exports.shallowCopyFromList = function (to, from, list) {
     list = list || [];
     from = from || {};
     if (to !== null && to !== undefined) {
@@ -1160,7 +1160,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.cache = {
+  exports.cache = {
     _data: {},
     set: function set(key, val) {
       this._data[key] = val;
@@ -1184,7 +1184,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.hyphenToCamel = function (str) {
+  exports.hyphenToCamel = function (str) {
     return str.replace(/-[a-z]/g, function (match) {
       return match[1].toUpperCase();
     });
@@ -1197,7 +1197,7 @@ var utils$4 = {};
    * @static
    * @private
    */
-  exports$1.createNullProtoObjWherePossible = function () {
+  exports.createNullProtoObjWherePossible = function () {
     if (typeof Object.create == 'function') {
       return function () {
         return Object.create(null);
@@ -1217,8 +1217,8 @@ var utils$4 = {};
       return {};
     };
   }();
-  exports$1.hasOwnOnlyObject = function (obj) {
-    var o = exports$1.createNullProtoObjWherePossible();
+  exports.hasOwnOnlyObject = function (obj) {
+    var o = exports.createNullProtoObjWherePossible();
     for (var p in obj) {
       if (hasOwn(obj, p)) {
         o[p] = obj[p];
@@ -1249,7 +1249,7 @@ var require$$3$1 = {
  * limitations under the License.
  *
 */
-(function (exports$1) {
+(function (exports) {
 
   /**
    * @file Embedded JavaScript templating engine. {@link http://ejs.co}
@@ -1304,7 +1304,7 @@ var require$$3$1 = {
    * @type {Cache}
    */
 
-  exports$1.cache = utils.cache;
+  exports.cache = utils.cache;
 
   /**
    * Custom file loader. Useful for template preprocessing or restricting access
@@ -1313,7 +1313,7 @@ var require$$3$1 = {
    * @type {fileLoader}
    */
 
-  exports$1.fileLoader = fs.readFileSync;
+  exports.fileLoader = fs.readFileSync;
 
   /**
    * Name of the object containing the locals.
@@ -1325,7 +1325,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.localsName = _DEFAULT_LOCALS_NAME;
+  exports.localsName = _DEFAULT_LOCALS_NAME;
 
   /**
    * Promise implementation -- defaults to the native implementation if available
@@ -1335,7 +1335,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.promiseImpl = new Function('return this;')().Promise;
+  exports.promiseImpl = new Function('return this;')().Promise;
 
   /**
    * Get the path to the included file from the parent file path and the
@@ -1346,7 +1346,7 @@ var require$$3$1 = {
    * @param {Boolean} [isDir=false] whether the parent file path is a directory
    * @return {String}
    */
-  exports$1.resolveInclude = function (name, filename, isDir) {
+  exports.resolveInclude = function (name, filename, isDir) {
     var dirname = path.dirname;
     var extname = path.extname;
     var resolve = path.resolve;
@@ -1368,7 +1368,7 @@ var require$$3$1 = {
   function resolvePaths(name, paths) {
     var filePath;
     if (paths.some(function (v) {
-      filePath = exports$1.resolveInclude(name, v, true);
+      filePath = exports.resolveInclude(name, v, true);
       return fs.existsSync(filePath);
     })) {
       return filePath;
@@ -1394,14 +1394,14 @@ var require$$3$1 = {
       if (Array.isArray(options.root)) {
         includePath = resolvePaths(path, options.root);
       } else {
-        includePath = exports$1.resolveInclude(path, options.root || '/', true);
+        includePath = exports.resolveInclude(path, options.root || '/', true);
       }
     }
     // Relative paths
     else {
       // Look relative to a passed filename first
       if (options.filename) {
-        filePath = exports$1.resolveInclude(path, options.filename);
+        filePath = exports.resolveInclude(path, options.filename);
         if (fs.existsSync(filePath)) {
           includePath = filePath;
         }
@@ -1443,7 +1443,7 @@ var require$$3$1 = {
       if (!filename) {
         throw new Error('cache option requires a filename');
       }
-      func = exports$1.cache.get(filename);
+      func = exports.cache.get(filename);
       if (func) {
         return func;
       }
@@ -1457,9 +1457,9 @@ var require$$3$1 = {
       }
       template = fileLoader(filename).toString().replace(_BOM, '');
     }
-    func = exports$1.compile(template, options);
+    func = exports.compile(template, options);
     if (options.cache) {
-      exports$1.cache.set(filename, func);
+      exports.cache.set(filename, func);
     }
     return func;
   }
@@ -1479,8 +1479,8 @@ var require$$3$1 = {
   function tryHandleCache(options, data, cb) {
     var result;
     if (!cb) {
-      if (typeof exports$1.promiseImpl == 'function') {
-        return new exports$1.promiseImpl(function (resolve, reject) {
+      if (typeof exports.promiseImpl == 'function') {
+        return new exports.promiseImpl(function (resolve, reject) {
           try {
             result = handleCache(options)(data);
             resolve(result);
@@ -1510,7 +1510,7 @@ var require$$3$1 = {
    */
 
   function fileLoader(filePath) {
-    return exports$1.fileLoader(filePath);
+    return exports.fileLoader(filePath);
   }
 
   /**
@@ -1590,7 +1590,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.compile = function compile(template, opts) {
+  exports.compile = function compile(template, opts) {
     var templ;
 
     // v1 compat
@@ -1624,7 +1624,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.render = function (template, d, o) {
+  exports.render = function (template, d, o) {
     var data = d || utils.createNullProtoObjWherePossible();
     var opts = o || utils.createNullProtoObjWherePossible();
 
@@ -1649,7 +1649,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.renderFile = function () {
+  exports.renderFile = function () {
     var args = Array.prototype.slice.call(arguments);
     var filename = args.shift();
     var cb;
@@ -1711,9 +1711,9 @@ var require$$3$1 = {
    * EJS template class
    * @public
    */
-  exports$1.Template = Template;
-  exports$1.clearCache = function () {
-    exports$1.cache.reset();
+  exports.Template = Template;
+  exports.clearCache = function () {
+    exports.cache.reset();
   };
   function Template(text, optsParam) {
     var opts = utils.hasOwnOnlyObject(optsParam);
@@ -1729,9 +1729,9 @@ var require$$3$1 = {
     options.compileDebug = opts.compileDebug !== false;
     options.debug = !!opts.debug;
     options.filename = opts.filename;
-    options.openDelimiter = opts.openDelimiter || exports$1.openDelimiter || _DEFAULT_OPEN_DELIMITER;
-    options.closeDelimiter = opts.closeDelimiter || exports$1.closeDelimiter || _DEFAULT_CLOSE_DELIMITER;
-    options.delimiter = opts.delimiter || exports$1.delimiter || _DEFAULT_DELIMITER;
+    options.openDelimiter = opts.openDelimiter || exports.openDelimiter || _DEFAULT_OPEN_DELIMITER;
+    options.closeDelimiter = opts.closeDelimiter || exports.closeDelimiter || _DEFAULT_CLOSE_DELIMITER;
+    options.delimiter = opts.delimiter || exports.delimiter || _DEFAULT_DELIMITER;
     options.strict = opts.strict || false;
     options.context = opts.context;
     options.cache = opts.cache || false;
@@ -1739,7 +1739,7 @@ var require$$3$1 = {
     options.root = opts.root;
     options.includer = opts.includer;
     options.outputFunctionName = opts.outputFunctionName;
-    options.localsName = opts.localsName || exports$1.localsName || _DEFAULT_LOCALS_NAME;
+    options.localsName = opts.localsName || exports.localsName || _DEFAULT_LOCALS_NAME;
     options.views = opts.views;
     options.async = opts.async;
     options.destructuredLocals = opts.destructuredLocals;
@@ -2073,7 +2073,7 @@ var require$$3$1 = {
    * @public
    * @func
    * */
-  exports$1.escapeXML = utils.escapeXML;
+  exports.escapeXML = utils.escapeXML;
 
   /**
    * Express.js support.
@@ -2084,7 +2084,7 @@ var require$$3$1 = {
    * @func
    */
 
-  exports$1.__express = exports$1.renderFile;
+  exports.__express = exports.renderFile;
 
   /**
    * Version of EJS.
@@ -2094,7 +2094,7 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.VERSION = _VERSION_STRING;
+  exports.VERSION = _VERSION_STRING;
 
   /**
    * Name for detection of EJS.
@@ -2104,11 +2104,11 @@ var require$$3$1 = {
    * @public
    */
 
-  exports$1.name = _NAME;
+  exports.name = _NAME;
 
   /* istanbul ignore if */
   if (typeof window != 'undefined') {
-    window.ejs = exports$1;
+    window.ejs = exports;
   }
 })(ejs$1);
 
@@ -6337,7 +6337,7 @@ var hasRequiredSax;
 function requireSax() {
   if (hasRequiredSax) return sax;
   hasRequiredSax = 1;
-  (function (exports$1) {
+  (function (exports) {
     (function (sax) {
       // wrapper for non-node envs
       sax.parser = function (strict, opt) {
@@ -6367,9 +6367,13 @@ function requireSax() {
         clearBuffers(parser);
         parser.q = parser.c = '';
         parser.bufferCheckPosition = sax.MAX_BUFFER_LENGTH;
+        parser.encoding = null;
         parser.opt = opt || {};
         parser.opt.lowercase = parser.opt.lowercase || parser.opt.lowercasetags;
         parser.looseCase = parser.opt.lowercase ? 'toLowerCase' : 'toUpperCase';
+        parser.opt.maxEntityCount = parser.opt.maxEntityCount || 512;
+        parser.opt.maxEntityDepth = parser.opt.maxEntityDepth || 4;
+        parser.entityCount = parser.entityDepth = 0;
         parser.tags = [];
         parser.closed = parser.closedRoot = parser.sawRoot = false;
         parser.tag = parser.error = null;
@@ -6492,6 +6496,32 @@ function requireSax() {
       function createStream(strict, opt) {
         return new SAXStream(strict, opt);
       }
+      function determineBufferEncoding(data, isEnd) {
+        // BOM-based detection is the most reliable signal when present.
+        if (data.length >= 2) {
+          if (data[0] === 0xff && data[1] === 0xfe) {
+            return 'utf-16le';
+          }
+          if (data[0] === 0xfe && data[1] === 0xff) {
+            return 'utf-16be';
+          }
+        }
+        if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+          return 'utf8';
+        }
+        if (data.length >= 4) {
+          // XML documents without a BOM still start with "<?xml", which is enough
+          // to distinguish UTF-16LE/BE from UTF-8 by looking at the zero bytes.
+          if (data[0] === 0x3c && data[1] === 0x00 && data[2] === 0x3f && data[3] === 0x00) {
+            return 'utf-16le';
+          }
+          if (data[0] === 0x00 && data[1] === 0x3c && data[2] === 0x00 && data[3] === 0x3f) {
+            return 'utf-16be';
+          }
+          return 'utf8';
+        }
+        return isEnd ? 'utf8' : null;
+      }
       function SAXStream(strict, opt) {
         if (!(this instanceof SAXStream)) {
           return new SAXStream(strict, opt);
@@ -6512,6 +6542,7 @@ function requireSax() {
           me._parser.error = null;
         };
         this._decoder = null;
+        this._decoderBuffer = null;
         streamWraps.forEach(function (ev) {
           Object.defineProperty(me, 'on' + ev, {
             get: function get() {
@@ -6535,13 +6566,42 @@ function requireSax() {
           value: SAXStream
         }
       });
+      SAXStream.prototype._decodeBuffer = function (data, isEnd) {
+        if (this._decoderBuffer) {
+          // Keep incomplete leading bytes until we have enough data to infer the
+          // stream encoding, then decode the buffered prefix together with the next chunk.
+          data = Buffer.concat([this._decoderBuffer, data]);
+          this._decoderBuffer = null;
+        }
+        if (!this._decoder) {
+          var encoding = determineBufferEncoding(data, isEnd);
+          if (!encoding) {
+            // A very short first chunk may not contain enough bytes to detect the
+            // encoding yet, so defer decoding until the next write/end call.
+            this._decoderBuffer = data;
+            return '';
+          }
+
+          // Store the detected transport encoding so strict mode can compare it
+          // with the optional encoding declared in the XML prolog later on.
+          this._parser.encoding = encoding;
+          this._decoder = new TextDecoder(encoding);
+        }
+        return this._decoder.decode(data, {
+          stream: !isEnd
+        });
+      };
       SAXStream.prototype.write = function (data) {
         if (typeof Buffer === 'function' && typeof Buffer.isBuffer === 'function' && Buffer.isBuffer(data)) {
-          if (!this._decoder) {
-            var SD = require$$1$4.StringDecoder;
-            this._decoder = new SD('utf8');
+          data = this._decodeBuffer(data, false);
+        } else if (this._decoderBuffer) {
+          // Flush any buffered binary prefix before handling a string chunk.
+          // This only matters if the caller mixes Buffer and string writes (used in test).
+          var remaining = this._decodeBuffer(Buffer.alloc(0), true);
+          if (remaining) {
+            this._parser.write(remaining);
+            this.emit('data', remaining);
           }
-          data = this._decoder.write(data);
         }
         this._parser.write(data.toString());
         this.emit('data', data);
@@ -6550,6 +6610,20 @@ function requireSax() {
       SAXStream.prototype.end = function (chunk) {
         if (chunk && chunk.length) {
           this.write(chunk);
+        }
+        // Flush any remaining decoded data from the TextDecoder
+        if (this._decoderBuffer) {
+          var finalChunk = this._decodeBuffer(Buffer.alloc(0), true);
+          if (finalChunk) {
+            this._parser.write(finalChunk);
+            this.emit('data', finalChunk);
+          }
+        } else if (this._decoder) {
+          var remaining = this._decoder.decode();
+          if (remaining) {
+            this._parser.write(remaining);
+            this.emit('data', remaining);
+          }
         }
         this._parser.end();
         return true;
@@ -6568,8 +6642,8 @@ function requireSax() {
 
       // this really needs to be replaced with character classes.
       // XML allows all manner of ridiculous numbers and digits.
-      var CDATA = '[CDATA[';
-      var DOCTYPE = 'DOCTYPE';
+      var CDATAre = /^\[CDATA\[$/i;
+      var DOCTYPEre = /^DOCTYPE$/i;
       var XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace';
       var XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/';
       var rootNS = {
@@ -6591,7 +6665,7 @@ function requireSax() {
         return c === ' ' || c === '\n' || c === '\r' || c === '\t';
       }
       function isQuote(c) {
-        return c === '"' || c === '\'';
+        return c === '"' || c === "'";
       }
       function isAttribEnd(c) {
         return c === '>' || isWhitespace(c);
@@ -6676,268 +6750,268 @@ function requireSax() {
         // <script> ...
         SCRIPT_ENDING: S++ // <script> ... <
       };
-      sax.XML_ENTITIES = {
-        'amp': '&',
-        'gt': '>',
-        'lt': '<',
-        'quot': '"',
-        'apos': "'"
-      };
-      sax.ENTITIES = {
-        'amp': '&',
-        'gt': '>',
-        'lt': '<',
-        'quot': '"',
-        'apos': "'",
-        'AElig': 198,
-        'Aacute': 193,
-        'Acirc': 194,
-        'Agrave': 192,
-        'Aring': 197,
-        'Atilde': 195,
-        'Auml': 196,
-        'Ccedil': 199,
-        'ETH': 208,
-        'Eacute': 201,
-        'Ecirc': 202,
-        'Egrave': 200,
-        'Euml': 203,
-        'Iacute': 205,
-        'Icirc': 206,
-        'Igrave': 204,
-        'Iuml': 207,
-        'Ntilde': 209,
-        'Oacute': 211,
-        'Ocirc': 212,
-        'Ograve': 210,
-        'Oslash': 216,
-        'Otilde': 213,
-        'Ouml': 214,
-        'THORN': 222,
-        'Uacute': 218,
-        'Ucirc': 219,
-        'Ugrave': 217,
-        'Uuml': 220,
-        'Yacute': 221,
-        'aacute': 225,
-        'acirc': 226,
-        'aelig': 230,
-        'agrave': 224,
-        'aring': 229,
-        'atilde': 227,
-        'auml': 228,
-        'ccedil': 231,
-        'eacute': 233,
-        'ecirc': 234,
-        'egrave': 232,
-        'eth': 240,
-        'euml': 235,
-        'iacute': 237,
-        'icirc': 238,
-        'igrave': 236,
-        'iuml': 239,
-        'ntilde': 241,
-        'oacute': 243,
-        'ocirc': 244,
-        'ograve': 242,
-        'oslash': 248,
-        'otilde': 245,
-        'ouml': 246,
-        'szlig': 223,
-        'thorn': 254,
-        'uacute': 250,
-        'ucirc': 251,
-        'ugrave': 249,
-        'uuml': 252,
-        'yacute': 253,
-        'yuml': 255,
-        'copy': 169,
-        'reg': 174,
-        'nbsp': 160,
-        'iexcl': 161,
-        'cent': 162,
-        'pound': 163,
-        'curren': 164,
-        'yen': 165,
-        'brvbar': 166,
-        'sect': 167,
-        'uml': 168,
-        'ordf': 170,
-        'laquo': 171,
-        'not': 172,
-        'shy': 173,
-        'macr': 175,
-        'deg': 176,
-        'plusmn': 177,
-        'sup1': 185,
-        'sup2': 178,
-        'sup3': 179,
-        'acute': 180,
-        'micro': 181,
-        'para': 182,
-        'middot': 183,
-        'cedil': 184,
-        'ordm': 186,
-        'raquo': 187,
-        'frac14': 188,
-        'frac12': 189,
-        'frac34': 190,
-        'iquest': 191,
-        'times': 215,
-        'divide': 247,
-        'OElig': 338,
-        'oelig': 339,
-        'Scaron': 352,
-        'scaron': 353,
-        'Yuml': 376,
-        'fnof': 402,
-        'circ': 710,
-        'tilde': 732,
-        'Alpha': 913,
-        'Beta': 914,
-        'Gamma': 915,
-        'Delta': 916,
-        'Epsilon': 917,
-        'Zeta': 918,
-        'Eta': 919,
-        'Theta': 920,
-        'Iota': 921,
-        'Kappa': 922,
-        'Lambda': 923,
-        'Mu': 924,
-        'Nu': 925,
-        'Xi': 926,
-        'Omicron': 927,
-        'Pi': 928,
-        'Rho': 929,
-        'Sigma': 931,
-        'Tau': 932,
-        'Upsilon': 933,
-        'Phi': 934,
-        'Chi': 935,
-        'Psi': 936,
-        'Omega': 937,
-        'alpha': 945,
-        'beta': 946,
-        'gamma': 947,
-        'delta': 948,
-        'epsilon': 949,
-        'zeta': 950,
-        'eta': 951,
-        'theta': 952,
-        'iota': 953,
-        'kappa': 954,
-        'lambda': 955,
-        'mu': 956,
-        'nu': 957,
-        'xi': 958,
-        'omicron': 959,
-        'pi': 960,
-        'rho': 961,
-        'sigmaf': 962,
-        'sigma': 963,
-        'tau': 964,
-        'upsilon': 965,
-        'phi': 966,
-        'chi': 967,
-        'psi': 968,
-        'omega': 969,
-        'thetasym': 977,
-        'upsih': 978,
-        'piv': 982,
-        'ensp': 8194,
-        'emsp': 8195,
-        'thinsp': 8201,
-        'zwnj': 8204,
-        'zwj': 8205,
-        'lrm': 8206,
-        'rlm': 8207,
-        'ndash': 8211,
-        'mdash': 8212,
-        'lsquo': 8216,
-        'rsquo': 8217,
-        'sbquo': 8218,
-        'ldquo': 8220,
-        'rdquo': 8221,
-        'bdquo': 8222,
-        'dagger': 8224,
-        'Dagger': 8225,
-        'bull': 8226,
-        'hellip': 8230,
-        'permil': 8240,
-        'prime': 8242,
-        'Prime': 8243,
-        'lsaquo': 8249,
-        'rsaquo': 8250,
-        'oline': 8254,
-        'frasl': 8260,
-        'euro': 8364,
-        'image': 8465,
-        'weierp': 8472,
-        'real': 8476,
-        'trade': 8482,
-        'alefsym': 8501,
-        'larr': 8592,
-        'uarr': 8593,
-        'rarr': 8594,
-        'darr': 8595,
-        'harr': 8596,
-        'crarr': 8629,
-        'lArr': 8656,
-        'uArr': 8657,
-        'rArr': 8658,
-        'dArr': 8659,
-        'hArr': 8660,
-        'forall': 8704,
-        'part': 8706,
-        'exist': 8707,
-        'empty': 8709,
-        'nabla': 8711,
-        'isin': 8712,
-        'notin': 8713,
-        'ni': 8715,
-        'prod': 8719,
-        'sum': 8721,
-        'minus': 8722,
-        'lowast': 8727,
-        'radic': 8730,
-        'prop': 8733,
-        'infin': 8734,
-        'ang': 8736,
-        'and': 8743,
-        'or': 8744,
-        'cap': 8745,
-        'cup': 8746,
-        'int': 8747,
-        'there4': 8756,
-        'sim': 8764,
-        'cong': 8773,
-        'asymp': 8776,
-        'ne': 8800,
-        'equiv': 8801,
-        'le': 8804,
-        'ge': 8805,
-        'sub': 8834,
-        'sup': 8835,
-        'nsub': 8836,
-        'sube': 8838,
-        'supe': 8839,
-        'oplus': 8853,
-        'otimes': 8855,
-        'perp': 8869,
-        'sdot': 8901,
-        'lceil': 8968,
-        'rceil': 8969,
-        'lfloor': 8970,
-        'rfloor': 8971,
-        'lang': 9001,
-        'rang': 9002,
-        'loz': 9674,
-        'spades': 9824,
-        'clubs': 9827,
-        'hearts': 9829,
-        'diams': 9830
-      };
+      sax.XML_ENTITIES = Object.assign(Object.create(null), {
+        amp: '&',
+        gt: '>',
+        lt: '<',
+        quot: '"',
+        apos: "'"
+      });
+      sax.ENTITIES = Object.assign(Object.create(null), {
+        amp: '&',
+        gt: '>',
+        lt: '<',
+        quot: '"',
+        apos: "'",
+        AElig: 198,
+        Aacute: 193,
+        Acirc: 194,
+        Agrave: 192,
+        Aring: 197,
+        Atilde: 195,
+        Auml: 196,
+        Ccedil: 199,
+        ETH: 208,
+        Eacute: 201,
+        Ecirc: 202,
+        Egrave: 200,
+        Euml: 203,
+        Iacute: 205,
+        Icirc: 206,
+        Igrave: 204,
+        Iuml: 207,
+        Ntilde: 209,
+        Oacute: 211,
+        Ocirc: 212,
+        Ograve: 210,
+        Oslash: 216,
+        Otilde: 213,
+        Ouml: 214,
+        THORN: 222,
+        Uacute: 218,
+        Ucirc: 219,
+        Ugrave: 217,
+        Uuml: 220,
+        Yacute: 221,
+        aacute: 225,
+        acirc: 226,
+        aelig: 230,
+        agrave: 224,
+        aring: 229,
+        atilde: 227,
+        auml: 228,
+        ccedil: 231,
+        eacute: 233,
+        ecirc: 234,
+        egrave: 232,
+        eth: 240,
+        euml: 235,
+        iacute: 237,
+        icirc: 238,
+        igrave: 236,
+        iuml: 239,
+        ntilde: 241,
+        oacute: 243,
+        ocirc: 244,
+        ograve: 242,
+        oslash: 248,
+        otilde: 245,
+        ouml: 246,
+        szlig: 223,
+        thorn: 254,
+        uacute: 250,
+        ucirc: 251,
+        ugrave: 249,
+        uuml: 252,
+        yacute: 253,
+        yuml: 255,
+        copy: 169,
+        reg: 174,
+        nbsp: 160,
+        iexcl: 161,
+        cent: 162,
+        pound: 163,
+        curren: 164,
+        yen: 165,
+        brvbar: 166,
+        sect: 167,
+        uml: 168,
+        ordf: 170,
+        laquo: 171,
+        not: 172,
+        shy: 173,
+        macr: 175,
+        deg: 176,
+        plusmn: 177,
+        sup1: 185,
+        sup2: 178,
+        sup3: 179,
+        acute: 180,
+        micro: 181,
+        para: 182,
+        middot: 183,
+        cedil: 184,
+        ordm: 186,
+        raquo: 187,
+        frac14: 188,
+        frac12: 189,
+        frac34: 190,
+        iquest: 191,
+        times: 215,
+        divide: 247,
+        OElig: 338,
+        oelig: 339,
+        Scaron: 352,
+        scaron: 353,
+        Yuml: 376,
+        fnof: 402,
+        circ: 710,
+        tilde: 732,
+        Alpha: 913,
+        Beta: 914,
+        Gamma: 915,
+        Delta: 916,
+        Epsilon: 917,
+        Zeta: 918,
+        Eta: 919,
+        Theta: 920,
+        Iota: 921,
+        Kappa: 922,
+        Lambda: 923,
+        Mu: 924,
+        Nu: 925,
+        Xi: 926,
+        Omicron: 927,
+        Pi: 928,
+        Rho: 929,
+        Sigma: 931,
+        Tau: 932,
+        Upsilon: 933,
+        Phi: 934,
+        Chi: 935,
+        Psi: 936,
+        Omega: 937,
+        alpha: 945,
+        beta: 946,
+        gamma: 947,
+        delta: 948,
+        epsilon: 949,
+        zeta: 950,
+        eta: 951,
+        theta: 952,
+        iota: 953,
+        kappa: 954,
+        lambda: 955,
+        mu: 956,
+        nu: 957,
+        xi: 958,
+        omicron: 959,
+        pi: 960,
+        rho: 961,
+        sigmaf: 962,
+        sigma: 963,
+        tau: 964,
+        upsilon: 965,
+        phi: 966,
+        chi: 967,
+        psi: 968,
+        omega: 969,
+        thetasym: 977,
+        upsih: 978,
+        piv: 982,
+        ensp: 8194,
+        emsp: 8195,
+        thinsp: 8201,
+        zwnj: 8204,
+        zwj: 8205,
+        lrm: 8206,
+        rlm: 8207,
+        ndash: 8211,
+        mdash: 8212,
+        lsquo: 8216,
+        rsquo: 8217,
+        sbquo: 8218,
+        ldquo: 8220,
+        rdquo: 8221,
+        bdquo: 8222,
+        dagger: 8224,
+        Dagger: 8225,
+        bull: 8226,
+        hellip: 8230,
+        permil: 8240,
+        prime: 8242,
+        Prime: 8243,
+        lsaquo: 8249,
+        rsaquo: 8250,
+        oline: 8254,
+        frasl: 8260,
+        euro: 8364,
+        image: 8465,
+        weierp: 8472,
+        real: 8476,
+        trade: 8482,
+        alefsym: 8501,
+        larr: 8592,
+        uarr: 8593,
+        rarr: 8594,
+        darr: 8595,
+        harr: 8596,
+        crarr: 8629,
+        lArr: 8656,
+        uArr: 8657,
+        rArr: 8658,
+        dArr: 8659,
+        hArr: 8660,
+        forall: 8704,
+        part: 8706,
+        exist: 8707,
+        empty: 8709,
+        nabla: 8711,
+        isin: 8712,
+        notin: 8713,
+        ni: 8715,
+        prod: 8719,
+        sum: 8721,
+        minus: 8722,
+        lowast: 8727,
+        radic: 8730,
+        prop: 8733,
+        infin: 8734,
+        ang: 8736,
+        and: 8743,
+        or: 8744,
+        cap: 8745,
+        cup: 8746,
+        "int": 8747,
+        there4: 8756,
+        sim: 8764,
+        cong: 8773,
+        asymp: 8776,
+        ne: 8800,
+        equiv: 8801,
+        le: 8804,
+        ge: 8805,
+        sub: 8834,
+        sup: 8835,
+        nsub: 8836,
+        sube: 8838,
+        supe: 8839,
+        oplus: 8853,
+        otimes: 8855,
+        perp: 8869,
+        sdot: 8901,
+        lceil: 8968,
+        rceil: 8969,
+        lfloor: 8970,
+        rfloor: 8971,
+        lang: 9001,
+        rang: 9002,
+        loz: 9674,
+        spades: 9824,
+        clubs: 9827,
+        hearts: 9829,
+        diams: 9830
+      });
       Object.keys(sax.ENTITIES).forEach(function (key) {
         var e = sax.ENTITIES[key];
         var s = typeof e === 'number' ? String.fromCharCode(e) : e;
@@ -6951,6 +7025,36 @@ function requireSax() {
       S = sax.STATE;
       function emit(parser, event, data) {
         parser[event] && parser[event](data);
+      }
+      function getDeclaredEncoding(body) {
+        var match = body && body.match(/(?:^|\s)encoding\s*=\s*(['"])([^'"]+)\1/i);
+        return match ? match[2] : null;
+      }
+      function normalizeEncodingName(encoding) {
+        if (!encoding) {
+          return null;
+        }
+        return encoding.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }
+      function encodingsMatch(detectedEncoding, declaredEncoding) {
+        var detected = normalizeEncodingName(detectedEncoding);
+        var declared = normalizeEncodingName(declaredEncoding);
+        if (!detected || !declared) {
+          return true;
+        }
+        if (declared === 'utf16') {
+          return detected === 'utf16le' || detected === 'utf16be';
+        }
+        return detected === declared;
+      }
+      function validateXmlDeclarationEncoding(parser, data) {
+        if (!parser.strict || !parser.encoding || !data || data.name !== 'xml') {
+          return;
+        }
+        var declaredEncoding = getDeclaredEncoding(data.body);
+        if (declaredEncoding && !encodingsMatch(parser.encoding, declaredEncoding)) {
+          strictFail(parser, 'XML declaration encoding ' + declaredEncoding + ' does not match detected stream encoding ' + parser.encoding.toUpperCase());
+        }
       }
       function emitNode(parser, nodeType, data) {
         if (parser.textNode) closeText(parser);
@@ -7236,11 +7340,21 @@ function requireSax() {
           }
         }
         entity = entity.replace(/^0+/, '');
-        if (isNaN(num) || numStr.toLowerCase() !== entity) {
+        if (isNaN(num) || numStr.toLowerCase() !== entity || num < 0 || num > 0x10ffff || !isXmlChar(num)) {
           strictFail(parser, 'Invalid character entity');
           return '&' + parser.entity + ';';
         }
         return String.fromCodePoint(num);
+      }
+
+      // Returns true if `num` is a code point that matches the XML `Char`
+      // production, false otherwise. Character references that resolve to a
+      // character outside this range (e.g. surrogates or restricted control
+      // characters) are not well-formed.
+      // https://www.w3.org/TR/REC-xml/#NT-Char
+      // https://www.w3.org/TR/REC-xml/#wf-Legalchar
+      function isXmlChar(num) {
+        return num === 0x9 || num === 0xa || num === 0xd || num >= 0x20 && num <= 0xd7ff || num >= 0xe000 && num <= 0xfffd || num >= 0x10000 && num <= 0x10ffff;
       }
       function beginWhiteSpace(parser, c) {
         if (c === '<') {
@@ -7386,12 +7500,12 @@ function requireSax() {
                 parser.state = S.DOCTYPE_DTD;
                 parser.doctype += '<!' + parser.sgmlDecl + c;
                 parser.sgmlDecl = '';
-              } else if ((parser.sgmlDecl + c).toUpperCase() === CDATA) {
+              } else if (CDATAre.test(parser.sgmlDecl + c)) {
                 emitNode(parser, 'onopencdata');
                 parser.state = S.CDATA;
                 parser.sgmlDecl = '';
                 parser.cdata = '';
-              } else if ((parser.sgmlDecl + c).toUpperCase() === DOCTYPE) {
+              } else if (DOCTYPEre.test(parser.sgmlDecl + c)) {
                 parser.state = S.DOCTYPE;
                 if (parser.doctype || parser.sawRoot) {
                   strictFail(parser, 'Inappropriately located doctype declaration');
@@ -7494,10 +7608,22 @@ function requireSax() {
               }
               continue;
             case S.CDATA:
+              var starti = i - 1;
+              while (c && c !== ']') {
+                c = charAt(chunk, i++);
+                if (c && parser.trackPosition) {
+                  parser.position++;
+                  if (c === '\n') {
+                    parser.line++;
+                    parser.column = 0;
+                  } else {
+                    parser.column++;
+                  }
+                }
+              }
+              parser.cdata += chunk.substring(starti, i - 1);
               if (c === ']') {
                 parser.state = S.CDATA_ENDING;
-              } else {
-                parser.cdata += c;
               }
               continue;
             case S.CDATA_ENDING:
@@ -7543,10 +7669,12 @@ function requireSax() {
               continue;
             case S.PROC_INST_ENDING:
               if (c === '>') {
-                emitNode(parser, 'onprocessinginstruction', {
+                var procInstEndData = {
                   name: parser.procInstName,
                   body: parser.procInstBody
-                });
+                };
+                validateXmlDeclarationEncoding(parser, procInstEndData);
+                emitNode(parser, 'onprocessinginstruction', procInstEndData);
                 parser.procInstName = parser.procInstBody = '';
                 parser.state = S.TEXT;
               } else {
@@ -7715,7 +7843,7 @@ function requireSax() {
               } else if (isMatch(nameBody, c)) {
                 parser.tagName += c;
               } else if (parser.script) {
-                parser.script += '</' + parser.tagName;
+                parser.script += '</' + parser.tagName + c;
                 parser.tagName = '';
                 parser.state = S.SCRIPT;
               } else {
@@ -7757,9 +7885,16 @@ function requireSax() {
               if (c === ';') {
                 var parsedEntity = parseEntity(parser);
                 if (parser.opt.unparsedEntities && !Object.values(sax.XML_ENTITIES).includes(parsedEntity)) {
+                  if ((parser.entityCount += 1) > parser.opt.maxEntityCount) {
+                    error(parser, 'Parsed entity count exceeds max entity count');
+                  }
+                  if ((parser.entityDepth += 1) > parser.opt.maxEntityDepth) {
+                    error(parser, 'Parsed entity depth exceeds max entity depth');
+                  }
                   parser.entity = '';
                   parser.state = returnState;
                   parser.write(parsedEntity);
+                  parser.entityDepth -= 1;
                 } else {
                   parser[buffer] += parsedEntity;
                   parser.entity = '';
@@ -7810,21 +7945,21 @@ function requireSax() {
               // `NaN`, `+Infinity`, or `-Infinity`
               codePoint < 0 ||
               // not a valid Unicode code point
-              codePoint > 0x10FFFF ||
+              codePoint > 0x10ffff ||
               // not a valid Unicode code point
               floor(codePoint) !== codePoint // not an integer
               ) {
                 throw RangeError('Invalid code point: ' + codePoint);
               }
-              if (codePoint <= 0xFFFF) {
+              if (codePoint <= 0xffff) {
                 // BMP code point
                 codeUnits.push(codePoint);
               } else {
                 // Astral code point; split in surrogate halves
                 // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
                 codePoint -= 0x10000;
-                highSurrogate = (codePoint >> 10) + 0xD800;
-                lowSurrogate = codePoint % 0x400 + 0xDC00;
+                highSurrogate = (codePoint >> 10) + 0xd800;
+                lowSurrogate = codePoint % 0x400 + 0xdc00;
                 codeUnits.push(highSurrogate, lowSurrogate);
               }
               if (index + 1 === length || codeUnits.length > MAX_SIZE) {
@@ -7846,7 +7981,7 @@ function requireSax() {
           }
         })();
       }
-    })(exports$1);
+    })(exports);
   })(sax);
   return sax;
 }
@@ -7911,7 +8046,7 @@ var hasRequiredParser;
 function requireParser() {
   if (hasRequiredParser) return parser;
   hasRequiredParser = 1;
-  (function (exports$1) {
+  (function (exports) {
     // Generated by CoffeeScript 1.12.7
     (function () {
 
@@ -7968,7 +8103,7 @@ function requireParser() {
         descriptor.configurable = true;
         return Object.defineProperty(obj, key, descriptor);
       };
-      exports$1.Parser = function (superClass) {
+      exports.Parser = function (superClass) {
         extend(Parser, superClass);
         function Parser(opts) {
           this.parseStringPromise = bind(this.parseStringPromise, this);
@@ -7977,8 +8112,8 @@ function requireParser() {
           this.assignOrPush = bind(this.assignOrPush, this);
           this.processAsync = bind(this.processAsync, this);
           var key, ref, value;
-          if (!(this instanceof exports$1.Parser)) {
-            return new exports$1.Parser(opts);
+          if (!(this instanceof exports.Parser)) {
+            return new exports.Parser(opts);
           }
           this.options = {};
           ref = defaults["0.2"];
@@ -8282,7 +8417,7 @@ function requireParser() {
         };
         return Parser;
       }(events);
-      exports$1.parseString = function (str, a, b) {
+      exports.parseString = function (str, a, b) {
         var cb, options, parser;
         if (b != null) {
           if (typeof b === 'function') {
@@ -8297,15 +8432,15 @@ function requireParser() {
           }
           options = {};
         }
-        parser = new exports$1.Parser(options);
+        parser = new exports.Parser(options);
         return parser.parseString(str, cb);
       };
-      exports$1.parseStringPromise = function (str, a) {
+      exports.parseStringPromise = function (str, a) {
         var options, parser;
         if (_typeof(a) === 'object') {
           options = a;
         }
-        parser = new exports$1.Parser(options);
+        parser = new exports.Parser(options);
         return parser.parseStringPromise(str);
       };
     }).call(commonjsGlobal);
@@ -8797,7 +8932,7 @@ var gate$1 = {};
 
 gate$1.create = create;
 var util$3 = require$$1$1;
-var assert = require$$1$5;
+var assert = require$$1$4;
 var noop$1 = function noop() {};
 function create(options) {
   return new Gate(options);
@@ -10797,7 +10932,7 @@ function toIdentifier(str) {
    * @private
    */
 
-  function populateConstructorExports(exports$1, codes, HttpError) {
+  function populateConstructorExports(exports, codes, HttpError) {
     codes.forEach(function forEachCode(code) {
       var CodeError;
       var name = toIdentifier(statuses.message[code]);
@@ -10811,8 +10946,8 @@ function toIdentifier(str) {
       }
       if (CodeError) {
         // export the constructor
-        exports$1[code] = CodeError;
-        exports$1[name] = CodeError;
+        exports[code] = CodeError;
+        exports[name] = CodeError;
       }
     });
   }
@@ -10988,7 +11123,7 @@ var hasRequiredDebug$3;
 function requireDebug$3() {
   if (hasRequiredDebug$3) return debug$9.exports;
   hasRequiredDebug$3 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     /**
      * This is the common logic for both the Node.js and web browser
      * implementations of `debug()`.
@@ -10996,19 +11131,19 @@ function requireDebug$3() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-    exports$1.coerce = coerce;
-    exports$1.disable = disable;
-    exports$1.enable = enable;
-    exports$1.enabled = enabled;
-    exports$1.humanize = requireMs$3();
+    exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+    exports.coerce = coerce;
+    exports.disable = disable;
+    exports.enable = enable;
+    exports.enabled = enabled;
+    exports.humanize = requireMs$3();
 
     /**
      * The currently active debug mode names, and names to skip.
      */
 
-    exports$1.names = [];
-    exports$1.skips = [];
+    exports.names = [];
+    exports.skips = [];
 
     /**
      * Map of special "%n" handling functions, for the debug "format" argument.
@@ -11016,7 +11151,7 @@ function requireDebug$3() {
      * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
      */
 
-    exports$1.formatters = {};
+    exports.formatters = {};
 
     /**
      * Previous log timestamp.
@@ -11038,7 +11173,7 @@ function requireDebug$3() {
         hash = (hash << 5) - hash + namespace.charCodeAt(i);
         hash |= 0; // Convert to 32bit integer
       }
-      return exports$1.colors[Math.abs(hash) % exports$1.colors.length];
+      return exports.colors[Math.abs(hash) % exports.colors.length];
     }
 
     /**
@@ -11068,7 +11203,7 @@ function requireDebug$3() {
         for (var i = 0; i < args.length; i++) {
           args[i] = arguments[i];
         }
-        args[0] = exports$1.coerce(args[0]);
+        args[0] = exports.coerce(args[0]);
         if ('string' !== typeof args[0]) {
           // anything else let's inspect with %O
           args.unshift('%O');
@@ -11080,7 +11215,7 @@ function requireDebug$3() {
           // if we encounter an escaped % then don't increase the array index
           if (match === '%%') return match;
           index++;
-          var formatter = exports$1.formatters[format];
+          var formatter = exports.formatters[format];
           if ('function' === typeof formatter) {
             var val = args[index];
             match = formatter.call(self, val);
@@ -11093,18 +11228,18 @@ function requireDebug$3() {
         });
 
         // apply env-specific formatting (colors, etc.)
-        exports$1.formatArgs.call(self, args);
-        var logFn = debug.log || exports$1.log || console.log.bind(console);
+        exports.formatArgs.call(self, args);
+        var logFn = debug.log || exports.log || console.log.bind(console);
         logFn.apply(self, args);
       }
       debug.namespace = namespace;
-      debug.enabled = exports$1.enabled(namespace);
-      debug.useColors = exports$1.useColors();
+      debug.enabled = exports.enabled(namespace);
+      debug.useColors = exports.useColors();
       debug.color = selectColor(namespace);
 
       // env-specific initialization logic for debug instances
-      if ('function' === typeof exports$1.init) {
-        exports$1.init(debug);
+      if ('function' === typeof exports.init) {
+        exports.init(debug);
       }
       return debug;
     }
@@ -11118,18 +11253,18 @@ function requireDebug$3() {
      */
 
     function enable(namespaces) {
-      exports$1.save(namespaces);
-      exports$1.names = [];
-      exports$1.skips = [];
+      exports.save(namespaces);
+      exports.names = [];
+      exports.skips = [];
       var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
       var len = split.length;
       for (var i = 0; i < len; i++) {
         if (!split[i]) continue; // ignore empty strings
         namespaces = split[i].replace(/\*/g, '.*?');
         if (namespaces[0] === '-') {
-          exports$1.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+          exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
         } else {
-          exports$1.names.push(new RegExp('^' + namespaces + '$'));
+          exports.names.push(new RegExp('^' + namespaces + '$'));
         }
       }
     }
@@ -11141,7 +11276,7 @@ function requireDebug$3() {
      */
 
     function disable() {
-      exports$1.enable('');
+      exports.enable('');
     }
 
     /**
@@ -11154,13 +11289,13 @@ function requireDebug$3() {
 
     function enabled(name) {
       var i, len;
-      for (i = 0, len = exports$1.skips.length; i < len; i++) {
-        if (exports$1.skips[i].test(name)) {
+      for (i = 0, len = exports.skips.length; i < len; i++) {
+        if (exports.skips[i].test(name)) {
           return false;
         }
       }
-      for (i = 0, len = exports$1.names.length; i < len; i++) {
-        if (exports$1.names[i].test(name)) {
+      for (i = 0, len = exports.names.length; i < len; i++) {
+        if (exports.names[i].test(name)) {
           return true;
         }
       }
@@ -11187,20 +11322,20 @@ var hasRequiredBrowser$3;
 function requireBrowser$3() {
   if (hasRequiredBrowser$3) return browser$3.exports;
   hasRequiredBrowser$3 = 1;
-  (function (module, exports$1) {
-    exports$1 = module.exports = requireDebug$3();
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
-    exports$1.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
+  (function (module, exports) {
+    exports = module.exports = requireDebug$3();
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
 
     /**
      * Colors.
      */
 
-    exports$1.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
+    exports.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
 
     /**
      * Currently only WebKit-based Web Inspectors, Firefox >= v31,
@@ -11234,7 +11369,7 @@ function requireBrowser$3() {
      * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
      */
 
-    exports$1.formatters.j = function (v) {
+    exports.formatters.j = function (v) {
       try {
         return JSON.stringify(v);
       } catch (err) {
@@ -11250,7 +11385,7 @@ function requireBrowser$3() {
 
     function formatArgs(args) {
       var useColors = this.useColors;
-      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports$1.humanize(this.diff);
+      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports.humanize(this.diff);
       if (!useColors) return;
       var c = 'color: ' + this.color;
       args.splice(1, 0, c, 'color: inherit');
@@ -11295,9 +11430,9 @@ function requireBrowser$3() {
     function save(namespaces) {
       try {
         if (null == namespaces) {
-          exports$1.storage.removeItem('debug');
+          exports.storage.removeItem('debug');
         } else {
-          exports$1.storage.debug = namespaces;
+          exports.storage.debug = namespaces;
         }
       } catch (e) {}
     }
@@ -11312,7 +11447,7 @@ function requireBrowser$3() {
     function load() {
       var r;
       try {
-        r = exports$1.storage.debug;
+        r = exports.storage.debug;
       } catch (e) {}
 
       // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
@@ -11326,7 +11461,7 @@ function requireBrowser$3() {
      * Enable namespaces listed in `localStorage.debug` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
 
     /**
      * Localstorage attempts to return the localstorage.
@@ -11357,7 +11492,7 @@ var hasRequiredNode$3;
 function requireNode$3() {
   if (hasRequiredNode$3) return node$3.exports;
   hasRequiredNode$3 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     var tty = require$$0$5;
     var util = require$$1$1;
 
@@ -11367,19 +11502,19 @@ function requireNode$3() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = requireDebug$3();
-    exports$1.init = init;
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
+    exports = module.exports = requireDebug$3();
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
 
     /**
      * Colors.
      */
 
-    exports$1.colors = [6, 2, 3, 4, 5, 1];
+    exports.colors = [6, 2, 3, 4, 5, 1];
 
     /**
      * Build up the default `inspectOpts` object from the environment variables.
@@ -11387,7 +11522,7 @@ function requireNode$3() {
      *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
      */
 
-    exports$1.inspectOpts = Object.keys(process.env).filter(function (key) {
+    exports.inspectOpts = Object.keys(process.env).filter(function (key) {
       return /^debug_/i.test(key);
     }).reduce(function (obj, key) {
       // camel-case
@@ -11420,14 +11555,14 @@ function requireNode$3() {
      */
 
     function useColors() {
-      return 'colors' in exports$1.inspectOpts ? Boolean(exports$1.inspectOpts.colors) : tty.isatty(fd);
+      return 'colors' in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(fd);
     }
 
     /**
      * Map %o to `util.inspect()`, all on a single line.
      */
 
-    exports$1.formatters.o = function (v) {
+    exports.formatters.o = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts).split('\n').map(function (str) {
         return str.trim();
@@ -11438,7 +11573,7 @@ function requireNode$3() {
      * Map %o to `util.inspect()`, allowing multiple lines if needed.
      */
 
-    exports$1.formatters.O = function (v) {
+    exports.formatters.O = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts);
     };
@@ -11456,7 +11591,7 @@ function requireNode$3() {
         var c = this.color;
         var prefix = "  \x1B[3" + c + ';1m' + name + ' ' + "\x1B[0m";
         args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-        args.push("\x1B[3" + c + 'm+' + exports$1.humanize(this.diff) + "\x1B[0m");
+        args.push("\x1B[3" + c + 'm+' + exports.humanize(this.diff) + "\x1B[0m");
       } else {
         args[0] = new Date().toUTCString() + ' ' + name + ' ' + args[0];
       }
@@ -11572,9 +11707,9 @@ function requireNode$3() {
 
     function init(debug) {
       debug.inspectOpts = {};
-      var keys = Object.keys(exports$1.inspectOpts);
+      var keys = Object.keys(exports.inspectOpts);
       for (var i = 0; i < keys.length; i++) {
-        debug.inspectOpts[keys[i]] = exports$1.inspectOpts[keys[i]];
+        debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
       }
     }
 
@@ -11582,7 +11717,7 @@ function requireNode$3() {
      * Enable namespaces listed in `process.env.DEBUG` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
   })(node$3, node$3.exports);
   return node$3.exports;
 }
@@ -11617,7 +11752,7 @@ function requireSrc() {
 
 var EventEmitter = require$$1$2.EventEmitter;
 var ReadStream = require$$3$2.ReadStream;
-var Stream$1 = require$$1$6;
+var Stream$1 = require$$1$5;
 var Zlib = require$$3$3;
 
 /**
@@ -11981,7 +12116,7 @@ function requireInternal() {
   //------------------------------------------------------------------------------
 
   // We use node.js internal decoder. Its signature is the same as ours.
-  var StringDecoder = require$$1$4.StringDecoder;
+  var StringDecoder = require$$1$6.StringDecoder;
   if (!StringDecoder.prototype.end)
     // Node v0.8 doesn't have this method.
     StringDecoder.prototype.end = function () {};
@@ -22160,7 +22295,7 @@ var hasRequiredEncodings;
 function requireEncodings() {
   if (hasRequiredEncodings) return encodings;
   hasRequiredEncodings = 1;
-  (function (exports$1) {
+  (function (exports) {
 
     // Update this array if you add/rename/remove files in this directory.
     // We support Browserify by skipping automatic module discovery and requiring modules directly.
@@ -22169,7 +22304,7 @@ function requireEncodings() {
     // Put all encoding/alias/codec definitions to single object and export it. 
     for (var i = 0; i < modules.length; i++) {
       var module = modules[i];
-      for (var enc in module) if (Object.prototype.hasOwnProperty.call(module, enc)) exports$1[enc] = module[enc];
+      for (var enc in module) if (Object.prototype.hasOwnProperty.call(module, enc)) exports[enc] = module[enc];
     }
   })(encodings);
   return encodings;
@@ -22181,7 +22316,7 @@ function requireStreams() {
   if (hasRequiredStreams) return streams;
   hasRequiredStreams = 1;
   var Buffer = require$$0$6.Buffer,
-    Transform = require$$1$6.Transform;
+    Transform = require$$1$5.Transform;
 
   // == Exports ==================================================================
   streams = function streams(iconv) {
@@ -22456,7 +22591,7 @@ function requireExtendNode() {
 
       // -- Readable -------------------------------------------------------------
       if (iconv.supportsStreams) {
-        var Readable = require$$1$6.Readable;
+        var Readable = require$$1$5.Readable;
         original.ReadableSetEncoding = Readable.prototype.setEncoding;
         Readable.prototype.setEncoding = function setEncoding(enc, options) {
           // Use our own decoder, it has the same interface.
@@ -22481,7 +22616,7 @@ function requireExtendNode() {
       Buffer.prototype.toString = original.BufferToString;
       Buffer.prototype.write = original.BufferWrite;
       if (iconv.supportsStreams) {
-        var Readable = require$$1$6.Readable;
+        var Readable = require$$1$5.Readable;
         Readable.prototype.setEncoding = original.ReadableSetEncoding;
         delete Readable.prototype.collect;
       }
@@ -34446,7 +34581,7 @@ var mimeDb = require$$0;
  * Copyright(c) 2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-(function (exports$1) {
+(function (exports) {
 
   /**
    * Module dependencies.
@@ -34468,18 +34603,18 @@ var mimeDb = require$$0;
    * @public
    */
 
-  exports$1.charset = charset;
-  exports$1.charsets = {
+  exports.charset = charset;
+  exports.charsets = {
     lookup: charset
   };
-  exports$1.contentType = contentType;
-  exports$1.extension = extension;
-  exports$1.extensions = Object.create(null);
-  exports$1.lookup = lookup;
-  exports$1.types = Object.create(null);
+  exports.contentType = contentType;
+  exports.extension = extension;
+  exports.extensions = Object.create(null);
+  exports.lookup = lookup;
+  exports.types = Object.create(null);
 
   // Populate the extensions/types maps
-  populateMaps(exports$1.extensions, exports$1.types);
+  populateMaps(exports.extensions, exports.types);
 
   /**
    * Get the default charset for a MIME type.
@@ -34519,14 +34654,14 @@ var mimeDb = require$$0;
     if (!str || typeof str !== 'string') {
       return false;
     }
-    var mime = str.indexOf('/') === -1 ? exports$1.lookup(str) : str;
+    var mime = str.indexOf('/') === -1 ? exports.lookup(str) : str;
     if (!mime) {
       return false;
     }
 
     // TODO: use content-type or other module
     if (mime.indexOf('charset') === -1) {
-      var charset = exports$1.charset(mime);
+      var charset = exports.charset(mime);
       if (charset) mime += '; charset=' + charset.toLowerCase();
     }
     return mime;
@@ -34548,7 +34683,7 @@ var mimeDb = require$$0;
     var match = EXTRACT_TYPE_REGEXP.exec(type);
 
     // get extensions
-    var exts = match && exports$1.extensions[match[1].toLowerCase()];
+    var exts = match && exports.extensions[match[1].toLowerCase()];
     if (!exts || !exts.length) {
       return false;
     }
@@ -34572,7 +34707,7 @@ var mimeDb = require$$0;
     if (!extension) {
       return false;
     }
-    return exports$1.types[extension] || false;
+    return exports.types[extension] || false;
   }
 
   /**
@@ -35341,7 +35476,7 @@ var weakSetHas = hasWeakSet ? WeakSet.prototype.has : null;
 var hasWeakRef = typeof WeakRef === 'function' && WeakRef.prototype;
 var weakRefDeref = hasWeakRef ? WeakRef.prototype.deref : null;
 var booleanValueOf = Boolean.prototype.valueOf;
-var objectToString = Object.prototype.toString;
+var objectToString$1 = Object.prototype.toString;
 var functionToString = Function.prototype.toString;
 var $match = String.prototype.match;
 var $slice = String.prototype.slice;
@@ -35646,7 +35781,7 @@ function has$3(obj, key) {
   return hasOwn$1.call(obj, key);
 }
 function toStr(obj) {
-  return objectToString.call(obj);
+  return objectToString$1.call(obj);
 }
 function nameOf(f) {
   if (f.name) {
@@ -36934,14 +37069,14 @@ var formats$3 = {
 };
 
 var formats$2 = formats$3;
-var getSideChannel$1 = sideChannel;
+var getSideChannel$2 = sideChannel;
 var defineProperty = esDefineProperty;
 var has$2 = Object.prototype.hasOwnProperty;
 var isArray$2 = Array.isArray;
 
 // Track objects created from arrayLimit overflow using side-channel
 // Stores the current max numeric index for O(1) lookup
-var overflowChannel = getSideChannel$1();
+var overflowChannel = getSideChannel$2();
 var markOverflow = function markOverflow(obj, maxIndex) {
   overflowChannel.set(obj, maxIndex);
   return obj;
@@ -36954,6 +37089,20 @@ var getMaxIndex = function getMaxIndex(obj) {
 };
 var setMaxIndex = function setMaxIndex(obj, maxIndex) {
   overflowChannel.set(obj, maxIndex);
+};
+
+// Track containers produced by a `strictMerge` conflict wrap, and their current max numeric index,
+// so repeated conflicts on one path append instead of nesting a new wrapper each time
+var conflictChannel = getSideChannel$2();
+var markConflict = function markConflict(obj, maxIndex) {
+  conflictChannel.set(obj, maxIndex);
+  return obj;
+};
+var isConflict = function isConflict(obj) {
+  return conflictChannel.has(obj);
+};
+var getConflictIndex = function getConflictIndex(obj) {
+  return conflictChannel.get(obj);
 };
 var hexTable = function () {
   var array = [];
@@ -37000,6 +37149,27 @@ var setProperty = function setProperty(obj, key, value) {
     obj[key] = value;
   }
 };
+var maxNumericIndex = function maxNumericIndex(obj, min) {
+  var max = min;
+  var keys = Object.keys(obj);
+  for (var i = 0; i < keys.length; ++i) {
+    var num = parseInt(keys[i], 10);
+    if (String(num) === keys[i] && num > max) {
+      max = num;
+    }
+  }
+  return max;
+};
+var limitedPair = function limitedPair(first, second, options) {
+  var pair = [first, second];
+  if (options && typeof options.arrayLimit === 'number' && pair.length > options.arrayLimit) {
+    if (options.throwOnLimitExceeded) {
+      throw new RangeError('Array limit exceeded. Only ' + options.arrayLimit + ' element' + (options.arrayLimit === 1 ? '' : 's') + ' allowed in an array.');
+    }
+    return markOverflow(arrayToObject(pair, options), 1);
+  }
+  return pair;
+};
 var merge$2 = function merge(target, source, options) {
   /* eslint no-param-reassign: 0 */
   if (!source) {
@@ -37021,13 +37191,21 @@ var merge$2 = function merge(target, source, options) {
         var newIndex = getMaxIndex(target) + 1;
         target[newIndex] = source;
         setMaxIndex(target, newIndex);
+      } else if (options && options.strictMerge && isConflict(target)) {
+        var nextConflict = getConflictIndex(target) + 1;
+        if (options.throwOnLimitExceeded && typeof options.arrayLimit === 'number' && nextConflict >= options.arrayLimit) {
+          throw new RangeError('Array limit exceeded. Only ' + options.arrayLimit + ' element' + (options.arrayLimit === 1 ? '' : 's') + ' allowed in an array.');
+        }
+        target[nextConflict] = source;
+        markConflict(target, nextConflict);
       } else if (options && options.strictMerge) {
-        return [target, source];
+        var conflict = limitedPair(target, source, options);
+        return isArray$2(conflict) ? markConflict(conflict, 1) : conflict;
       } else if (options && (options.plainObjects || options.allowPrototypes) || !has$2.call(Object.prototype, source)) {
         target[source] = true;
       }
     } else {
-      return [target, source];
+      return limitedPair(target, source, options);
     }
     return target;
   }
@@ -37059,6 +37237,10 @@ var merge$2 = function merge(target, source, options) {
   var mergeTarget = target;
   if (isArray$2(target) && !isArray$2(source)) {
     mergeTarget = arrayToObject(target, options);
+    if (isConflict(target)) {
+      // the array may have grown past its last conflict, so continue after its last index
+      markConflict(mergeTarget, target.length - 1);
+    }
   }
   if (isArray$2(target) && isArray$2(source)) {
     source.forEach(function (item, i) {
@@ -37089,12 +37271,18 @@ var merge$2 = function merge(target, source, options) {
       setProperty(acc, key, value);
     }
     if (isOverflow(source) && !isOverflow(acc)) {
-      markOverflow(acc, getMaxIndex(source));
+      markOverflow(acc, maxNumericIndex(acc, getMaxIndex(source)));
     }
     if (isOverflow(acc)) {
       var keyNum = parseInt(key, 10);
       if (String(keyNum) === key && keyNum >= 0 && keyNum > getMaxIndex(acc)) {
         setMaxIndex(acc, keyNum);
+      }
+    }
+    if (isConflict(acc)) {
+      var conflictKey = parseInt(key, 10);
+      if (String(conflictKey) === key && conflictKey > getConflictIndex(acc)) {
+        markConflict(acc, conflictKey);
       }
     }
     return acc;
@@ -37107,6 +37295,12 @@ var assign = function assignSingleSource(target, source) {
   }, target);
 };
 var decode$2 = function decode(str, defaultDecoder, charset) {
+  // With no `%` there is no escape to expand, in either charset: `unescape` has
+  // nothing to match, and `decodeURIComponent` is the identity on such a string
+  // (and cannot throw). So only `+` -> ' ' remains, and often not even that.
+  if (typeof str === 'string' && str.indexOf('%') === -1) {
+    return str.indexOf('+') === -1 ? str : str.replace(/\+/g, ' ');
+  }
   var strWithoutPlus = str.replace(/\+/g, ' ');
   if (charset === 'iso-8859-1') {
     // unescape never throws, no try...catch needed:
@@ -37118,6 +37312,56 @@ var decode$2 = function decode(str, defaultDecoder, charset) {
   } catch (e) {
     return strWithoutPlus;
   }
+};
+var hasToPrimitive = typeof Symbol === 'function' && _typeof(Symbol.toPrimitive) === 'symbol';
+var arrayJoin = Array.prototype.join;
+var arrayToString = Array.prototype.toString;
+var objectToString = Object.prototype.toString;
+
+// an object with no callable toString (eg, from JSON, or null-prototype) would make String() or join() throw,
+// so it becomes its primitive valueOf or else Object.prototype.toString; arrays are walked like join walks them,
+// copied only once an element changes, with an array already being joined becoming '' as engines do for cycles
+var toCoercible = function toCoercible(value, joining) {
+  if (!value || _typeof(value) !== 'object' && typeof value !== 'function') {
+    return value;
+  }
+  if (hasToPrimitive && value[Symbol.toPrimitive] != null) {
+    return value;
+  }
+  if (isArray$2(value) && value.toString === arrayToString && value.join === arrayJoin) {
+    var ancestors = joining || getSideChannel$2();
+    if (ancestors.has(value)) {
+      return '';
+    }
+    ancestors.set(value, true);
+    var copy;
+    for (var i = 0; i < value.length; i += 1) {
+      var item = value[i];
+      var coerced = toCoercible(item, ancestors);
+      if (!copy && coerced !== item) {
+        copy = [];
+        for (var j = 0; j < i; j += 1) {
+          copy[j] = value[j];
+        }
+      }
+      if (copy) {
+        copy[i] = coerced;
+      }
+    }
+    ancestors['delete'](value);
+    return copy || value;
+  }
+  if (typeof value.toString === 'function') {
+    return value;
+  }
+  var valueOf = value.valueOf;
+  if (typeof valueOf === 'function') {
+    var primitive = valueOf.call(value);
+    if (!primitive || _typeof(primitive) !== 'object' && typeof primitive !== 'function') {
+      return String(primitive);
+    }
+  }
+  return objectToString.call(value);
 };
 var limit = 1024;
 
@@ -37133,12 +37377,14 @@ var encode = function encode(str, defaultEncoder, charset, kind, format) {
   if (_typeof(str) === 'symbol') {
     string = Symbol.prototype.toString.call(str);
   } else if (typeof str !== 'string') {
-    string = String(str);
+    string = String(toCoercible(str));
   }
   if (charset === 'iso-8859-1') {
+    // `escape` leaves `+` untouched, but a literal `+` is decoded back to a space,
+    // so it must be percent-encoded to round-trip (the utf-8 path already does this).
     return escape(string).replace(/%u[0-9a-f]{4}/gi, function ($0) {
       return '%26%23' + parseInt($0.slice(2), 16) + '%3B';
-    });
+    }).replace(/\+/g, '%2B');
   }
   var out = '';
   for (var j = 0; j < string.length; j += limit) {
@@ -37192,7 +37438,7 @@ var compact = function compact(value) {
     },
     prop: 'o'
   }];
-  var refs = getSideChannel$1();
+  var refs = getSideChannel$2();
   for (var i = 0; i < queue.length; ++i) {
     var item = queue[i];
     var obj = item.obj[item.prop];
@@ -37272,10 +37518,11 @@ var utils$3 = {
   isRegExp: isRegExp,
   markOverflow: markOverflow,
   maybeMap: maybeMap,
-  merge: merge$2
+  merge: merge$2,
+  toCoercible: toCoercible
 };
 
-var getSideChannel = sideChannel;
+var getSideChannel$1 = sideChannel;
 var utils$2 = utils$3;
 var formats$1 = formats$3;
 var has$1 = Object.prototype.hasOwnProperty;
@@ -37383,11 +37630,11 @@ var stringify$2 = function stringify(object, prefix, generateArrayPrefix, commaR
     // we need to join elements in
     if (encodeValuesOnly && encoder) {
       obj = utils$2.maybeMap(obj, function (v) {
-        return v == null ? v : encoder(v);
+        return v == null ? v : encoder(v, defaults$1.encoder, charset, 'value', format);
       });
     }
     objKeys = [{
-      value: obj.length > 0 ? obj.join(',') || null : void undefined
+      value: obj.length > 0 ? utils$2.toCoercible(obj).join(',') || null : void undefined
     }];
   } else if (isArray$1(filter)) {
     objKeys = filter;
@@ -37395,7 +37642,7 @@ var stringify$2 = function stringify(object, prefix, generateArrayPrefix, commaR
     var keys = Object.keys(obj);
     objKeys = sort ? keys.sort(sort) : keys;
   }
-  var encodedPrefix = encodeDotInKeys ? String(prefix).replace(/\./g, '%2E') : String(prefix);
+  var encodedPrefix = String(prefix);
   var adjustedPrefix = commaRoundTrip && isArray$1(obj) && obj.length === 1 ? encodedPrefix + '[]' : encodedPrefix;
   if (allowEmptyArrays && isArray$1(obj) && obj.length === 0 && Object.keys(obj).length === 0) {
     return adjustedPrefix + '[]';
@@ -37409,7 +37656,7 @@ var stringify$2 = function stringify(object, prefix, generateArrayPrefix, commaR
     var encodedKey = allowDots && encodeDotInKeys ? String(key).replace(/\./g, '%2E') : String(key);
     var keyPrefix = isArray$1(obj) ? typeof generateArrayPrefix === 'function' ? generateArrayPrefix(adjustedPrefix, encodedKey) : adjustedPrefix : adjustedPrefix + (allowDots ? '.' + encodedKey : '[' + encodedKey + ']');
     sideChannel.set(object, step);
-    var valueSideChannel = getSideChannel();
+    var valueSideChannel = getSideChannel$1();
     valueSideChannel.set(sentinel, sideChannel);
     pushToArray(values, stringify(value, keyPrefix, generateArrayPrefix, commaRoundTrip, allowEmptyArrays, strictNullHandling, skipNulls, encodeDotInKeys, generateArrayPrefix === 'comma' && encodeValuesOnly && isArray$1(obj) ? null : encoder, filter, sort, allowDots, serializeDate, format, formatter, encodeValuesOnly, charset, valueSideChannel, depth, currentDepth + 1));
   }
@@ -37445,7 +37692,7 @@ var normalizeStringifyOptions = function normalizeStringifyOptions(opts) {
     filter = opts.filter;
   }
   var arrayFormat;
-  if (opts.arrayFormat in arrayPrefixGenerators) {
+  if (has$1.call(arrayPrefixGenerators, opts.arrayFormat)) {
     arrayFormat = opts.arrayFormat;
   } else if ('indices' in opts) {
     arrayFormat = opts.indices ? 'indices' : 'repeat';
@@ -37503,7 +37750,7 @@ var stringify_1 = function stringify_1(object, opts) {
   if (options.sort) {
     objKeys.sort(options.sort);
   }
-  var sideChannel = getSideChannel();
+  var sideChannel = getSideChannel$1();
   for (var i = 0; i < objKeys.length; ++i) {
     var key = objKeys[i];
     if (typeof key === 'undefined' || key === null) {
@@ -37530,9 +37777,63 @@ var stringify_1 = function stringify_1(object, opts) {
   return joined.length > 0 ? prefix + joined : '';
 };
 
+var getSideChannel = sideChannel;
 var utils$1 = utils$3;
 var has = Object.prototype.hasOwnProperty;
 var isArray = Array.isArray;
+var getPrototypeOf = Object.getPrototypeOf;
+var isPlainContainer = function isPlainContainer(value) {
+  if (!value || _typeof(value) !== 'object') {
+    return false;
+  }
+  if (isArray(value)) {
+    return true;
+  }
+  var proto = getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+var emptyCopyOf = function emptyCopyOf(value) {
+  if (isArray(value)) {
+    var arr = [];
+    arr.length = value.length;
+    return arr;
+  }
+  return getPrototypeOf(value) === null ? {
+    __proto__: null
+  } : {};
+};
+
+// `merge` and `compact` modify the containers they are given, so copy the caller's arrays and plain objects first
+var copyInput = function copyInput(input) {
+  var copies = getSideChannel();
+  var result = {};
+  var queue = [{
+    source: input,
+    target: result
+  }];
+  for (var i = 0; i < queue.length; ++i) {
+    var source = queue[i].source;
+    var target = queue[i].target;
+    var keys = Object.keys(source);
+    for (var j = 0; j < keys.length; ++j) {
+      var value = source[keys[j]];
+      if (isPlainContainer(value)) {
+        if (!copies.has(value)) {
+          var copy = emptyCopyOf(value);
+          copies.set(value, copy);
+          queue[queue.length] = {
+            source: value,
+            target: copy
+          };
+        }
+        target[keys[j]] = copies.get(value);
+      } else {
+        target[keys[j]] = value;
+      }
+    }
+  }
+  return result;
+};
 var defaults = {
   allowDots: false,
   allowEmptyArrays: false,
@@ -37627,6 +37928,9 @@ var parseValues = function parseQueryStringValues(str, options) {
     var part = parts[i];
     var bracketEqualsPos = part.indexOf(']=');
     var pos = bracketEqualsPos === -1 ? part.indexOf('=') : bracketEqualsPos + 1;
+
+    // `[]` belongs to the key, so look for it at the split point, not anywhere in the part
+    var isEmptyBracketKey = pos > 1 && part.slice(pos - 2, pos) === '[]';
     var key;
     var val;
     if (pos === -1) {
@@ -37643,7 +37947,7 @@ var parseValues = function parseQueryStringValues(str, options) {
     if (val && options.interpretNumericEntities && charset === 'iso-8859-1') {
       val = interpretNumericEntities(String(val));
     }
-    if (part.indexOf('[]=') > -1) {
+    if (isEmptyBracketKey) {
       val = isArray(val) ? [val] : val;
     }
     if (options.comma && isArray(val) && val.length > options.arrayLimit) {
@@ -37651,7 +37955,7 @@ var parseValues = function parseQueryStringValues(str, options) {
     }
     if (key !== null) {
       var existing = has.call(obj, key);
-      if (existing && (options.duplicates === 'combine' || part.indexOf('[]=') > -1)) {
+      if (existing && (options.duplicates === 'combine' || isEmptyBracketKey)) {
         obj[key] = utils$1.combine(obj[key], val, options.arrayLimit, options.plainObjects, options.throwOnLimitExceeded);
       } else if (!existing || options.duplicates === 'last') {
         obj[key] = val;
@@ -37706,10 +38010,46 @@ var parseObject = function parseObject(chain, val, options, valuesParsed) {
   return leaf;
 };
 
+// Behaves like `key.replace(/\.([^.[]+)/g, '[$1]')`, but only rewrites a dot
+// that sits at bracket depth 0. A literal dot already inside a `[...]` segment
+// is left untouched instead of corrupting the key (e.g. "outer[a.b]"). (#617)
+var topLevelDotsToBrackets = function topLevelDotsToBrackets(key) {
+  var result = '';
+  var depth = 0;
+  for (var i = 0; i < key.length; i += 1) {
+    var cu = key.charCodeAt(i);
+    if (cu === 0x5B) {
+      // '['
+      depth += 1;
+      result += '[';
+    } else if (cu === 0x5D) {
+      // ']'
+      if (depth > 0) {
+        depth -= 1;
+      }
+      result += ']';
+    } else if (cu === 0x2E // '.'
+    && depth === 0 && i + 1 < key.length && key.charCodeAt(i + 1) !== 0x2E // not another '.'
+    && key.charCodeAt(i + 1) !== 0x5B // not '['
+    ) {
+      var start = i + 1;
+      var j = start;
+      while (j < key.length && key.charCodeAt(j) !== 0x2E && key.charCodeAt(j) !== 0x5B) {
+        j += 1;
+      }
+      result += '[' + key.slice(start, j) + ']';
+      i = j - 1;
+    } else {
+      result += key.charAt(i);
+    }
+  }
+  return result;
+};
+
 // Split a key like "a[b][c[]]" into ['a', '[b]', '[c[]]'] while preserving
 // qs parse semantics for depth/prototype guards.
 var splitKeyIntoSegments = function splitKeyIntoSegments(originalKey, options) {
-  var key = options.allowDots ? originalKey.replace(/\.([^.[]+)/g, '[$1]') : originalKey;
+  var key = options.allowDots ? topLevelDotsToBrackets(originalKey) : originalKey;
 
   // depth <= 0 keeps the whole key as one segment
   if (options.depth <= 0) {
@@ -37850,7 +38190,7 @@ var parse$7 = function parse(str, opts) {
       __proto__: null
     } : {};
   }
-  var tempObj = typeof str === 'string' ? parseValues(str, options) : str;
+  var tempObj = typeof str === 'string' ? parseValues(str, options) : copyInput(str);
   var obj = options.plainObjects ? {
     __proto__: null
   } : {};
@@ -38160,7 +38500,7 @@ function requireUrlencoded() {
  * Copyright(c) 2014-2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-(function (module, exports$1) {
+(function (module, exports) {
 
   /**
    * Module dependencies.
@@ -38189,14 +38529,14 @@ function requireUrlencoded() {
    * @type {Parsers}
    */
 
-  exports$1 = module.exports = deprecate["function"](bodyParser, 'bodyParser: use individual json/urlencoded middlewares');
+  exports = module.exports = deprecate["function"](bodyParser, 'bodyParser: use individual json/urlencoded middlewares');
 
   /**
    * JSON parser.
    * @public
    */
 
-  Object.defineProperty(exports$1, 'json', {
+  Object.defineProperty(exports, 'json', {
     configurable: true,
     enumerable: true,
     get: createParserGetter('json')
@@ -38207,7 +38547,7 @@ function requireUrlencoded() {
    * @public
    */
 
-  Object.defineProperty(exports$1, 'raw', {
+  Object.defineProperty(exports, 'raw', {
     configurable: true,
     enumerable: true,
     get: createParserGetter('raw')
@@ -38218,7 +38558,7 @@ function requireUrlencoded() {
    * @public
    */
 
-  Object.defineProperty(exports$1, 'text', {
+  Object.defineProperty(exports, 'text', {
     configurable: true,
     enumerable: true,
     get: createParserGetter('text')
@@ -38229,7 +38569,7 @@ function requireUrlencoded() {
    * @public
    */
 
-  Object.defineProperty(exports$1, 'urlencoded', {
+  Object.defineProperty(exports, 'urlencoded', {
     configurable: true,
     enumerable: true,
     get: createParserGetter('urlencoded')
@@ -38254,8 +38594,8 @@ function requireUrlencoded() {
         writable: true
       }
     });
-    var _urlencoded = exports$1.urlencoded(opts);
-    var _json = exports$1.json(opts);
+    var _urlencoded = exports.urlencoded(opts);
+    var _json = exports.json(opts);
     return function bodyParser(req, res, next) {
       _json(req, res, function (err) {
         if (err) return next(err);
@@ -38522,7 +38862,7 @@ var hasRequiredDebug$2;
 function requireDebug$2() {
   if (hasRequiredDebug$2) return debug$8.exports;
   hasRequiredDebug$2 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     /**
      * This is the common logic for both the Node.js and web browser
      * implementations of `debug()`.
@@ -38530,19 +38870,19 @@ function requireDebug$2() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-    exports$1.coerce = coerce;
-    exports$1.disable = disable;
-    exports$1.enable = enable;
-    exports$1.enabled = enabled;
-    exports$1.humanize = requireMs$2();
+    exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+    exports.coerce = coerce;
+    exports.disable = disable;
+    exports.enable = enable;
+    exports.enabled = enabled;
+    exports.humanize = requireMs$2();
 
     /**
      * The currently active debug mode names, and names to skip.
      */
 
-    exports$1.names = [];
-    exports$1.skips = [];
+    exports.names = [];
+    exports.skips = [];
 
     /**
      * Map of special "%n" handling functions, for the debug "format" argument.
@@ -38550,7 +38890,7 @@ function requireDebug$2() {
      * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
      */
 
-    exports$1.formatters = {};
+    exports.formatters = {};
 
     /**
      * Previous log timestamp.
@@ -38572,7 +38912,7 @@ function requireDebug$2() {
         hash = (hash << 5) - hash + namespace.charCodeAt(i);
         hash |= 0; // Convert to 32bit integer
       }
-      return exports$1.colors[Math.abs(hash) % exports$1.colors.length];
+      return exports.colors[Math.abs(hash) % exports.colors.length];
     }
 
     /**
@@ -38602,7 +38942,7 @@ function requireDebug$2() {
         for (var i = 0; i < args.length; i++) {
           args[i] = arguments[i];
         }
-        args[0] = exports$1.coerce(args[0]);
+        args[0] = exports.coerce(args[0]);
         if ('string' !== typeof args[0]) {
           // anything else let's inspect with %O
           args.unshift('%O');
@@ -38614,7 +38954,7 @@ function requireDebug$2() {
           // if we encounter an escaped % then don't increase the array index
           if (match === '%%') return match;
           index++;
-          var formatter = exports$1.formatters[format];
+          var formatter = exports.formatters[format];
           if ('function' === typeof formatter) {
             var val = args[index];
             match = formatter.call(self, val);
@@ -38627,18 +38967,18 @@ function requireDebug$2() {
         });
 
         // apply env-specific formatting (colors, etc.)
-        exports$1.formatArgs.call(self, args);
-        var logFn = debug.log || exports$1.log || console.log.bind(console);
+        exports.formatArgs.call(self, args);
+        var logFn = debug.log || exports.log || console.log.bind(console);
         logFn.apply(self, args);
       }
       debug.namespace = namespace;
-      debug.enabled = exports$1.enabled(namespace);
-      debug.useColors = exports$1.useColors();
+      debug.enabled = exports.enabled(namespace);
+      debug.useColors = exports.useColors();
       debug.color = selectColor(namespace);
 
       // env-specific initialization logic for debug instances
-      if ('function' === typeof exports$1.init) {
-        exports$1.init(debug);
+      if ('function' === typeof exports.init) {
+        exports.init(debug);
       }
       return debug;
     }
@@ -38652,18 +38992,18 @@ function requireDebug$2() {
      */
 
     function enable(namespaces) {
-      exports$1.save(namespaces);
-      exports$1.names = [];
-      exports$1.skips = [];
+      exports.save(namespaces);
+      exports.names = [];
+      exports.skips = [];
       var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
       var len = split.length;
       for (var i = 0; i < len; i++) {
         if (!split[i]) continue; // ignore empty strings
         namespaces = split[i].replace(/\*/g, '.*?');
         if (namespaces[0] === '-') {
-          exports$1.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+          exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
         } else {
-          exports$1.names.push(new RegExp('^' + namespaces + '$'));
+          exports.names.push(new RegExp('^' + namespaces + '$'));
         }
       }
     }
@@ -38675,7 +39015,7 @@ function requireDebug$2() {
      */
 
     function disable() {
-      exports$1.enable('');
+      exports.enable('');
     }
 
     /**
@@ -38688,13 +39028,13 @@ function requireDebug$2() {
 
     function enabled(name) {
       var i, len;
-      for (i = 0, len = exports$1.skips.length; i < len; i++) {
-        if (exports$1.skips[i].test(name)) {
+      for (i = 0, len = exports.skips.length; i < len; i++) {
+        if (exports.skips[i].test(name)) {
           return false;
         }
       }
-      for (i = 0, len = exports$1.names.length; i < len; i++) {
-        if (exports$1.names[i].test(name)) {
+      for (i = 0, len = exports.names.length; i < len; i++) {
+        if (exports.names[i].test(name)) {
           return true;
         }
       }
@@ -38721,20 +39061,20 @@ var hasRequiredBrowser$2;
 function requireBrowser$2() {
   if (hasRequiredBrowser$2) return browser$2.exports;
   hasRequiredBrowser$2 = 1;
-  (function (module, exports$1) {
-    exports$1 = module.exports = requireDebug$2();
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
-    exports$1.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
+  (function (module, exports) {
+    exports = module.exports = requireDebug$2();
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
 
     /**
      * Colors.
      */
 
-    exports$1.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
+    exports.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
 
     /**
      * Currently only WebKit-based Web Inspectors, Firefox >= v31,
@@ -38768,7 +39108,7 @@ function requireBrowser$2() {
      * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
      */
 
-    exports$1.formatters.j = function (v) {
+    exports.formatters.j = function (v) {
       try {
         return JSON.stringify(v);
       } catch (err) {
@@ -38784,7 +39124,7 @@ function requireBrowser$2() {
 
     function formatArgs(args) {
       var useColors = this.useColors;
-      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports$1.humanize(this.diff);
+      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports.humanize(this.diff);
       if (!useColors) return;
       var c = 'color: ' + this.color;
       args.splice(1, 0, c, 'color: inherit');
@@ -38829,9 +39169,9 @@ function requireBrowser$2() {
     function save(namespaces) {
       try {
         if (null == namespaces) {
-          exports$1.storage.removeItem('debug');
+          exports.storage.removeItem('debug');
         } else {
-          exports$1.storage.debug = namespaces;
+          exports.storage.debug = namespaces;
         }
       } catch (e) {}
     }
@@ -38846,7 +39186,7 @@ function requireBrowser$2() {
     function load() {
       var r;
       try {
-        r = exports$1.storage.debug;
+        r = exports.storage.debug;
       } catch (e) {}
 
       // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
@@ -38860,7 +39200,7 @@ function requireBrowser$2() {
      * Enable namespaces listed in `localStorage.debug` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
 
     /**
      * Localstorage attempts to return the localstorage.
@@ -38891,7 +39231,7 @@ var hasRequiredNode$2;
 function requireNode$2() {
   if (hasRequiredNode$2) return node$2.exports;
   hasRequiredNode$2 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     var tty = require$$0$5;
     var util = require$$1$1;
 
@@ -38901,19 +39241,19 @@ function requireNode$2() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = requireDebug$2();
-    exports$1.init = init;
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
+    exports = module.exports = requireDebug$2();
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
 
     /**
      * Colors.
      */
 
-    exports$1.colors = [6, 2, 3, 4, 5, 1];
+    exports.colors = [6, 2, 3, 4, 5, 1];
 
     /**
      * Build up the default `inspectOpts` object from the environment variables.
@@ -38921,7 +39261,7 @@ function requireNode$2() {
      *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
      */
 
-    exports$1.inspectOpts = Object.keys(process.env).filter(function (key) {
+    exports.inspectOpts = Object.keys(process.env).filter(function (key) {
       return /^debug_/i.test(key);
     }).reduce(function (obj, key) {
       // camel-case
@@ -38954,14 +39294,14 @@ function requireNode$2() {
      */
 
     function useColors() {
-      return 'colors' in exports$1.inspectOpts ? Boolean(exports$1.inspectOpts.colors) : tty.isatty(fd);
+      return 'colors' in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(fd);
     }
 
     /**
      * Map %o to `util.inspect()`, all on a single line.
      */
 
-    exports$1.formatters.o = function (v) {
+    exports.formatters.o = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts).split('\n').map(function (str) {
         return str.trim();
@@ -38972,7 +39312,7 @@ function requireNode$2() {
      * Map %o to `util.inspect()`, allowing multiple lines if needed.
      */
 
-    exports$1.formatters.O = function (v) {
+    exports.formatters.O = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts);
     };
@@ -38990,7 +39330,7 @@ function requireNode$2() {
         var c = this.color;
         var prefix = "  \x1B[3" + c + ';1m' + name + ' ' + "\x1B[0m";
         args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-        args.push("\x1B[3" + c + 'm+' + exports$1.humanize(this.diff) + "\x1B[0m");
+        args.push("\x1B[3" + c + 'm+' + exports.humanize(this.diff) + "\x1B[0m");
       } else {
         args[0] = new Date().toUTCString() + ' ' + name + ' ' + args[0];
       }
@@ -39106,9 +39446,9 @@ function requireNode$2() {
 
     function init(debug) {
       debug.inspectOpts = {};
-      var keys = Object.keys(exports$1.inspectOpts);
+      var keys = Object.keys(exports.inspectOpts);
       for (var i = 0; i < keys.length; i++) {
-        debug.inspectOpts[keys[i]] = exports$1.inspectOpts[keys[i]];
+        debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
       }
     }
 
@@ -39116,7 +39456,7 @@ function requireNode$2() {
      * Enable namespaces listed in `process.env.DEBUG` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
   })(node$2, node$2.exports);
   return node$2.exports;
 }
@@ -39863,7 +40203,7 @@ var hasRequiredDebug$1;
 function requireDebug$1() {
   if (hasRequiredDebug$1) return debug$6.exports;
   hasRequiredDebug$1 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     /**
      * This is the common logic for both the Node.js and web browser
      * implementations of `debug()`.
@@ -39871,19 +40211,19 @@ function requireDebug$1() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-    exports$1.coerce = coerce;
-    exports$1.disable = disable;
-    exports$1.enable = enable;
-    exports$1.enabled = enabled;
-    exports$1.humanize = requireMs$1();
+    exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+    exports.coerce = coerce;
+    exports.disable = disable;
+    exports.enable = enable;
+    exports.enabled = enabled;
+    exports.humanize = requireMs$1();
 
     /**
      * The currently active debug mode names, and names to skip.
      */
 
-    exports$1.names = [];
-    exports$1.skips = [];
+    exports.names = [];
+    exports.skips = [];
 
     /**
      * Map of special "%n" handling functions, for the debug "format" argument.
@@ -39891,7 +40231,7 @@ function requireDebug$1() {
      * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
      */
 
-    exports$1.formatters = {};
+    exports.formatters = {};
 
     /**
      * Previous log timestamp.
@@ -39913,7 +40253,7 @@ function requireDebug$1() {
         hash = (hash << 5) - hash + namespace.charCodeAt(i);
         hash |= 0; // Convert to 32bit integer
       }
-      return exports$1.colors[Math.abs(hash) % exports$1.colors.length];
+      return exports.colors[Math.abs(hash) % exports.colors.length];
     }
 
     /**
@@ -39943,7 +40283,7 @@ function requireDebug$1() {
         for (var i = 0; i < args.length; i++) {
           args[i] = arguments[i];
         }
-        args[0] = exports$1.coerce(args[0]);
+        args[0] = exports.coerce(args[0]);
         if ('string' !== typeof args[0]) {
           // anything else let's inspect with %O
           args.unshift('%O');
@@ -39955,7 +40295,7 @@ function requireDebug$1() {
           // if we encounter an escaped % then don't increase the array index
           if (match === '%%') return match;
           index++;
-          var formatter = exports$1.formatters[format];
+          var formatter = exports.formatters[format];
           if ('function' === typeof formatter) {
             var val = args[index];
             match = formatter.call(self, val);
@@ -39968,18 +40308,18 @@ function requireDebug$1() {
         });
 
         // apply env-specific formatting (colors, etc.)
-        exports$1.formatArgs.call(self, args);
-        var logFn = debug.log || exports$1.log || console.log.bind(console);
+        exports.formatArgs.call(self, args);
+        var logFn = debug.log || exports.log || console.log.bind(console);
         logFn.apply(self, args);
       }
       debug.namespace = namespace;
-      debug.enabled = exports$1.enabled(namespace);
-      debug.useColors = exports$1.useColors();
+      debug.enabled = exports.enabled(namespace);
+      debug.useColors = exports.useColors();
       debug.color = selectColor(namespace);
 
       // env-specific initialization logic for debug instances
-      if ('function' === typeof exports$1.init) {
-        exports$1.init(debug);
+      if ('function' === typeof exports.init) {
+        exports.init(debug);
       }
       return debug;
     }
@@ -39993,18 +40333,18 @@ function requireDebug$1() {
      */
 
     function enable(namespaces) {
-      exports$1.save(namespaces);
-      exports$1.names = [];
-      exports$1.skips = [];
+      exports.save(namespaces);
+      exports.names = [];
+      exports.skips = [];
       var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
       var len = split.length;
       for (var i = 0; i < len; i++) {
         if (!split[i]) continue; // ignore empty strings
         namespaces = split[i].replace(/\*/g, '.*?');
         if (namespaces[0] === '-') {
-          exports$1.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+          exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
         } else {
-          exports$1.names.push(new RegExp('^' + namespaces + '$'));
+          exports.names.push(new RegExp('^' + namespaces + '$'));
         }
       }
     }
@@ -40016,7 +40356,7 @@ function requireDebug$1() {
      */
 
     function disable() {
-      exports$1.enable('');
+      exports.enable('');
     }
 
     /**
@@ -40029,13 +40369,13 @@ function requireDebug$1() {
 
     function enabled(name) {
       var i, len;
-      for (i = 0, len = exports$1.skips.length; i < len; i++) {
-        if (exports$1.skips[i].test(name)) {
+      for (i = 0, len = exports.skips.length; i < len; i++) {
+        if (exports.skips[i].test(name)) {
           return false;
         }
       }
-      for (i = 0, len = exports$1.names.length; i < len; i++) {
-        if (exports$1.names[i].test(name)) {
+      for (i = 0, len = exports.names.length; i < len; i++) {
+        if (exports.names[i].test(name)) {
           return true;
         }
       }
@@ -40062,20 +40402,20 @@ var hasRequiredBrowser$1;
 function requireBrowser$1() {
   if (hasRequiredBrowser$1) return browser$1.exports;
   hasRequiredBrowser$1 = 1;
-  (function (module, exports$1) {
-    exports$1 = module.exports = requireDebug$1();
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
-    exports$1.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
+  (function (module, exports) {
+    exports = module.exports = requireDebug$1();
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
 
     /**
      * Colors.
      */
 
-    exports$1.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
+    exports.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
 
     /**
      * Currently only WebKit-based Web Inspectors, Firefox >= v31,
@@ -40109,7 +40449,7 @@ function requireBrowser$1() {
      * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
      */
 
-    exports$1.formatters.j = function (v) {
+    exports.formatters.j = function (v) {
       try {
         return JSON.stringify(v);
       } catch (err) {
@@ -40125,7 +40465,7 @@ function requireBrowser$1() {
 
     function formatArgs(args) {
       var useColors = this.useColors;
-      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports$1.humanize(this.diff);
+      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports.humanize(this.diff);
       if (!useColors) return;
       var c = 'color: ' + this.color;
       args.splice(1, 0, c, 'color: inherit');
@@ -40170,9 +40510,9 @@ function requireBrowser$1() {
     function save(namespaces) {
       try {
         if (null == namespaces) {
-          exports$1.storage.removeItem('debug');
+          exports.storage.removeItem('debug');
         } else {
-          exports$1.storage.debug = namespaces;
+          exports.storage.debug = namespaces;
         }
       } catch (e) {}
     }
@@ -40187,7 +40527,7 @@ function requireBrowser$1() {
     function load() {
       var r;
       try {
-        r = exports$1.storage.debug;
+        r = exports.storage.debug;
       } catch (e) {}
 
       // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
@@ -40201,7 +40541,7 @@ function requireBrowser$1() {
      * Enable namespaces listed in `localStorage.debug` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
 
     /**
      * Localstorage attempts to return the localstorage.
@@ -40232,7 +40572,7 @@ var hasRequiredNode$1;
 function requireNode$1() {
   if (hasRequiredNode$1) return node$1.exports;
   hasRequiredNode$1 = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     var tty = require$$0$5;
     var util = require$$1$1;
 
@@ -40242,19 +40582,19 @@ function requireNode$1() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = requireDebug$1();
-    exports$1.init = init;
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
+    exports = module.exports = requireDebug$1();
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
 
     /**
      * Colors.
      */
 
-    exports$1.colors = [6, 2, 3, 4, 5, 1];
+    exports.colors = [6, 2, 3, 4, 5, 1];
 
     /**
      * Build up the default `inspectOpts` object from the environment variables.
@@ -40262,7 +40602,7 @@ function requireNode$1() {
      *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
      */
 
-    exports$1.inspectOpts = Object.keys(process.env).filter(function (key) {
+    exports.inspectOpts = Object.keys(process.env).filter(function (key) {
       return /^debug_/i.test(key);
     }).reduce(function (obj, key) {
       // camel-case
@@ -40295,14 +40635,14 @@ function requireNode$1() {
      */
 
     function useColors() {
-      return 'colors' in exports$1.inspectOpts ? Boolean(exports$1.inspectOpts.colors) : tty.isatty(fd);
+      return 'colors' in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(fd);
     }
 
     /**
      * Map %o to `util.inspect()`, all on a single line.
      */
 
-    exports$1.formatters.o = function (v) {
+    exports.formatters.o = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts).split('\n').map(function (str) {
         return str.trim();
@@ -40313,7 +40653,7 @@ function requireNode$1() {
      * Map %o to `util.inspect()`, allowing multiple lines if needed.
      */
 
-    exports$1.formatters.O = function (v) {
+    exports.formatters.O = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts);
     };
@@ -40331,7 +40671,7 @@ function requireNode$1() {
         var c = this.color;
         var prefix = "  \x1B[3" + c + ';1m' + name + ' ' + "\x1B[0m";
         args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-        args.push("\x1B[3" + c + 'm+' + exports$1.humanize(this.diff) + "\x1B[0m");
+        args.push("\x1B[3" + c + 'm+' + exports.humanize(this.diff) + "\x1B[0m");
       } else {
         args[0] = new Date().toUTCString() + ' ' + name + ' ' + args[0];
       }
@@ -40447,9 +40787,9 @@ function requireNode$1() {
 
     function init(debug) {
       debug.inspectOpts = {};
-      var keys = Object.keys(exports$1.inspectOpts);
+      var keys = Object.keys(exports.inspectOpts);
       for (var i = 0; i < keys.length; i++) {
-        debug.inspectOpts[keys[i]] = exports$1.inspectOpts[keys[i]];
+        debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
       }
     }
 
@@ -40457,7 +40797,7 @@ function requireNode$1() {
      * Enable namespaces listed in `process.env.DEBUG` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
   })(node$1, node$1.exports);
   return node$1.exports;
 }
@@ -41087,7 +41427,7 @@ var utilsMerge = {exports: {}};
  * @return {Object}
  * @api public
  */
-(function (module, exports$1) {
+(function (module, exports) {
   module.exports = function (a, b) {
     if (a && b) {
       for (var key in b) {
@@ -41961,7 +42301,7 @@ var utils = {};
 var safeBuffer = {exports: {}};
 
 /*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
-(function (module, exports$1) {
+(function (module, exports) {
   /* eslint-disable node/no-deprecated-api */
   var buffer = require$$0$6;
   var Buffer = buffer.Buffer;
@@ -41976,8 +42316,8 @@ var safeBuffer = {exports: {}};
     module.exports = buffer;
   } else {
     // Copy properties from require('buffer')
-    copyProps(buffer, exports$1);
-    exports$1.Buffer = SafeBuffer;
+    copyProps(buffer, exports);
+    exports.Buffer = SafeBuffer;
   }
   function SafeBuffer(arg, encodingOrOffset, length) {
     return Buffer(arg, encodingOrOffset, length);
@@ -42594,7 +42934,7 @@ var hasRequiredDebug;
 function requireDebug() {
   if (hasRequiredDebug) return debug$1.exports;
   hasRequiredDebug = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     /**
      * This is the common logic for both the Node.js and web browser
      * implementations of `debug()`.
@@ -42602,19 +42942,19 @@ function requireDebug() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-    exports$1.coerce = coerce;
-    exports$1.disable = disable;
-    exports$1.enable = enable;
-    exports$1.enabled = enabled;
-    exports$1.humanize = requireMs();
+    exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
+    exports.coerce = coerce;
+    exports.disable = disable;
+    exports.enable = enable;
+    exports.enabled = enabled;
+    exports.humanize = requireMs();
 
     /**
      * The currently active debug mode names, and names to skip.
      */
 
-    exports$1.names = [];
-    exports$1.skips = [];
+    exports.names = [];
+    exports.skips = [];
 
     /**
      * Map of special "%n" handling functions, for the debug "format" argument.
@@ -42622,7 +42962,7 @@ function requireDebug() {
      * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
      */
 
-    exports$1.formatters = {};
+    exports.formatters = {};
 
     /**
      * Previous log timestamp.
@@ -42644,7 +42984,7 @@ function requireDebug() {
         hash = (hash << 5) - hash + namespace.charCodeAt(i);
         hash |= 0; // Convert to 32bit integer
       }
-      return exports$1.colors[Math.abs(hash) % exports$1.colors.length];
+      return exports.colors[Math.abs(hash) % exports.colors.length];
     }
 
     /**
@@ -42674,7 +43014,7 @@ function requireDebug() {
         for (var i = 0; i < args.length; i++) {
           args[i] = arguments[i];
         }
-        args[0] = exports$1.coerce(args[0]);
+        args[0] = exports.coerce(args[0]);
         if ('string' !== typeof args[0]) {
           // anything else let's inspect with %O
           args.unshift('%O');
@@ -42686,7 +43026,7 @@ function requireDebug() {
           // if we encounter an escaped % then don't increase the array index
           if (match === '%%') return match;
           index++;
-          var formatter = exports$1.formatters[format];
+          var formatter = exports.formatters[format];
           if ('function' === typeof formatter) {
             var val = args[index];
             match = formatter.call(self, val);
@@ -42699,18 +43039,18 @@ function requireDebug() {
         });
 
         // apply env-specific formatting (colors, etc.)
-        exports$1.formatArgs.call(self, args);
-        var logFn = debug.log || exports$1.log || console.log.bind(console);
+        exports.formatArgs.call(self, args);
+        var logFn = debug.log || exports.log || console.log.bind(console);
         logFn.apply(self, args);
       }
       debug.namespace = namespace;
-      debug.enabled = exports$1.enabled(namespace);
-      debug.useColors = exports$1.useColors();
+      debug.enabled = exports.enabled(namespace);
+      debug.useColors = exports.useColors();
       debug.color = selectColor(namespace);
 
       // env-specific initialization logic for debug instances
-      if ('function' === typeof exports$1.init) {
-        exports$1.init(debug);
+      if ('function' === typeof exports.init) {
+        exports.init(debug);
       }
       return debug;
     }
@@ -42724,18 +43064,18 @@ function requireDebug() {
      */
 
     function enable(namespaces) {
-      exports$1.save(namespaces);
-      exports$1.names = [];
-      exports$1.skips = [];
+      exports.save(namespaces);
+      exports.names = [];
+      exports.skips = [];
       var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
       var len = split.length;
       for (var i = 0; i < len; i++) {
         if (!split[i]) continue; // ignore empty strings
         namespaces = split[i].replace(/\*/g, '.*?');
         if (namespaces[0] === '-') {
-          exports$1.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
+          exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
         } else {
-          exports$1.names.push(new RegExp('^' + namespaces + '$'));
+          exports.names.push(new RegExp('^' + namespaces + '$'));
         }
       }
     }
@@ -42747,7 +43087,7 @@ function requireDebug() {
      */
 
     function disable() {
-      exports$1.enable('');
+      exports.enable('');
     }
 
     /**
@@ -42760,13 +43100,13 @@ function requireDebug() {
 
     function enabled(name) {
       var i, len;
-      for (i = 0, len = exports$1.skips.length; i < len; i++) {
-        if (exports$1.skips[i].test(name)) {
+      for (i = 0, len = exports.skips.length; i < len; i++) {
+        if (exports.skips[i].test(name)) {
           return false;
         }
       }
-      for (i = 0, len = exports$1.names.length; i < len; i++) {
-        if (exports$1.names[i].test(name)) {
+      for (i = 0, len = exports.names.length; i < len; i++) {
+        if (exports.names[i].test(name)) {
           return true;
         }
       }
@@ -42793,20 +43133,20 @@ var hasRequiredBrowser;
 function requireBrowser() {
   if (hasRequiredBrowser) return browser.exports;
   hasRequiredBrowser = 1;
-  (function (module, exports$1) {
-    exports$1 = module.exports = requireDebug();
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
-    exports$1.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
+  (function (module, exports) {
+    exports = module.exports = requireDebug();
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
+    exports.storage = 'undefined' != typeof chrome && 'undefined' != typeof chrome.storage ? chrome.storage.local : localstorage();
 
     /**
      * Colors.
      */
 
-    exports$1.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
+    exports.colors = ['lightseagreen', 'forestgreen', 'goldenrod', 'dodgerblue', 'darkorchid', 'crimson'];
 
     /**
      * Currently only WebKit-based Web Inspectors, Firefox >= v31,
@@ -42840,7 +43180,7 @@ function requireBrowser() {
      * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
      */
 
-    exports$1.formatters.j = function (v) {
+    exports.formatters.j = function (v) {
       try {
         return JSON.stringify(v);
       } catch (err) {
@@ -42856,7 +43196,7 @@ function requireBrowser() {
 
     function formatArgs(args) {
       var useColors = this.useColors;
-      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports$1.humanize(this.diff);
+      args[0] = (useColors ? '%c' : '') + this.namespace + (useColors ? ' %c' : ' ') + args[0] + (useColors ? '%c ' : ' ') + '+' + exports.humanize(this.diff);
       if (!useColors) return;
       var c = 'color: ' + this.color;
       args.splice(1, 0, c, 'color: inherit');
@@ -42901,9 +43241,9 @@ function requireBrowser() {
     function save(namespaces) {
       try {
         if (null == namespaces) {
-          exports$1.storage.removeItem('debug');
+          exports.storage.removeItem('debug');
         } else {
-          exports$1.storage.debug = namespaces;
+          exports.storage.debug = namespaces;
         }
       } catch (e) {}
     }
@@ -42918,7 +43258,7 @@ function requireBrowser() {
     function load() {
       var r;
       try {
-        r = exports$1.storage.debug;
+        r = exports.storage.debug;
       } catch (e) {}
 
       // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
@@ -42932,7 +43272,7 @@ function requireBrowser() {
      * Enable namespaces listed in `localStorage.debug` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
 
     /**
      * Localstorage attempts to return the localstorage.
@@ -42963,7 +43303,7 @@ var hasRequiredNode;
 function requireNode() {
   if (hasRequiredNode) return node.exports;
   hasRequiredNode = 1;
-  (function (module, exports$1) {
+  (function (module, exports) {
     var tty = require$$0$5;
     var util = require$$1$1;
 
@@ -42973,19 +43313,19 @@ function requireNode() {
      * Expose `debug()` as the module.
      */
 
-    exports$1 = module.exports = requireDebug();
-    exports$1.init = init;
-    exports$1.log = log;
-    exports$1.formatArgs = formatArgs;
-    exports$1.save = save;
-    exports$1.load = load;
-    exports$1.useColors = useColors;
+    exports = module.exports = requireDebug();
+    exports.init = init;
+    exports.log = log;
+    exports.formatArgs = formatArgs;
+    exports.save = save;
+    exports.load = load;
+    exports.useColors = useColors;
 
     /**
      * Colors.
      */
 
-    exports$1.colors = [6, 2, 3, 4, 5, 1];
+    exports.colors = [6, 2, 3, 4, 5, 1];
 
     /**
      * Build up the default `inspectOpts` object from the environment variables.
@@ -42993,7 +43333,7 @@ function requireNode() {
      *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
      */
 
-    exports$1.inspectOpts = Object.keys(process.env).filter(function (key) {
+    exports.inspectOpts = Object.keys(process.env).filter(function (key) {
       return /^debug_/i.test(key);
     }).reduce(function (obj, key) {
       // camel-case
@@ -43026,14 +43366,14 @@ function requireNode() {
      */
 
     function useColors() {
-      return 'colors' in exports$1.inspectOpts ? Boolean(exports$1.inspectOpts.colors) : tty.isatty(fd);
+      return 'colors' in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(fd);
     }
 
     /**
      * Map %o to `util.inspect()`, all on a single line.
      */
 
-    exports$1.formatters.o = function (v) {
+    exports.formatters.o = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts).split('\n').map(function (str) {
         return str.trim();
@@ -43044,7 +43384,7 @@ function requireNode() {
      * Map %o to `util.inspect()`, allowing multiple lines if needed.
      */
 
-    exports$1.formatters.O = function (v) {
+    exports.formatters.O = function (v) {
       this.inspectOpts.colors = this.useColors;
       return util.inspect(v, this.inspectOpts);
     };
@@ -43062,7 +43402,7 @@ function requireNode() {
         var c = this.color;
         var prefix = "  \x1B[3" + c + ';1m' + name + ' ' + "\x1B[0m";
         args[0] = prefix + args[0].split('\n').join('\n' + prefix);
-        args.push("\x1B[3" + c + 'm+' + exports$1.humanize(this.diff) + "\x1B[0m");
+        args.push("\x1B[3" + c + 'm+' + exports.humanize(this.diff) + "\x1B[0m");
       } else {
         args[0] = new Date().toUTCString() + ' ' + name + ' ' + args[0];
       }
@@ -43178,9 +43518,9 @@ function requireNode() {
 
     function init(debug) {
       debug.inspectOpts = {};
-      var keys = Object.keys(exports$1.inspectOpts);
+      var keys = Object.keys(exports.inspectOpts);
       for (var i = 0; i < keys.length; i++) {
-        debug.inspectOpts[keys[i]] = exports$1.inspectOpts[keys[i]];
+        debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
       }
     }
 
@@ -43188,7 +43528,7 @@ function requireNode() {
      * Enable namespaces listed in `process.env.DEBUG` initially.
      */
 
-    exports$1.enable(load());
+    exports.enable(load());
   })(node, node.exports);
   return node.exports;
 }
@@ -46632,7 +46972,7 @@ var onFinished$1 = onFinishedExports;
 var parseRange$1 = rangeParser_1;
 var path$1 = require$$1$3;
 var statuses$1 = statuses$3;
-var Stream = require$$1$6;
+var Stream = require$$1$5;
 var util = require$$1$1;
 
 /**
@@ -48646,7 +48986,7 @@ var proxyAddrExports = proxyAddr.exports;
  * Copyright(c) 2014-2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-(function (exports$1) {
+(function (exports) {
 
   /**
    * Module dependencies.
@@ -48672,7 +49012,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.etag = createETagGenerator({
+  exports.etag = createETagGenerator({
     weak: false
   });
 
@@ -48685,7 +49025,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.wetag = createETagGenerator({
+  exports.wetag = createETagGenerator({
     weak: true
   });
 
@@ -48697,7 +49037,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.isAbsolute = function (path) {
+  exports.isAbsolute = function (path) {
     if ('/' === path[0]) return true;
     if (':' === path[1] && ('\\' === path[2] || '/' === path[2])) return true; // Windows device path
     if ('\\\\' === path.substring(0, 2)) return true; // Microsoft Azure absolute path
@@ -48711,7 +49051,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.flatten = deprecate["function"](flatten, 'utils.flatten: use array-flatten npm module instead');
+  exports.flatten = deprecate["function"](flatten, 'utils.flatten: use array-flatten npm module instead');
 
   /**
    * Normalize the given `type`, for example "html" becomes "text/html".
@@ -48721,7 +49061,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.normalizeType = function (type) {
+  exports.normalizeType = function (type) {
     return ~type.indexOf('/') ? acceptParams(type) : {
       value: mime.lookup(type),
       params: {}
@@ -48736,10 +49076,10 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.normalizeTypes = function (types) {
+  exports.normalizeTypes = function (types) {
     var ret = [];
     for (var i = 0; i < types.length; ++i) {
-      ret.push(exports$1.normalizeType(types[i]));
+      ret.push(exports.normalizeType(types[i]));
     }
     return ret;
   };
@@ -48753,7 +49093,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.contentDisposition = deprecate["function"](contentDisposition, 'utils.contentDisposition: use content-disposition npm module instead');
+  exports.contentDisposition = deprecate["function"](contentDisposition, 'utils.contentDisposition: use content-disposition npm module instead');
 
   /**
    * Parse accept params `str` returning an
@@ -48790,7 +49130,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.compileETag = function (val) {
+  exports.compileETag = function (val) {
     var fn;
     if (typeof val === 'function') {
       return val;
@@ -48798,12 +49138,12 @@ var proxyAddrExports = proxyAddr.exports;
     switch (val) {
       case true:
       case 'weak':
-        fn = exports$1.wetag;
+        fn = exports.wetag;
         break;
       case false:
         break;
       case 'strong':
-        fn = exports$1.etag;
+        fn = exports.etag;
         break;
       default:
         throw new TypeError('unknown value for etag function: ' + val);
@@ -48819,7 +49159,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.compileQueryParser = function compileQueryParser(val) {
+  exports.compileQueryParser = function compileQueryParser(val) {
     var fn;
     if (typeof val === 'function') {
       return val;
@@ -48849,7 +49189,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.compileTrust = function (val) {
+  exports.compileTrust = function (val) {
     if (typeof val === 'function') return val;
     if (val === true) {
       // Support plain true/false
@@ -48881,7 +49221,7 @@ var proxyAddrExports = proxyAddr.exports;
    * @api private
    */
 
-  exports$1.setCharset = function setCharset(type, charset) {
+  exports.setCharset = function setCharset(type, charset) {
     if (!type || !charset) {
       return type;
     }
@@ -48946,7 +49286,7 @@ var proxyAddrExports = proxyAddr.exports;
  * Copyright(c) 2014-2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-(function (module, exports$1) {
+(function (module, exports) {
 
   /**
    * Module dependencies.
@@ -51123,7 +51463,7 @@ var cookieSignature = {};
 /**
  * Module dependencies.
  */
-(function (exports$1) {
+(function (exports) {
   var crypto = require$$0$7;
 
   /**
@@ -51135,7 +51475,7 @@ var cookieSignature = {};
    * @api private
    */
 
-  exports$1.sign = function (val, secret) {
+  exports.sign = function (val, secret) {
     if ('string' !== typeof val) throw new TypeError("Cookie value must be provided as a string.");
     if (null == secret) throw new TypeError("Secret key must be provided.");
     return val + '.' + crypto.createHmac('sha256', secret).update(val).digest('base64').replace(/\=+$/, '');
@@ -51151,11 +51491,11 @@ var cookieSignature = {};
    * @api private
    */
 
-  exports$1.unsign = function (val, secret) {
+  exports.unsign = function (val, secret) {
     if ('string' !== typeof val) throw new TypeError("Signed cookie string must be provided.");
     if (null == secret) throw new TypeError("Secret key must be provided.");
     var str = val.slice(0, val.lastIndexOf('.')),
-      mac = exports$1.sign(str, secret);
+      mac = exports.sign(str, secret);
     return sha1(mac) == sha1(val) ? str : false;
   };
 
@@ -52778,7 +53118,7 @@ function requireServeStatic() {
  * Copyright(c) 2014-2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-(function (module, exports$1) {
+(function (module, exports) {
 
   /**
    * Module dependencies.
@@ -52796,7 +53136,7 @@ function requireServeStatic() {
    * Expose `createApplication()`.
    */
 
-  exports$1 = module.exports = createApplication;
+  exports = module.exports = createApplication;
 
   /**
    * Create an express application.
@@ -52806,60 +53146,60 @@ function requireServeStatic() {
    */
 
   function createApplication() {
-    var app = function app(req, res, next) {
-      app.handle(req, res, next);
+    var _app = function app(req, res, next) {
+      _app.handle(req, res, next);
     };
-    mixin(app, EventEmitter.prototype, false);
-    mixin(app, proto, false);
+    mixin(_app, EventEmitter.prototype, false);
+    mixin(_app, proto, false);
 
     // expose the prototype that will get set on requests
-    app.request = Object.create(req, {
+    _app.request = Object.create(req, {
       app: {
         configurable: true,
         enumerable: true,
         writable: true,
-        value: app
+        value: _app
       }
     });
 
     // expose the prototype that will get set on responses
-    app.response = Object.create(res, {
+    _app.response = Object.create(res, {
       app: {
         configurable: true,
         enumerable: true,
         writable: true,
-        value: app
+        value: _app
       }
     });
-    app.init();
-    return app;
+    _app.init();
+    return _app;
   }
 
   /**
    * Expose the prototypes.
    */
 
-  exports$1.application = proto;
-  exports$1.request = req;
-  exports$1.response = res;
+  exports.application = proto;
+  exports.request = req;
+  exports.response = res;
 
   /**
    * Expose constructors.
    */
 
-  exports$1.Route = Route;
-  exports$1.Router = Router;
+  exports.Route = Route;
+  exports.Router = Router;
 
   /**
    * Expose middleware
    */
 
-  exports$1.json = bodyParser.json;
-  exports$1.query = requireQuery();
-  exports$1.raw = bodyParser.raw;
-  exports$1["static"] = requireServeStatic();
-  exports$1.text = bodyParser.text;
-  exports$1.urlencoded = bodyParser.urlencoded;
+  exports.json = bodyParser.json;
+  exports.query = requireQuery();
+  exports.raw = bodyParser.raw;
+  exports["static"] = requireServeStatic();
+  exports.text = bodyParser.text;
+  exports.urlencoded = bodyParser.urlencoded;
 
   /**
    * Replace removed middleware with an appropriate error message.
@@ -52867,7 +53207,7 @@ function requireServeStatic() {
 
   var removedMiddlewares = ['bodyParser', 'compress', 'cookieSession', 'session', 'logger', 'cookieParser', 'favicon', 'responseTime', 'errorHandler', 'timeout', 'methodOverride', 'vhost', 'csrf', 'directory', 'limit', 'multipart', 'staticCache'];
   removedMiddlewares.forEach(function (name) {
-    Object.defineProperty(exports$1, name, {
+    Object.defineProperty(exports, name, {
       get: function get() {
         throw new Error('Most middleware (like ' + name + ') is no longer bundled with Express and must be installed separately. Please see https://github.com/senchalabs/connect#middleware.');
       },
