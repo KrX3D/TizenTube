@@ -861,6 +861,25 @@ JSON.parse = function () {
   // knowing when a stall is being explained. Only measured while the playback
   // diagnostic is on, and playbackHealth.js reports it next to each stall.
   const _startedAt = playbackDiagnosticsEnabled() ? Date.now() : 0;
+  // Checkpoints across the regions no timeFilter covers.
+  //
+  // The reason this exists: a capture with nativeMs in it put 95% of the
+  // measured time in neither JSON.parse nor any timed filter. Trivial
+  // responses cost real money — {"responseContext"} 207ms, a three-element
+  // array 256ms, {"responseContext","actionStatePair"} 502ms — with nativeMs
+  // at 0 and every filter in single digits. A cost that does not scale with
+  // the data is not in the walkers, and three guesses at what it is instead
+  // have all been wrong. So the remainder gets measured rather than reasoned
+  // about.
+  //
+  // Checkpoints and not more timeFilter calls because the regions contain
+  // their own returns — the watch path has one — and wrapping them in
+  // closures would change what those returns return.
+  const _marks = _startedAt ? {} : null;
+  let _markAt = _startedAt;
+  const mark = _startedAt
+    ? (name) => { const now = Date.now(); _marks[name] = (_marks[name] || 0) + (now - _markAt); _markAt = now; }
+    : () => { };
   try {
     const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
     window.__ttLastDetectedPage = detectedPage;
@@ -880,6 +899,7 @@ JSON.parse = function () {
     // distinct key set so it only logs once per response shape, not once
     // per parse — the actual field carrying this ad is still unknown, so
     // logging broadly here beats guessing a specific path blind.
+    mark('detectMs');
     if (detectedPage === 'home' && !Array.isArray(r) && r && typeof r === 'object') {
       const keySet = Object.keys(r).sort().join(',');
       if (keySet !== _lastLoggedHomeKeySet) {
@@ -914,6 +934,7 @@ JSON.parse = function () {
       applyLibraryShelfSpacing();
     }
 
+    mark('diagMs');
     timeFilter('videoLength', () => noteVideoLength(r));
     timeFilter('progressCache', () => updateProgressCache(r));
     // This is the one piece of per-response work that was never attributed,
@@ -963,6 +984,7 @@ JSON.parse = function () {
       });
     }
 
+    mark('earlyMs');
     // =========================================================
     // === WATCH PAGE FAST PATH                               ===
     // =========================================================
@@ -1055,6 +1077,7 @@ JSON.parse = function () {
         processShelves(wNextPivot.contents, false, detectedPage);
         timeFilter('shelves', () => consolidateShelves(wNextPivot.contents, 'watchNext.continuation.pivot', detectedPage, !!wNextPivot.continuations, filterShortsFromItems));
       }
+      mark('watchMs');
       return r;
     }
     // =========================================================
@@ -1333,6 +1356,7 @@ JSON.parse = function () {
       } catch (_) { }
     }
 
+    mark('browseMs');
     timeFilter('tilesDeep', () => processTileArraysDeep(r, detectedPage, 'response', 0, filterShortsFromItems));
     return r;
   } catch (error) {
@@ -1345,12 +1369,15 @@ JSON.parse = function () {
   } finally {
     _parseDepth--;
     if (_startedAt) {
+      // Runs on every path, including the watch branch's own return and the
+      // catch, so no exit is unaccounted for.
+      mark('tailMs');
       const _took = Date.now() - _startedAt;
       noteParseCost(_took);
       // The aggregate says how much; this says which response, which is the
       // part that can be acted on. nativeMs is how long JSON.parse itself
       // took, so a slow line says which side of it was slow.
-      noteParseShape(_took, window.__ttLastDetectedPage, r, _startedAt - _enteredAt);
+      noteParseShape(_took, window.__ttLastDetectedPage, r, _startedAt - _enteredAt, _marks);
     }
   }
 };

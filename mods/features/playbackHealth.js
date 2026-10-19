@@ -171,7 +171,16 @@ function takeWork() {
  * the filter counts say which of this fork's walkers was in it. No values: a
  * response carries a person's own feed.
  */
-export function noteParseShape(ms, detectedPage, response, nativeMs) {
+function trimmedMarks(marks) {
+    const out = {};
+    for (const key of Object.keys(marks)) {
+        const value = Math.round(marks[key]);
+        if (value > 0) out[key] = value;
+    }
+    return out;
+}
+
+export function noteParseShape(ms, detectedPage, response, nativeMs, marks) {
     if (!enabled()) {
         takeWork();
         return;
@@ -214,7 +223,9 @@ export function noteParseShape(ms, detectedPage, response, nativeMs) {
         page: detectedPage || null,
         keys,
         items,
-    }, takeWork(), takeSpent()));
+        // Only the checkpoints that cost something, so the line stays
+        // readable: a region at zero says nothing worth the characters.
+    }, marks ? trimmedMarks(marks) : null, takeWork(), takeSpent()));
 }
 
 /**
