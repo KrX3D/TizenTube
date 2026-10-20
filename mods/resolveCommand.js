@@ -9,7 +9,7 @@ import { sendTestPing } from './features/logServer.js';
 import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
-import { shareCurrentVideo, shareVideo } from './features/qrShare.js';
+import { shareCurrentVideo, shareVideo, sharePlaylist } from './features/qrShare.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken, addVideoToPlaylist } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
@@ -457,6 +457,9 @@ function customAction(action, parameters) {
             break;
         case 'SHARE_VIDEO':
             shareVideo(parameters?.videoId);
+            break;
+        case 'SHARE_PLAYLIST':
+            sharePlaylist(parameters?.playlistId);
             break;
         case 'HIDE_CHANNEL': {
             const name = String(parameters?.name || '').trim();

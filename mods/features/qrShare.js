@@ -9,8 +9,12 @@ import { t } from 'i18next';
 // read. The QR is generated locally — nothing is sent anywhere.
 
 // Version 6 at error-correction level H comfortably fits a ~43-character
-// watch URL while staying readable from across a room.
+// watch URL while staying readable from across a room. A playlist URL is
+// longer — youtube.com/playlist?list= plus a 34-character id is about 60 — so
+// the version is chosen per URL rather than fixed, and version 6 remains the
+// floor so a watch URL looks exactly as it did.
 const QR_VERSION = 6;
+const QR_VERSION_MAX = 10;
 const QR_ERROR_CORRECTION = 'H';
 const QR_CELL_SIZE = 8;
 const QR_MARGIN = 8;
@@ -41,16 +45,55 @@ export function shareCurrentVideo() {
  * @param {string} videoId
  */
 export function shareVideo(videoId) {
+    if (!videoId) {
+        showToast('TizenTube', t('toasts.shareNoVideo'));
+        return;
+    }
+    shareUrlAsQr(`https://www.youtube.com/watch?v=${videoId}`);
+}
+
+/**
+ * The same, for a whole playlist.
+ *
+ * A playlist is the one thing on a TV it is most useful to send to a phone —
+ * the list is long, the remote is slow, and a watch URL for one of its videos
+ * is not the same thing as the playlist. Reached from a playlist tile's long
+ * press menu.
+ *
+ * @param {string} playlistId  with or without the VL prefix a tile carries
+ */
+export function sharePlaylist(playlistId) {
+    // A tile's browse id is VL + the playlist id; a playlist URL wants the id
+    // itself. WL and LL have no prefix and pass through unchanged.
+    const list = String(playlistId || '').replace(/^VL/, '').trim();
+    if (!list) {
+        showToast('TizenTube', t('toasts.shareFailed'));
+        return;
+    }
+    shareUrlAsQr(`https://www.youtube.com/playlist?list=${list}`);
+}
+
+/** The modal, which is the same whatever the URL points at. */
+function shareUrlAsQr(shareUrl) {
     try {
-        if (!videoId) {
-            showToast('TizenTube', t('toasts.shareNoVideo'));
+        // The smallest version that holds this URL, so a short one stays as
+        // large and as readable as it was before playlists came along.
+        let qr = null;
+        for (let version = QR_VERSION; version <= QR_VERSION_MAX; version++) {
+            try {
+                const attempt = qrcode.qrcode(version, QR_ERROR_CORRECTION);
+                attempt.addData(shareUrl);
+                attempt.make();
+                qr = attempt;
+                break;
+            } catch (_) {
+                // Too long for this version; the next one is bigger.
+            }
+        }
+        if (!qr) {
+            showToast('TizenTube', t('toasts.shareFailed'));
             return;
         }
-        const shareUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-        const qr = qrcode.qrcode(QR_VERSION, QR_ERROR_CORRECTION);
-        qr.addData(shareUrl);
-        qr.make();
 
         // qrcode-npm only emits a full <img> tag; the renderer wants the bare
         // data URL, so pull the src back out of it.

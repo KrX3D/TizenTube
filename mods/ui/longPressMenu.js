@@ -457,6 +457,21 @@ function playPlaylistEntry(playlistId, videoId) {
     }))];
 }
 
+/**
+ * Share, for a playlist tile: the same QR code the video menu offers.
+ *
+ * Reuses the video menu's own 'share' id and label, so it orders and hides
+ * with everything else and needs no new strings.
+ */
+function sharePlaylistEntry(playlistId) {
+    const list = String(playlistId || '').replace(/^VL/, '').trim();
+    if (!list) return [];
+    return [tagMenuItem('share', MenuServiceItemRenderer(t('videoMenu.share'), {
+        clickTrackingParams: null,
+        playlistEditEndpoint: { customAction: { action: 'SHARE_PLAYLIST', parameters: { playlistId: list } } }
+    }))];
+}
+
 export function browseTileLongPressData(info) {
     // Every way out of this function now says why. All of them used to return
     // null in silence, so a tile that got no menu and a tile whose menu never
@@ -472,8 +487,21 @@ export function browseTileLongPressData(info) {
     let items = [];
     try {
         if (info?.kind === 'playlist') {
+            // Four entries, which is a count the app is known to draw.
+            //
+            // Every menu seen to open sorts by this one number: 1 and 2 never
+            // drew, 4 and 5 always did, and 3 has never been observed either
+            // way. Since the entry that matters here — showing a playlist's
+            // watched videos — is the whole point of the menu, it is not worth
+            // shipping an untested 3 and finding out.
+            //
+            // None of the four is padding. Play and Open are what a long press
+            // on a playlist obviously wants, and sharing is the one thing a TV
+            // genuinely cannot do another way: no clipboard, no address bar,
+            // and a long playlist is exactly what you want on a phone instead.
             items = playPlaylistEntry(info.id, firstVideoId)
                 .concat(openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id))
+                .concat(sharePlaylistEntry(info.id))
                 .concat(playlistExemptionEntry(info.id));
         } else if (info?.kind === 'channel') {
             // Both scopes, since a channel tile answers for both: its id is
