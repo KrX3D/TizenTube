@@ -18,6 +18,18 @@ import { configRead } from '../config.js';
 
 // Label prefix -> category. Prefixes not listed here fall into 'other', which
 // is enabled by default so a newly added label is never silently swallowed.
+//
+// That default is the right one and it has a cost worth knowing about: a
+// prefix nobody mapped still logs, it just logs under a category nobody would
+// think to switch off. An audit of one day's capture against this table found
+// eleven prefixes in that state, including tiles (43 lines, the loudest thing
+// outside 'player'), longPress, reload and badgedVideo, and two of them —
+// tiles against tile, longPress against addLongPress — were near misses of a
+// prefix that IS here.
+//
+// So when adding a label, add its prefix here too. The check is cheap: grep
+// the codebase for appendFileOnlyLog(' and compare the prefixes against the
+// keys below.
 const PREFIX_CATEGORY = {
   // Navigation and page detection — the "what am I looking at" tier.
   page: 'nav', parse: 'nav', nav: 'nav', home: 'nav',
@@ -27,20 +39,32 @@ const PREFIX_CATEGORY = {
 
   shorts: 'shorts',
 
-  hideVideo: 'watched', deep: 'watched',
+  hideVideo: 'watched', deep: 'watched', hideWatched: 'watched',
+  // Found by the check below rather than by reading: marking a video watched
+  // belongs with the rest of the watched handling, and it was mine, added
+  // without a mapping while writing the very audit that caught it.
+  markWatched: 'watched',
 
   playlist: 'playlist', consolidate: 'playlist',
 
   membersOnly: 'filters', survey: 'filters', channelShelf: 'filters',
   specialPlaylist: 'filters', libraryTab: 'filters', duplicate: 'filters',
+  channelHider: 'filters', musicShelf: 'filters', aggregateShelf: 'filters',
+  badge: 'filters', badgedVideo: 'filters', filters: 'filters',
 
   shelf: 'shelves', shelfItem: 'shelves', processShelves: 'shelves',
   tile: 'shelves', addLongPress: 'shelves', sidebar: 'shelves',
+  // tiles as well as tile, and longPress as well as addLongPress. Both pairs
+  // were a near miss: the singular was mapped, the plural was not, so turning
+  // 'shelves' off left the loudest of them running. tiles.countsStripped was
+  // 43 lines in one day's capture, more than any other non-player prefix.
+  tiles: 'shelves', longPress: 'shelves',
 
   dearrow: 'thumbs', thumbs: 'thumbs',
 
   resume: 'player', screenOff: 'player',
   captionStyle: 'player', player: 'player',
+  unwedge: 'player', reload: 'player',
 
   // Its own category rather than folded into 'player', because the volumes
   // are nothing alike. One capture held 7302 SponsorBlock lines against 29942
