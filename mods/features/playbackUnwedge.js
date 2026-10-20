@@ -213,7 +213,16 @@ function check() {
     // useful thing to do here.
     if (moved < -0.05) {
         stuckBeats = 0;
-        attempts = 0;
+        // attempts is deliberately NOT cleared here, though it was.
+        //
+        // The cap is two attempts per video, and clearing it on a backwards
+        // move handed that back: a player oscillating around a frame it cannot
+        // pass produces a backwards move every few beats, so the counter was
+        // reset every few beats and this file could act again, and again, for
+        // as long as the loop lasted. The reset was meant to express "a
+        // self-recovery is not a wedge", which is what clearing stuckBeats
+        // already says. A self-recovery is not a new video either, and only a
+        // new video should forgive attempts already spent.
         appendFileOnlyLog('unwedge.selfRecovering', {
             at: Math.round(at * 10) / 10,
             movedSec: Math.round(moved * 10) / 10,

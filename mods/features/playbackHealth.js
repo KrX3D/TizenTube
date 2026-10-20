@@ -80,8 +80,26 @@ let qualities = [];
 // while the playhead is not moving — which is the case worth watching.
 const BEAT_MS = 10000;
 const QUIET_BEATS = 6;
+
+// Media seconds advanced per second of wall clock, below which a beat is
+// stuttering rather than playing.
+//
+// Reported on 20 October: a video paused for twenty minutes then resumed
+// played a couple of seconds, stopped for several, played two more, and looped.
+// Nothing in this file called that a problem. "stuck" means the playhead did
+// not move at all, and a playhead that advances two seconds in a ten second
+// beat has moved, so the beat read as ordinary and said nothing for a minute
+// at a time. The individual stalls are still caught by the waiting/playing
+// pair, but a loop of them is only visible by counting lines, and the one
+// number that names it outright was not being recorded.
+//
+// Six tenths rather than something tighter: a beat can legitimately come in
+// short when the timer is late under load, and the timer being late is itself
+// measured below rather than mistaken for a stutter.
+const STUTTER_RATIO = 0.6;
 let beatTimer = null;
 let lastBeatPosition = 0;
+let lastBeatAt = 0;
 let beatsSinceLine = 0;
 let stalls = 0;
 let stalledMs = 0;
@@ -285,6 +303,11 @@ export function noteParseCost(ms) {
 }
 
 /** True when this fork's parse cost is worth measuring at all. */
+// Exported for the same reason playbackUnwedge.js exports check: the beat is
+// where the judgement lives, and a judgement that has never been run against a
+// known input is a guess.
+export { beat };
+
 export function playbackDiagnosticsEnabled() {
     return enabled();
 }
@@ -444,21 +467,41 @@ function beat() {
         video = found;
         listen(video);
         lastBeatPosition = video.currentTime || 0;
+        lastBeatAt = 0;
     }
     if (!video) return;
     const at = video.currentTime || 0;
     const moved = Math.round((at - lastBeatPosition) * 10) / 10;
     lastBeatPosition = at;
+    // Real time between beats, not the interval it was asked for. A beat that
+    // arrives late says the page itself was busy, and dividing by the nominal
+    // interval would hide that in the ratio instead of showing it.
+    const now = Date.now();
+    const elapsedMs = lastBeatAt ? now - lastBeatAt : 0;
+    lastBeatAt = now;
     let paused = false;
     try { paused = !!video.paused; } catch (e) { }
     // Not moving while not paused is the shape of the hang; anything else is
     // ordinary and does not need a line every ten seconds.
     const stuck = moved <= 0 && !paused;
+    // How much of real time reached the screen. Null when there is nothing to
+    // compare against, and deliberately not computed across a seek: a jump
+    // forward would read as a ratio above one and a jump back as a negative,
+    // and neither is a statement about playback.
+    const ratio = (!paused && elapsedMs > 1000 && moved >= 0 && moved <= elapsedMs / 1000 + 1)
+        ? Math.round((moved / (elapsedMs / 1000)) * 100) / 100
+        : null;
+    const stuttering = ratio !== null && ratio < STUTTER_RATIO && !stuck;
     beatsSinceLine++;
-    if (!stuck && beatsSinceLine < QUIET_BEATS) return;
+    if (!stuck && !stuttering && beatsSinceLine < QUIET_BEATS) return;
     beatsSinceLine = 0;
     appendFileOnlyLog('player.heartbeat', Object.assign(snapshot(video), {
         movedSec: moved,
+        elapsedMs,
+        // The number that names a stutter loop in one line: 0.2 is two seconds
+        // of video reaching the screen in ten seconds of sitting there.
+        ratio,
+        stuttering,
         stuck,
         paused,
         parseMsSinceBeat: Math.round(beatParseMs),
@@ -533,6 +576,7 @@ function attach() {
     listen(video);
 
     lastBeatPosition = video.currentTime || 0;
+    lastBeatAt = 0;
     beatsSinceLine = 0;
     beatParseMs = 0;
     beatParses = 0;
