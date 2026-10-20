@@ -35,6 +35,12 @@ import { isCategoryEnabled } from './logCategories.js';
 // Enough to see a pattern; past this the summary is the useful part.
 const MAX_STALLS_LOGGED = 25;
 
+// Beats before an unfinished stall is reported rather than waited on. Two, so
+// roughly twenty seconds: long enough that an ordinary rebuffer has ended by
+// then, short enough to be in the log well before anyone reaches for the
+// remote.
+const OPEN_STALL_BEATS = 2;
+
 // A gap this short is a frame hiccup, not a spinner the user would notice.
 const MIN_STALL_MS = 250;
 
@@ -43,6 +49,12 @@ let attachRetry = null;
 
 let stallStartedAt = 0;
 let stallPosition = 0;
+// Beats during which the current stall has been open, so one that never ends
+// is still reported. Everything about a stall used to be recorded on the way
+// out of it, in onResumed, which means a stall with no end was invisible to
+// all of it.
+let openStallBeats = 0;
+let openStallLogged = false;
 
 // The furthest the playhead was seen to reach.
 //
@@ -346,6 +358,37 @@ function onWaiting() {
     if (video.currentTime > furthestPosition) furthestPosition = video.currentTime;
     stallStartedAt = Date.now();
     stallPosition = video.currentTime || 0;
+    openStallBeats = 0;
+    openStallLogged = false;
+}
+
+/**
+ * A stall that has not ended, reported once while it is still going.
+ *
+ * From the 20 October capture: a player frozen for nearly four minutes, ended
+ * only by navigating away, and the summary for that video said
+ * `stalls: 1, stalledMs: 5322` — five seconds, for a session containing a
+ * four-minute freeze. Both numbers come from onResumed, so a stall that never
+ * resumes is counted as never having happened; the 5322 was an earlier,
+ * ordinary rebuffer that did end.
+ *
+ * Reported from the beat rather than from an event, because the absence of the
+ * event is the whole problem.
+ */
+function reportOpenStall() {
+    if (!stallStartedAt || openStallLogged) return;
+    openStallBeats++;
+    if (openStallBeats < OPEN_STALL_BEATS) return;
+    openStallLogged = true;
+    // Counted here as well as logged, so the summary cannot report a session
+    // of frozen playback as a clean one. onResumed adds its real duration if
+    // it ever does end.
+    stalls++;
+    appendFileOnlyLog('player.stallOpen', Object.assign(snapshot(video), takeParseCost(), {
+        openForMs: Date.now() - stallStartedAt,
+        at: Math.round(stallPosition),
+        stall: stalls,
+    }));
 }
 
 /** The frame size the player settled on, as it changes. */
@@ -386,7 +429,11 @@ function onResumed() {
     stallStartedAt = 0;
     if (lasted < MIN_STALL_MS) return;
 
-    stalls++;
+    // Already counted by reportOpenStall if it ran long enough to be reported
+    // while open; its duration is only known now.
+    if (!openStallLogged) stalls++;
+    openStallLogged = false;
+    openStallBeats = 0;
     stalledMs += lasted;
     if (logged >= MAX_STALLS_LOGGED) return;
     logged++;
@@ -418,7 +465,7 @@ function onError() {
 
 /** One line per video, which is the one worth reading first. */
 function reportSummary(reason) {
-    if (!stalls) return;
+    if (!stalls && !stallStartedAt) return;
     appendFileOnlyLog('player.stallSummary', {
         reason,
         stalls,
@@ -432,10 +479,24 @@ function reportSummary(reason) {
         // was seen to reach, not from the element, which by now has been
         // reset.
         watchedSec: Math.round(furthestPosition) || null,
+        // A stall still open as the video is left: its duration never reached
+        // stalledMs, so without this the summary understates the session by
+        // however long the freeze lasted. Today's capture understated it by a
+        // factor of forty-five.
+        endedStalled: stallStartedAt ? Date.now() - stallStartedAt : null,
     });
     stalls = 0;
     stalledMs = 0;
     logged = 0;
+    openStallBeats = 0;
+    openStallLogged = false;
+    // Cleared here, not only in detach(). onEnded() calls this and nothing
+    // else, so a video that ended while a stall was open left stallStartedAt
+    // set: the next video's waiting event was then ignored by onWaiting's own
+    // guard, and its first playing event reported a stall measured from the
+    // previous video. A test of the ordinary two-second rebuffer caught it
+    // reporting ninety-two seconds.
+    stallStartedAt = 0;
 }
 
 function beat() {
@@ -473,6 +534,7 @@ function beat() {
         ? Math.round((moved / (elapsedMs / 1000)) * 100) / 100
         : null;
     const stuttering = ratio !== null && ratio < STUTTER_RATIO && !stuck;
+    reportOpenStall();
     beatsSinceLine++;
     if (!stuck && !stuttering && beatsSinceLine < QUIET_BEATS) return;
     beatsSinceLine = 0;
