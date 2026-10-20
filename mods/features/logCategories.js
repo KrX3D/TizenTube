@@ -140,6 +140,10 @@ const VERBATIM_LABELS = [
   'longPress.browseMenuSkipped',
   'addLongPress.browseTile',
   'addLongPress.browseTileRejected',
+  // The whole of markWatched: every line it writes is a record of why a
+  // request was or was not accepted, and basic mode was reducing the shape
+  // fields that say where to look next.
+  'markWatched.',
   'hideVideo.summary',
   'hideVideo.pageNotEnabled',
   // The three lines anyone reads when playback misbehaves. Basic mode was

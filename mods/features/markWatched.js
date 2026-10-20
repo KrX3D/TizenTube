@@ -93,7 +93,12 @@ function identityService() {
 function paramsFromNext(videoId, identity) {
     return new Promise((resolve) => {
         const client = innerTubeClient();
-        if (!client) return resolve(null);
+        if (!client) {
+            // Was silent, and that silence was indistinguishable in a capture
+            // from the fallback never having been reached at all.
+            appendFileOnlyLog('markWatched.paramsFromNext.noClient', { videoId: videoId });
+            return resolve(null);
+        }
         const request = {
             path: '/youtubei/v1/next',
             payload: {
@@ -123,7 +128,23 @@ function paramsFromNext(videoId, identity) {
                         where = 'currentVideoEndpoint.params';
                     }
                 } catch (_) { }
-                appendFileOnlyLog('markWatched.paramsFromNext', { videoId: videoId, found: !!found, where: where });
+                // The shape, but only when nothing was found: if /next does
+                // carry params this says so in one word, and if it does not,
+                // the keys say where to look instead of guessing. A capture on
+                // 20 October had a player request refused with hadParams:false
+                // and no line from here at all, which left no way to tell
+                // whether /next was asked and came back empty or was never
+                // asked.
+                const detail = { videoId: videoId, found: !!found, where: where };
+                if (!found) {
+                    try {
+                        const endpoint = response?.currentVideoEndpoint?.watchEndpoint;
+                        detail.responseKeys = Object.keys(response || {});
+                        detail.endpointKeys = endpoint ? Object.keys(endpoint) : null;
+                        detail.hasCurrentVideoEndpoint = !!response?.currentVideoEndpoint;
+                    } catch (_) { }
+                }
+                appendFileOnlyLog('markWatched.paramsFromNext', detail);
                 resolve(found);
             }, function (err) {
                 appendFileOnlyLog('markWatched.paramsFromNext.failed', { videoId: videoId, message: err && err.message || String(err) });
@@ -190,11 +211,27 @@ function playerResponse(videoId, watchParams) {
         };
 
         // The tile's own params when it has them, /next's when it does not.
+        //
+        // One line per attempt saying which of the three happened, because the
+        // interesting failure is a request sent with no params at all: that
+        // comes back UNPLAYABLE with an empty tracking block, and without this
+        // the capture showed only the refusal and not the reason for it.
         const withParamsThenSend = (identity) => {
-            if (watchParams) return send(identity, watchParams);
+            if (watchParams) {
+                appendFileOnlyLog('markWatched.params', { videoId: videoId, from: 'tile', identity: !!identity });
+                return send(identity, watchParams);
+            }
             paramsFromNext(videoId, identity).then(
-                (fetched) => send(identity, fetched),
-                () => send(identity, null)
+                (fetched) => {
+                    appendFileOnlyLog('markWatched.params', {
+                        videoId: videoId, from: fetched ? 'next' : 'none', identity: !!identity,
+                    });
+                    send(identity, fetched);
+                },
+                () => {
+                    appendFileOnlyLog('markWatched.params', { videoId: videoId, from: 'rejected', identity: !!identity });
+                    send(identity, null);
+                }
             );
         };
 
