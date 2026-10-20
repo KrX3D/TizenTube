@@ -140,6 +140,12 @@ const VERBATIM_LABELS = [
   'addLongPress.browseTileRejected',
   'hideVideo.summary',
   'hideVideo.pageNotEnabled',
+  // The three lines anyone reads when playback misbehaves. Basic mode was
+  // dropping movedSec, ratio and stuck from the heartbeat and lastedMs from a
+  // stall, which is everything they are for.
+  'player.heartbeat',
+  'player.stall',
+  'player.stallSummary',
 ];
 
 export function isVerbatimLabel(label) {
