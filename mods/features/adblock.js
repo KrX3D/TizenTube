@@ -1762,6 +1762,18 @@ let _loggedTileWithoutLines = false;
  * ("Palworld – Thema") in particular must not be mistaken for channels, which
  * is why this keys on the id and not on the tile's round style.
  */
+// Signatures of tiles already reported as rejected, so a shelf of a hundred
+// tiles of the same shape logs once. Capped because the set is keyed partly on
+// an id prefix and a long session should not be able to grow it without bound.
+const _rejectedTiles = new Set();
+const MAX_REJECTED_LOGGED = 40;
+
+function noteRejectedTile(signature, payload) {
+  if (_rejectedTiles.has(signature) || _rejectedTiles.size >= MAX_REJECTED_LOGGED) return;
+  _rejectedTiles.add(signature);
+  appendFileOnlyLog('addLongPress.browseTileRejected', payload);
+}
+
 function browseTileInfo(item) {
   const tile = item?.tileRenderer;
   if (!tile) return null;
@@ -1777,7 +1789,20 @@ function browseTileInfo(item) {
     || tile.contentId
     || '';
   const id = String(browseId).trim();
-  if (!id) return null;
+  if (!id) {
+    // A tile with no browse id anywhere this looks. If the library's playlist
+    // tiles turn out to be shaped differently from the ones that work, this is
+    // the line that says so, and the select command's keys say where the id
+    // went instead.
+    noteRejectedTile('noid:' + Object.keys(select || {}).sort().join(','), {
+      reason: 'noBrowseId',
+      select: Object.keys(select || {}),
+      nested: Array.isArray(commands) ? commands.map(c => Object.keys(c || {})[0] || '?') : null,
+      style: tile.style || null,
+      page: detectCurrentPage(),
+    });
+    return null;
+  }
   const title = tile.metadata?.tileMetadataRenderer?.title?.simpleText || '';
   const thumbnails = tile.header?.tileHeaderRenderer?.thumbnail?.thumbnails || [];
 
@@ -1787,6 +1812,17 @@ function browseTileInfo(item) {
   if (/^VL./.test(upper) || upper === 'WL' || upper === 'LL') {
     return { kind: 'playlist', id, title, thumbnails };
   }
+  // An id that is neither a channel nor a playlist by these rules. Mostly
+  // topic and FE tiles, which is correct and expected — but if a library
+  // playlist ever arrives with an unprefixed id, it lands here silently, and
+  // the prefix alone is enough to recognise that without logging whole ids.
+  noteRejectedTile('id:' + id.slice(0, 4), {
+    reason: 'unrecognisedId',
+    idPrefix: id.slice(0, 4),
+    length: id.length,
+    style: tile.style || null,
+    page: detectCurrentPage(),
+  });
   return null;
 }
 

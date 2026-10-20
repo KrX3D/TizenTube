@@ -101,6 +101,26 @@ export function patchResolveCommand() {
                 //                                   to draw
                 //   logged without our id           something removes it
                 //                                   between us and the dialog
+                // What the TV did with the hold longPressProbe.js just timed.
+                // Collected into that probe's one summary line rather than
+                // logged per command: a hold followed by a page load resolves
+                // dozens of commands and all we need from them is which kinds
+                // arrived, in order. The probe object lives on the global
+                // because importing it here would close a cycle through
+                // innerTubeCalls.js.
+                const _probe = window.__ttLongPressWindow;
+                if (_probe && _probe.left > 0 && Date.now() < _probe.until) {
+                    _probe.left--;
+                    try {
+                        const keys = Object.keys(cmd || {});
+                        const primary = keys.length ? keys[0] : '?';
+                        const browseId = cmd?.browseEndpoint?.browseId
+                            || cmd?.watchEndpoint?.videoId
+                            || null;
+                        _probe.cmds.push(browseId ? primary + ':' + browseId : primary);
+                        if (cmd?.showMenuCommand) _probe.menu++;
+                    } catch (_) { }
+                }
                 if (cmd?.showMenuCommand) {
                     try {
                         const menuItems = cmd.showMenuCommand?.menu?.menuRenderer?.items || [];
@@ -114,6 +134,13 @@ export function patchResolveCommand() {
                             // through innerTubeCalls.js, which imports this
                             // file.
                             ids: menuItems.map((entry) => (entry && entry.__ttMenuId) || null),
+                            // What the dialog has to draw a header from. An
+                            // empty thumbnail list or a missing title is the
+                            // other way a menu that opens can still show
+                            // nothing, and neither is visible from the
+                            // attachment side.
+                            thumbs: (cmd.showMenuCommand.thumbnail?.thumbnails || []).length,
+                            subtitle: cmd.showMenuCommand.subtitle?.simpleText || null,
                         });
                     } catch (_) { }
                 }
