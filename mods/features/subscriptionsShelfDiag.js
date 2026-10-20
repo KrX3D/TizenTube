@@ -1,4 +1,3 @@
-import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { isCategoryEnabled } from './logCategories.js';
 

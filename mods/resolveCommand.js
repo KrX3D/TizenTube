@@ -320,7 +320,53 @@ export function patchResolveCommand() {
                     }
                 }
 
-                return ogResolve.call(this, cmd, _);
+                // What the app itself makes of a menu command, which is the
+                // one link in this chain still unobserved.
+                //
+                // From the 20 October capture, long pressing a playlist tile
+                // in the library and a video tile seconds apart on the same
+                // page:
+                //
+                //   playlist  menuOpened {contentId:"VLPLhUcIRiMP5gi…",
+                //               entries:2, ids:["openPlaylist",
+                //               "showWatchedPlaylist"]}
+                //             probe      {menu:1, cmds:["clickTrackingParams"]}
+                //
+                //   video     menuOpened {contentId:"xvojRkY-3Ms", entries:3}
+                //             probe      {menu:1, cmds:["clickTrackingParams",
+                //               "openPopupAction","signalAction",
+                //               "showHintCommand"]}
+                //
+                // So our command arrives intact, with our entries in it, and
+                // for a video the app then resolves openPopupAction — the
+                // thing that actually puts the dialog on screen. For the
+                // playlist it resolves nothing further at all. The menu is
+                // built, dispatched and accepted, and the app's own handler
+                // declines to display it.
+                //
+                // Three ways that can happen and no way yet to tell them
+                // apart: the handler throws, it returns without acting, or it
+                // acts and draws nothing. Only menu commands are wrapped, so
+                // this costs nothing for the thousands of other commands.
+                if (!cmd?.showMenuCommand) return ogResolve.call(this, cmd, _);
+                try {
+                    const outcome = ogResolve.call(this, cmd, _);
+                    appendFileOnlyLog('longPress.menuHandled', {
+                        contentId: cmd.showMenuCommand.contentId || null,
+                        returned: outcome === undefined ? 'undefined' : String(outcome),
+                        type: typeof outcome,
+                    });
+                    return outcome;
+                } catch (err) {
+                    // Rethrown, so the app behaves exactly as it did before
+                    // this was watched. The point is only to see it.
+                    appendFileOnlyLog('longPress.menuThrew', {
+                        contentId: cmd.showMenuCommand.contentId || null,
+                        msg: String(err?.message || err),
+                        where: String(err?.stack || '').split('\n').slice(0, 3).join(' | '),
+                    });
+                    throw err;
+                }
             }
         }
     }
