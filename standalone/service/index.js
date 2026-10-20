@@ -696,9 +696,11 @@ let _inServiceSyslog = false;
  *
  * Built to match what the page sends — same facility, same hostname, same
  * app-name — so both streams read as one source on the receiver rather than
- * two. Only the MSGID differs, because the context does.
+ * two. Only the MSGID differs, because the context does: StandaloneService for
+ * this process's own lines, Injector for the ones about getting the userscript
+ * into the page.
  */
-function serviceSyslogFrame(level, message, target, when) {
+function serviceSyslogFrame(level, message, target, when, context) {
     const severity = SYSLOG_SEVERITY[level] === undefined ? SYSLOG_SEVERITY.INFO : SYSLOG_SEVERITY[level];
     const priority = (target.facility * 8) + severity;
     // A newline would end the frame early and everything after it would be
@@ -708,7 +710,7 @@ function serviceSyslogFrame(level, message, target, when) {
     // so it reports when it was written rather than when it was finally sent.
     return '<' + priority + '>1 ' + (when || new Date().toISOString()) + ' '
         + headerField(target.hostname, 255) + ' ' + headerField(target.appName, 48)
-        + ' - StandaloneService - ' + text;
+        + ' - ' + namedOr(context || 'StandaloneService', 32) + ' - ' + text;
 }
 
 /**
@@ -738,11 +740,11 @@ function haveRealName() {
     return !!(_syslogTarget && _syslogTarget.hostname && _syslogTarget.hostname !== GENERIC_NAME);
 }
 
-function emitServiceSyslog(level, message, when) {
+function emitServiceSyslog(level, message, when, context) {
     if (!_syslogTarget || _inServiceSyslog) return;
     _inServiceSyslog = true;
     try {
-        relaySyslog(serviceSyslogFrame(level, message, _syslogTarget, when), _syslogTarget.host, _syslogTarget.port);
+        relaySyslog(serviceSyslogFrame(level, message, _syslogTarget, when, context), _syslogTarget.host, _syslogTarget.port);
     } catch (e) {
         // Nowhere to report this that would not come straight back here.
     } finally {
@@ -766,18 +768,18 @@ function flushServiceLogBuffer() {
     const held = _serviceLogBuffer;
     _serviceLogBuffer = [];
     for (let i = 0; i < held.length; i++) {
-        emitServiceSyslog(held[i].level, held[i].message, held[i].when);
+        emitServiceSyslog(held[i].level, held[i].message, held[i].when, held[i].context);
     }
 }
 
-function sendServiceSyslog(level, message) {
+function sendServiceSyslog(level, message, context) {
     if (!_syslogTarget || _inServiceSyslog) return;
 
     if (!haveRealName()) {
         // Dropping the oldest rather than the newest: a launch that fails has
         // its reason near the end, and the cap is far above a normal startup.
         if (_serviceLogBuffer.length >= SERVICE_LOG_BUFFER_MAX) _serviceLogBuffer.shift();
-        _serviceLogBuffer.push({ level: level, message: message, when: new Date().toISOString() });
+        _serviceLogBuffer.push({ level: level, message: message, when: new Date().toISOString(), context: context });
         if (!_serviceNameTimer) {
             // The page may never tell us — syslog can be off in its settings,
             // or it may not get far enough to send anything. Held lines are
@@ -789,7 +791,34 @@ function sendServiceSyslog(level, message) {
     }
 
     flushServiceLogBuffer();
-    emitServiceSyslog(level, message, null);
+    emitServiceSyslog(level, message, null, context);
+}
+
+/**
+ * The logger handed to injector.js, which reaches syslog as well as HTTP.
+ *
+ * The injector had relayLog, which speaks only to the PC receiver script. So
+ * every line about getting the userscript into the page — the retries, the
+ * giving up, the version lookup, the stand-downs — went exclusively to an
+ * address most installs have nobody listening on. A capture from 20 October
+ * holds eight days of TizenTube logging and not one line with the Injector
+ * context, while the same capture shows a connect attempt that ran for
+ * twenty-nine seconds and achieved nothing. The symptom was recorded and the
+ * explanation was not, for the one subsystem that decides whether the mod
+ * loads at all.
+ *
+ * Page entries the injector drains over CDP come through here too — they carry
+ * the host they are addressed to, and the page has already sent its own syslog
+ * for them. Only the injector's own voice is forwarded, so nothing is sent
+ * twice.
+ */
+function relayInjectorLog(entry, host, port) {
+    relayLog(entry, host, port);
+    try {
+        if (entry && entry.context === 'Injector' && !host) {
+            sendServiceSyslog(entry.level || 'INFO', entry.message || '', 'Injector');
+        }
+    } catch (e) { }
 }
 
 function logServiceEvent(level, message) {
@@ -990,7 +1019,11 @@ app.get('/tizentube/health', (req, res) => {
 });
 
 app.get('/tizentube/getState', (req, res) => {
-    injector.canConnectToDaemon().then(r => {
+    // canConnectToDaemon takes a logger and was called without one, so its
+    // every explanation — a stuck isConnecting being released, a retry, the
+    // give-up after the last attempt — was discarded at this call site. Those
+    // are the lines that say why a launch did not inject.
+    injector.canConnectToDaemon(relayInjectorLog).then(r => {
         logServiceEvent('INFO', `getState → ${JSON.stringify(r)}`);
         res.json(r);
     }).catch((err) => {
@@ -1019,7 +1052,7 @@ app.get('/tizentube/debugger', (req, res) => {
             if (!app && !started) {
                 started = true;
                 clearInterval(interval);
-                injector.startDebugger(args, relayLog);
+                injector.startDebugger(args, relayInjectorLog);
             }
         });
     }, 50);
