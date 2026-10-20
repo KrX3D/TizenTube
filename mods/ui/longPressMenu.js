@@ -424,6 +424,39 @@ function videoIdFromThumbnails(thumbnails) {
     return null;
 }
 
+/**
+ * Play, for a playlist tile.
+ *
+ * A third entry, and the reason it is needed is a number. Every menu in the
+ * 16 October capture sorted by entry count — one entry never drew, four and
+ * five always did — which is why these tiles were given a second. The 20
+ * October capture adds the missing data point: two does not draw either.
+ *
+ *   entries 1  ids ["showWatchedPlaylist"]                            no
+ *   entries 2  ids ["openPlaylist","showWatchedPlaylist"]             no
+ *   entries 4  ids ["playlists","playlists","channel","markWatched"]  yes
+ *   entries 5  ids [...,"channel","showWatchedPlaylist"]              yes
+ *
+ * It is also the entry a long press on a playlist most obviously wants, and
+ * the thumbnail already gives a video of that playlist to start from — which
+ * is what makes a watchEndpoint possible here at all. Reuses the video menu's
+ * own 'play' id and label, since it is the same action.
+ *
+ * Returns nothing when no video id could be read, rather than a Play that
+ * plays nothing.
+ */
+function playPlaylistEntry(playlistId, videoId) {
+    if (!videoId) return [];
+    // A tile's browse id is VL + the playlist id; a watchEndpoint wants the
+    // playlist id itself. WL and LL carry no prefix and pass through unchanged.
+    const list = String(playlistId || '').replace(/^VL/, '');
+    if (!list) return [];
+    return [tagMenuItem('play', MenuNavigationItemRenderer(t('videoMenu.play'), {
+        clickTrackingParams: null,
+        watchEndpoint: { videoId: videoId, playlistId: list }
+    }))];
+}
+
 export function browseTileLongPressData(info) {
     // Every way out of this function now says why. All of them used to return
     // null in silence, so a tile that got no menu and a tile whose menu never
@@ -434,10 +467,13 @@ export function browseTileLongPressData(info) {
         return null;
     }
     const title = String(info?.title || '').trim();
+    // Read once: both the Play entry and the contentId below want it.
+    const firstVideoId = videoIdFromThumbnails(info?.thumbnails || []);
     let items = [];
     try {
         if (info?.kind === 'playlist') {
-            items = openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id)
+            items = playPlaylistEntry(info.id, firstVideoId)
+                .concat(openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id))
                 .concat(playlistExemptionEntry(info.id));
         } else if (info?.kind === 'channel') {
             // Both scopes, since a channel tile answers for both: its id is
@@ -499,7 +535,7 @@ export function browseTileLongPressData(info) {
             // title, subtitle and thumbnail are all passed explicitly below —
             // and the entries act on info.id regardless of what goes here.
             // Falls back to the browse id, which is where this started.
-            contentId: videoIdFromThumbnails(info.thumbnails || []) || info.id,
+            contentId: firstVideoId || info.id,
             thumbnail: { thumbnails: info.thumbnails || [] },
             title: { simpleText: title || info.id },
             subtitle: {
