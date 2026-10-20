@@ -30,7 +30,9 @@ import { pickVideo, lastPick } from '../utils/pickVideo.js';
  *
  *   - only while something is actually buffered ahead of the playhead
  *   - only when the playhead has not moved across two beats, so roughly twenty
- *     seconds of genuinely stopped rather than one slow moment
+ *     seconds of genuinely stopped rather than one slow moment — and across
+ *     five of them, roughly fifty seconds, when the player claims to have data
+ *     at the playhead, since then it may be retrying something of its own
  *   - never while paused, seeking, or at rate 0; a stopped player that was
  *     asked to stop is not wedged
  *   - three attempts per video at most, escalating, then it gives up and says
@@ -55,9 +57,16 @@ const MAX_ATTEMPTS = 2;
 // thing a seek can usefully do about a frame the decoder will not pass.
 const SEEK_S = 1;
 
-// Above HAVE_CURRENT_DATA the player has what it needs at the playhead, so a
-// seek is not what is missing. See the readyState note in check().
+// Above HAVE_CURRENT_DATA the player says it has what it needs at the
+// playhead. That is a reason to wait longer before touching it, not a reason
+// never to. See the readyState note in check().
 const WEDGED_READY_STATE = 2;
+
+// Beats of perfect stillness before acting on a player that claims to have
+// data at the playhead. Five, so roughly fifty seconds — long enough that a
+// player retrying something of its own is left to finish, and short of the
+// point where the only remedy left is restarting the app.
+const FROZEN_BEATS_BEFORE_ACTING = 5;
 
 // A buffer that fell by more than this since the last look is draining, which
 // is starvation or a recovery in progress rather than a wedge.
@@ -258,43 +267,62 @@ function check() {
         return;
     }
 
-    // The discriminator between the two captures, and the reason this file
-    // exists at all:
+    stuckBeats++;
+
+    // How long to wait, which depends on what the player claims about its own
+    // data. Three captures, and the readyState alone does not separate them:
     //
     //   18 Oct  readyState 1, 8.2s buffered, frozen past twenty seconds, and
     //           only an app restart cleared it. The player did not have data
     //           at the playhead although it held plenty just past it, which is
     //           what a seek is actually for.
     //
-    //   19 Oct  readyState 4, buffer healthy, looping over one frame. The
-    //           player had everything it needed at that position and still
-    //           could not pass it, so the fault is in decoding that frame and
-    //           no seek of any size addresses it. Nudging only cost buffer and
-    //           dropped the sound.
+    //   19 Oct  readyState 4, buffer healthy, oscillating around one frame it
+    //           could not pass. Everything needed was at that position, so no
+    //           seek addresses it; nudging only cost buffer and dropped sound.
     //
-    // So acting is limited to the first shape.
-    if (readyState >= WEDGED_READY_STATE) {
-        stuckBeats = 0;
-        appendFileOnlyLog('unwedge.hasDataButStuck', Object.assign({
-            at: Math.round(at),
-            bufferedAhead: Math.round(ahead * 10) / 10,
-            readyState,
-        }, lastPick()));
+    //   20 Oct  readyState 3, 7s buffered, position identical across thirteen
+    //           consecutive beats — over two minutes, ended by hand.
+    //
+    // The guard written after the second of those stood this file down at
+    // readyState >= 2 outright, which meant it could only ever act on the
+    // first. The third is the shape it exists for and it logged
+    // hasDataButStuck at it, unchanged, every ten seconds for two minutes.
+    //
+    // What actually separates the second from the third is not readyState but
+    // movement: the oscillation moved, including backwards, and a backwards
+    // move already stands this file down a few lines above. A wedge does not
+    // move at all. So a player claiming data gets a much longer run of perfect
+    // stillness before anything is tried, rather than a pass.
+    const needed = readyState >= WEDGED_READY_STATE
+        ? FROZEN_BEATS_BEFORE_ACTING
+        : STUCK_BEATS_BEFORE_ACTING;
+
+    if (stuckBeats < needed) {
+        // Only the claiming-data case is worth a line while waiting: the other
+        // reaches its threshold in two beats and would say nothing new.
+        if (readyState >= WEDGED_READY_STATE) {
+            appendFileOnlyLog('unwedge.hasDataButStuck', Object.assign({
+                at: Math.round(at),
+                bufferedAhead: Math.round(ahead * 10) / 10,
+                readyState,
+                stillForSec: stuckBeats * (CHECK_MS / 1000),
+                actsAfterSec: needed * (CHECK_MS / 1000),
+            }, lastPick()));
+        }
         return;
     }
-
-    stuckBeats++;
-    if (stuckBeats < STUCK_BEATS_BEFORE_ACTING) return;
 
     if (attempts >= MAX_ATTEMPTS) {
         if (attempts === MAX_ATTEMPTS) {
             attempts++;
-            appendFileOnlyLog('unwedge.gaveUp', {
+            appendFileOnlyLog('unwedge.gaveUp', Object.assign({
                 at: Math.round(at),
                 bufferedAhead: Math.round(ahead * 10) / 10,
                 readyState,
                 attempts: MAX_ATTEMPTS,
-            });
+                stillForSec: stuckBeats * (CHECK_MS / 1000),
+            }, lastPick()));
         }
         return;
     }
@@ -305,6 +333,7 @@ function check() {
         bufferedAhead: Math.round(ahead * 10) / 10,
         readyState,
         stuckBeats,
+        stillForSec: stuckBeats * (CHECK_MS / 1000),
         attempt: attempts,
     }, lastPick()));
 }
