@@ -145,6 +145,7 @@ const VERBATIM_LABELS = [
   // stall, which is everything they are for.
   'player.heartbeat',
   'player.stall',
+  'player.stallOpen',
   'player.stallSummary',
   // The whole of playbackUnwedge, as a prefix. Every line it writes is a
   // record of a decision it made about the player, and basic mode was
