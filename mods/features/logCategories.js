@@ -120,6 +120,36 @@ const BASIC_KEYS = [
   'removed', 'batch', 'batches', 'enabled', 'source', 'style', 'msg', 'message',
 ];
 
+// Labels whose payload is the whole point, exempt from basic mode's reduction.
+//
+// Basic turns an array into "[3]" and an object into "{…}", which is right for
+// a narrative line and useless for a line that exists to be read as evidence:
+// longPress.probe reduced to menu and a count says nothing about which
+// commands the hold produced, and hideVideo.summary without its reasons object
+// is just a number that was already obvious from the screen. These stay whole
+// in both modes.
+//
+// Keep this list short. A label belongs here only while someone is reading it
+// to answer a question, and the honest moment to take one out is when that
+// question is answered.
+const VERBATIM_LABELS = [
+  'longPress.probe',
+  'longPress.menuOpened',
+  'longPress.browseMenuSkipped',
+  'addLongPress.browseTile',
+  'addLongPress.browseTileRejected',
+  'hideVideo.summary',
+  'hideVideo.pageNotEnabled',
+];
+
+export function isVerbatimLabel(label) {
+  try {
+    return VERBATIM_LABELS.indexOf(String(label)) !== -1;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Reduce a payload for basic verbosity.
  *
@@ -128,8 +158,9 @@ const BASIC_KEYS = [
  * keeps the payload untouched, which is the behaviour this codebase had
  * before categories existed.
  */
-export function applyVerbosity(payload) {
+export function applyVerbosity(payload, label) {
   try {
+    if (isVerbatimLabel(label)) return payload;
     if (configRead('logVerbosity') !== 'basic') return payload;
     if (!payload || typeof payload !== 'object') return payload;
     if (Array.isArray(payload)) return { count: payload.length };

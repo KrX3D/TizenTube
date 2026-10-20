@@ -404,7 +404,14 @@ function openBrowseEntry(id, label, browseId) {
  * without a menu rather than attaching one that opens empty.
  */
 export function browseTileLongPressData(info) {
-    if (!configRead('enableHideWatchedVideos')) return null;
+    // Every way out of this function now says why. All of them used to return
+    // null in silence, so a tile that got no menu and a tile whose menu never
+    // opened looked identical in a capture — which is most of why this took
+    // five attempts.
+    if (!configRead('enableHideWatchedVideos')) {
+        appendFileOnlyLog('longPress.browseMenuSkipped', { reason: 'hideWatchedOff', kind: info?.kind || null });
+        return null;
+    }
     const title = String(info?.title || '').trim();
     let items = [];
     try {
@@ -422,37 +429,47 @@ export function browseTileLongPressData(info) {
                 .concat(channelPageExemptionEntry(info.id, title))
                 .concat(channelNameExemptionEntry(title));
         }
-    } catch (_) {
+    } catch (err) {
+        appendFileOnlyLog('longPress.browseMenuSkipped', {
+            reason: 'threw', kind: info?.kind || null, id: info?.id || null,
+            msg: String(err?.message || err),
+        });
         return null;
     }
-    if (!items.length) return null;
+    if (!items.length) {
+        appendFileOnlyLog('longPress.browseMenuSkipped', { reason: 'noEntries', kind: info?.kind || null, id: info?.id || null });
+        return null;
+    }
     const ordered = applyMenuPreferences(items);
-    if (!ordered.length) return null;
+    if (!ordered.length) {
+        // Every entry hidden by the user's own menu preferences. Worth its own
+        // reason: the menu is then correctly empty and correctly shows
+        // nothing, which is indistinguishable from the bug being chased.
+        appendFileOnlyLog('longPress.browseMenuSkipped', { reason: 'allHidden', kind: info?.kind || null, id: info?.id || null });
+        return null;
+    }
     return {
         clickTrackingParams: null,
         showMenuCommand: {
-            // No contentId, and that is the point of this version.
+            // The content id is back, and the reasoning that removed it was
+            // the wrong way round.
             //
-            // The gesture was never the problem. A capture of the app's own
-            // resolveCommand shows the menu opening for a playlist tile and
-            // carrying our entry:
+            // It came out because the one capture of a playlist menu reaching
+            // the app carried a browse id here where a working video menu
+            // carried a video id, and a header built by looking that id up
+            // would find nothing for VLPL… . That was a guess about the
+            // drawing. What it overlooked is what the capture itself proves:
+            // with the id present the command reached resolveCommand at all.
             //
-            //   longPress.menuOpened {"contentId":"VLPLhUcIRiMP5gi...",
-            //     "title":"Watch","entries":1,"ids":["showWatchedPlaylist"]}
-            //
-            // against a working video menu fifteen seconds earlier:
-            //
-            //   longPress.menuOpened {"contentId":"Lc11bmjXW30", ...
-            //     "ids":["playlists","playlists","channel","markWatched"]}
-            //
-            // So the command arrives intact and the dialog then draws nothing,
-            // and the one structural difference between the two is this field:
-            // a video id in the menu that works, a playlist browse id in the
-            // one that does not. A dialog that looks a content id up to build
-            // its header would get nothing back for VLPL… and have nothing to
-            // draw. The header does not need it from us — the thumbnail, title
-            // and subtitle are all passed explicitly below — so it is left out
-            // rather than filled with something that is not a video.
+            // Since it was removed, not one longPress.menuOpened line has been
+            // recorded for a playlist tile — four days of captures, none. The
+            // two commits are fifty-three minutes apart on the same day, so
+            // the logging was already in place for the build that produced that
+            // line. The app evidently will not dispatch a showMenuCommand that
+            // has no content id, which makes its absence strictly worse: a
+            // menu that opens and draws nothing can still be fixed, a menu
+            // that never opens cannot be looked at.
+            contentId: info.id,
             thumbnail: { thumbnails: info.thumbnails || [] },
             title: { simpleText: title || info.id },
             subtitle: {

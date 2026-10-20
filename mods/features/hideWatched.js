@@ -29,7 +29,7 @@ export function appendFileOnlyLog(label, payload) {
   if (!isCategoryEnabled(label)) return;
   if (!Array.isArray(window.__ttFileOnlyLogs)) window.__ttFileOnlyLogs = [];
   let msg = '';
-  try { msg = JSON.stringify(applyVerbosity(payload)); } catch { msg = String(payload); }
+  try { msg = JSON.stringify(applyVerbosity(payload, label)); } catch { msg = String(payload); }
   // syslog taps the same choke point rather than logServer.js's array hook, so
   // the two outputs stay fully independent — either can be on without the
   // other, and a dead syslog target cannot stop the log server relaying. Sent
@@ -239,8 +239,26 @@ function itemExempt(item, pageName) {
 
 // ── hideVideo ─────────────────────────────────────────────────────────────────
 
+// Reported repeatedly: watched videos are not being hidden. Three of the ways
+// that can happen used to leave no trace at all — the feature switched off, the
+// page not in the configured list, and an exception on a single tile, which the
+// per-item catch turns into "keep it" for every tile after it as well. The
+// counters below exist so one line can distinguish those from the case where
+// hiding ran correctly and simply found nothing watched.
+let _loggedDisabled = false;
+let _lastPageNotEnabled = '';
+
 export function hideVideo(items, pageHint = null) {
-  if (!Array.isArray(items) || !configRead('enableHideWatchedVideos')) return items;
+  if (!Array.isArray(items)) return items;
+  if (!configRead('enableHideWatchedVideos')) {
+    // Once per session. It is not a fault, but it is the first thing to rule
+    // out and the only evidence of it would otherwise be an absence.
+    if (!_loggedDisabled) {
+      _loggedDisabled = true;
+      appendFileOnlyLog('hideVideo.disabled', { reason: 'enableHideWatchedVideos is off' });
+    }
+    return items;
+  }
   const pages = configRead('hideWatchedVideosPages');
   const threshold = configRead('hideWatchedVideosThreshold');
   const hashPage = detectCurrentPage();
@@ -251,7 +269,16 @@ export function hideVideo(items, pageHint = null) {
   // Read by playbackProgress.js to tell whether returning to a page produced
   // a fresh response or a re-shown copy of the old one.
   window.__ttPageRenderedAt = { page: pageName, at: Date.now() };
-  if (!pages.includes(pageName)) return items;
+  if (!pages.includes(pageName)) {
+    // Deduped on the page name rather than logged per call: a single response
+    // can reach here once per tile array, and all of those say the same thing.
+    if (_lastPageNotEnabled !== pageName) {
+      _lastPageNotEnabled = pageName;
+      appendFileOnlyLog('hideVideo.pageNotEnabled', { pageName, pages, items: items.length });
+    }
+    return items;
+  }
+  _lastPageNotEnabled = '';
   // This whole playlist or channel was exempted. Checked before the per-tile
   // work rather than inside it: nothing on the page is to be hidden, so there
   // is no reason to read progress off every tile to decide that.
@@ -260,18 +287,23 @@ export function hideVideo(items, pageHint = null) {
     appendFileOnlyLog('hideVideo.exempt.page', { pageName, because: exemptPage, items: items.length });
     return items;
   }
-  return items.filter(item => {
+  // Tallied rather than logged per tile, so the summary below costs one line
+  // per call however many items there are.
+  const why = { noVideoId: 0, exempt: 0, keepOne: 0, noProgress: 0, underThreshold: 0, removed: 0, threw: 0 };
+  let firstError = null;
+  const kept = items.filter(item => {
     try {
       // Search results are lockupViewModel rather than tileRenderer; without
       // this they were never eligible for hiding at all (upstream ca60382 has
       // the same code path but left it unreachable behind a tileRenderer-only
       // early return).
       const videoId = item?.tileRenderer?.contentId || lockupVideoId(item);
-      if (!videoId) return true;
+      if (!videoId) { why.noVideoId++; return true; }
       if (item.__ttKeepOneForContinuation) {
         const currentSeq = Number(window.__ttParseSeq || 0);
         const itemSeq = Number(item.__ttKeepOneForContinuationParseSeq || 0);
         if (pageName === 'playlist' && itemSeq > 0 && itemSeq === currentSeq) {
+          why.keepOne++;
           appendFileOnlyLog('hideVideo.keep_one', { pageName, videoId });
           return true;
         }
@@ -284,17 +316,40 @@ export function hideVideo(items, pageHint = null) {
       // an exempt tile still clears the markers it would otherwise leave on
       // the item for the next parse to find.
       const exemptItem = itemExempt(item, pageName);
-      if (exemptItem) return true;
+      if (exemptItem) { why.exempt++; return true; }
       const pct = getWatchPercent(item);
       if (pct === null) {
+        why.noProgress++;
         appendFileOnlyLog('hideVideo.noProgress', { pageName, videoId });
         return true;
       }
       const keep = pct <= threshold;
-      if (!keep) appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId });
+      if (keep) why.underThreshold++;
+      else {
+        why.removed++;
+        appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId });
+      }
       return keep;
-    } catch { return true; }
+    } catch (err) {
+      // This swallowed every failure here in silence, and it fails open: one
+      // throw keeps one video, and a throw on every tile keeps all of them,
+      // which looks exactly like the feature doing nothing.
+      why.threw++;
+      if (!firstError) firstError = String(err?.message || err);
+      return true;
+    }
   });
+  // The one line worth reading when hiding appears not to work. Every item is
+  // accounted for by exactly one counter, so the reason is in the numbers:
+  // noProgress means YouTube sent no watch overlay and nothing local was
+  // known, underThreshold means the videos are watched less than the threshold
+  // allows, exempt means a playlist or channel was deliberately spared, and
+  // threw means this code is broken.
+  appendFileOnlyLog('hideVideo.summary', {
+    pageName, items: items.length, kept: kept.length, removed: items.length - kept.length,
+    threshold, reasons: why, msg: firstError,
+  });
+  return kept;
 }
 
 // ── processTileArraysDeep ─────────────────────────────────────────────────────
