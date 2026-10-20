@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
+import { pickVideo, lastPick } from '../utils/pickVideo.js';
 
 /**
  * playbackUnwedge.js — nudge a player that has stopped with data in hand.
@@ -77,20 +78,6 @@ function enabled() {
     }
 }
 
-/** The element actually playing, which is not always the first one. */
-function pickVideo() {
-    try {
-        const videos = document.querySelectorAll('video');
-        for (let i = 0; i < videos.length; i++) {
-            const video = videos[i];
-            if (video && !video.paused && isFinite(video.duration) && video.duration > 0) return video;
-        }
-        return videos[0] || null;
-    } catch (_) {
-        return null;
-    }
-}
-
 /** Seconds of data buffered ahead of where the playhead is. */
 function bufferedAhead(video) {
     try {
@@ -141,6 +128,14 @@ function videoKey(video) {
         return null;
     }
 }
+
+// The remaining doubt about the attempt budget, written down rather than
+// guessed at: if the app swaps between two elements of the same video, the key
+// above does not change, so attempts carry across the swap. That is the
+// conservative direction — it cannot act more than twice per video either way
+// — and whether the swap happens at all is what the videos count on each line
+// is there to answer.
+
 
 function act(video, attempt, detail) {
     const at = Number(video.currentTime) || 0;
@@ -213,6 +208,11 @@ function check() {
     // useful thing to do here.
     if (moved < -0.05) {
         stuckBeats = 0;
+        // Before concluding the player is retrying, see how many elements
+        // there are: a backwards move across two elements is not a move. This
+        // branch was written from a capture that is now known to have been
+        // exactly that, so the count belongs on the line that justifies it.
+        const pick = lastPick();
         // attempts is deliberately NOT cleared here, though it was.
         //
         // The cap is two attempts per video, and clearing it on a backwards
@@ -228,6 +228,8 @@ function check() {
             movedSec: Math.round(moved * 10) / 10,
             bufferedAhead: Math.round(ahead * 10) / 10,
             readyState,
+            videos: pick.videos,
+            videoIndex: pick.videoIndex,
         });
         return;
     }
@@ -237,7 +239,7 @@ function check() {
         // and a seek cannot conjure data. Counted but never acted on, so a
         // capture still shows it was considered.
         stuckBeats = 0;
-        appendFileOnlyLog('unwedge.starved', { at: Math.round(at), bufferedAhead: Math.round(ahead * 10) / 10, readyState });
+        appendFileOnlyLog('unwedge.starved', Object.assign({ at: Math.round(at), bufferedAhead: Math.round(ahead * 10) / 10, readyState }, lastPick()));
         return;
     }
 
@@ -247,12 +249,12 @@ function check() {
     // short of it.
     if (previousAhead !== null && ahead < previousAhead - DRAIN_TOLERANCE_S) {
         stuckBeats = 0;
-        appendFileOnlyLog('unwedge.draining', {
+        appendFileOnlyLog('unwedge.draining', Object.assign({
             at: Math.round(at),
             bufferedAhead: Math.round(ahead * 10) / 10,
             wasAhead: Math.round(previousAhead * 10) / 10,
             readyState,
-        });
+        }, lastPick()));
         return;
     }
 
@@ -273,11 +275,11 @@ function check() {
     // So acting is limited to the first shape.
     if (readyState >= WEDGED_READY_STATE) {
         stuckBeats = 0;
-        appendFileOnlyLog('unwedge.hasDataButStuck', {
+        appendFileOnlyLog('unwedge.hasDataButStuck', Object.assign({
             at: Math.round(at),
             bufferedAhead: Math.round(ahead * 10) / 10,
             readyState,
-        });
+        }, lastPick()));
         return;
     }
 
@@ -298,13 +300,13 @@ function check() {
     }
 
     attempts++;
-    act(video, attempts, {
+    act(video, attempts, Object.assign({
         at: Math.round(at * 10) / 10,
         bufferedAhead: Math.round(ahead * 10) / 10,
         readyState,
         stuckBeats,
         attempt: attempts,
-    });
+    }, lastPick()));
 }
 
 if (!window.__ttPlaybackUnwedgeStarted) {

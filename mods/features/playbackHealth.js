@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
+import { pickVideo, lastPick } from '../utils/pickVideo.js';
 import { isCategoryEnabled } from './logCategories.js';
 
 /**
@@ -247,35 +248,6 @@ export function noteParseShape(ms, detectedPage, response, nativeMs, marks) {
     }, marks ? trimmedMarks(marks) : null, takeWork(), takeSpent()));
 }
 
-/**
- * The element that is playing, which is not always the one bound at attach.
- *
- * The same fault the remaining-time readout had: the app rebuilds the player
- * without a hashchange, and a captured reference then reports on an element
- * nothing is playing on. For a diagnostic that is worse than for a readout —
- * it does not look broken, it looks like evidence.
- *
- * Also prefers the element that is actually playing when a page carries more
- * than one, since a watch page can have an inline-preview video besides the
- * player.
- */
-function pickVideo() {
-    let fallback = null;
-    try {
-        const all = document.querySelectorAll('video');
-        for (let i = 0; i < all.length; i++) {
-            const el = all[i];
-            if (!el) continue;
-            const usable = isFinite(el.duration) && el.duration > 0;
-            if (usable && !el.paused && el.readyState > 0) return el;
-            if (usable && !fallback) fallback = el;
-            if (!fallback) fallback = el;
-        }
-    } catch (e) { }
-    if (fallback) return fallback;
-    try { return document.querySelector('video'); } catch (e) { return null; }
-}
-
 function enabled() {
     try {
         // A log category now rather than a setting of its own, so it sits with
@@ -337,6 +309,15 @@ function snapshot(el) {
         readyState: el.readyState,
         rate: el.playbackRate,
     };
+    // Which element this describes. A capture where these numbers swing
+    // between two sets of values is two elements being sampled, not a playhead
+    // moving, and that was indistinguishable until this went on the line.
+    const pick = lastPick();
+    out.videos = pick.videos;
+    if (pick.videos > 1) {
+        out.videoIndex = pick.videoIndex;
+        out.picked = pick.picked;
+    }
     // Cobalt exposes decoder counters on some builds; dropped frames are the
     // difference between a network problem and a decode one.
     try {
