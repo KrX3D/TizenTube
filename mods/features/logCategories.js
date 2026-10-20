@@ -146,11 +146,32 @@ const VERBATIM_LABELS = [
   'player.heartbeat',
   'player.stall',
   'player.stallSummary',
+  // The whole of playbackUnwedge, as a prefix. Every line it writes is a
+  // record of a decision it made about the player, and basic mode was
+  // stripping the numbers those decisions were made on — including the element
+  // count that turned out to be the thing worth knowing.
+  'unwedge.',
 ];
 
+/**
+ * Whether a label keeps its payload whole.
+ *
+ * An entry ending in a dot covers everything beneath it, so a file whose every
+ * line is evidence can say so once instead of listing seven labels and
+ * forgetting the eighth.
+ */
 export function isVerbatimLabel(label) {
   try {
-    return VERBATIM_LABELS.indexOf(String(label)) !== -1;
+    const name = String(label);
+    for (let i = 0; i < VERBATIM_LABELS.length; i++) {
+      const entry = VERBATIM_LABELS[i];
+      if (entry.charAt(entry.length - 1) === '.') {
+        if (name.lastIndexOf(entry, 0) === 0) return true;
+      } else if (name === entry) {
+        return true;
+      }
+    }
+    return false;
   } catch {
     return false;
   }
