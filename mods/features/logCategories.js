@@ -72,11 +72,27 @@ const PREFIX_CATEGORY = {
   // reading came to a few dozen — so switching the noise off used to mean
   // switching off the thing being looked at.
   sponsorblock: 'sponsorblock',
+
+  // Not label prefixes any real line uses: these are the names the two former
+  // settings are read under, via isCategoryEnabled('playbackDiag.'). Without
+  // them the lookup falls through to 'other', which is on by default, so the
+  // costly playback timing would have come back on for everyone.
+  playbackDiag: 'playbackDiag',
+  subsShelf: 'subsShelf',
 };
 
+// playbackDiag and subsShelf were their own on/off settings a level up in the
+// menu until they were asked to live here with the rest. They differ from the
+// others in one way worth knowing: the categories above FILTER lines that are
+// produced anyway, while these two stop the work being done at all — the
+// playback one gates the parse timing and the heartbeat, not just their
+// output. That makes them stronger than a category, not weaker, so putting
+// them in the same list costs nothing and reads better than a separate pair of
+// switches.
 export const LOG_CATEGORIES = [
   'nav', 'ads', 'shorts', 'watched', 'playlist',
-  'filters', 'shelves', 'thumbs', 'player', 'sponsorblock', 'other',
+  'filters', 'shelves', 'thumbs', 'player', 'sponsorblock',
+  'playbackDiag', 'subsShelf', 'other',
 ];
 
 export function categoryForLabel(label) {

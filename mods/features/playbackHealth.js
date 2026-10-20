@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
+import { isCategoryEnabled } from './logCategories.js';
 
 /**
  * playbackHealth.js — why the spinner appeared.
@@ -259,7 +260,10 @@ function pickVideo() {
 
 function enabled() {
     try {
-        return configRead('enablePlaybackDiagnostics') === true;
+        // A log category now rather than a setting of its own, so it sits with
+        // the others in the menu. isCategoryEnabled takes a label, and the
+        // prefix is what it reads.
+        return isCategoryEnabled('playbackDiag.');
     } catch (e) {
         return false;
     }

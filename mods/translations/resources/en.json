@@ -79,12 +79,12 @@
                             "filters": "Members-only, surveys, library",
                             "shelves": "Shelves and tiles",
                             "thumbs": "Thumbnails and DeArrow",
-                            "player": "Player, SponsorBlock, captions",
+                            "player": "Player, playback recovery, captions",
                             "other": "Everything else",
-                            "sponsorblock": "SponsorBlock"
-                        },
-                        "playbackDiagnostics": "Log Playback Stalls",
-                        "diagSubscriptionsShelf": "Log Subscriptions Shelf Layout"
+                            "sponsorblock": "SponsorBlock",
+                            "playbackDiag": "Playback stalls and timing (costly)",
+                            "subsShelf": "Subscription shelf layout"
+                        }
                     },
                     "debugConsole": {
                         "title": "Debug Console",

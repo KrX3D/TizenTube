@@ -79,12 +79,12 @@
                             "filters": "Nur für Mitglieder, Umfragen, Mediathek",
                             "shelves": "Regale und Kacheln",
                             "thumbs": "Vorschaubilder und DeArrow",
-                            "player": "Player, SponsorBlock, Untertitel",
+                            "player": "Player, Wiedergabe-Wiederherstellung, Untertitel",
                             "other": "Alles Übrige",
-                            "sponsorblock": "SponsorBlock"
-                        },
-                        "playbackDiagnostics": "Wiedergabe-Aussetzer protokollieren",
-                        "diagSubscriptionsShelf": "Layout der Abo-Regale protokollieren"
+                            "sponsorblock": "SponsorBlock",
+                            "playbackDiag": "Wiedergabe-Aussetzer und Zeitmessung (aufwendig)",
+                            "subsShelf": "Layout der Abo-Regale"
+                        }
                     },
                     "debugConsole": {
                         "title": "Debug-Konsole",
