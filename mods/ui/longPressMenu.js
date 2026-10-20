@@ -403,6 +403,27 @@ function openBrowseEntry(id, label, browseId) {
  * Returns null when there is nothing to offer, so the caller can leave the tile
  * without a menu rather than attaching one that opens empty.
  */
+/**
+ * A real video id out of a tile's thumbnail URL, or null.
+ *
+ * YouTube builds a playlist or channel tile's thumbnail from one of its
+ * videos, so the URL carries that video's id: i.ytimg.com/vi/<id>/... . That
+ * is the one place a browse tile offers something the app can resolve.
+ */
+function videoIdFromThumbnails(thumbnails) {
+    try {
+        for (let i = 0; i < thumbnails.length; i++) {
+            const url = String((thumbnails[i] && thumbnails[i].url) || '');
+            // vi_webp as well as vi: Cobalt is served the webp variant on
+            // some shelves, and a tile whose thumbnail happens to be webp is
+            // not a reason to fall back to the browse id.
+            const match = /\/vi(?:_webp)?\/([A-Za-z0-9_-]{11})\//.exec(url);
+            if (match) return match[1];
+        }
+    } catch (_) { }
+    return null;
+}
+
 export function browseTileLongPressData(info) {
     // Every way out of this function now says why. All of them used to return
     // null in silence, so a tile that got no menu and a tile whose menu never
@@ -451,25 +472,34 @@ export function browseTileLongPressData(info) {
     return {
         clickTrackingParams: null,
         showMenuCommand: {
-            // The content id is back, and the reasoning that removed it was
-            // the wrong way round.
+            // A video id where one can be had, not the browse id.
             //
-            // It came out because the one capture of a playlist menu reaching
-            // the app carried a browse id here where a working video menu
-            // carried a video id, and a header built by looking that id up
-            // would find nothing for VLPL… . That was a guess about the
-            // drawing. What it overlooked is what the capture itself proves:
-            // with the id present the command reached resolveCommand at all.
+            // Captured 20 October, a History video tile and a playlist tile on
+            // the same library page seven seconds apart. Identical component,
+            // identical classes, identical shelf:
             //
-            // Since it was removed, not one longPress.menuOpened line has been
-            // recorded for a playlist tile — four days of captures, none. The
-            // two commits are fifty-three minutes apart on the same day, so
-            // the logging was already in place for the build that produced that
-            // line. The app evidently will not dispatch a showMenuCommand that
-            // has no content id, which makes its absence strictly worse: a
-            // menu that opens and draws nothing can still be fixed, a menu
-            // that never opens cannot be looked at.
-            contentId: info.id,
+            //   video     cmds ["clickTrackingParams","openPopupAction",
+            //                   "signalAction","showHintCommand"]
+            //   playlist  cmds ["clickTrackingParams"]
+            //
+            // openPopupAction is what puts the dialog on screen, and it is the
+            // app's, not ours. So the gesture fires, our command arrives with
+            // our entries in it, the app accepts it — and then declines to
+            // display it. The tile cannot be the reason, and neither can the
+            // entries: they use the same two renderers and the same endpoint
+            // shapes as the video menu that works.
+            //
+            // That leaves this field, the one structural difference between
+            // the two commands: an 11-character video id against VLPL… . A
+            // handler that looks the content up to build its popup would find
+            // nothing for a playlist browse id and have nothing to open.
+            //
+            // The thumbnail gives a real id belonging to this playlist, so
+            // this is not a placeholder. The header does not depend on it —
+            // title, subtitle and thumbnail are all passed explicitly below —
+            // and the entries act on info.id regardless of what goes here.
+            // Falls back to the browse id, which is where this started.
+            contentId: videoIdFromThumbnails(info.thumbnails || []) || info.id,
             thumbnail: { thumbnails: info.thumbnails || [] },
             title: { simpleText: title || info.id },
             subtitle: {
