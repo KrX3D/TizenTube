@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
+import { isCategoryEnabled } from './logCategories.js';
 
 // Diagnostics for the Subscriptions page shelf layout.
 //
@@ -85,7 +86,9 @@ function shelfTitle(shelve) {
 export function logSubscriptionsShelfShape(shelves, pageName) {
   try {
     if (pageName !== 'subscriptions') return;
-    if (!configRead('diagSubscriptionsShelf')) return;
+    // Moved from its own setting into the log categories, so it is switched
+    // on in the same place as everything else that writes log lines.
+    if (!isCategoryEnabled('subsShelf.')) return;
     if (!Array.isArray(shelves) || !shelves.length) return;
 
     // The reported behaviour is 6.5-specific, so a capture is only useful if

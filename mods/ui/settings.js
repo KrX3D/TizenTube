@@ -603,18 +603,10 @@ export default function modernUI(update, parameters) {
                                 { name: t('settings.options.misc.options.logging.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
                                 { name: t('settings.options.misc.options.logging.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
                                 { name: t('settings.options.misc.options.logging.categories.sponsorblock'), icon: 'MONEY_HAND', value: 'sponsorblock' },
+                                { name: t('settings.options.misc.options.logging.categories.playbackDiag'), icon: 'SLOW_MOTION_VIDEO', value: 'playbackDiag' },
+                                { name: t('settings.options.misc.options.logging.categories.subsShelf'), icon: 'SUBSCRIPTIONS', value: 'subsShelf' },
                                 { name: t('settings.options.misc.options.logging.categories.other'), icon: 'ARTICLE', value: 'other' }
                             ]
-                        },
-                        {
-                            name: t('settings.options.misc.options.logging.playbackDiagnostics'),
-                            icon: 'PLAY_CIRCLE',
-                            value: 'enablePlaybackDiagnostics'
-                        },
-                        {
-                            name: t('settings.options.misc.options.logging.diagSubscriptionsShelf'),
-                            icon: 'SUBSCRIPTIONS',
-                            value: 'diagSubscriptionsShelf'
                         }
                     ]
                 }

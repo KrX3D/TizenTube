@@ -117,11 +117,14 @@ const defaultConfig = {
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 1054,
   logServerEnabled: false,
-  diagSubscriptionsShelf: false,
   // Every category on by default, so upgrading changes nothing until the
   // user narrows it down. 'basic' vs 'detailed' controls payload depth.
   // sponsorblock is listed but deliberately NOT on by default: it was the
   // loudest thing in the log by a wide margin, and nobody turned it on.
+  // sponsorblock, playbackDiag and subsShelf are listed as categories but
+  // deliberately absent here: all three were off by default before, and all
+  // three are loud or costly enough that nobody should get them without
+  // asking.
   logCategories: ['nav', 'ads', 'shorts', 'watched', 'playlist', 'filters', 'shelves', 'thumbs', 'player', 'other'],
   logVerbosity: 'detailed',
   // syslog output, independent of the log server above.
@@ -168,7 +171,6 @@ const defaultConfig = {
   enableInstantSeek: false,
   instantSeekDelayMs: 500,
   enableStopAtPlaylistEnd: false,
-  enablePlaybackDiagnostics: false,
   enableRemainingTime: false,
   enableFinishTime: false,
 };
@@ -182,6 +184,29 @@ try {
     localConfig = { ...defaultConfig };
   } else {
     localConfig = JSON.parse(raw);
+  }
+  // Two settings became log categories (playbackDiag, subsShelf). Anyone who
+  // had them on keeps them on, and the old keys are dropped so the config does
+  // not carry a setting nothing reads. Only the STORED object is consulted:
+  // configRead would hand back the default and migrate a choice nobody made.
+  try {
+    const MOVED = { enablePlaybackDiagnostics: 'playbackDiag', diagSubscriptionsShelf: 'subsShelf' };
+    let moved = false;
+    for (const oldKey of Object.keys(MOVED)) {
+      if (!Object.prototype.hasOwnProperty.call(localConfig, oldKey)) continue;
+      const wasOn = localConfig[oldKey] === true;
+      delete localConfig[oldKey];
+      moved = true;
+      if (!wasOn) continue;
+      const cats = Array.isArray(localConfig.logCategories)
+        ? localConfig.logCategories.slice()
+        : defaultConfig.logCategories.slice();
+      if (cats.indexOf(MOVED[oldKey]) === -1) cats.push(MOVED[oldKey]);
+      localConfig.logCategories = cats;
+    }
+    if (moved) window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+  } catch (err) {
+    // A failed migration leaves both categories off, which is the default.
   }
 } catch (err) {
   console.warn('Config read failed:', err);
