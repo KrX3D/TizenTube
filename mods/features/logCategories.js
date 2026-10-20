@@ -135,6 +135,8 @@ const BASIC_KEYS = [
 const VERBATIM_LABELS = [
   'longPress.probe',
   'longPress.menuOpened',
+  'longPress.menuHandled',
+  'longPress.menuThrew',
   'longPress.browseMenuSkipped',
   'addLongPress.browseTile',
   'addLongPress.browseTileRejected',
