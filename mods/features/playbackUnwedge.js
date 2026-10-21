@@ -200,6 +200,7 @@ function check() {
 
     const at = Number(video.currentTime) || 0;
     const moved = lastPosition === null ? null : at - lastPosition;
+    const previousPosition = lastPosition;
     lastPosition = at;
     const ahead = bufferedAhead(video);
     const previousAhead = lastAhead;
@@ -217,6 +218,38 @@ function check() {
             readyState,
         }, lastPick()));
         starvedBeats = 0;
+    }
+
+    // An element with nothing in it says nothing, so it is stepped over
+    // without touching a single counter.
+    //
+    // Captured 21 October on the 5.5 TV, alternating with the real player beat
+    // by beat:
+    //
+    //   at 1925, buffered 5.5, readyState 4   the player, stuck
+    //   at 0,    buffered 0,   readyState 0   this
+    //
+    // The second was read as the playhead moving back 1924.9 seconds, which
+    // satisfied the self-recovery branch below, which cleared stuckBeats. So
+    // the count restarted every other beat and never reached the five needed
+    // to act: stillForSec went 10, 10, 10, 20, 10 while the viewer waited, and
+    // the app had to be restarted by hand. A recovery disarmed by a phantom is
+    // worse than no recovery, because it looks like one.
+    //
+    // Nothing is reset here deliberately. Clearing stuckBeats is what the old
+    // path did wrong; this beat simply did not happen.
+    if (readyState === 0 && ahead <= 0.5 && at < 1) {
+        appendFileOnlyLog('unwedge.emptyElement', Object.assign({
+            at: Math.round(at),
+            movedSec: moved === null ? null : Math.round(moved * 10) / 10,
+            readyState,
+            stillForSec: stuckBeats * (CHECK_MS / 1000),
+        }, lastPick()));
+        // The position is not recorded either: comparing the real player's
+        // next beat against this one is how the phantom move was invented.
+        lastPosition = previousPosition;
+        lastAhead = previousAhead;
+        return;
     }
 
     // Anything the viewer asked for is not a wedge.
