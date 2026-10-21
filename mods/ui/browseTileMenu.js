@@ -60,7 +60,6 @@ function readEntry(item) {
  */
 const ICONS = {
     playPlaylist: 'PLAY_ARROW',
-    openPlaylist: 'PLAYLIST_PLAY',
     sharePlaylist: 'SEND',
     showWatchedPlaylist: 'EYE_OFF',
     channel: 'ACCOUNT_CIRCLE',

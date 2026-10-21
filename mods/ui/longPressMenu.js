@@ -7,7 +7,6 @@ import { detectCurrentPage } from '../features/hideWatched.js';
 import { currentPlaylistEditable } from '../features/playlistOwnership.js';
 import {
     currentChannelId,
-    currentPlaylistId,
     isChannelNameExempt,
     isChannelPageExempt,
     isPlaylistExempt,
@@ -34,7 +33,7 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playPlaylist', 'openPlaylist', 'sharePlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
+export const DEFAULT_ORDER = ['play', 'playPlaylist', 'sharePlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
@@ -65,7 +64,6 @@ export const ENTRY_LABELS = {
     // the press will do; these are the fixed names the settings screen lists
     // them under, which cannot flip or the list would reword itself depending
     // on which playlist you last looked at.
-    openPlaylist: 'videoMenu.openPlaylist',
     markWatched: 'videoMenu.markWatched',
     showWatchedPlaylist: 'videoMenu.showWatchedPlaylist',
     showWatchedChannelPage: 'videoMenu.showWatchedChannelPage',
@@ -344,14 +342,14 @@ function hideWatchedEntries(data) {
     try {
         const page = detectCurrentPage();
 
-        if (page === 'playlist') {
-            // The tile's own playlist first: it is the playlist the video is
-            // actually in, and on a page showing one playlist the two agree.
-            // The page is the fallback for a tile that carries no playlist.
-            for (const entry of playlistExemptionEntry(
-                normalisePlaylistId(data.watchEndpointData?.playlistId) || currentPlaylistId()
-            )) entries.push(entry);
-        }
+        // Deliberately not offered on a video inside a playlist any more.
+        //
+        // It was, and it reads as a mistake: the entry is about the whole
+        // playlist, not the video the menu belongs to, so finding it on a
+        // video suggests it acts on that video. The playlist tile's own menu
+        // is where a playlist-wide switch belongs, and now that
+        // browseTileMenu.js draws that menu it is somewhere you can actually
+        // reach. Asked for directly once that started working.
 
         if (page === 'channel') {
             for (const entry of channelPageExemptionEntry(currentChannelId(), channelNameOf(data.item))) {
@@ -503,27 +501,21 @@ export function browseTileLongPressData(info) {
     let items = [];
     try {
         if (info?.kind === 'playlist') {
-            // Four entries, which is a count the app is known to draw.
+            // Three entries, and the count no longer matters: browseTileMenu.js
+            // draws this panel, so the app's refusal to draw a menu of one or
+            // two is no longer a constraint on what goes in it. Open Playlist
+            // was in here partly to clear that bar and partly because it
+            // seemed obvious — but selecting the tile already opens the
+            // playlist, so it only spent a row saying so.
             //
-            // Every menu seen to open sorts by this one number: 1 and 2 never
-            // drew, 4 and 5 always did, and 3 has never been observed either
-            // way. Since the entry that matters here — showing a playlist's
-            // watched videos — is the whole point of the menu, it is not worth
-            // shipping an untested 3 and finding out.
-            //
-            // None of the four is padding. Play and Open are what a long press
-            // on a playlist obviously wants, and sharing is the one thing a TV
-            // genuinely cannot do another way: no clipboard, no address bar,
-            // and a long playlist is exactly what you want on a phone instead.
-            //
-            // All four have ids of their own. The first attempt at this gave
-            // Play and Share the video menu's ids, and anyone who had switched
-            // those off for videos — which this fork's own author had — got the
-            // playlist menu filtered back down to two entries and no menu at
-            // all. A menu assembled from another menu's settings is not
-            // really a menu of its own.
+            // Each has an id of its own and a label in ENTRY_LABELS, so all
+            // three can be reordered or switched off in the long press menu
+            // settings like any other entry. The first attempt gave Play and
+            // Share the video menu's ids, and anyone who had switched those
+            // off for videos — which this fork's own author had — got this
+            // menu filtered down to two entries and no menu at all. A menu
+            // assembled from another menu's settings is not a menu of its own.
             items = playPlaylistEntry(info.id, firstVideoId)
-                .concat(openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id))
                 .concat(sharePlaylistEntry(info.id))
                 .concat(playlistExemptionEntry(info.id));
         } else if (info?.kind === 'channel') {
