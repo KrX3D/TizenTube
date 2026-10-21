@@ -146,6 +146,7 @@ const VERBATIM_LABELS = [
   // fields that say where to look next.
   'markWatched.',
   'hideVideo.summary',
+  'hideVideo.noProgressShape',
   'hideVideo.pageNotEnabled',
   // The three lines anyone reads when playback misbehaves. Basic mode was
   // dropping movedSec, ratio and stuck from the heartbeat and lastedMs from a
