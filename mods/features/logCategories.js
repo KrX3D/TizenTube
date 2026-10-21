@@ -59,11 +59,11 @@ const PREFIX_CATEGORY = {
   // were a near miss: the singular was mapped, the plural was not, so turning
   // 'shelves' off left the loudest of them running. tiles.countsStripped was
   // 43 lines in one day's capture, more than any other non-player prefix.
-  tiles: 'shelves', longPress: 'shelves',
+  tiles: 'shelves', longPress: 'shelves', browseTileMenu: 'shelves',
 
   dearrow: 'thumbs', thumbs: 'thumbs',
 
-  resume: 'player', screenOff: 'player',
+  resume: 'player', screenOff: 'player', playerRequest: 'player',
   captionStyle: 'player', player: 'player',
   unwedge: 'player', reload: 'player',
 
@@ -146,6 +146,8 @@ const VERBATIM_LABELS = [
   // request was or was not accepted, and basic mode was reducing the shape
   // fields that say where to look next.
   'markWatched.',
+  // The two shapes being compared are the whole content of these lines.
+  'playerRequest.',
   'hideVideo.summary',
   'hideVideo.noProgressShape',
   // fromHistory is the whole point of this line: hidden because the account

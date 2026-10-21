@@ -307,7 +307,16 @@ function playerResponse(videoId, watchParams) {
             try {
                 const request = { path: '/youtubei/v1/player', payload: payload, clickTracking: { clickTrackingParams: null } };
                 if (identity) request.identity = identity;
-                client.fetch(request).subscribe(resolve, reject);
+                // Set across the call, not in the payload: playerRequestShape
+                // needs to tell our request from the app's, and a marker field
+                // in the payload would be sent to YouTube. Cleared in a
+                // finally, since fetch can throw.
+                window.__ttMarkWatchedInFlight = true;
+                try {
+                    client.fetch(request).subscribe(resolve, reject);
+                } finally {
+                    window.__ttMarkWatchedInFlight = false;
+                }
             } catch (err) {
                 reject(err);
             }

@@ -41,5 +41,6 @@ import "./features/playbackUnwedge.js";
 // watched videos until this has run.
 import "./features/hideWatchedExemptions.js";
 import "./features/watchHistory.js";
+import "./features/playerRequestShape.js";
 import "./features/longPressProbe.js";
 import "./ui/sidebarModification.js";
