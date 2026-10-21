@@ -77,7 +77,9 @@ function note(request) {
         appendFileOnlyLog('playerRequest.shape', {
             // Which side made it, which is the whole point of the comparison.
             mine,
-            hasIdentity: !!(request && request.identity),
+            // No `request &&` here: the early return above already proved it,
+            // since a falsy request could not have produced a payload.
+            hasIdentity: !!request.identity,
             keys: Object.keys(payload).sort(),
             shape,
         });
