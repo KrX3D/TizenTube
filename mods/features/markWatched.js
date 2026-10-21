@@ -90,6 +90,50 @@ function identityService() {
  * request is still made, just as poorly as before, which is no worse than not
  * trying.
  */
+/**
+ * Whether a response carries a feedback token, and what sits around it.
+ *
+ * Names only. A feedback token is an opaque capability tied to the account and
+ * to one action; it has no place in a log file that gets posted into an issue.
+ * The labels beside it are what identify the action, and those are what decide
+ * whether this route is usable.
+ */
+function describeFeedback(node, depth) {
+    const out = { tokens: 0, labels: [], keys: [] };
+
+    /** Whatever reads as this node's own label, or null. */
+    const labelOf = (value) => {
+        const title = value.title;
+        const text = (title && (title.simpleText
+            || (title.runs && title.runs[0] && title.runs[0].text)))
+            || (typeof value.label === 'string' ? value.label : null);
+        return text ? String(text).slice(0, 40) : null;
+    };
+
+    // The label is carried down rather than read beside the token, because
+    // they are not in the same place: YouTube puts the token under
+    // onTap.innertubeCommand.feedbackEndpoint and the title on the list item
+    // several levels above it. Reading only the token's own object found the
+    // token every time and never once named it.
+    const walk = (value, at, parentKey, inherited) => {
+        if (!value || typeof value !== 'object' || at > 12) return;
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) walk(value[i], at + 1, parentKey, inherited);
+            return;
+        }
+        const label = labelOf(value) || inherited;
+        if (typeof value.feedbackToken === 'string' && value.feedbackToken) {
+            out.tokens++;
+            if (parentKey && out.keys.indexOf(parentKey) === -1) out.keys.push(parentKey);
+            if (label && out.labels.indexOf(label) === -1) out.labels.push(label);
+        }
+        const names = Object.keys(value);
+        for (let i = 0; i < names.length; i++) walk(value[names[i]], at + 1, names[i], label);
+    };
+    walk(node, depth || 0, null, null);
+    return out;
+}
+
 function paramsFromNext(videoId, identity) {
     return new Promise((resolve) => {
         const client = innerTubeClient();
@@ -136,6 +180,25 @@ function paramsFromNext(videoId, identity) {
                 // whether /next was asked and came back empty or was never
                 // asked.
                 const detail = { videoId: videoId, found: !!found, where: where };
+                // Whether YouTube offers a feedback token for this video.
+                //
+                // This is the last unexplored route to marking a video
+                // watched on the account. The /player route is closed: no
+                // signed params exist on the tile or here, so the request
+                // comes back UNPLAYABLE every time. The engagement panel route
+                // is closed too — a subscriptions tile carries no panel
+                // reference at all, which addLongPress.feedbackPanel reports
+                // as "not found". A token in this response would be the one
+                // remaining way, and sendFeedbackToken already exists to use
+                // it.
+                //
+                // The token itself is never logged: it is an opaque
+                // account-scoped capability. Only whether one is there, and
+                // the names of the fields around it, which is what says
+                // whether it is the right kind of token.
+                try {
+                    detail.feedback = describeFeedback(response);
+                } catch (_) { }
                 if (!found) {
                     try {
                         const endpoint = response?.currentVideoEndpoint?.watchEndpoint;
