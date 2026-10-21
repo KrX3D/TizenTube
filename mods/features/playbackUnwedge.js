@@ -72,10 +72,16 @@ const FROZEN_BEATS_BEFORE_ACTING = 5;
 // is starvation or a recovery in progress rather than a wedge.
 const DRAIN_TOLERANCE_S = 1;
 
+// Beats between reports while the buffer is empty. A starvation that lasts ten
+// minutes should not cost sixty identical lines when the only thing changing
+// is how long it has been going.
+const STARVED_LOG_EVERY = 6;
+
 let timer = null;
 let lastPosition = null;
 let lastAhead = null;
 let stuckBeats = 0;
+let starvedBeats = 0;
 let attempts = 0;
 let lastVideoId = null;
 
@@ -177,6 +183,7 @@ function check() {
         lastPosition = null;
         lastAhead = null;
         stuckBeats = 0;
+        starvedBeats = 0;
         attempts = 0;
     }
 
@@ -197,6 +204,20 @@ function check() {
     const ahead = bufferedAhead(video);
     const previousAhead = lastAhead;
     lastAhead = ahead;
+
+    // Data arrived again after a spell with none. Reported here rather than in
+    // the starved branch below, because a player that recovers starts moving
+    // and a moving player returns before ever reaching it — which is why the
+    // first capture of this showed a starvation beginning and never ending.
+    if (starvedBeats && ahead > 0.5) {
+        appendFileOnlyLog('unwedge.starvedEnded', Object.assign({
+            at: Math.round(at),
+            bufferedAhead: Math.round(ahead * 10) / 10,
+            starvedForSec: starvedBeats * (CHECK_MS / 1000),
+            readyState,
+        }, lastPick()));
+        starvedBeats = 0;
+    }
 
     // Anything the viewer asked for is not a wedge.
     if (paused || seeking || !(rate > 0)) {
@@ -245,10 +266,28 @@ function check() {
 
     if (ahead <= 0.5) {
         // Nothing to play. This is the other failure — the buffer drained —
-        // and a seek cannot conjure data. Counted but never acted on, so a
-        // capture still shows it was considered.
+        // and a seek cannot conjure data, so this file does not act on it.
+        //
+        // Captured on the 6.5 TV, 21 October: a video that had been playing
+        // perfectly with 76 seconds buffered went 76.5 -> 36 -> 0 across two
+        // beats and froze at 153 seconds with an empty buffer and readyState
+        // 2. Nothing was wrong with the player; the data stopped arriving.
+        //
+        // What the capture could not say is whether that ever ends. This
+        // branch logged an identical line every ten seconds with no duration
+        // on it and no closing line, so a starvation that recovered after a
+        // minute and one that lasted until the app was killed by hand read
+        // exactly the same.
         stuckBeats = 0;
-        appendFileOnlyLog('unwedge.starved', Object.assign({ at: Math.round(at), bufferedAhead: Math.round(ahead * 10) / 10, readyState }, lastPick()));
+        starvedBeats++;
+        if (starvedBeats === 1 || starvedBeats % STARVED_LOG_EVERY === 0) {
+            appendFileOnlyLog('unwedge.starved', Object.assign({
+                at: Math.round(at),
+                bufferedAhead: Math.round(ahead * 10) / 10,
+                readyState,
+                starvedForSec: starvedBeats * (CHECK_MS / 1000),
+            }, lastPick()));
+        }
         return;
     }
 
