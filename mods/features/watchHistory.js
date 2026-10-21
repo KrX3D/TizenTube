@@ -34,10 +34,19 @@ import { appendFileOnlyLog, setWatchedLookup } from './hideWatched.js';
 
 const HISTORY_BROWSE_ID = 'FEhistory';
 
-// Pages of history to walk. Three is roughly the last couple of hundred
-// videos, which is far more than any subscriptions feed reaches back to, and
-// the point is the recent past rather than the archive.
-const MAX_PAGES = 3;
+// Pages of history to walk.
+//
+// Three was a guess at "roughly the last couple of hundred videos" and it was
+// wrong by a factor of five: the first capture with this working loaded 43 ids
+// from three pages, so a page of this feed is about fourteen entries. Fourteen
+// is nothing against a subscriptions feed that goes back weeks, and 18 videos
+// in that same capture stayed on screen with nothing known about them.
+//
+// Twelve pages is around 170 videos, which does reach back as far as the feed
+// does. They cost one request each, once per cooldown, and they stop early the
+// moment a page brings no continuation — so a short history still costs one
+// request, not twelve.
+const MAX_PAGES = 12;
 
 // How long a fetched set is trusted. Long enough that moving around the app
 // costs nothing, short enough that watching something on a PC shows up on the
@@ -153,19 +162,31 @@ export function refreshWatchHistory(reason) {
     const found = Object.create(null);
     const startedAt = Date.now();
 
+    // What each page contributed, so a short result says which of the two it
+    // was: a history with little in it, or continuations that stopped being
+    // followed. The first version could not tell those apart.
+    const perPage = [];
     const page = (payload, pagesLeft) => browse(client, payload).then((response) => {
         if (!response) return null;
+        const before = Object.keys(found).length;
         collectVideoIds(response, found, 0);
+        perPage.push(Object.keys(found).length - before);
         if (pagesLeft <= 1 || Object.keys(found).length >= MAX_IDS) return null;
         const token = continuationToken(response, 0);
-        return token ? page({ continuation: token }, pagesLeft - 1) : null;
+        if (!token) return null;
+        // A page that added nothing twice over is the end of the feed however
+        // many continuations it keeps offering.
+        if (perPage.length >= 2 && perPage[perPage.length - 1] === 0 && perPage[perPage.length - 2] === 0) return null;
+        return page({ continuation: token }, pagesLeft - 1);
     });
 
     return page({ browseId: HISTORY_BROWSE_ID }, MAX_PAGES).then(() => {
         _inFlight = false;
         const ids = Object.keys(found);
         if (!ids.length) {
-            appendFileOnlyLog('watchHistory.empty', { reason: reason || null, tookMs: Date.now() - startedAt });
+            appendFileOnlyLog('watchHistory.empty', {
+                reason: reason || null, tookMs: Date.now() - startedAt, pages: perPage.length,
+            });
             return _count;
         }
         if (ids.length > MAX_IDS) ids.length = MAX_IDS;
@@ -176,6 +197,7 @@ export function refreshWatchHistory(reason) {
         _fetchedAt = Date.now();
         appendFileOnlyLog('watchHistory.loaded', {
             reason: reason || null, count: _count, tookMs: Date.now() - startedAt,
+            pages: perPage.length, perPage: perPage,
         });
         return _count;
     }, (err) => {
