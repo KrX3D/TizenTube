@@ -547,8 +547,7 @@
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Kanal",
         "markWatched": "Als gesehen markieren",
-        "playPlaylist": "Playlist abspielen",
-        "sharePlaylist": "Playlist teilen (QR-Code)"
+        "playPlaylist": "Playlist abspielen"
     },
     "toasts": {
         "feedbackSent": "Feedback gesendet.",

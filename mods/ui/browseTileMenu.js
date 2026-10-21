@@ -39,8 +39,7 @@ import { appendFileOnlyLog } from '../features/hideWatched.js';
 /** The label and the command out of either kind of menu item. */
 function readEntry(item) {
     const nav = item && item.menuNavigationItemRenderer;
-    const svc = item && item.menuServiceItemRenderer;
-    const renderer = nav || svc;
+    const renderer = nav || (item && item.menuServiceItemRenderer);
     if (!renderer) return null;
     const runs = renderer.text && renderer.text.runs;
     const label = (runs && runs.length && runs[0].text)
@@ -48,7 +47,7 @@ function readEntry(item) {
         || '';
     const endpoint = nav ? renderer.navigationEndpoint : renderer.serviceEndpoint;
     if (!label || !endpoint) return null;
-    return { id: (item && item.__ttMenuId) || null, label, endpoint, isService: !!svc };
+    return { id: (item && item.__ttMenuId) || null, label, endpoint };
 }
 
 /**
@@ -60,11 +59,35 @@ function readEntry(item) {
  */
 const ICONS = {
     playPlaylist: 'PLAY_ARROW',
-    sharePlaylist: 'SEND',
+    share: 'SEND',
     showWatchedPlaylist: 'EYE_OFF',
     channel: 'ACCOUNT_CIRCLE',
     showWatchedChannelPage: 'EYE_OFF',
     showWatchedChannelEverywhere: 'PERSON',
+};
+
+/**
+ * Entries that take the screen over, and so need the panel gone first.
+ *
+ * Every row dismisses the panel; the order is what differs. Two reports made
+ * that distinction necessary:
+ *
+ *   sharing a playlist appeared to do nothing — the QR opened and POPUP_BACK,
+ *   queued after it, closed the thing that had just appeared
+ *
+ *   playing a playlist played it and left the panel sitting on top, because
+ *   this row had no POPUP_BACK at all on the theory that navigating would
+ *   dismiss the panel by itself. It does not.
+ *
+ * So anything that navigates or opens its own screen closes the panel before
+ * acting, and anything that acts in place and returns closes it afterwards —
+ * which is the right way round for the watched toggle, whose toast should
+ * follow the panel going away rather than precede it.
+ */
+const CLOSES_PANEL_FIRST = {
+    playPlaylist: true,
+    share: true,
+    channel: true,
 };
 
 /**
@@ -82,13 +105,10 @@ export function showBrowseTileMenu(menu) {
         for (let i = 0; i < items.length; i++) {
             const entry = readEntry(items[i]);
             if (!entry) continue;
-            // A service endpoint acts and stays; a navigation replaces the
-            // page by itself. So only the first needs the panel dismissed
-            // afterwards, and adding it to the second would go back from
-            // wherever it had just arrived.
-            const commands = entry.isService
-                ? [entry.endpoint, { signalAction: { signal: 'POPUP_BACK' } }]
-                : [entry.endpoint];
+            const dismiss = { signalAction: { signal: 'POPUP_BACK' } };
+            const commands = CLOSES_PANEL_FIRST[entry.id] === true
+                ? [dismiss, entry.endpoint]
+                : [entry.endpoint, dismiss];
             rows.push(buttonItem(
                 { title: entry.label },
                 { icon: ICONS[entry.id] || null },
