@@ -33,22 +33,24 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'playPlaylist', 'sharePlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
+export const DEFAULT_ORDER = ['play', 'playPlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
 export const ENTRY_LABELS = {
     play: 'videoMenu.play',
-    // A playlist tile's own Play and Share, kept separate from the video
-    // menu's. Reusing 'play' and 'share' put them under the video menu's
-    // hidden list: a capture showed a four-entry video menu whose ids were
-    // ["playlists","playlists","channel","markWatched"] — both of those
-    // entries switched off — and the playlist menu built from the same ids
-    // was filtered straight back down to two, which is a count that does not
-    // draw. Separate ids are also simply truer: playing a playlist and
-    // playing a video are different things to want.
+    // A playlist tile's own Play, kept separate from the video menu's: playing
+    // a playlist and playing a video are different things to want, and
+    // somebody who has switched Play off for videos has said nothing about
+    // playlists.
+    //
+    // Share is deliberately NOT separate — it shares the video menu's 'share'
+    // id, so one setting covers both. Asked for, and the more obvious reading
+    // of a single Share setting. The separation existed because reusing the id
+    // let the video menu's hidden list empty this menu below the entry count
+    // the app needed to draw it; browseTileMenu.js draws it now, so that
+    // reason is gone.
     playPlaylist: 'videoMenu.playPlaylist',
-    sharePlaylist: 'videoMenu.sharePlaylist',
     watchLater: 'videoMenu.watchLater',
     playlists: 'videoMenu.yourPlaylists',
     savePlaylist: 'videoMenu.savePlaylist',
@@ -474,13 +476,22 @@ const BROWSE_ENTRIES_THAT_DRAW = 4;
 /**
  * Share, for a playlist tile: the same QR code the video menu offers.
  *
- * Its own id rather than the video menu's 'share', so switching Share off for
- * videos does not take this menu under the count that draws. See ENTRY_LABELS.
+ * Under the video menu's own 'share' id, so one setting governs both. It had
+ * an id of its own for a while, because reusing 'share' meant switching Share
+ * off for videos also removed it here, and that took this menu under the entry
+ * count the app needed to draw it at all. browseTileMenu.js draws the panel
+ * now, so the count does not matter and the reason is gone — and one switch
+ * for "share things as a QR code" is what was asked for, which is also the
+ * more obvious reading of a single Share setting.
+ *
+ * The action stays separate: a playlist and a video are shared by different
+ * URLs, so SHARE_PLAYLIST carries the playlist id where SHARE_VIDEO carries a
+ * video id.
  */
 function sharePlaylistEntry(playlistId) {
     const list = String(playlistId || '').replace(/^VL/, '').trim();
     if (!list) return [];
-    return [tagMenuItem('sharePlaylist', MenuServiceItemRenderer(t('videoMenu.sharePlaylist'), {
+    return [tagMenuItem('share', MenuServiceItemRenderer(t('videoMenu.share'), {
         clickTrackingParams: null,
         playlistEditEndpoint: { customAction: { action: 'SHARE_PLAYLIST', parameters: { playlistId: list } } }
     }))];
