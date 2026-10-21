@@ -4,6 +4,7 @@
 # WHAT THIS WORKFLOW DOES
 # -----------------------
 # - Runs on every push to the `main` branch (build + verification + version bump)
+# - Does NOT run on pull requests: the job refuses to, so such runs did nothing
 # - Runs on push to main and manual dispatch (build + npm publish + cleanup)
 # - Builds:
 #     - dist/userScript.js  (browser userscript, bundled & minified)
@@ -115,12 +116,25 @@
 name: Build, publish and cleanup old npm versions
 
 on:
-  pull_request:
-    paths-ignore:
-      - 'dist/**'
-      - 'package.json'
-      # Read by the Gitea mirror, ignored by GitHub Actions entirely.
-      - '.gitea/**'
+  # Deliberately not pull_request.
+  #
+  # This workflow has one job and it begins by refusing to run on a pull
+  # request, so every pull request produced a run whose only job was skipped
+  # immediately: a real run, listed in the Actions tab, queued against the
+  # concurrency group below, and unable to do anything. The group is shared
+  # with the publish runs and does not cancel in progress, so those empty runs
+  # also sat pending behind a publish that was still finishing.
+  #
+  # build-standalone-release.yaml and codeql.yml each reached the same
+  # conclusion already — the first by filtering its workflow_run to main, the
+  # second by taking the push side and saying why. This is the last of the
+  # three still doing it.
+  #
+  # Nothing is lost: nothing ran. Every change here arrives through a pull
+  # request that is fast-forwarded onto main, and the push to main builds,
+  # verifies and publishes it. A pull request that wants its own build check
+  # needs a workflow that actually builds something, which this one declines
+  # to do by design.
   push:
     branches:
       - main
@@ -174,11 +188,13 @@ jobs:
   build-publish-clean:
     runs-on: ubuntu-latest
 
-    # Prevent loop on bot commits and on our own "[skip ci]" commits
+    # Prevent loop on bot commits and on our own "[skip ci]" commits.
+    #
+    # The pull_request clause that used to lead this is gone with the trigger:
+    # it was the whole reason those runs existed and did nothing.
     if: >
-      github.event_name != 'pull_request' &&
-      (github.event_name != 'push' ||
-      (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')))
+      github.event_name != 'push' ||
+      (github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]'))
 
     steps:
       - name: Checkout
