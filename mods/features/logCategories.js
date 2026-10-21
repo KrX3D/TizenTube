@@ -40,6 +40,7 @@ const PREFIX_CATEGORY = {
   shorts: 'shorts',
 
   hideVideo: 'watched', deep: 'watched', hideWatched: 'watched',
+  watchHistory: 'watched',
   // Found by the check below rather than by reading: marking a video watched
   // belongs with the rest of the watched handling, and it was mine, added
   // without a mapping while writing the very audit that caught it.
@@ -147,6 +148,9 @@ const VERBATIM_LABELS = [
   'markWatched.',
   'hideVideo.summary',
   'hideVideo.noProgressShape',
+  // fromHistory is the whole point of this line: hidden because the account
+  // watched it, or hidden because a percentage said so, are different claims.
+  'hideVideo.removed',
   'hideVideo.pageNotEnabled',
   // The three lines anyone reads when playback misbehaves. Basic mode was
   // dropping movedSec, ratio and stuck from the heartbeat and lastedMs from a

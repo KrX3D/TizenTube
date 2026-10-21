@@ -79,6 +79,9 @@ const defaultConfig = {
   hideWatchedExemptPlaylists: [],
   hideWatchedExemptChannelPages: [],
   hideWatchedExemptChannelNames: [],
+  // On at least one supported TV the response carries no watch state at all,
+  // so without this the filter can only hide what was watched on that TV.
+  hideWatchedVideosFromHistory: true,
   hideWatchedVideosPages: [
       'home',
       'search',

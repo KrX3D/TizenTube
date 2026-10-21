@@ -259,6 +259,7 @@
                         "title": "Angesehene Videos ausblenden",
                         "options": {
                             "enableHideWatchedVideos": "Ausblenden angesehener Videos aktivieren",
+                            "hideWatchedVideosFromHistory": "Videos aus dem Wiedergabeverlauf ebenfalls ausblenden",
                             "watchedVideosThreshold": {
                                 "title": "Schwellenwert für angesehene Videos",
                                 "subtitle": "Lege den Prozentsatz fest, ab dem Videos als angesehen gelten und ausgeblendet werden"

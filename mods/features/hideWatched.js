@@ -255,6 +255,11 @@ export function getWatchPercent(item) {
     const videoId = item?.tileRenderer?.contentId
       || item?.tileRenderer?.onSelectCommand?.watchEndpoint?.videoId
       || lockupVideoId(item);
+    // History outranks everything: being in it means the account watched the
+    // video to the point YouTube recorded it, which is a stronger statement
+    // than any percentage read off a tile. Checked before the cache so a
+    // video watched elsewhere needs nothing to have happened on this TV.
+    if (watchedByHistory(videoId)) return 100;
     const stored = videoId ? window._ttVideoProgressCache?.[videoId] : undefined;
     const cached = stored === undefined || stored === null ? null : Number(stored);
     const known = cached !== null && isFinite(cached) ? cached : null;
@@ -274,6 +279,28 @@ export function getWatchPercent(item) {
 // anything that imports this back would make a cycle rollup warns about on
 // every build. Nothing is exempt until that module registers itself.
 let _exemption = null;
+
+// Whether the account's own history says a video has been watched, supplied by
+// watchHistory.js the same way and for the same reason.
+//
+// This exists because on the 6.5 TV the response carries no watch state at
+// all: a full day's capture holds not one
+// thumbnailOverlayResumePlaybackRenderer, and a subscriptions tile's only
+// overlay is its duration. So a video finished on a PC is indistinguishable
+// from one never opened, and the history is the only place left to ask.
+let _watchedLookup = null;
+
+export function setWatchedLookup(check) {
+    _watchedLookup = typeof check === 'function' ? check : null;
+}
+
+function watchedByHistory(videoId) {
+    try {
+        return !!(videoId && _watchedLookup && _watchedLookup(videoId));
+    } catch (_) {
+        return false;
+    }
+}
 
 export function setHideWatchedExemption(check) {
     _exemption = check && typeof check.page === 'function' && typeof check.item === 'function'
@@ -341,7 +368,7 @@ export function hideVideo(items, pageHint = null) {
   }
   // Tallied rather than logged per tile, so the summary below costs one line
   // per call however many items there are.
-  const why = { noVideoId: 0, exempt: 0, keepOne: 0, noProgress: 0, underThreshold: 0, removed: 0, threw: 0 };
+  const why = { noVideoId: 0, exempt: 0, keepOne: 0, noProgress: 0, underThreshold: 0, removed: 0, removedByHistory: 0, threw: 0 };
   let firstError = null;
   const kept = items.filter(item => {
     try {
@@ -383,7 +410,12 @@ export function hideVideo(items, pageHint = null) {
       if (keep) why.underThreshold++;
       else {
         why.removed++;
-        appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId });
+        // Named, because "removed" from history and "removed" from a
+        // percentage are different claims and only one of them needs the
+        // response to have said anything.
+        const fromHistory = watchedByHistory(videoId);
+        if (fromHistory) why.removedByHistory++;
+        appendFileOnlyLog('hideVideo.removed', { pageName, pct, videoId, fromHistory });
       }
       return keep;
     } catch (err) {

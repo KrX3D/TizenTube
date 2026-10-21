@@ -259,6 +259,7 @@
                         "title": "Hide Watched Videos",
                         "options": {
                             "enableHideWatchedVideos": "Enable Hide Watched Videos",
+                            "hideWatchedVideosFromHistory": "Also hide videos from your watch history",
                             "watchedVideosThreshold": {
                                 "title": "Watched Videos Threshold",
                                 "subtitle": "Set the percentage threshold for hiding watched videos"

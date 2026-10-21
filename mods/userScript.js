@@ -40,5 +40,6 @@ import "./features/playbackUnwedge.js";
 // cannot import it back without making a cycle. Nothing is exempt from hiding
 // watched videos until this has run.
 import "./features/hideWatchedExemptions.js";
+import "./features/watchHistory.js";
 import "./features/longPressProbe.js";
 import "./ui/sidebarModification.js";
