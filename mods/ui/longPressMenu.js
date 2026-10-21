@@ -34,12 +34,22 @@ const ID_FIELD = '__ttMenuId';
 
 // The order entries appear in when nothing has been configured, which is also
 // the order the settings screen lists them in the first time it is opened.
-export const DEFAULT_ORDER = ['play', 'openPlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
+export const DEFAULT_ORDER = ['play', 'playPlaylist', 'openPlaylist', 'sharePlaylist', 'playNext', 'watchLater', 'playlists', 'savePlaylist', 'removeFromPlaylist', 'queue', 'share', 'channel', 'hideChannel', 'markWatched', 'showWatchedPlaylist', 'showWatchedChannelPage', 'showWatchedChannelEverywhere'];
 
 // Label for each id, for the settings screen. Dynamic entries (one per
 // playlist) share the single id 'playlists' and move and hide as one block.
 export const ENTRY_LABELS = {
     play: 'videoMenu.play',
+    // A playlist tile's own Play and Share, kept separate from the video
+    // menu's. Reusing 'play' and 'share' put them under the video menu's
+    // hidden list: a capture showed a four-entry video menu whose ids were
+    // ["playlists","playlists","channel","markWatched"] — both of those
+    // entries switched off — and the playlist menu built from the same ids
+    // was filtered straight back down to two, which is a count that does not
+    // draw. Separate ids are also simply truer: playing a playlist and
+    // playing a video are different things to want.
+    playPlaylist: 'videoMenu.playPlaylist',
+    sharePlaylist: 'videoMenu.sharePlaylist',
     watchLater: 'videoMenu.watchLater',
     playlists: 'videoMenu.yourPlaylists',
     savePlaylist: 'videoMenu.savePlaylist',
@@ -444,6 +454,8 @@ function videoIdFromThumbnails(thumbnails) {
  *
  * Returns nothing when no video id could be read, rather than a Play that
  * plays nothing.
+ *
+ * Has its own id rather than the video menu's 'play': see ENTRY_LABELS.
  */
 function playPlaylistEntry(playlistId, videoId) {
     if (!videoId) return [];
@@ -451,22 +463,26 @@ function playPlaylistEntry(playlistId, videoId) {
     // playlist id itself. WL and LL carry no prefix and pass through unchanged.
     const list = String(playlistId || '').replace(/^VL/, '');
     if (!list) return [];
-    return [tagMenuItem('play', MenuNavigationItemRenderer(t('videoMenu.play'), {
+    return [tagMenuItem('playPlaylist', MenuNavigationItemRenderer(t('videoMenu.playPlaylist'), {
         clickTrackingParams: null,
         watchEndpoint: { videoId: videoId, playlistId: list }
     }))];
 }
 
+// Entries below which the app has never been seen to draw one of these menus.
+// Observed: 1 no, 2 no, 4 yes, 5 yes; 3 unobserved.
+const BROWSE_ENTRIES_THAT_DRAW = 4;
+
 /**
  * Share, for a playlist tile: the same QR code the video menu offers.
  *
- * Reuses the video menu's own 'share' id and label, so it orders and hides
- * with everything else and needs no new strings.
+ * Its own id rather than the video menu's 'share', so switching Share off for
+ * videos does not take this menu under the count that draws. See ENTRY_LABELS.
  */
 function sharePlaylistEntry(playlistId) {
     const list = String(playlistId || '').replace(/^VL/, '').trim();
     if (!list) return [];
-    return [tagMenuItem('share', MenuServiceItemRenderer(t('videoMenu.share'), {
+    return [tagMenuItem('sharePlaylist', MenuServiceItemRenderer(t('videoMenu.sharePlaylist'), {
         clickTrackingParams: null,
         playlistEditEndpoint: { customAction: { action: 'SHARE_PLAYLIST', parameters: { playlistId: list } } }
     }))];
@@ -499,6 +515,13 @@ export function browseTileLongPressData(info) {
             // on a playlist obviously wants, and sharing is the one thing a TV
             // genuinely cannot do another way: no clipboard, no address bar,
             // and a long playlist is exactly what you want on a phone instead.
+            //
+            // All four have ids of their own. The first attempt at this gave
+            // Play and Share the video menu's ids, and anyone who had switched
+            // those off for videos — which this fork's own author had — got the
+            // playlist menu filtered back down to two entries and no menu at
+            // all. A menu assembled from another menu's settings is not
+            // really a menu of its own.
             items = playPlaylistEntry(info.id, firstVideoId)
                 .concat(openBrowseEntry('openPlaylist', t('videoMenu.openPlaylist'), info.id))
                 .concat(sharePlaylistEntry(info.id))
@@ -526,6 +549,19 @@ export function browseTileLongPressData(info) {
         return null;
     }
     const ordered = applyMenuPreferences(items);
+    // Below the count the app has been seen to draw. Not refused — three has
+    // never been observed either way, so a menu of three is worth attaching —
+    // but said out loud, because the alternative is another round of blaming
+    // the tile for a menu the settings emptied.
+    if (ordered.length && ordered.length < BROWSE_ENTRIES_THAT_DRAW) {
+        appendFileOnlyLog('longPress.browseMenuThin', {
+            kind: info?.kind || null,
+            id: info?.id || null,
+            entries: ordered.length,
+            needs: BROWSE_ENTRIES_THAT_DRAW,
+            ids: ordered.map((entry) => (entry && entry.__ttMenuId) || null),
+        });
+    }
     if (!ordered.length) {
         // Every entry hidden by the user's own menu preferences. Worth its own
         // reason: the menu is then correctly empty and correctly shows
