@@ -907,6 +907,11 @@ export default function modernUI(update, parameters) {
                             value: 'enableHideWatchedVideos'
                         },
                         {
+                            name: t('settings.options.uiSettings.options.hideWatchedVideos.options.hideWatchedVideosFromHistory'),
+                            icon: 'TIMER',
+                            value: 'hideWatchedVideosFromHistory'
+                        },
+                        {
                             name: t('settings.options.uiSettings.options.hideWatchedVideos.options.watchedVideosThreshold.title'),
                             value: null,
                             menuId: 'tt-hide-watched-videos-threshold',
