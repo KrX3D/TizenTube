@@ -731,8 +731,25 @@ const GENERIC_NAME = 'TizenTube';
 // fallback lines, express, the listen — before anything appeared in the TV's
 // own file. Those are exactly the lines worth having when a launch goes wrong,
 // and they were in the one file nobody looks at.
+//
+// Ninety seconds was too long, and the reason is the launch this is for.
+//
+// Reported three times: the app opens, YouTube loads, the mod is not there.
+// The user closes it, opens it again, gets a black screen, closes it, installs
+// again, and the third one works. The log has nothing at all for the first two
+// — no process line, no dns line, nothing — and no generic file on the
+// receiver either. That absence is this timer: the page never injected, so it
+// never told the service the TV's name, so every line stayed in this buffer,
+// and the user closed the app long before ninety seconds were up. The buffer
+// died with the process, holding the only account of what went wrong.
+//
+// Twenty seconds instead. A launch that works has the page talking in about
+// four, so this still almost never fires on a good one — and on a bad one the
+// lines are out while the viewer is still looking at the black screen deciding
+// whether to close it. They land under the generic name, which is the file
+// nobody looks at, but a file nobody looks at beats a buffer nobody can.
 const SERVICE_LOG_BUFFER_MAX = 300;
-const SERVICE_NAME_WAIT_MS = 90000;
+const SERVICE_NAME_WAIT_MS = 20000;
 let _serviceLogBuffer = [];
 let _serviceNameTimer = null;
 
@@ -759,7 +776,7 @@ function emitServiceSyslog(level, message, when, context) {
  * finally sent, so the startup sequence reads in the order it happened even
  * though it arrives in one burst a few seconds later.
  */
-function flushServiceLogBuffer() {
+function flushServiceLogBuffer(reason) {
     if (_serviceNameTimer) {
         try { clearTimeout(_serviceNameTimer); } catch (e) { }
         _serviceNameTimer = null;
@@ -767,6 +784,19 @@ function flushServiceLogBuffer() {
     if (!_serviceLogBuffer.length) return;
     const held = _serviceLogBuffer;
     _serviceLogBuffer = [];
+    // Under the generic name, these lines are about to land in a file that
+    // says nothing about which TV they came from or why they are there. So
+    // they say it themselves, first.
+    if (reason && !haveRealName()) {
+        held.unshift({
+            level: 'WARN',
+            message: 'These lines are filed under the generic name because the page never '
+                + 'identified this TV (' + reason + '). That is itself the finding: the '
+                + 'userscript did not reach the point of sending its first log line.',
+            when: held[0] && held[0].when,
+            context: 'StandaloneService',
+        });
+    }
     for (let i = 0; i < held.length; i++) {
         emitServiceSyslog(held[i].level, held[i].message, held[i].when, held[i].context);
     }
@@ -784,7 +814,9 @@ function sendServiceSyslog(level, message, context) {
             // The page may never tell us — syslog can be off in its settings,
             // or it may not get far enough to send anything. Held lines are
             // worth more under the generic name than not at all.
-            _serviceNameTimer = setTimeout(flushServiceLogBuffer, SERVICE_NAME_WAIT_MS);
+            _serviceNameTimer = setTimeout(function () {
+                flushServiceLogBuffer('waited ' + Math.round(SERVICE_NAME_WAIT_MS / 1000) + 's');
+            }, SERVICE_NAME_WAIT_MS);
             try { if (typeof _serviceNameTimer.unref === 'function') _serviceNameTimer.unref(); } catch (e) { }
         }
         return;
@@ -836,6 +868,24 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
     logServiceEvent('ERROR', `Unhandled rejection: ${reason && reason.stack || reason}`);
 });
+// A launch abandoned sooner than the wait above still has something to say.
+// Best effort by nature: the send is a UDP datagram and the process may not
+// live long enough to put it on the wire. It costs nothing to try, and the
+// launches worth seeing are exactly the ones that end this way.
+['SIGTERM', 'SIGINT', 'SIGHUP'].forEach(function (signal) {
+    try {
+        process.on(signal, function () {
+            try { flushServiceLogBuffer('process got ' + signal); } catch (e) { }
+            process.exit(0);
+        });
+    } catch (e) { }
+});
+try {
+    process.on('exit', function () {
+        try { flushServiceLogBuffer('process exiting'); } catch (e) { }
+    });
+} catch (e) { }
+
 logServiceEvent('INFO', `Standalone service process starting (node ${process.version})`);
 
 // ── Now the requires that previously ran before any of the above existed ──
