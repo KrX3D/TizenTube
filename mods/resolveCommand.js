@@ -11,7 +11,7 @@ import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo, shareVideo, sharePlaylist } from './features/qrShare.js';
 import { showBrowseTileMenu } from './ui/browseTileMenu.js';
-import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken, addVideoToPlaylist } from './utils/innerTubeCalls.js';
+import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken, addVideoToPlaylist, findFeedbackToken } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
@@ -675,12 +675,48 @@ async function markFeedback(parameters, tokenIndex, showReasons) {
             return;
         }
 
-        const buttons = reasons.map((reason) => buttonItem(
-            { title: extractFeedbackText(reason.title) },
+        // reason.title and reason.token are where these used to be.
+        //
+        // reisxd/TizenTube#720 reports that YouTube now wraps each reason in a
+        // dismissalReasonTextRenderer, with the label under `text` and the
+        // token under feedback.feedbackEndpoint.feedbackToken. Read the old
+        // way, that gives a dialog of blank rows that do nothing when pressed:
+        // extractFeedbackText(undefined) is the empty string, and a
+        // FEEDBACK_REASON carrying token: undefined cannot be sent. Both are
+        // read now, and the token by searching rather than by naming a path —
+        // findFeedbackToken already exists for exactly this, because the shape
+        // has moved before and the panel tokens are found the same way.
+        const readReason = (reason) => {
+            const wrapped = reason && reason.dismissalReasonTextRenderer;
+            const label = extractFeedbackText((wrapped && wrapped.text) || (reason && reason.title));
+            const token = (reason && typeof reason.token === 'string' && reason.token)
+                || findFeedbackToken(reason)
+                || null;
+            return { label, token };
+        };
+
+        const readable = reasons.map(readReason).filter((entry) => entry.label && entry.token);
+        if (readable.length !== reasons.length) {
+            // A row with no label or no token is worse than no row: it is a
+            // dialog that looks like it works. Said out loud so the next shape
+            // change is a line in a capture rather than a silent blank.
+            appendFileOnlyLog('feedback.reasonUnreadable', {
+                reasons: reasons.length,
+                readable: readable.length,
+                keys: reasons.map((reason) => Object.keys(reason || {})[0] || '?'),
+            });
+        }
+        if (!readable.length) {
+            showToast('TizenTube', t('toasts.feedbackSent'));
+            return;
+        }
+
+        const buttons = readable.map((entry) => buttonItem(
+            { title: entry.label },
             null,
             [
                 { signalAction: { signal: 'POPUP_BACK' } },
-                { customAction: { action: 'FEEDBACK_REASON', parameters: { token: reason.token } } }
+                { customAction: { action: 'FEEDBACK_REASON', parameters: { token: entry.token } } }
             ]
         ));
         showModal(extractFeedbackText(dismissal.dismissalReasonsPrompt), overlayPanelItemListRenderer(buttons), 'tt-feedback-reasons');

@@ -51,6 +51,9 @@ const PREFIX_CATEGORY = {
   membersOnly: 'filters', survey: 'filters', channelShelf: 'filters',
   specialPlaylist: 'filters', libraryTab: 'filters', duplicate: 'filters',
   channelHider: 'filters', musicShelf: 'filters', aggregateShelf: 'filters',
+  // Not interested and Don't recommend channel, which is what the filters
+  // category covers on the response side too.
+  feedback: 'filters',
   badge: 'filters', badgedVideo: 'filters', filters: 'filters',
 
   shelf: 'shelves', shelfItem: 'shelves', processShelves: 'shelves',
