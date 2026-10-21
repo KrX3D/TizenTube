@@ -68,9 +68,14 @@ function note(request) {
     try {
         const payload = request && request.payload;
         if (!payload) return;
+        // From the XHR hook there is no request object to read an identity
+        // from, only a body — so that field says "not known here" rather than
+        // "no identity", which are different things.
+        const identityKnown = Object.prototype.hasOwnProperty.call(request, 'identity')
+            || Object.prototype.hasOwnProperty.call(request, 'path');
         const shape = shapeOf(payload, 0);
         const mine = !!window.__ttMarkWatchedInFlight;
-        const signature = (mine ? 'mine|' : 'app|') + JSON.stringify(shape);
+        const signature = (mine ? 'mine|' : 'app|') + (identityKnown ? 'client|' : 'xhr|') + JSON.stringify(shape);
         if (_seen[signature] || _shapeCount >= MAX_SHAPES) return;
         _seen[signature] = true;
         _shapeCount++;
@@ -79,7 +84,8 @@ function note(request) {
             mine,
             // No `request &&` here: the early return above already proved it,
             // since a falsy request could not have produced a payload.
-            hasIdentity: !!request.identity,
+            hasIdentity: identityKnown ? !!request.identity : null,
+            via: identityKnown ? 'client' : 'xhr',
             keys: Object.keys(payload).sort(),
             shape,
         });
@@ -109,6 +115,58 @@ function wrap(client) {
     return true;
 }
 
+/**
+ * The same, at the XHR layer, which is the only place the app's own request
+ * can be seen.
+ *
+ * The client wrapper caught ours and nothing else:
+ *
+ *   playerRequest.shape {"mine":true,"hasIdentity":true,
+ *     "keys":["contentCheckOk","params","playbackContext","racyCheckOk","videoId"]}
+ *
+ * One line, and no mine:false to compare it against. The app does not reach
+ * /player through KabukiInnerTubeClient.fetch — whatever it uses, wrapping
+ * that one client cannot see it, and a comparison with nothing on the other
+ * side is not a comparison.
+ *
+ * XMLHttpRequest is below all of it. Cobalt's fetch is a polyfill over XHR,
+ * so one hook here catches both however the request was made. The body is
+ * read, shaped and dropped; the request is not touched.
+ */
+function watchXhr() {
+    try {
+        const XHR = window.XMLHttpRequest;
+        if (!XHR || !XHR.prototype || XHR.prototype.__ttShapeWatched) return false;
+        const open = XHR.prototype.open;
+        const send = XHR.prototype.send;
+        if (typeof open !== 'function' || typeof send !== 'function') return false;
+
+        XHR.prototype.open = function (method, url) {
+            try { this.__ttUrl = String(url || ''); } catch (_) { }
+            return open.apply(this, arguments);
+        };
+
+        XHR.prototype.send = function (body) {
+            try {
+                if (this.__ttUrl && this.__ttUrl.indexOf(PLAYER_PATH) !== -1 && typeof body === 'string') {
+                    // Only a JSON body is shaped. Anything else is not the
+                    // payload this is about, and parsing it would be a
+                    // guess at someone else's format.
+                    if (body.charAt(0) === '{') {
+                        note({ payload: JSON.parse(body) });
+                    }
+                }
+            } catch (_) { }
+            return send.apply(this, arguments);
+        };
+
+        XHR.prototype.__ttShapeWatched = true;
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 function innerTubeClient() {
     try {
         const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
@@ -118,6 +176,16 @@ function innerTubeClient() {
     }
 }
 
+// The XHR hook goes on at once. It needs nothing from the app, and the app's
+// own first player request can come before the client is even reachable —
+// which is one reason the client wrapper never saw one.
+if (watchXhr()) {
+    appendFileOnlyLog('playerRequest.watchingXhr', {});
+}
+
+// The client wrapper stays as well. It is the one that can say an identity
+// went with the request, which the body alone cannot.
+//
 // The client appears some way into startup, and the app's first player request
 // follows soon after — so this waits for it rather than racing it, and stops
 // as soon as it has wrapped one.
@@ -137,4 +205,4 @@ const waiting = setInterval(() => {
 }, WAIT_EVERY_MS);
 try { if (typeof waiting.unref === 'function') waiting.unref(); } catch (_) { }
 
-export { shapeOf, wrap };
+export { shapeOf, wrap, watchXhr };
