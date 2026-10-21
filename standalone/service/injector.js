@@ -175,6 +175,17 @@ let _pinnedUrl = null;
 let _pinnedVersion = null;
 let _pinnedAt = 0;
 
+// Supplied by index.js, which owns the filesystem side. Absent until it is
+// set, and everything below treats that as "no copy", so the order falls back
+// to exactly what it was before.
+let _cache = null;
+
+function setUserScriptCache(cache) {
+    _cache = (cache && typeof cache.read === 'function' && typeof cache.write === 'function')
+        ? cache
+        : null;
+}
+
 /**
  * The URL to fetch the userscript from, pinned to a version when possible.
  *
@@ -423,20 +434,46 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
             // falls back to the unversioned one. That is slightly stale by
             // design — jsDelivr caches its idea of "latest" for twelve hours —
             // and slightly stale is worth far more than an error page.
+            // The kept copy, or the unversioned URL if there is none.
+            //
+            // In that order, because the unversioned URL is the only thing
+            // here whose age is unknown — jsDelivr caches "latest" for twelve
+            // hours — while a kept copy is some exact release that was
+            // fetched and size-checked. An older release that says which one
+            // it is beats a newer-looking one that does not.
+            const afterPinnedFailed = (src, why) => {
+                const kept = _cache ? _cache.read() : null;
+                if (kept) {
+                    if (typeof relayLog === 'function') {
+                        relayLog({
+                            ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
+                            message: 'pinned userscript ' + src.version + ' ' + why
+                                + ' Using the copy kept on this TV instead: ' + kept.version
+                                + (kept.version === src.version
+                                    ? ' — the same release, so nothing is lost.'
+                                    : ' — an older release than the ' + src.version + ' this install expects.')
+                        });
+                    }
+                    return Promise.resolve(kept.source);
+                }
+                if (typeof relayLog === 'function') {
+                    relayLog({
+                        ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
+                        message: 'pinned userscript ' + src.version + ' ' + why
+                            + ' No copy is kept on this TV yet, so falling back to the unversioned URL,'
+                            + ' whose age is unknown — jsDelivr caches it for twelve hours.'
+                    });
+                }
+                return fetchUserScript({ url: USERSCRIPT_UNPINNED, version: null, pinned: false }, false);
+            };
+
             const fetchUserScript = (src, allowFallback) => {
                 return fetch(src.url).then((res) => {
                     if (!res || !res.ok) {
                         const status = res ? res.status : 'no response';
                         if (allowFallback && src.pinned) {
-                            if (typeof relayLog === 'function') {
-                                relayLog({
-                                    ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
-                                    message: 'pinned userscript ' + src.version + ' gave HTTP ' + status
-                                        + ' at ' + src.url + ' — jsDelivr has probably not pulled it from npm yet.'
-                                        + ' Falling back to the unversioned URL, which may be a release behind.'
-                                });
-                            }
-                            return fetchUserScript({ url: USERSCRIPT_UNPINNED, version: null, pinned: false }, false);
+                            return afterPinnedFailed(src, 'gave HTTP ' + status + ' at ' + src.url
+                                + ' — jsDelivr has probably not pulled it from npm yet.');
                         }
                         throw new Error('userscript fetch failed with HTTP ' + status + ' at ' + src.url);
                     }
@@ -445,15 +482,8 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                         // this short is not the bundle, which is megabytes.
                         if (!text || text.length < 10000) {
                             if (allowFallback && src.pinned) {
-                                if (typeof relayLog === 'function') {
-                                    relayLog({
-                                        ts: new Date().toISOString(), level: 'WARN', context: 'Injector',
-                                        message: 'pinned userscript ' + src.version + ' returned only '
-                                            + (text ? text.length : 0) + ' bytes, which cannot be the bundle.'
-                                            + ' Falling back to the unversioned URL.'
-                                    });
-                                }
-                                return fetchUserScript({ url: USERSCRIPT_UNPINNED, version: null, pinned: false }, false);
+                                return afterPinnedFailed(src, 'returned only '
+                                    + (text ? text.length : 0) + ' bytes, which cannot be the bundle.');
                             }
                             throw new Error('userscript body was only ' + (text ? text.length : 0) + ' bytes');
                         }
@@ -465,6 +495,12 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                                 message: 'userscript ' + (src.version || 'unpinned') + ' fetched from '
                                     + src.url + ' (' + text.length + ' bytes)'
                             });
+                        }
+                        // Kept only for a pinned fetch: a copy is useful
+                        // because it is a known release, and the unversioned
+                        // URL cannot say which one it served.
+                        if (src.pinned && src.version && _cache) {
+                            try { _cache.write(src.version, text); } catch (e) { }
                         }
                         return text;
                     });
@@ -918,6 +954,10 @@ function startDebugger(args, relayLog, sessionId, attempt) {
 
 module.exports = {
     setSyslogRelay,
+    // Without this on the list, index.js's typeof check quietly found nothing
+    // and the copy was never kept or read — a no-op that would have looked
+    // exactly like the cache not helping.
+    setUserScriptCache,
     userScriptSource,
     // The pinned URL if one has been resolved, for callers that cannot wait.
     lastPinnedUserScriptUrl: function () { return _pinnedUrl; },

@@ -330,7 +330,7 @@ const RECEIVER_STORE_FILE = 'tt-log-receiver.json';
 //   fs.mkdirSync(dir, { recursive: true }) needs Node 10.12. One TV's service
 //   runtime is Node v4.4.3, where the options object is not understood and
 //   nothing nested can be created at all.
-function receiverStoreCandidates() {
+function storeCandidates(file) {
     const out = [];
     try {
         const appId = tizenAppId();
@@ -338,13 +338,17 @@ function receiverStoreCandidates() {
         const path = require('path');
         // The app's own home, when the runtime says where it is.
         const home = process.env.HOME;
-        if (home) out.push(path.join(home, 'apps_rw', appId, 'data', RECEIVER_STORE_FILE));
-        out.push(path.join('/opt/usr/home/owner/apps_rw', appId, 'data', RECEIVER_STORE_FILE));
+        if (home) out.push(path.join(home, 'apps_rw', appId, 'data', file));
+        out.push(path.join('/opt/usr/home/owner/apps_rw', appId, 'data', file));
         // Correct on firmware old enough to still keep application data here,
         // and harmless where it is read-only: the probe below finds out.
-        out.push(path.join('/opt/usr/apps', appId, 'data', RECEIVER_STORE_FILE));
+        out.push(path.join('/opt/usr/apps', appId, 'data', file));
     } catch (e) { }
     return out;
+}
+
+function receiverStoreCandidates() {
+    return storeCandidates(RECEIVER_STORE_FILE);
 }
 
 // The one that answered, so the choice is made once per run.
@@ -583,6 +587,109 @@ function relayLog(entry, host, port) {
         req.write(body);
         req.end();
     } catch (e) { }
+}
+
+// ── The userscript, kept on the TV ───────────────────────────────────────────
+//
+// The pinned URL is immutable and therefore always correct; the trouble is
+// that it is not always there. jsDelivr has to pull a new version from npm,
+// and until it has, the pinned path answers 503 — which is what happened on
+// the 5.5 TV at 15:36:49 with 1.31.180 freshly installed.
+//
+// The fallback for that was the unversioned URL, and the unversioned URL is
+// the one thing here whose age is unknown: jsDelivr caches its idea of
+// "latest" for twelve hours, so it can serve a build several releases old and
+// say nothing. That TV then ran a two-entry playlist menu while 1.31.180 was
+// installed, and two rounds of testing were spent on a build nobody meant to
+// be running.
+//
+// A copy on the TV is better than that, because its provenance is known: it is
+// a pinned version that was fetched and size-checked at some point, so it is
+// some exact release rather than an unknown one. Hence the order — pinned, the
+// local copy, and the unversioned URL only when there is no local copy to use,
+// which is the first launch after an install and nothing else.
+const USERSCRIPT_CACHE_FILE = 'tt-userscript.js';
+
+// The same floor the network path uses. A truncated write is as useless as an
+// error page, and this is the one place that can tell.
+const USERSCRIPT_MIN_BYTES = 10000;
+
+// A version marker on the first line, so a copy can say which release it is.
+// A comment rather than a wrapper, so the file stays directly injectable.
+const USERSCRIPT_CACHE_MARK = '//tt-userscript-version:';
+
+let _userScriptCachePath = null;
+
+/**
+ * Where the copy lives, or null if nowhere is writable.
+ *
+ * Decided next to the receiver store when that has already answered, since a
+ * directory that took one verified write will take another; otherwise probed
+ * the same way, because which path is writable is firmware-dependent.
+ */
+function userScriptCachePath() {
+    if (_userScriptCachePath) return _userScriptCachePath;
+    try {
+        const path = require('path');
+        if (_receiverStorePath) {
+            _userScriptCachePath = path.join(path.dirname(_receiverStorePath), USERSCRIPT_CACHE_FILE);
+            return _userScriptCachePath;
+        }
+        const candidates = storeCandidates(USERSCRIPT_CACHE_FILE);
+        if (candidates.length) {
+            _userScriptCachePath = candidates[0];
+            return _userScriptCachePath;
+        }
+    } catch (e) { }
+    return null;
+}
+
+/** Keep this version's bundle, so a 503 next time costs nothing. */
+function writeUserScriptCache(version, source) {
+    if (!version || !source || source.length < USERSCRIPT_MIN_BYTES) return false;
+    const target = userScriptCachePath();
+    if (!target) return false;
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        mkdirpSync(fs, path.dirname(target));
+        // Written beside the real name and moved into place, so a write cut
+        // short by the app closing cannot leave half a bundle to be injected
+        // on the next launch.
+        const temp = target + '.part';
+        fs.writeFileSync(temp, USERSCRIPT_CACHE_MARK + version + '\n' + source, { mode: 0o600 });
+        try { fs.unlinkSync(target); } catch (e) { }
+        fs.renameSync(temp, target);
+        logServiceEvent('INFO', 'userscript ' + version + ' kept at ' + target
+            + ' (' + source.length + ' bytes), for a launch the CDN cannot serve');
+        return true;
+    } catch (err) {
+        logServiceEvent('WARN', 'userscript could not be kept at ' + target + ': ' + (err && err.message || err));
+        return false;
+    }
+}
+
+/** The kept copy, as { version, source }, or null. */
+function readUserScriptCache() {
+    const target = userScriptCachePath();
+    if (!target) return null;
+    try {
+        const fs = require('fs');
+        const text = fs.readFileSync(target, 'utf8');
+        if (!text || text.length < USERSCRIPT_MIN_BYTES) return null;
+        const firstBreak = text.indexOf('\n');
+        if (firstBreak === -1 || text.lastIndexOf(USERSCRIPT_CACHE_MARK, 0) !== 0) {
+            // Written by something else, or by a version of this that did not
+            // mark it. Not injected, because its release is then unknown and
+            // an unknown release is the problem being solved.
+            return null;
+        }
+        const version = text.slice(USERSCRIPT_CACHE_MARK.length, firstBreak).trim();
+        if (!version) return null;
+        return { version: version, source: text };
+    } catch (err) {
+        return null;
+    }
 }
 
 const SYSLOG_DEFAULT_FACILITY = 16;
@@ -955,7 +1062,17 @@ try {
     // them. Four days of syslog on two TVs contain not one StandaloneService
     // line, which is how it was finally noticed.
     if (injector && typeof injector.setSyslogRelay === 'function') {
-        injector.setSyslogRelay(function (frame, host, port, report) {
+        // The injector does the fetching; the filesystem knowledge stays here,
+    // where which-path-is-writable is already solved and verified.
+    try {
+        if (typeof injector.setUserScriptCache === 'function') {
+            injector.setUserScriptCache({ read: readUserScriptCache, write: writeUserScriptCache });
+        }
+    } catch (err) {
+        logServiceEvent('WARN', 'userscript cache not installed: ' + (err && err.stack || err));
+    }
+
+    injector.setSyslogRelay(function (frame, host, port, report) {
             noteSyslogTarget(host, port, frame);
             relaySyslog(frame, host, port, report);
         });
