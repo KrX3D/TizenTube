@@ -10,6 +10,7 @@ import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/
 import { sendSyslogTest } from './features/syslog.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo, shareVideo, sharePlaylist } from './features/qrShare.js';
+import { showBrowseTileMenu } from './ui/browseTileMenu.js';
 import { requestNextAndNavigateChannel, getFeedbackPanelTokens, sendFeedbackToken, addVideoToPlaylist } from './utils/innerTubeCalls.js';
 import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
@@ -348,6 +349,19 @@ export function patchResolveCommand() {
                 // apart: the handler throws, it returns without acting, or it
                 // acts and draws nothing. Only menu commands are wrapped, so
                 // this costs nothing for the thousands of other commands.
+                // A browse tile's menu is ours to draw. The app accepts the
+                // command, returns true and issues no openPopupAction for
+                // these — eight attempts at shaping the command could not
+                // change that, because what it objects to is the tile, and a
+                // command cannot reach that. So this one never goes through.
+                if (cmd?.showMenuCommand?.__ttBrowseTileMenu) {
+                    if (showBrowseTileMenu(cmd)) return true;
+                    // Drawing failed, which should not happen. Let the app
+                    // have it rather than swallow the press entirely.
+                    appendFileOnlyLog('longPress.browseMenuFellBack', {
+                        contentId: cmd.showMenuCommand.contentId || null,
+                    });
+                }
                 if (!cmd?.showMenuCommand) return ogResolve.call(this, cmd, _);
                 try {
                     const outcome = ogResolve.call(this, cmd, _);

@@ -572,6 +572,12 @@ export function browseTileLongPressData(info) {
     return {
         clickTrackingParams: null,
         showMenuCommand: {
+            // Drawn by browseTileMenu.js rather than by the app, which has
+            // never once put one of these on screen. resolveCommand.js looks
+            // for this and takes over; everything below is still what it reads
+            // the header and the rows from, so there is one definition of what
+            // a playlist tile offers.
+            __ttBrowseTileMenu: true,
             // A video id where one can be had, not the browse id.
             //
             // Captured 20 October, a History video tile and a playlist tile on
