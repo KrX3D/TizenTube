@@ -99,14 +99,43 @@ function identityService() {
  * whether this route is usable.
  */
 function describeFeedback(node, depth) {
-    const out = { tokens: 0, labels: [], keys: [] };
+    // paths as well as labels. A label can be absent — the first capture had
+    // three tokens and not one label — but the chain of keys leading to a
+    // token is always there, and it identifies the action structurally:
+    // a token under engagementPanels is a different thing from one under an
+    // overlay or a menu, whatever either is called.
+    const out = { tokens: 0, labels: [], keys: [], paths: [] };
+    const MAX_PATHS = 6;
 
-    /** Whatever reads as this node's own label, or null. */
+    /**
+     * Whatever reads as this node's own label, or null.
+     *
+     * Widened after the first capture came back with three tokens and no
+     * labels at all: title and label were the only two fields read, and
+     * whatever carries the text beside these tokens is neither. Every field
+     * here is a place the app puts a human-readable string, and the first one
+     * found wins.
+     */
     const labelOf = (value) => {
-        const title = value.title;
-        const text = (title && (title.simpleText
-            || (title.runs && title.runs[0] && title.runs[0].text)))
-            || (typeof value.label === 'string' ? value.label : null);
+        const fromNode = (node) => {
+            if (!node) return null;
+            if (typeof node === 'string') return node;
+            return node.simpleText
+                || (node.runs && node.runs[0] && node.runs[0].text)
+                || (node.content && typeof node.content === 'string' ? node.content : null)
+                || null;
+        };
+        const text = fromNode(value.title)
+            || fromNode(value.text)
+            || fromNode(value.label)
+            || fromNode(value.defaultText)
+            || fromNode(value.buttonText)
+            || fromNode(value.headline)
+            || fromNode(value.message)
+            || (value.accessibility && value.accessibility.accessibilityData
+                && value.accessibility.accessibilityData.label)
+            || (value.accessibilityData && value.accessibilityData.label)
+            || null;
         return text ? String(text).slice(0, 40) : null;
     };
 
@@ -115,10 +144,12 @@ function describeFeedback(node, depth) {
     // onTap.innertubeCommand.feedbackEndpoint and the title on the list item
     // several levels above it. Reading only the token's own object found the
     // token every time and never once named it.
-    const walk = (value, at, parentKey, inherited) => {
+    const walk = (value, at, parentKey, inherited, trail) => {
         if (!value || typeof value !== 'object' || at > 12) return;
         if (Array.isArray(value)) {
-            for (let i = 0; i < value.length; i++) walk(value[i], at + 1, parentKey, inherited);
+            for (let i = 0; i < value.length; i++) {
+                walk(value[i], at + 1, parentKey, inherited, trail);
+            }
             return;
         }
         const label = labelOf(value) || inherited;
@@ -126,11 +157,20 @@ function describeFeedback(node, depth) {
             out.tokens++;
             if (parentKey && out.keys.indexOf(parentKey) === -1) out.keys.push(parentKey);
             if (label && out.labels.indexOf(label) === -1) out.labels.push(label);
+            if (out.paths.length < MAX_PATHS) {
+                const path = trail.join('.');
+                if (out.paths.indexOf(path) === -1) out.paths.push(path);
+            }
         }
         const names = Object.keys(value);
-        for (let i = 0; i < names.length; i++) walk(value[names[i]], at + 1, names[i], label);
+        for (let i = 0; i < names.length; i++) {
+            // Array indices are left out of the trail: which of four overlays
+            // carried it is noise, and including them made two tokens of the
+            // same kind read as two different shapes.
+            walk(value[names[i]], at + 1, names[i], label, trail.concat([names[i]]));
+        }
     };
-    walk(node, depth || 0, null, null);
+    walk(node, depth || 0, null, null, []);
     return out;
 }
 
