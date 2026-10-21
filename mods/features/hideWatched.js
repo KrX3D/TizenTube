@@ -164,6 +164,58 @@ if (!window.__ttHideWatchedLocationTrackingInit) {
 
 // ── Watch progress extraction ─────────────────────────────────────────────────
 
+// Shapes of tiles already reported as carrying no progress, so a shelf of
+// thirty identical ones reports once. Capped, because the signature includes
+// key names from the response and a long session should not grow it without
+// bound.
+const _noProgressShapes = new Set();
+const MAX_NO_PROGRESS_SHAPES = 25;
+
+/**
+ * What a tile with no readable progress actually carries.
+ *
+ * Reported: watched videos are still shown on the subscriptions page. The
+ * summary says the filter ran and did its job — 34 tiles removed across 20
+ * calls — and that 33 more came back with nothing to judge them by. Those are
+ * the ones still on screen, and the question is whether YouTube said nothing
+ * or said it somewhere this does not look.
+ *
+ * Only the key names are logged, never the values: enough to name a field
+ * worth reading, and nothing that describes what was watched.
+ */
+function noteNoProgressShape(item, pageName) {
+  try {
+    const tile = item && item.tileRenderer;
+    if (!tile) return;
+    const overlays = (tile.header && tile.header.tileHeaderRenderer && tile.header.tileHeaderRenderer.thumbnailOverlays)
+      || tile.thumbnailOverlays || [];
+    const overlayKeys = [];
+    for (let i = 0; i < overlays.length; i++) {
+      const name = Object.keys(overlays[i] || {})[0];
+      if (name && overlayKeys.indexOf(name) === -1) overlayKeys.push(name);
+    }
+    const badgeStyles = [];
+    const badges = tile.badges || [];
+    for (let i = 0; i < badges.length; i++) {
+      const style = badges[i] && badges[i].metadataBadgeRenderer && badges[i].metadataBadgeRenderer.style;
+      if (style && badgeStyles.indexOf(style) === -1) badgeStyles.push(String(style));
+    }
+    const signature = pageName + '|' + overlayKeys.join(',') + '|' + badgeStyles.join(',') + '|' + Object.keys(tile).sort().join(',');
+    if (_noProgressShapes.has(signature) || _noProgressShapes.size >= MAX_NO_PROGRESS_SHAPES) return;
+    _noProgressShapes.add(signature);
+    appendFileOnlyLog('hideVideo.noProgressShape', {
+      pageName,
+      overlays: overlayKeys,
+      badges: badgeStyles,
+      tileKeys: Object.keys(tile).sort(),
+      // Named explicitly because their absence is the whole question: these
+      // are the two fields read directly off the tile.
+      hasWatchProgressPercentage: Object.prototype.hasOwnProperty.call(item, 'watchProgressPercentage'),
+      hasPercentDurationWatched: Object.prototype.hasOwnProperty.call(item, 'percentDurationWatched'),
+    });
+  } catch (_) { }
+}
+
 // What the response itself says about progress, or null if it says nothing.
 function responseWatchPercent(item) {
   const overlays = item?.tileRenderer?.header?.tileHeaderRenderer?.thumbnailOverlays
@@ -321,6 +373,10 @@ export function hideVideo(items, pageHint = null) {
       if (pct === null) {
         why.noProgress++;
         appendFileOnlyLog('hideVideo.noProgress', { pageName, videoId });
+        // Once per distinct tile shape, which is what turns "nothing to judge
+        // it by" into either "YouTube said nothing" or "we are not reading
+        // the field it said it in".
+        noteNoProgressShape(item, pageName);
         return true;
       }
       const keep = pct <= threshold;
