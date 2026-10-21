@@ -151,6 +151,10 @@ const VERBATIM_LABELS = [
   // fromHistory is the whole point of this line: hidden because the account
   // watched it, or hidden because a percentage said so, are different claims.
   'hideVideo.removed',
+  // The whole of watchHistory: how many ids, over how many pages, and what
+  // each page gave. A count on its own cannot say whether a thin result is a
+  // thin history or a walk that stopped early.
+  'watchHistory.',
   'hideVideo.pageNotEnabled',
   // The three lines anyone reads when playback misbehaves. Basic mode was
   // dropping movedSec, ratio and stuck from the heartbeat and lastedMs from a
