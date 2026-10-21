@@ -138,6 +138,7 @@ const VERBATIM_LABELS = [
   'longPress.menuHandled',
   'longPress.menuThrew',
   'longPress.browseMenuSkipped',
+  'longPress.browseMenuThin',
   'addLongPress.browseTile',
   'addLongPress.browseTileRejected',
   // The whole of markWatched: every line it writes is a record of why a

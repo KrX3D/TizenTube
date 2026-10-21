@@ -1902,6 +1902,12 @@ function addLongPress(items) {
               kind: browseInfo.kind,
               id: browseInfo.id,
               entries: browseMenu.showMenuCommand.menu.menuRenderer.items.length,
+              // Which ones, not just how many. A count alone could not
+              // distinguish a menu that was built short from one the user's
+              // own long press settings had filtered, and that distinction
+              // was the answer: entries reusing the video menu's ids were
+              // being removed by its hidden list.
+              ids: browseMenu.showMenuCommand.menu.menuRenderer.items.map((entry) => (entry && entry.__ttMenuId) || null),
               style: item.tileRenderer.style || null,
               page: detectCurrentPage(),
               thumbs: (browseInfo.thumbnails || []).length,
