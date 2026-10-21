@@ -38,6 +38,30 @@
 let lastCount = 0;
 let lastIndex = -1;
 let lastHow = null;
+let lastTag = 0;
+
+// A number stamped on each element the first time it is picked, so two beats
+// can be told apart.
+//
+// The count and the index were not enough, and a capture from 21 October shows
+// why. Alternate beats reported, both with videos:1 and videoIndex:0:
+//
+//   at 1925, buffered 5.5, readyState 4
+//   at 0,    buffered 0,   readyState 0, movedSec -1924.9
+//
+// One element cannot do that. What the app does is tear the player down and
+// build another, so at any instant there is exactly one — and "one element"
+// read as "the same element" because nothing distinguished them. A stamp does.
+let nextTag = 0;
+
+function tagOf(el) {
+    try {
+        if (!el.__ttVideoTag) el.__ttVideoTag = ++nextTag;
+        return el.__ttVideoTag;
+    } catch (_) {
+        return 0;
+    }
+}
 
 /**
  * The element actually playing.
@@ -53,6 +77,7 @@ export function pickVideo() {
     lastCount = 0;
     lastIndex = -1;
     lastHow = null;
+    lastTag = 0;
     let fallback = null;
     let fallbackIndex = -1;
     let fallbackHow = null;
@@ -66,6 +91,7 @@ export function pickVideo() {
             if (usable && !el.paused && el.readyState > 0) {
                 lastIndex = i;
                 lastHow = 'playing';
+                lastTag = tagOf(el);
                 return el;
             }
             if (usable && fallbackHow !== 'hasDuration') {
@@ -81,6 +107,7 @@ export function pickVideo() {
     } catch (_) { }
     lastIndex = fallbackIndex;
     lastHow = fallbackHow;
+    lastTag = fallback ? tagOf(fallback) : 0;
     return fallback;
 }
 
@@ -93,5 +120,8 @@ export function pickVideo() {
  * the fact.
  */
 export function lastPick() {
-    return { videos: lastCount, videoIndex: lastIndex, picked: lastHow };
+    // videoTag is the one that answers "is this the same player as last beat".
+    // videos and videoIndex answer "how many are there", which is a different
+    // question and the one that misled two readings of this.
+    return { videos: lastCount, videoIndex: lastIndex, picked: lastHow, videoTag: lastTag };
 }
