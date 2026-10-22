@@ -157,6 +157,7 @@ const VERBATIM_LABELS = [
   'playerRequest.',
   // The list of startup screens is the entire content of this line.
   'whosWatching.actions',
+  'whosWatching.fired',
   'hideVideo.summary',
   'hideVideo.noProgressShape',
   // fromHistory is the whole point of this line: hidden because the account
