@@ -978,6 +978,14 @@ JSON.parse = function () {
             // nothing that walks items[] can reach it.
             topbar: shapeKeys(r.topbar, 0),
             footer: shapeKeys(r.footer, 0),
+            // startupBehaviours as well, and not only to find the account
+            // row. The other open question is why powering the TV off during
+            // a video asks for the profile on the way back in while powering
+            // it off on a page does not — and a key called startupBehaviours,
+            // arriving in the same response as the account row, is the best
+            // candidate for naming it that has turned up. Two questions, one
+            // capture.
+            startupBehaviours: shapeKeys(r.startupBehaviours, 0),
           });
         }
       } catch (_) { }
