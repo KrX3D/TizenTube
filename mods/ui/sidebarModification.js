@@ -5,9 +5,6 @@ import { appendFileOnlyLog } from '../features/hideWatched.js';
 import { t } from 'i18next';
 import { guideEntryKey, guideEntryHideKeys, guideEntryTitle } from './guideEntryKey.js';
 
-// Reported once per distinct shape rather than per guide response, which
-// arrives on every navigation.
-let _lastGuideShape = '';
 
 // Sidebar (guide) customisation — upstream 2f2c567 / 79195bb.
 //
@@ -125,41 +122,6 @@ function showSetting(settingType, parameters) {
             const guideItems = guide?.items?.[0]?.guideSectionRenderer?.originalItems
                 || guide?.items?.[0]?.guideSectionRenderer?.items
                 || [];
-
-            // Everything in the guide that this loop cannot see.
-            //
-            // Asked for: hide the profile entry that sits above Home and shows
-            // one letter of the account name. Hiding a sidebar entry already
-            // works, but only for an item with a guideEntryRenderer in the
-            // first section — the loop below takes items[0] and skips anything
-            // else without a word. An entry in another section, or built from
-            // another renderer, can therefore be neither hidden nor reported,
-            // which is how this came to be asked rather than found.
-            //
-            // Renderer names only, and deliberately no titles: the entry being
-            // asked about is labelled with the account holder's own name.
-            try {
-                const sections = (guide?.items || []).map((section) => {
-                    const name = Object.keys(section || {})[0] || '?';
-                    const inner = section?.guideSectionRenderer;
-                    const items = (inner?.originalItems || inner?.items || []);
-                    return {
-                        section: name,
-                        items: items.slice(0, 12).map((item) => Object.keys(item || {})[0] || '?'),
-                        count: items.length,
-                    };
-                });
-                const seen = sections.map((s) => s.section + ':' + s.items.join(',')).join('|');
-                if (seen !== _lastGuideShape) {
-                    _lastGuideShape = seen;
-                    appendFileOnlyLog('sidebar.guideShape', {
-                        sections,
-                        // The keys outside items[] entirely, which is where a
-                        // header or an account row would sit.
-                        guideKeys: Object.keys(guide || {}),
-                    });
-                }
-            } catch (err) { }
 
             // Recorded so a capture shows each entry's real shape — Shorts was
             // added to the sidebar for signed-in accounts only, and its exact
