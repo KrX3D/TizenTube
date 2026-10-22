@@ -1,4 +1,5 @@
 import { configChangeEmitter, configRead } from '../config.js';
+import { appendFileOnlyLog } from '../features/hideWatched.js';
 
 configChangeEmitter.addEventListener('configChange', (event) => {
     const { key, value } = event.detail;
@@ -27,6 +28,35 @@ function disableWhosWatching(value) {
 
     const shouldPermanentlyEnable = configRead('permanentlyEnableWhoIsWatchingMenu');
     const date = new Date();
+
+    // Which startup screens this TV actually has, and which of them this code
+    // knows about.
+    //
+    // Reported: powering the TV off on a page and starting it again goes
+    // straight back in, but powering it off during a video asks for the
+    // profile first. Three keys are pushed forward below and evidently none of
+    // them governs that second path — but they are pushed with `&&`, so a key
+    // that is not there is skipped in silence and a key that is there under
+    // another name is never touched at all. Either way the result is the same
+    // screen and no explanation.
+    //
+    // Names only. These are the identifiers of YouTube's own startup
+    // promotions; the values are timestamps and say nothing useful here.
+    try {
+        const known = [
+            'startup-screen-account-selector-with-guest',
+            'whos_watching_fullscreen_zero_accounts',
+            'startup-screen-signed-out-welcome-back',
+        ];
+        const present = Object.keys((LeanbackRecurringActions.data && LeanbackRecurringActions.data.data) || {});
+        appendFileOnlyLog('whosWatching.actions', {
+            enabling: !!value,
+            actions: present,
+            // The ones this file reaches for and did not find, which is the
+            // list to compare against anything new in `actions`.
+            missing: known.filter(function (key) { return present.indexOf(key) === -1; }),
+        });
+    } catch (err) { }
 
     if (!value) {
         try {

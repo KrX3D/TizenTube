@@ -67,6 +67,8 @@ const PREFIX_CATEGORY = {
   dearrow: 'thumbs', thumbs: 'thumbs',
 
   resume: 'player', screenOff: 'player', playerRequest: 'player',
+  // The startup account selector, which is navigation rather than playback.
+  whosWatching: 'nav',
   captionStyle: 'player', player: 'player',
   unwedge: 'player', reload: 'player',
 
@@ -151,6 +153,8 @@ const VERBATIM_LABELS = [
   'markWatched.',
   // The two shapes being compared are the whole content of these lines.
   'playerRequest.',
+  // The list of startup screens is the entire content of this line.
+  'whosWatching.actions',
   'hideVideo.summary',
   'hideVideo.noProgressShape',
   // fromHistory is the whole point of this line: hidden because the account
