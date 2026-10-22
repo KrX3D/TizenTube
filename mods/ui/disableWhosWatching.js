@@ -16,6 +16,14 @@ let interval;
 const FIRING_WINDOW_MS = 30000;
 let firingTimer = null;
 
+// The keys this file writes, and therefore the ones whose movement says
+// nothing about YouTube.
+const OURS = [
+    'startup-screen-account-selector-with-guest',
+    'whos_watching_fullscreen_zero_accounts',
+    'startup-screen-signed-out-welcome-back',
+];
+
 /** Seconds since each action last fired, by name. */
 function ageOf(data, names) {
     const out = {};
@@ -39,6 +47,23 @@ function watchForFiring(dataAtStartup) {
     if (firingTimer) return;
     const before = {};
     const names = Object.keys(dataAtStartup);
+    // The three keys this file writes are left out of the comparison
+    // altogether.
+    //
+    // The first capture of this reported all three as having "fired", seven
+    // days into the future:
+    //
+    //   fired [{"action":"whos_watching_fullscreen_zero_accounts","atSec":608400},
+    //          {"action":"startup-screen-signed-out-welcome-back","atSec":608400},
+    //          {"action":"startup-screen-account-selector-with-guest","atSec":608400}]
+    //
+    // That is this file's own doing, seen from the outside: the snapshot was
+    // taken before the pushes and the pushes then changed exactly those three.
+    // The call now happens after them, which fixes the ordering — and these
+    // three are skipped as well, because the permanent-enable path rewrites
+    // them once a minute and no comparison can tell that from a real firing.
+    // Their suppression is visible in agoSec being negative; it does not need
+    // to be visible here too.
     for (let i = 0; i < names.length; i++) {
         const fired = dataAtStartup[names[i]] && dataAtStartup[names[i]].lastFired;
         before[names[i]] = typeof fired === 'number' ? fired : null;
@@ -60,6 +85,7 @@ function watchForFiring(dataAtStartup) {
                     appeared.push(name);
                     return;
                 }
+                if (OURS.indexOf(name) !== -1) return;
                 if (before[name] !== now) {
                     // When it fired, relative to this launch, which is the
                     // number that lines it up against the screen appearing.
@@ -134,20 +160,6 @@ function disableWhosWatching(value) {
             agoSec: ageOf(data, present),
         });
 
-        // And again once the startup screens have had their moment.
-        //
-        // This function runs at module load, before any of them fire, so the
-        // ages above describe the previous session. The one that produces the
-        // screen fires during startup — so the same reading a little later,
-        // compared against this one, names it: its age drops from hours to
-        // seconds while everything else only grows.
-        //
-        // Reported: powering the TV off on a page resumes cleanly, powering it
-        // off during a video asks for the profile — but powering it off during
-        // a video and back on after a few seconds also resumes cleanly. So
-        // whatever fires is time-dependent, which is what makes a before and
-        // after worth having rather than a single list.
-        watchForFiring(data);
     } catch (err) { }
 
     if (!value) {
@@ -201,4 +213,31 @@ function disableWhosWatching(value) {
     }
 }
 
+/**
+ * Watch for a firing after whatever this file was going to write.
+ *
+ * Separate from disableWhosWatching so the snapshot is taken once the pushes
+ * are done, which is the whole correction: a snapshot from before them sees
+ * them as YouTube firing three screens at once, seven days in the future.
+ */
+function watchAfterSettling() {
+    try {
+        const raw = localStorage['yt.leanback.default::recurring_actions'];
+        if (!raw) return;
+        const data = (JSON.parse(raw).data || {}).data || {};
+        // This function runs at module load, before the startup screens fire,
+        // so what is read here describes the state they will fire from. The
+        // one that produces the screen fires during startup, and the reading
+        // thirty seconds later names it.
+        //
+        // Reported: powering off on a page resumes cleanly, powering off
+        // during a video asks for the profile — and powering off during a
+        // video and back on a few seconds later also resumes cleanly. So
+        // whatever fires is time-dependent, which is what makes a before and
+        // after worth having rather than a longer list of names.
+        watchForFiring(data);
+    } catch (err) { }
+}
+
 disableWhosWatching(configRead('enableWhoIsWatchingMenu'));
+watchAfterSettling();
