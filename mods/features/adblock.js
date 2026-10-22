@@ -844,6 +844,8 @@ let _lastLoggedParseKey = null;
 // that; nested calls now just return the parsed result untouched.
 let _parseDepth = 0;
 let _lastLoggedHomeKeySet = null;
+// Reported once per distinct shape: the guide arrives on every navigation.
+let _lastLoggedGuideShape = null;
 let _lastLoggedNonTileKeySet = null;
 let _lastLoggedNonShelfKeySet = null;
 JSON.parse = function () {
@@ -906,6 +908,45 @@ JSON.parse = function () {
         _lastLoggedHomeKeySet = keySet;
         appendFileOnlyLog('home.responseShape', { keys: Object.keys(r) });
       }
+    }
+
+    // The sidebar's own response, every section of it.
+    //
+    // Asked for: hide the profile entry above Home that shows one letter of
+    // the account name. The first attempt logged this from the sidebar
+    // settings screen, which only runs when that screen is opened — so a
+    // capture of someone opening pages, which is exactly what was asked for
+    // and done, contained nothing at all. This sits in the parse hook every
+    // response passes through instead.
+    //
+    // Not in customGuideAction.js, which is where the guide is handled: that
+    // file wraps JSON.parse early and keeps its imports deliberately few, and
+    // pulling the logger in there could change when it loads.
+    //
+    // Renderer names only, never titles: the entry being looked for carries
+    // the account holder's own name.
+    if (r && !Array.isArray(r) && Array.isArray(r.items) && r.items[0]?.guideSectionRenderer) {
+      try {
+        const sections = r.items.map((section) => {
+          const inner = section?.guideSectionRenderer;
+          const items = (inner?.originalItems || inner?.items || []);
+          return {
+            section: Object.keys(section || {})[0] || '?',
+            count: items.length,
+            items: items.slice(0, 14).map((item) => Object.keys(item || {})[0] || '?'),
+          };
+        });
+        const signature = JSON.stringify(sections) + '|' + Object.keys(r).sort().join(',');
+        if (signature !== _lastLoggedGuideShape) {
+          _lastLoggedGuideShape = signature;
+          appendFileOnlyLog('sidebar.guideShape', {
+            sections,
+            // Anything outside items[] — where a header or an account row
+            // would sit, and the reason a loop over items[] found nothing.
+            guideKeys: Object.keys(r),
+          });
+        }
+      } catch (_) { }
     }
 
     if (Array.isArray(r)) {
