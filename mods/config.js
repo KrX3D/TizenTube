@@ -110,6 +110,9 @@ const defaultConfig = {
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE', 'SEARCH'],
   sidebarContentsOrder: [],
   disableChannelsOnSidebar: false,
+  // The account row above Home. Off by default: it is the only way to switch
+  // account from the sidebar, so nobody should lose it without asking.
+  hideAccountOnSidebar: false,
   enableUpdater: true,
   autoFrameRate: false,
   autoFrameRatePauseVideoFor: 0,

@@ -1136,6 +1136,11 @@ export default function modernUI(update, parameters) {
                     value: 'disableChannelsOnSidebar'
                 },
                 {
+                    name: t('settings.options.uiSettings.options.hideAccountOnSidebar'),
+                    icon: 'PERSON',
+                    value: 'hideAccountOnSidebar'
+                },
+                {
                     name: t('settings.options.uiSettings.options.clock.title'),
                     value: null,
                     icon: 'TIMER',
