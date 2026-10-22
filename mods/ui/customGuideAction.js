@@ -172,7 +172,13 @@ JSON.parse = function () {
 };
 
 configChangeEmitter.addEventListener('configChange', (e) => {
-    if (e.detail.key === 'disabledSidebarContents' || e.detail.key === 'disableChannelsOnSidebar' || e.detail.key === 'sidebarContentsOrder') {
+    // hideAccountOnSidebar belongs on this list for the same reason as the
+    // other three: the hiding happens while the guide response is parsed, so a
+    // setting changed after that has no effect until a guide arrives. The
+    // others reload one; this one did not, which is why it needed the app
+    // restarted and the others did not.
+    if (e.detail.key === 'disabledSidebarContents' || e.detail.key === 'disableChannelsOnSidebar'
+        || e.detail.key === 'sidebarContentsOrder' || e.detail.key === 'hideAccountOnSidebar') {
         try {
             const commandExecutor = getCommandExecutor();
             if (commandExecutor) {
