@@ -2,6 +2,10 @@ import { configChangeEmitter, configRead, configWrite } from "../config.js";
 import getCommandExecutor from "./customCommandExecution.js";
 import { GuideEntryRenderer } from "./ytUI.js";
 import { guideEntryKey } from "./guideEntryKey.js";
+// The only import here that is not already part of this file's early load:
+// appendFileOnlyLog comes from hideWatched.js, which thirty-odd modules
+// already import, so it is loaded before this regardless of order.
+import { appendFileOnlyLog } from "../features/hideWatched.js";
 
 /** Order entries are plain browseId strings or { browseId, title } objects. */
 function orderBrowseId(orderItem) {
@@ -89,6 +93,43 @@ JSON.parse = function () {
 
             const disabledSidebarContents = configRead('disabledSidebarContents');
             const disableChannelsOnSidebar = configRead('disableChannelsOnSidebar');
+
+            // The account row that sits above Home and shows one letter of the
+            // account name.
+            //
+            // It is not in items[], which is why hiding it needed asking: the
+            // loop below walks guide.items and this lives in guide.topbar. A
+            // capture of the guide's shape named it exactly:
+            //
+            //   topbar {"guideSectionRenderer":{"items":["[1]",
+            //     {"guideAccountEntryRenderer":{"navigationEndpoint":"…",
+            //       "thumbnail":"…","title":"…","trackingParams":"string"}}]}}
+            //
+            // Only the account entries are taken out, not the section and not
+            // the topbar: something else may be put in there later, and
+            // deleting the container would take that with it. A section left
+            // with no items is left in place for the same reason — the app
+            // renders an empty one without complaint, and it is not this
+            // file's business to decide the topbar should not exist.
+            try {
+                if (configRead('hideAccountOnSidebar')) {
+                    const topSection = r.topbar?.guideSectionRenderer;
+                    if (Array.isArray(topSection?.items)) {
+                        const before = topSection.items.length;
+                        topSection.items = topSection.items.filter(
+                            (item) => !item?.guideAccountEntryRenderer
+                        );
+                        if (topSection.items.length !== before) {
+                            appendFileOnlyLog('sidebar.accountHidden', {
+                                removed: before - topSection.items.length,
+                                left: topSection.items.length,
+                            });
+                        }
+                    }
+                }
+            } catch (accountErr) {
+                console.warn('[customGuideAction] hiding the account row failed:', accountErr);
+            }
             for (let i = 0; i < r.items.length; i++) {
                 try {
                     const section = r.items[i].guideSectionRenderer;

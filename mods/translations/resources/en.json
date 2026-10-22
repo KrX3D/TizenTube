@@ -314,6 +314,7 @@
                     },
                     "sortSubscriptionsByAlphabet": "Sort Subscriptions Alphabetically",
                     "disableChannelsOnSidebar": "Disable Channels on Sidebar",
+                    "hideAccountOnSidebar": "Hide the account row above Home",
                     "playlistBatchLoad": {
                         "title": "Playlist Batch Load",
                         "loadAllAtOnce": "Load All Batches at Once",

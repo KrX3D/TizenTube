@@ -314,6 +314,7 @@
                     },
                     "sortSubscriptionsByAlphabet": "Abonnements alphabetisch sortieren",
                     "disableChannelsOnSidebar": "Kanäle in der Seitenleiste deaktivieren",
+                    "hideAccountOnSidebar": "Konto-Zeile über der Startseite ausblenden",
                     "playlistBatchLoad": {
                         "title": "Playlist-Stapelladen",
                         "loadAllAtOnce": "Alle Stapel auf einmal laden",
