@@ -147,6 +147,8 @@ const VERBATIM_LABELS = [
   'longPress.browseMenuThin',
   'addLongPress.browseTile',
   'addLongPress.browseTileRejected',
+  // The guide's section and renderer names are the whole content of this one.
+  'sidebar.guideShape',
   // The whole of markWatched: every line it writes is a record of why a
   // request was or was not accepted, and basic mode was reducing the shape
   // fields that say where to look next.
