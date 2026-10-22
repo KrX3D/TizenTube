@@ -77,11 +77,16 @@ const DRAIN_TOLERANCE_S = 1;
 // is how long it has been going.
 const STARVED_LOG_EVERY = 6;
 
+// The same rate for the empty element, and for the same reason: the lines are
+// byte-for-byte identical, so forty of them say exactly what one says.
+const EMPTY_LOG_EVERY = 6;
+
 let timer = null;
 let lastPosition = null;
 let lastAhead = null;
 let stuckBeats = 0;
 let starvedBeats = 0;
+let emptyBeats = 0;
 let attempts = 0;
 let lastVideoId = null;
 
@@ -184,6 +189,7 @@ function check() {
         lastAhead = null;
         stuckBeats = 0;
         starvedBeats = 0;
+        emptyBeats = 0;
         attempts = 0;
     }
 
@@ -239,18 +245,30 @@ function check() {
     // Nothing is reset here deliberately. Clearing stuckBeats is what the old
     // path did wrong; this beat simply did not happen.
     if (readyState === 0 && ahead <= 0.5 && at < 1) {
-        appendFileOnlyLog('unwedge.emptyElement', Object.assign({
-            at: Math.round(at),
-            movedSec: moved === null ? null : Math.round(moved * 10) / 10,
-            readyState,
-            stillForSec: stuckBeats * (CHECK_MS / 1000),
-        }, lastPick()));
+        emptyBeats++;
+        // Once, then once a minute. Sitting on a page with nothing playing is
+        // the ordinary state of this element, and the first capture of it ran
+        // to forty-three identical lines — same position, same readyState,
+        // same tag, nothing changing. One says all of it.
+        if (emptyBeats === 1 || emptyBeats % EMPTY_LOG_EVERY === 0) {
+            appendFileOnlyLog('unwedge.emptyElement', Object.assign({
+                at: Math.round(at),
+                movedSec: moved === null ? null : Math.round(moved * 10) / 10,
+                readyState,
+                stillForSec: stuckBeats * (CHECK_MS / 1000),
+                emptyForSec: emptyBeats * (CHECK_MS / 1000),
+            }, lastPick()));
+        }
         // The position is not recorded either: comparing the real player's
         // next beat against this one is how the phantom move was invented.
         lastPosition = previousPosition;
         lastAhead = previousAhead;
         return;
     }
+
+    // Past the empty-element check, so there is something real here: the next
+    // run of empty beats is a new one and counts from the beginning.
+    emptyBeats = 0;
 
     // Anything the viewer asked for is not a wedge.
     if (paused || seeking || !(rate > 0)) {
