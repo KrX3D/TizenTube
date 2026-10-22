@@ -846,6 +846,32 @@ let _parseDepth = 0;
 let _lastLoggedHomeKeySet = null;
 // Reported once per distinct shape: the guide arrives on every navigation.
 let _lastLoggedGuideShape = null;
+
+/**
+ * The key names of a renderer tree, and nothing else.
+ *
+ * Used for the parts of the guide outside items[] — topbar and footer — where
+ * the account row turned out to live. Those carry the account holder's name
+ * and avatar URL, so this records structure only: an object becomes its key
+ * names, an array its length, and every leaf its type. Deliberately not the
+ * values, at any depth.
+ */
+function shapeKeys(node, depth) {
+  if (node === null || node === undefined) return null;
+  if (typeof node !== 'object') return typeof node;
+  if (depth > 4) return '…';
+  if (Array.isArray(node)) {
+    // One entry's shape stands for the array: a topbar's buttons are alike,
+    // and twelve copies of the same shape say nothing twelve times.
+    return node.length ? ['[' + node.length + ']', shapeKeys(node[0], depth + 1)] : [];
+  }
+  const out = {};
+  const names = Object.keys(node).sort();
+  for (let i = 0; i < names.length && i < 14; i++) {
+    out[names[i]] = shapeKeys(node[names[i]], depth + 1);
+  }
+  return out;
+}
 let _lastLoggedNonTileKeySet = null;
 let _lastLoggedNonShelfKeySet = null;
 JSON.parse = function () {
@@ -944,6 +970,14 @@ JSON.parse = function () {
             // Anything outside items[] — where a header or an account row
             // would sit, and the reason a loop over items[] found nothing.
             guideKeys: Object.keys(r),
+            // And what is in them. The first capture answered the question it
+            // was asked and raised the next one: one section, twelve entries,
+            // every one a guideEntryRenderer and so already hideable — and
+            // guideKeys holding topbar, footer and startupBehaviours. The
+            // account row is in one of those, not in items[], which is why
+            // nothing that walks items[] can reach it.
+            topbar: shapeKeys(r.topbar, 0),
+            footer: shapeKeys(r.footer, 0),
           });
         }
       } catch (_) { }
