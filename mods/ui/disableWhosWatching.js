@@ -10,6 +10,76 @@ configChangeEmitter.addEventListener('configChange', (event) => {
 
 let interval;
 
+// Beyond which the screens have either appeared or not. Long enough to cover a
+// slow launch, short enough that a viewer who gives up and closes the app has
+// probably not done so yet.
+const FIRING_WINDOW_MS = 30000;
+let firingTimer = null;
+
+/** Seconds since each action last fired, by name. */
+function ageOf(data, names) {
+    const out = {};
+    const now = Date.now();
+    for (let i = 0; i < names.length; i++) {
+        const fired = data[names[i]] && data[names[i]].lastFired;
+        out[names[i]] = (typeof fired === 'number' && isFinite(fired))
+            ? Math.round((now - fired) / 1000)
+            : null;
+    }
+    return out;
+}
+
+/**
+ * Which actions fire while the app is starting.
+ *
+ * The map is re-read rather than watched: there is no event for it, and a
+ * second reading answers the question a listener would.
+ */
+function watchForFiring(dataAtStartup) {
+    if (firingTimer) return;
+    const before = {};
+    const names = Object.keys(dataAtStartup);
+    for (let i = 0; i < names.length; i++) {
+        const fired = dataAtStartup[names[i]] && dataAtStartup[names[i]].lastFired;
+        before[names[i]] = typeof fired === 'number' ? fired : null;
+    }
+    const startedAt = Date.now();
+
+    firingTimer = setTimeout(function () {
+        firingTimer = null;
+        try {
+            const raw = localStorage['yt.leanback.default::recurring_actions'];
+            if (!raw) return;
+            const after = (JSON.parse(raw).data || {}).data || {};
+            const fired = [];
+            const appeared = [];
+            Object.keys(after).forEach(function (name) {
+                const now = after[name] && after[name].lastFired;
+                if (typeof now !== 'number') return;
+                if (!(name in before)) {
+                    appeared.push(name);
+                    return;
+                }
+                if (before[name] !== now) {
+                    // When it fired, relative to this launch, which is the
+                    // number that lines it up against the screen appearing.
+                    fired.push({ action: name, atSec: Math.round((now - startedAt) / 1000) });
+                }
+            });
+            appendFileOnlyLog('whosWatching.fired', {
+                withinSec: Math.round(FIRING_WINDOW_MS / 1000),
+                // Empty means nothing fired in the window, which is itself the
+                // answer on a launch that did not ask for a profile.
+                fired: fired,
+                // An action this TV had never recorded before, which a first
+                // sighting of the failing path could well produce.
+                newActions: appeared,
+            });
+        } catch (err) { }
+    }, FIRING_WINDOW_MS);
+    try { if (typeof firingTimer.unref === 'function') firingTimer.unref(); } catch (e) { }
+}
+
 function disableWhosWatching(value) {
     // FIX: Wrap the entire function body — localStorage may be missing or corrupt
     // (e.g. first boot, reset, or storage quota hit) and JSON.parse can throw.
@@ -48,14 +118,36 @@ function disableWhosWatching(value) {
             'whos_watching_fullscreen_zero_accounts',
             'startup-screen-signed-out-welcome-back',
         ];
-        const present = Object.keys((LeanbackRecurringActions.data && LeanbackRecurringActions.data.data) || {});
+        const data = (LeanbackRecurringActions.data && LeanbackRecurringActions.data.data) || {};
+        const present = Object.keys(data);
         appendFileOnlyLog('whosWatching.actions', {
             enabling: !!value,
             actions: present,
             // The ones this file reaches for and did not find, which is the
             // list to compare against anything new in `actions`.
             missing: known.filter(function (key) { return present.indexOf(key) === -1; }),
+            // How long ago each one fired, so the list is not just names.
+            // Relative seconds rather than the stored timestamps: an absolute
+            // one is a precise record of when this TV gets used, and the
+            // question only needs the gap. Negative means a time in the
+            // future, which is this file's own doing.
+            agoSec: ageOf(data, present),
         });
+
+        // And again once the startup screens have had their moment.
+        //
+        // This function runs at module load, before any of them fire, so the
+        // ages above describe the previous session. The one that produces the
+        // screen fires during startup — so the same reading a little later,
+        // compared against this one, names it: its age drops from hours to
+        // seconds while everything else only grows.
+        //
+        // Reported: powering the TV off on a page resumes cleanly, powering it
+        // off during a video asks for the profile — but powering it off during
+        // a video and back on after a few seconds also resumes cleanly. So
+        // whatever fires is time-dependent, which is what makes a before and
+        // after worth having rather than a single list.
+        watchForFiring(data);
     } catch (err) { }
 
     if (!value) {
