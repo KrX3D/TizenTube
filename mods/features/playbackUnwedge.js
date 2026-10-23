@@ -30,9 +30,7 @@ import { pickVideo, lastPick } from '../utils/pickVideo.js';
  *
  *   - only while something is actually buffered ahead of the playhead
  *   - only when the playhead has not moved across two beats, so roughly twenty
- *     seconds of genuinely stopped rather than one slow moment — and across
- *     five of them, roughly fifty seconds, when the player claims to have data
- *     at the playhead, since then it may be retrying something of its own
+ *     seconds of genuinely stopped rather than one slow moment
  *   - never while paused, seeking, or at rate 0; a stopped player that was
  *     asked to stop is not wedged
  *   - three attempts per video at most, escalating, then it gives up and says
@@ -58,15 +56,45 @@ const MAX_ATTEMPTS = 2;
 const SEEK_S = 1;
 
 // Above HAVE_CURRENT_DATA the player says it has what it needs at the
-// playhead. That is a reason to wait longer before touching it, not a reason
-// never to. See the readyState note in check().
+// playhead.
+//
+// It no longer buys a longer wait — see FROZEN_BEATS_BEFORE_ACTING below for
+// why that was retired — and is kept because the claim is still worth knowing
+// about while waiting: a player frozen while insisting it has the frame is the
+// shape this file exists for, and it is the one worth a line of its own.
 const WEDGED_READY_STATE = 2;
 
 // Beats of perfect stillness before acting on a player that claims to have
-// data at the playhead. Five, so roughly fifty seconds — long enough that a
-// player retrying something of its own is left to finish, and short of the
-// point where the only remedy left is restarting the app.
-const FROZEN_BEATS_BEFORE_ACTING = 5;
+// data at the playhead.
+//
+// Five was too many, and the 5.5 TV's own log is unambiguous about it. Every
+// stuck run it has ever recorded:
+//
+//   16 runs reached stillForSec 10
+//    6 runs reached stillForSec 20
+//    0 runs reached 30, 40 or 50
+//
+// against actsAfterSec 50 on every line. So for this shape the threshold was
+// never once reached and this file could not act at all. What ends the runs
+// instead is the app replacing the player — six different elements in one
+// session, each new one appearing ten to twenty seconds after the last froze,
+// which is the reload a viewer sees and reports as the freeze.
+//
+// Two beats now, the same as a player that admits it has no data, which
+// retires the special case rather than retuning it. The case was added on the
+// 19 October capture, where a player oscillated around a frame it could not
+// decode and a seek cost it buffer and sound — but oscillation means the
+// playhead moved, and a backwards move is caught by the self-recovery branch
+// above, which has since been seen to fire correctly on a move of 0.9
+// seconds. The extra three beats were belt over braces, and the cost of them
+// was never acting.
+//
+// Twenty seconds is also a defensible floor on its own terms: a playing,
+// unpaused, rate-1 element with seconds of data buffered advances about ten
+// seconds per beat, so two beats of not moving at all is not a state that
+// happens for any good reason. And the first attempt is a bare play(), which
+// cannot cost a player anything.
+const FROZEN_BEATS_BEFORE_ACTING = 2;
 
 // A buffer that fell by more than this since the last look is draining, which
 // is starvation or a recovery in progress rather than a wedge.
@@ -87,6 +115,7 @@ let lastAhead = null;
 let stuckBeats = 0;
 let starvedBeats = 0;
 let emptyBeats = 0;
+let lastTagSeen = 0;
 let attempts = 0;
 let lastVideoId = null;
 
@@ -182,6 +211,24 @@ function check() {
     // A different video resets everything: attempts are per video, and a
     // position that went backwards because something else loaded is not a
     // wedge.
+    // The app replacing the player, which is what the reports call a reload.
+    //
+    // Logged because it is the thing to measure: the runs above ended this way
+    // rather than by recovering, so if acting two beats in prevents a reload,
+    // this line is where that shows up — and if it does not, the stuck
+    // duration here says how much sooner it would have had to be.
+    const pick = lastPick();
+    if (pick.videoTag && lastTagSeen && pick.videoTag !== lastTagSeen) {
+        appendFileOnlyLog('unwedge.playerReplaced', {
+            was: lastTagSeen,
+            now: pick.videoTag,
+            stuckForSec: stuckBeats * (CHECK_MS / 1000),
+            attempts,
+            at: Math.round(Number(video.currentTime) || 0),
+        });
+    }
+    if (pick.videoTag) lastTagSeen = pick.videoTag;
+
     const key = videoKey(video);
     if (key !== lastVideoId) {
         lastVideoId = key;
@@ -359,8 +406,13 @@ function check() {
 
     stuckBeats++;
 
-    // How long to wait, which depends on what the player claims about its own
-    // data. Three captures, and the readyState alone does not separate them:
+    // How long to wait. Both answers are two beats now, and the pair is kept
+    // apart rather than collapsed so each can be moved on its own evidence —
+    // the readyState >= 2 one has been moved once already.
+    //
+    // The history is worth keeping, because the reasoning went wrong twice in
+    // opposite directions. Three captures, and the readyState alone does not
+    // separate them:
     //
     //   18 Oct  readyState 1, 8.2s buffered, frozen past twenty seconds, and
     //           only an app restart cleared it. The player did not have data
@@ -382,8 +434,11 @@ function check() {
     // What actually separates the second from the third is not readyState but
     // movement: the oscillation moved, including backwards, and a backwards
     // move already stands this file down a few lines above. A wedge does not
-    // move at all. So a player claiming data gets a much longer run of perfect
-    // stillness before anything is tried, rather than a pass.
+    // move at all.
+    //
+    // So the guard became a longer wait instead of a pass — and a fifty second
+    // one, which the 5.5 TV then showed was no better than the pass had been,
+    // since no run it ever recorded lasted that long.
     const needed = readyState >= WEDGED_READY_STATE
         ? FROZEN_BEATS_BEFORE_ACTING
         : STUCK_BEATS_BEFORE_ACTING;
