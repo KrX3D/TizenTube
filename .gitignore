@@ -5,3 +5,4 @@ dist/
 transpiled/
 .sign
 package-lock.json
+scripts/dns-watch/*.log
