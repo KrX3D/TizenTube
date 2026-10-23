@@ -656,6 +656,50 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
 const CAN_CONNECT_MAX_ATTEMPTS = 10;
 const CAN_CONNECT_RETRY_DELAY_MS = 500;
 
+// A refused connection is the daemon not being up yet, which on a cold boot it
+// is not.
+//
+// Reported four times: the app opens, YouTube loads, the mod is not there,
+// and restarting the app fixes it. The log of one such launch, filed under
+// the generic name because the page never came up to say which TV it was:
+//
+//   06:33:06  canConnectToDaemon attempt 1/10 failed, retrying:
+//             connect ECONNREFUSED 127.0.0.1:8001
+//   …          attempts 2 through 10, all the same
+//   06:33:11  giving up after 10 attempts
+//   06:33:11  getState → {"canConnectToDaemon":false,…}
+//
+// Ten attempts half a second apart is five seconds, and then the CDP path
+// stands down for the rest of the service run. Five seconds is simply not
+// long enough for the Tizen developer daemon to come up on a TV that has
+// just been switched on — the app is started by the system at the same time
+// as everything else, and nothing makes port 8001 ready first. A restart
+// works because by then the daemon has been listening for minutes.
+//
+// So a refusal gets its own, much longer budget. It is the one error that
+// means "not yet" rather than "not ever": the port is closed, which is what a
+// service that has not finished starting looks like. Anything else — a
+// timeout, a parse failure, a response without a device block — keeps the
+// original ten attempts, because those describe a daemon that answered badly
+// rather than one that has not answered at all.
+//
+// Ninety seconds, in half-second steps. Long enough to cover a slow boot,
+// and it costs nothing on a TV that was already on: the first attempt
+// succeeds and none of this is reached.
+const REFUSED_MAX_ATTEMPTS = 180;
+
+/** Whether this failure means the daemon is not listening yet. */
+function isConnectionRefused(err) {
+    try {
+        const code = err && (err.code || (err.cause && err.cause.code));
+        if (code === 'ECONNREFUSED') return true;
+        // node-fetch wraps it, and the code is not always carried through.
+        return /ECONNREFUSED/.test(String((err && err.message) || ''));
+    } catch (_) {
+        return false;
+    }
+}
+
 // getState (index.js) polls this every ~1s during normal operation, so it
 // must always resolve quickly — never reject, never hang indefinitely.
 // Previously any failure (network hiccup, JSON parse error, anything) just
@@ -784,14 +828,36 @@ function canConnectToDaemon(relayLog, attempt) {
             noteDaemonShape(device, relayLog, verdict);
             return { canConnectToDaemon: verdict, ip: device.ip || null, isConnecting };
         }).catch(e => {
-            if (attempt >= CAN_CONNECT_MAX_ATTEMPTS) {
+            // A refused connection waits much longer than anything else: see
+            // REFUSED_MAX_ATTEMPTS. The budget is chosen per failure rather
+            // than once, so a boot that refuses for a minute and then answers
+            // badly still gets the short budget for the bad answers.
+            const refused = isConnectionRefused(e);
+            const budget = refused ? REFUSED_MAX_ATTEMPTS : CAN_CONNECT_MAX_ATTEMPTS;
+            if (attempt >= budget) {
                 if (typeof relayLog === 'function') {
-                    relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `canConnectToDaemon giving up after ${CAN_CONNECT_MAX_ATTEMPTS} attempts: ${e && e.message || e}` });
+                    relayLog({
+                        ts: new Date().toISOString(), level: 'ERROR', context: 'Injector',
+                        message: `canConnectToDaemon giving up after ${budget} attempts`
+                            + (refused ? ` (${Math.round(budget * CAN_CONNECT_RETRY_DELAY_MS / 1000)}s of a refused port 8001,`
+                                + ' so the developer daemon never came up)' : '')
+                            + `: ${e && e.message || e}`
+                    });
                 }
                 return { canConnectToDaemon: false, ip: null, isConnecting };
             }
-            if (typeof relayLog === 'function') {
-                relayLog({ ts: new Date().toISOString(), level: 'ERROR', context: 'Injector', message: `canConnectToDaemon attempt ${attempt + 1}/${CAN_CONNECT_MAX_ATTEMPTS} failed, retrying: ${e && e.message || e}` });
+            // Only the occasional one is logged while waiting out a refusal.
+            // A hundred and eighty lines saying the port is still closed would
+            // bury the one that matters, and the count is in each line anyway.
+            const worthLogging = !refused || attempt === 0 || (attempt + 1) % 20 === 0;
+            if (typeof relayLog === 'function' && worthLogging) {
+                relayLog({
+                    ts: new Date().toISOString(), level: refused ? 'WARN' : 'ERROR', context: 'Injector',
+                    message: `canConnectToDaemon attempt ${attempt + 1}/${budget} failed, retrying`
+                        + (refused ? ' — port 8001 is closed, which is what a developer daemon that has'
+                            + ' not finished starting looks like' : '')
+                        + `: ${e && e.message || e}`
+                });
             }
             return new Promise(resolve => setTimeout(resolve, CAN_CONNECT_RETRY_DELAY_MS))
                 .then(() => canConnectToDaemon(relayLog, attempt + 1));
