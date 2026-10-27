@@ -41,6 +41,7 @@ public final class MainActivity extends Activity {
     private View fullscreenView;
     private WebChromeClient.CustomViewCallback fullscreenCallback;
     private String userScript;
+    private boolean injectionStatusShown;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,7 +52,7 @@ public final class MainActivity extends Activity {
         root.setBackgroundColor(Color.BLACK);
         setContentView(root);
 
-        userScript = readAsset("tizentube.js");
+        userScript = buildInjectedScript(readAsset("tizentube.js"));
         createWebView();
         installDocumentStartScript();
         webView.loadUrl(START_URL);
@@ -91,6 +92,21 @@ public final class MainActivity extends Activity {
                 if (!supportsDocumentStartScript() && isYouTubeUrl(url)) {
                     view.evaluateJavascript(userScript, null);
                 }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (injectionStatusShown || !isYouTubeUrl(url)) return;
+
+                view.evaluateJavascript("window.__ttAndroidInjected === true", result -> {
+                    if (injectionStatusShown) return;
+                    injectionStatusShown = true;
+                    int message = "true".equals(result)
+                            ? R.string.injection_active
+                            : R.string.injection_failed;
+                    Toast.makeText(MainActivity.this, message, Toast.LENGTH_LONG).show();
+                });
             }
 
             @Override
@@ -170,14 +186,58 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private static String buildInjectedScript(String bundle) {
+        return "window.__ttAndroidHost=true;"
+                + "window.__tizenTubeStandaloneVersion='Android TV 1.0.1';"
+                + "try {\n"
+                + bundle
+                + "\n;window.__ttAndroidInjected=true;"
+                + "} catch (error) {"
+                + "window.__ttAndroidInjectionError=String(error&&error.stack||error);"
+                + "console.error('[TizenTube Android] injection failed',error);"
+                + "}";
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        String colorKey = androidColorKey(event.getKeyCode());
+        if (colorKey != null) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                dispatchColorKey(colorKey);
+            }
+            return true;
+        }
+
         if (webView != null && webView.getVisibility() == View.VISIBLE
                 && event.getKeyCode() != KeyEvent.KEYCODE_BACK
                 && webView.dispatchKeyEvent(event)) {
             return true;
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    private static String androidColorKey(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_PROG_RED:
+                return "r";
+            case KeyEvent.KEYCODE_PROG_GREEN:
+                return "g";
+            case KeyEvent.KEYCODE_PROG_YELLOW:
+                return "y";
+            case KeyEvent.KEYCODE_PROG_BLUE:
+                return "b";
+            default:
+                return null;
+        }
+    }
+
+    private void dispatchColorKey(String key) {
+        if (webView == null) return;
+        String upper = key.toUpperCase();
+        String script = "(function(){var e=new KeyboardEvent('keydown',{"
+                + "key:'" + key + "',code:'Key" + upper + "',bubbles:true,cancelable:true"
+                + "});document.dispatchEvent(e);}());";
+        webView.evaluateJavascript(script, null);
     }
 
     @Override

@@ -2,4 +2,6 @@
     <string name="app_name">TizenTube for Android TV</string>
     <string name="webview_too_old">Android System WebView is too old for reliable TizenTube injection. Update it from Google Play.</string>
     <string name="load_failed">YouTube TV could not be loaded. Check the TV’s network connection.</string>
+    <string name="injection_active">TizenTube is active. Press the GREEN button to open its settings.</string>
+    <string name="injection_failed">TizenTube did not start. Reopen the app and check that Android System WebView is updated.</string>
 </resources>

@@ -36,6 +36,11 @@ workflow run's **Artifacts** section.
 The TV's Android System WebView must support document-start scripts. If it does
 not, the app shows a warning and uses a less reliable page-start fallback.
 
+When injection succeeds, the app shows a **TizenTube is active** message. Press
+the remote's **GREEN** colour button to open the TizenTube settings. The Android
+host translates Sony/Android colour-button key codes to the codes expected by
+the original Tizen UI.
+
 ## Current limitations
 
 - This is an initial Android TV port and requires testing on physical hardware.
