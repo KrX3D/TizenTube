@@ -1,0 +1,71 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'app.tizentube.androidtv'
+    compileSdk 37
+
+    defaultConfig {
+        applicationId 'app.tizentube.androidtv'
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            assets.srcDir layout.buildDirectory.dir('generated/tizentube/assets').get().asFile
+            res.srcDir layout.buildDirectory.dir('generated/tizentube/res').get().asFile
+        }
+    }
+}
+
+def prepareTizenTubeAssets = tasks.register('prepareTizenTubeAssets') {
+    def bundle = rootProject.file('../dist/userScript.js')
+    def icon = rootProject.file('../standalone/icon.png')
+    def banner = rootProject.file('../standalone/icon_16b9.png')
+    def generated = layout.buildDirectory.dir('generated/tizentube')
+
+    inputs.files(bundle, icon, banner)
+    outputs.dir(generated)
+
+    doLast {
+        copy {
+            from bundle
+            into generated.get().dir('assets')
+            rename { 'tizentube.js' }
+        }
+        copy {
+            from icon
+            into generated.get().dir('res/drawable-nodpi')
+            rename { 'icon.png' }
+        }
+        copy {
+            from banner
+            into generated.get().dir('res/drawable-nodpi')
+            rename { 'banner.png' }
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn prepareTizenTubeAssets
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.17.0'
+}

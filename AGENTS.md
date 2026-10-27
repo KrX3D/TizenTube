@@ -36,6 +36,14 @@ npm CDN at runtime — standalone mode does not bundle a copy of the mod
 into its `.wgt`. So most feature work in `mods/` automatically applies to
 both paths without any standalone-specific changes.
 
+There is also an experimental **Android TV host** under `android-tv/`. It is
+not part of either Tizen path: it packages the committed `dist/userScript.js`
+as an Android asset and injects it into `https://www.youtube.com/tv` with
+AndroidX WebKit's document-start API. It contains no native libraries, so its
+APK is shared by ARM32 and ARM64 Android/Google TV devices. Treat it as a
+hardware-test-required port; building successfully does not prove YouTube's TV
+web client, sign-in, DRM, or playback works on a particular Android TV WebView.
+
 ## Repo layout
 
 ```
@@ -90,6 +98,11 @@ standalone/                  # standalone installable app — see "Standalone mo
                                 # transpiles the bundle for Node 4.4.3, → dist/bundle.js; copies
                                 # bootstrap.js → dist/index.js unmodified
     package.json
+
+android-tv/                  # experimental Android/Google TV WebView host
+  app/src/main/               # Java activity, Android TV manifest, resources
+  app/build.gradle            # copies dist/userScript.js and standalone icons at build time
+  README.md                   # build/install notes and current limitations
 
 .github/
   workflows/

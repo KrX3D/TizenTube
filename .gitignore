@@ -1,7 +1,14 @@
 packets/
 node_modules/
 *.wgt
+*.apk
 dist/
 transpiled/
 .sign
 package-lock.json
+android-tv/.gradle/
+android-tv/build/
+android-tv/app/build/
+android-tv/local.properties
+.tooling-jdk17/
+.tooling-jdk17.zip

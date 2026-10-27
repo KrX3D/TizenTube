@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">TizenTube for Android TV</string>
+    <string name="webview_too_old">Android System WebView is too old for reliable TizenTube injection. Update it from Google Play.</string>
+    <string name="load_failed">YouTube TV could not be loaded. Check the TV’s network connection.</string>
+</resources>
