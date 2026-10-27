@@ -188,14 +188,22 @@ public final class MainActivity extends Activity {
 
     private static String buildInjectedScript(String bundle) {
         return "window.__ttAndroidHost=true;"
-                + "window.__tizenTubeStandaloneVersion='Android TV 1.0.1';"
+                + "window.__tizenTubeStandaloneVersion='Android TV 1.0.2';"
+                + "(function(){"
+                + "var started=false;"
+                + "function startTizenTube(){"
+                + "if(started)return;started=true;"
                 + "try {\n"
                 + bundle
                 + "\n;window.__ttAndroidInjected=true;"
                 + "} catch (error) {"
                 + "window.__ttAndroidInjectionError=String(error&&error.stack||error);"
                 + "console.error('[TizenTube Android] injection failed',error);"
-                + "}";
+                + "}"
+                + "}"
+                + "if(document.body||document.readyState!=='loading'){startTizenTube();}"
+                + "else{document.addEventListener('DOMContentLoaded',startTizenTube,{once:true});}"
+                + "}());";
     }
 
     @Override

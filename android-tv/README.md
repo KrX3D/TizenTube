@@ -5,8 +5,8 @@ intended for devices such as the Sony BRAVIA A90K running Android/Google TV.
 
 The APK contains no native libraries, so one APK supports both 32-bit ARM
 (`armeabi-v7a`) and 64-bit ARM devices. The committed `dist/userScript.js` is
-copied into the APK at build time and injected at document start, before any
-YouTube page script executes.
+copied into the APK at build time. The host registers the injection at document
+start, then runs TizenTube as soon as the page DOM is ready.
 
 ## Build
 
