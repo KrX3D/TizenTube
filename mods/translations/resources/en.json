@@ -315,13 +315,6 @@
                     "sortSubscriptionsByAlphabet": "Sort Subscriptions Alphabetically",
                     "disableChannelsOnSidebar": "Disable Channels on Sidebar",
                     "hideAccountOnSidebar": "Hide the account row above Home",
-                    "playlistBatchLoad": {
-                        "title": "Playlist Batch Load",
-                        "loadAllAtOnce": "Load All Batches at Once",
-                        "maxBatches": "Max Batches to Fetch",
-                        "maxBatchesSubtitle": "Maximum number of batches to fetch at once (each batch = 15 videos). Higher = more complete but slower initial load.",
-                        "maxBatchesOption": "{{n}} batches (~{{videos}} videos)"
-                    },
                     "hiddenPlaylists": {
                         "title": "Hide Special Playlists",
                         "shelves": {

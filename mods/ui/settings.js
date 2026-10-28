@@ -964,33 +964,6 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
-                    name: t('settings.options.uiSettings.options.playlistBatchLoad.title'),
-                    icon: 'PLAYLIST_PLAY',
-                    value: null,
-                    menuId: 'tt-playlist-batch-collect-settings',
-                    options: [
-                        {
-                            name: t('settings.options.uiSettings.options.playlistBatchLoad.loadAllAtOnce'),
-                            icon: 'PLAYLIST_PLAY',
-                            value: 'enablePlaylistBatchCollect'
-                        },
-                        {
-                            name: t('settings.options.uiSettings.options.playlistBatchLoad.maxBatches'),
-                            value: null,
-                            menuId: 'tt-playlist-batch-max',
-                            menuHeader: {
-                                title: t('settings.options.uiSettings.options.playlistBatchLoad.maxBatches'),
-                                subtitle: t('settings.options.uiSettings.options.playlistBatchLoad.maxBatchesSubtitle')
-                            },
-                            options: [10, 20, 50, 100, 200].map((n) => ({
-                                name: t('settings.options.uiSettings.options.playlistBatchLoad.maxBatchesOption', { n, videos: n * 15 }),
-                                key: 'playlistBatchCollectMaxBatches',
-                                value: n
-                            }))
-                        }
-                    ]
-                },
-                {
                     name: t('settings.options.uiSettings.options.libraryTabs.title'),
                     icon: 'TAB_LIBRARY',
                     value: null,
