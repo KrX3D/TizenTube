@@ -23473,6 +23473,15 @@ function requireRead() {
     // read options
     var encoding = opts.encoding !== null ? opts.encoding : null;
     var verify = opts.verify;
+
+    // assert charset is supported before creating the decompression stream, so a
+    // 415 cannot leave a decoder piped with no error listener
+    if (verify && encoding !== null && !iconv.encodingExists(encoding)) {
+      return next(createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
+        charset: encoding.toLowerCase(),
+        type: 'charset.unsupported'
+      }));
+    }
     try {
       // get the content stream
       stream = contentstream(req, debug, opts.inflate);
@@ -23485,14 +23494,6 @@ function requireRead() {
     // set raw-body options
     opts.length = length;
     opts.encoding = verify ? null : encoding;
-
-    // assert charset is supported
-    if (opts.encoding === null && encoding !== null && !iconv.encodingExists(encoding)) {
-      return next(createError(415, 'unsupported charset "' + encoding.toUpperCase() + '"', {
-        charset: encoding.toLowerCase(),
-        type: 'charset.unsupported'
-      }));
-    }
 
     // read body
     debug('read body');
@@ -23521,6 +23522,23 @@ function requireRead() {
           next(createError(400, _error));
         });
         return;
+      }
+
+      // detach and destroy the decompression stream to avoid
+      // decompression errors on the finished stream
+      if (stream !== req) {
+        // only detach the decompression stream, keep other consumers piped
+        if (typeof req.unpipe === 'function') {
+          req.unpipe(stream);
+        } else {
+          // Node.js 0.8 streams have no unpipe(dest)
+          unpipe(req);
+        }
+        stream.on('error', function () {});
+        destroy(stream, true);
+
+        // consume any remaining bytes so the HTTP request can finish
+        req.resume();
       }
 
       // verify
