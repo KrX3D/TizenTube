@@ -12,6 +12,7 @@ import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
 import './logServer.js';
 import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
+import { readBranding, writeBranding, brandingCacheSize } from './deArrowCache.js';
 import {
   appendFileOnlyLog,
   detectAndStorePage,
@@ -1612,8 +1613,77 @@ function addPreviews(items) {
 
 // ===== deArrowify =====
 
+/**
+ * Why the cache below exists, in one capture.
+ *
+ * deArrowify runs inside the JSON.parse hook, on a response that is still a
+ * plain object nobody has read. The branding request it fires comes back a few
+ * hundred milliseconds later and writes the title into that object — after
+ * YouTube TV has built the tile from it and put it on screen. So the request
+ * succeeds and the title does not change. Upstream measured roughly 190
+ * successful branding requests and not one visible title
+ * (reisxd/TizenTube#741).
+ *
+ * Their remedy holds the /browse, /search and /next readyState 4 handlers for
+ * up to two seconds while branding is fetched. With five concurrent requests
+ * and forty items that is eight round trips, so the ceiling would be hit on
+ * most loads and every navigation on a Chrome 47 TV would pay it.
+ *
+ * So branding is remembered instead — see deArrowCache.js. Anything already
+ * known is written during parsing, before the app reads the object, which is
+ * the only moment a title change is guaranteed to show. Anything unknown is
+ * still fetched in the background and still written late, but its real job is
+ * to be in the cache the next time the video appears. Nothing waits.
+ */
+
+/** The winning title and thumbnail timestamp out of a branding response. */
+function _deArrowPick(data) {
+  let title = null;
+  let thumbTimestamp = null;
+  try {
+    if (Array.isArray(data.titles) && data.titles.length > 0) {
+      const best = data.titles.reduce((max, t) => max.votes > t.votes ? max : t);
+      if (best && typeof best.title === 'string' && best.title) title = best.title;
+    }
+  } catch (_) { }
+  try {
+    if (Array.isArray(data.thumbnails) && data.thumbnails.length > 0) {
+      const best = data.thumbnails.reduce((max, t) => max.votes > t.votes ? max : t);
+      if (best && best.timestamp !== null && best.timestamp !== undefined) thumbTimestamp = best.timestamp;
+    }
+  } catch (_) { }
+  return { title, thumbTimestamp };
+}
+
+/**
+ * Write branding into one item.
+ *
+ * Shared by both paths — the cached one during parsing and the fetched one
+ * afterwards — so there is a single place that knows how a tile and a lockup
+ * differ. The thumbnail toggle is read here rather than before storing, so
+ * switching thumbnails on later uses what is already remembered instead of
+ * asking for all of it again.
+ */
+function _deArrowApply(item, isLockup, videoID, title, thumbTimestamp) {
+  if (title) {
+    try {
+      if (isLockup) setLockupTitle(item, title);
+      else item.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = title;
+    } catch (_) { }
+  }
+  if (thumbTimestamp !== null && thumbTimestamp !== undefined && configRead('enableDeArrowThumbnails')) {
+    try {
+      const dearrowThumb = [{ url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${thumbTimestamp}`, width: 1280, height: 640 }];
+      if (isLockup) setLockupThumbnails(item, dearrowThumb);
+      else item.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = dearrowThumb;
+    } catch (_) { }
+  }
+}
+
 function deArrowify(items) {
   if (!Array.isArray(items)) return;
+  let applied = 0;
+  let queued = 0;
   for (let i = items.length - 1; i >= 0; i--) {
     const item = items[i];
     if (!item || typeof item !== 'object') continue;
@@ -1628,31 +1698,42 @@ function deArrowify(items) {
       ? String(lockupVideoId(capturedItem) || lockupWatchEndpoint(capturedItem)?.videoId || '')
       : String(capturedItem.tileRenderer.contentId || capturedItem.tileRenderer.onSelectCommand?.watchEndpoint?.videoId || '');
     if (!videoID || videoID.length !== 11) { appendFileOnlyLog('dearrow.skip', { reason: 'no_video_id', lockup: isLockup, contentId: (isLockup ? lockupVideoId(capturedItem) : capturedItem.tileRenderer.contentId) || null }); continue; }
+
+    const known = readBranding(videoID);
+    if (known) {
+      // A remembered "this video has nothing" is why the fetch is skipped;
+      // most videos have no submission, and without it every Home load would
+      // ask about the same forty for ever.
+      if (known.title || known.thumbTimestamp !== null) {
+        _deArrowApply(capturedItem, isLockup, videoID, known.title, known.thumbTimestamp);
+        applied++;
+      }
+      continue;
+    }
+
+    queued++;
     _deArrowEnqueue(() =>
       fetch(`https://sponsor.ajay.app/api/branding?videoID=${videoID}`)
         .then(res => { if (!res.ok) return null; return res.json(); })
         .then(data => {
           if (!data) return;
-          if (Array.isArray(data.titles) && data.titles.length > 0) {
-            try {
-              const mostVoted = data.titles.reduce((max, title) => max.votes > title.votes ? max : title);
-              if (isLockup) setLockupTitle(capturedItem, mostVoted.title);
-              else capturedItem.tileRenderer.metadata.tileMetadataRenderer.title.simpleText = mostVoted.title;
-            } catch (_) { }
-          }
-          if (Array.isArray(data.thumbnails) && data.thumbnails.length > 0 && configRead('enableDeArrowThumbnails')) {
-            try {
-              const mostVotedThumbnail = data.thumbnails.reduce((max, thumbnail) => max.votes > thumbnail.votes ? max : thumbnail);
-              if (mostVotedThumbnail.timestamp !== null && mostVotedThumbnail.timestamp !== undefined) {
-                const dearrowThumb = [{ url: `https://dearrow-thumb.ajay.app/api/v1/getThumbnail?videoID=${videoID}&time=${mostVotedThumbnail.timestamp}`, width: 1280, height: 640 }];
-                if (isLockup) setLockupThumbnails(capturedItem, dearrowThumb);
-                else capturedItem.tileRenderer.header.tileHeaderRenderer.thumbnail.thumbnails = dearrowThumb;
-              }
-            } catch (_) { }
-          }
+          const picked = _deArrowPick(data);
+          // Stored before it is applied, because the storing is the part that
+          // reliably achieves something: this write may well be too late to
+          // change what is already on screen.
+          writeBranding(videoID, picked.title, picked.thumbTimestamp);
+          _deArrowApply(capturedItem, isLockup, videoID, picked.title, picked.thumbTimestamp);
         })
         .catch(err => appendFileOnlyLog('dearrow.fetch.error', { videoID, msg: String(err?.message || err) }))
     );
+  }
+  // One line per response, not one per tile — forty identical lines say what
+  // one says. This is also the line that answers whether any of this works:
+  // appliedFromCache rising while fetched falls means titles are landing
+  // before the app reads them, and appliedFromCache staying at zero across
+  // several visits would mean the cache is not surviving.
+  if (applied || queued) {
+    appendFileOnlyLog('dearrow.pass', { appliedFromCache: applied, fetched: queued, remembered: brandingCacheSize() });
   }
 }
 
