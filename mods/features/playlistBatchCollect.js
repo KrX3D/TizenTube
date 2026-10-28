@@ -91,16 +91,50 @@
  * the URL still matches; stale prefetch from another playlist is discarded.
  * Global state is also cleared on every navigation so a fresh collect starts.
  *
- * Only active when enablePlaylistBatchCollect is true — opt-in, default:
- * false (config.js). Settings → User Interface Settings → Playlist Batch
- * Load → "Load All at Once".
+ * When this runs
+ * ───────────────
+ * It used to be opt-in, behind two switches of its own, because collecting a
+ * whole playlist in the background needed proving on-device before it could be
+ * trusted. It is proven, and the switches are gone.
+ *
+ * What is left is the only question that was ever worth asking: is anything
+ * going to be filtered out of this playlist? Collecting every batch exists so
+ * that hiding watched videos can see the whole list rather than the first page,
+ * so if watched videos are not being hidden here, the fetching has no purpose
+ * and must not happen. batchCollectActive() is that test, and it reads the
+ * hide-watched options the user has already set — the master switch, whether
+ * 'playlist' is among the pages, and whether this particular playlist is one of
+ * their exemptions.
  */
 
 import { appendFileOnlyLog, getItemVideoId } from './hideWatched.js';
 import { configRead } from '../config.js';
+import { isPlaylistExempt, currentPlaylistId } from './hideWatchedExemptions.js';
 
 function _log(label, payload) {
   try { appendFileOnlyLog(label, payload); } catch (_) {}
+}
+
+/**
+ * Whether collecting the rest of this playlist would achieve anything.
+ *
+ * True only when hiding watched videos is on, playlists are among the pages it
+ * applies to, and this playlist is not one of the user's exemptions. Anything
+ * else means nothing would be filtered, so the background fetching is pure
+ * cost and is skipped.
+ *
+ * Read fresh on every gate rather than cached: all three inputs are live
+ * settings, and the playlist id changes under us as the user navigates.
+ */
+export function batchCollectActive() {
+  try {
+    if (configRead('enableHideWatchedVideos') !== true) return false;
+    const pages = configRead('hideWatchedVideosPages');
+    if (!Array.isArray(pages) || pages.indexOf('playlist') === -1) return false;
+    return !isPlaylistExempt(currentPlaylistId());
+  } catch (_) {
+    return false;
+  }
 }
 
 // ── Save native implementations BEFORE adblock.js patches them ───────────────
@@ -238,8 +272,15 @@ function _triggerReveal(reason) {
 // IMPORTANT: uses _nativeJSONParse (not patched JSON.parse) so watched items
 // are NOT filtered out during collection — we need the raw batch data.
 
+// A runaway guard, not a preference. The loop below stops as soon as a
+// response carries no continuation token, which is what ends it for every real
+// playlist; this only bounds the pathological case. At roughly fifteen videos
+// per batch it allows about 7500, well past anything a playlist page holds, so
+// in practice it means "all of it".
+const MAX_BATCHES = 500;
+
 async function _collectAll(url, plc, context, headers) {
-  const MAX = Math.max(1, Math.min(500, Number(configRead('playlistBatchCollectMaxBatches') || 50)));
+  const MAX = MAX_BATCHES;
 
   if (!context || !_nativeFetch) return null;
 
@@ -600,7 +641,7 @@ function maybeReloadForFullPlaylist(key) {
 // continuation token the playlist is complete, and the reload can happen
 // immediately instead of waiting for a redundant re-download.
 export function noteContinuationBatch(key, contents, continuations) {
-  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (!batchCollectActive()) return;
   if (!Array.isArray(contents) || !contents.length) return;
   if (getCachedFullPlaylist(key)) return; // already complete; this is the reloaded pass
 
@@ -689,7 +730,7 @@ export function noteContinuationBatch(key, contents, continuations) {
 const NATIVE_SETTLE_MS = 700;
 
 export function scheduleCollectAfterNativeSettles(continuations, reason) {
-  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (!batchCollectActive()) return;
   if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
 
   const key = playlistKeyFromHash();
@@ -714,7 +755,7 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
 }
 
 function autoStartCollect(continuations, seedContents) {
-  if (!configRead('enablePlaylistBatchCollect')) return;
+  if (!batchCollectActive()) return;
   if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
 
   if (!_lastBrowseContext || !_lastBrowseUrl) {
@@ -842,8 +883,7 @@ if (typeof XMLHttpRequest !== 'undefined') {
       return _origXHRSend.apply(this, arguments);
     }
 
-    // Feature flag
-    if (!configRead('enablePlaylistBatchCollect')) return _origXHRSend.apply(this, arguments);
+    if (!batchCollectActive()) return _origXHRSend.apply(this, arguments);
 
     // Prefetch data already ready — let real XHR through; JSON.parse injection
     // in adblock.js will consume __ttPrefetchedBatch on the next response.
@@ -1020,7 +1060,7 @@ if (_nativeFetch) {
       _lastBrowseHeaders = optHeaders;
     }
     if (!reqBody?.continuation || !reqBody?.context) return _nativeFetch(url, options);
-    if (!configRead('enablePlaylistBatchCollect'))   return _nativeFetch(url, options);
+    if (!batchCollectActive()) return _nativeFetch(url, options);
 
     // Let the real fetch through immediately.
     const response = await _nativeFetch(url, options);

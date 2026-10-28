@@ -146,8 +146,6 @@ const defaultConfig = {
   // sendOne() treats as nothing to send.
   logServerHost: '',
   logServerPort: 3030,
-  enablePlaylistBatchCollect: false,
-  playlistBatchCollectMaxBatches: 50,
   enableClock: false,
   isClock12HourFormat: false,
   clockShowSeconds: false,
@@ -213,6 +211,23 @@ try {
     if (moved) window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
   } catch (err) {
     // A failed migration leaves both categories off, which is the default.
+  }
+  // Settings retired because the thing they gated stopped being optional.
+  // Playlist batch collection was switched on by hand while it was being
+  // proven; it now follows the hide-watched options instead of carrying its
+  // own, so the stored keys are dropped rather than sitting in the config as
+  // settings nothing reads.
+  try {
+    const RETIRED = ['enablePlaylistBatchCollect', 'playlistBatchCollectMaxBatches'];
+    let dropped = false;
+    for (let i = 0; i < RETIRED.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(localConfig, RETIRED[i])) continue;
+      delete localConfig[RETIRED[i]];
+      dropped = true;
+    }
+    if (dropped) window.localStorage[CONFIG_KEY] = JSON.stringify(localConfig);
+  } catch (err) {
+    // A stored key nothing reads is harmless, so leaving it is a safe failure.
   }
 } catch (err) {
   console.warn('Config read failed:', err);
