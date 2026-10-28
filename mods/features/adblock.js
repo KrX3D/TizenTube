@@ -11,7 +11,7 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch } from './playlistBatchCollect.js';
+import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch, batchCollectActive } from './playlistBatchCollect.js';
 import { readBranding, writeBranding, brandingCacheSize } from './deArrowCache.js';
 import {
   appendFileOnlyLog,
@@ -540,7 +540,7 @@ function clearKeepOneMarkers(items, label = 'continuation') {
 // removed when the merged batch lands.
 function isBatchCollectHandlingPlaylist() {
   try {
-    if (!configRead('enablePlaylistBatchCollect')) return false;
+    if (!batchCollectActive()) return false;
     return !!(window.__ttPrefetchStarted || window.__ttPrefetchedBatch);
   } catch (_) { return false; }
 }

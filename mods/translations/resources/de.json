@@ -315,13 +315,6 @@
                     "sortSubscriptionsByAlphabet": "Abonnements alphabetisch sortieren",
                     "disableChannelsOnSidebar": "Kanäle in der Seitenleiste deaktivieren",
                     "hideAccountOnSidebar": "Konto-Zeile über der Startseite ausblenden",
-                    "playlistBatchLoad": {
-                        "title": "Playlist-Stapelladen",
-                        "loadAllAtOnce": "Alle Stapel auf einmal laden",
-                        "maxBatches": "Maximale Stapelanzahl",
-                        "maxBatchesSubtitle": "Maximale Anzahl an Stapeln, die auf einmal geladen werden (jeder Stapel = 15 Videos). Höher = vollständiger, aber langsamerer erster Ladevorgang.",
-                        "maxBatchesOption": "{{n}} Stapel (~{{videos}} Videos)"
-                    },
                     "hiddenPlaylists": {
                         "title": "Spezielle Playlists ausblenden",
                         "shelves": {
