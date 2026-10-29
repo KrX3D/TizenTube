@@ -37,9 +37,30 @@ const PAGE = 'subscriptions';
 // held one to three videos each; the aggregate held ten.
 const MIN_VIDEOS = 4;
 
-// How much of the row has to be repeated elsewhere. Not all of it: the
-// aggregate also carries videos from channels whose own row has not loaded yet
-// (7 of 10 in the capture).
+// How much of the overlap that COULD exist has to exist.
+//
+// This used to be measured against the aggregate row's own length, and that
+// was backwards: it penalised the row for being long, which is the whole
+// complaint. From the 29 October capture, with the row still on screen:
+//
+//   sizes [10, 3, 1, 1]
+//
+// Ten videos in the aggregate and five in every other row put together. Even
+// if all five were repeats of it — the worst case there is — that is 5/10 =
+// 0.50, and the threshold is 0.60. No arrangement of those four rows could
+// have reached it, so the pass could not fire however it was configured. The
+// same shape appears twice more in the log, both kept: [8,1,2,1,2,1] and
+// [6,2,1,1,1].
+//
+// The denominator is now what could possibly overlap: min(this row, every
+// other row combined). An aggregate row whose channels have only loaded a
+// video or two each then reads as fully overlapping, which is what it is,
+// instead of as barely overlapping because it is long.
+//
+// The ratio is kept as a sanity check rather than as the real test. What
+// actually identifies an aggregate is MIN_OTHER_SHELVES below: a per-channel
+// row shares its videos with the aggregate and nothing else, so only the
+// aggregate is spread across two or more others. That part needs no tuning.
 const MIN_SHARED_RATIO = 0.6;
 
 // And it has to be spread, not merely overlapping one neighbour — two rows
@@ -88,6 +109,11 @@ export function filterAggregateShelves(shelves, pageName) {
     }
 
     const candidates = [];
+    // Every row long enough to be an aggregate, whether or not it qualified.
+    // The old kept-line recorded only row sizes, so a run that left the row on
+    // screen could not be told from one where the numbers were nearly right,
+    // and there was nothing to tune against. These are those numbers.
+    const nearMisses = [];
     for (let i = 0; i < perShelf.length; i++) {
       const ids = perShelf[i];
       if (ids.length < MIN_VIDEOS) continue;
@@ -100,9 +126,22 @@ export function filterAggregateShelves(shelves, pageName) {
         }
         if (sharedHere) shared++;
       }
-      const ratio = shared / ids.length;
+      // The most that could overlap: this row cannot share more videos than
+      // the other rows hold between them.
+      let otherTotal = 0;
+      for (let j = 0; j < perShelf.length; j++) {
+        if (j !== i) otherTotal += perShelf[j].length;
+      }
+      const available = Math.min(ids.length, otherTotal);
+      const ratio = available > 0 ? shared / available : 0;
+      const entry = {
+        index: i, videos: ids.length, shared, spread: others.size,
+        available, ratio: Math.round(ratio * 100) / 100,
+      };
       if (ratio >= MIN_SHARED_RATIO && others.size >= MIN_OTHER_SHELVES) {
-        candidates.push({ index: i, videos: ids.length, shared, spread: others.size, ratio: Math.round(ratio * 100) / 100 });
+        candidates.push(entry);
+      } else {
+        nearMisses.push(entry);
       }
     }
 
@@ -114,6 +153,10 @@ export function filterAggregateShelves(shelves, pageName) {
         page: pageName,
         shelves: shelves.length,
         sizes: perShelf.map(ids => ids.length),
+        // Empty means no row was even long enough to consider, which is the
+        // ordinary Subscriptions page and not a failure. Entries mean a row
+        // was considered and rejected, and say by how much.
+        nearMiss: nearMisses,
       });
       return;
     }
