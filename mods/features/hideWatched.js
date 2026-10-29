@@ -494,6 +494,26 @@ const CONSOLIDATE_PAGES = new Set(['subscriptions', 'watch']);
 // measured it, so it keeps the old unbounded behaviour.
 const NORMAL_ROW_MAX = { subscriptions: 3 };
 
+/**
+ * Whether consolidation will rebuild this page's rows.
+ *
+ * Exported so the aggregated-row filter can stand down when it would be
+ * removing a row whose videos are about to be pooled anyway — see
+ * aggregateShelfHider.js. The conditions are read off consolidateShelves
+ * below, including its treatment of a missing pageName as "yes", so the two
+ * cannot drift apart into a page that is filtered by one and rebuilt by the
+ * other.
+ */
+export function consolidationApplies(pageName) {
+  try {
+    if (!configRead('enableHideWatchedVideos')) return false;
+    if (pageName && !CONSOLIDATE_PAGES.has(pageName)) return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export function consolidateShelves(contents, path = 'unknown', pageName = null, hasContinuation = false, itemFilter = null) {
   appendFileOnlyLog('consolidate.check', { path, contentsLength: contents?.length, pageName, hasContinuation });
   if (!configRead('enableHideWatchedVideos')) return;
