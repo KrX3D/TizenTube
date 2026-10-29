@@ -483,6 +483,17 @@ export function clearCarryover() {
 // Channel page is intentionally excluded — it breaks the channel page layout.
 const CONSOLIDATE_PAGES = new Set(['subscriptions', 'watch']);
 
+// The widest a normal row gets, by page.
+//
+// Only subscriptions is listed, because that is the page there are numbers
+// for: across every capture from the 5.0 TV, 390 rows on Subscriptions hold
+// one, two or three videos and not one normal row holds more. The eight rows
+// that exceeded three were all the aggregated row the page puts on top.
+//
+// The watch page is deliberately absent rather than guessed at — nothing has
+// measured it, so it keeps the old unbounded behaviour.
+const NORMAL_ROW_MAX = { subscriptions: 3 };
+
 export function consolidateShelves(contents, path = 'unknown', pageName = null, hasContinuation = false, itemFilter = null) {
   appendFileOnlyLog('consolidate.check', { path, contentsLength: contents?.length, pageName, hasContinuation });
   if (!configRead('enableHideWatchedVideos')) return;
@@ -544,12 +555,34 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
     const dedupedItems = [...carried, ...dedupedFresh];
     if (!dedupedItems.length) return;
 
-    // perRow: max across all shelves' recorded original row size and current item counts.
-    const perRow = Math.max(
+    // perRow: how wide a normal row on this page is.
+    //
+    // This took the maximum across every row, and one wide row was therefore
+    // enough to make every rebuilt row that wide. From the 29 October capture
+    // of Subscriptions:
+    //
+    //   sizes [10, 3, 1, 1]
+    //
+    // perRow came out as 10, so consolidation packed everything into rows of
+    // ten — the long row that has to be scrolled sideways, which is the
+    // complaint itself. The aggregated row was being read as evidence of how
+    // wide a row should be, when it is the one row that is not.
+    //
+    // So rows wider than a normal row are left out of the measurement. They
+    // still contribute their VIDEOS — every item was pooled above and is
+    // packed into the new rows below — they just no longer dictate the width.
+    const widthCap = NORMAL_ROW_MAX[pageName] || Infinity;
+    const widths = [
       ...shelves.map(s => s.shelfRenderer.content.horizontalListRenderer._originalRowSize || 0),
       ...shelves.map(s => s.shelfRenderer.content.horizontalListRenderer.items?.length || 0),
-      3
-    );
+    ].filter(n => n > 0 && n <= widthCap);
+    // The floor of three is kept from the old calculation, and it matters more
+    // now that over-wide rows are excluded: [8,1,2,1,2,1] leaves 2 as the
+    // widest normal row, and packing the page two to a row because one channel
+    // happened to post twice would be its own layout bug. Three is the width
+    // every normal Subscriptions row is built to, so with the cap that page
+    // now always comes out at three.
+    const perRow = Math.min(widthCap, Math.max(3, ...widths, 0));
 
     const insertAt = contents.findIndex(c => c.shelfRenderer);
     for (let i = contents.length - 1; i >= 0; i--) if (contents[i].shelfRenderer) contents.splice(i, 1);
@@ -557,10 +590,25 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
     // Pick the template from the first shelf that has a non-empty title or no suspicious header.
     // Avoids using a Shorts shelf (which survived processShelves) as template, which would
     // copy the "Shorts" heading into all consolidated rows.
-    const template = shelves.find(s => {
-      const firstItem = s.shelfRenderer.content.horizontalListRenderer.items?.[0];
+    //
+    // An over-wide row is skipped for the same reason a Shorts shelf is. The
+    // whole shelfRenderer is spread onto every rebuilt row, header included,
+    // so taking the aggregated row as the template stamps its title across the
+    // entire page — which is why "Relevanteste" was reported as the heading of
+    // a row holding more than three videos. It is only skipped if a normal row
+    // is available to use instead.
+    const usable = (s) => {
+      const hlr = s.shelfRenderer.content.horizontalListRenderer;
+      const firstItem = hlr?.items?.[0];
       return !firstItem?.tileRenderer?.onSelectCommand?.reelWatchEndpoint && !firstItem?.reelItemRenderer;
-    }) || shelves[0];
+    };
+    const normalWidth = (s) => {
+      const hlr = s.shelfRenderer.content.horizontalListRenderer;
+      return (hlr?._originalRowSize || hlr?.items?.length || 0) <= widthCap;
+    };
+    const template = shelves.find(s => usable(s) && normalWidth(s))
+      || shelves.find(usable)
+      || shelves[0];
 
     const newShelves = [];
 
@@ -606,6 +654,10 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
     contents.splice(insertAt, 0, ...newShelves);
     appendFileOnlyLog('consolidate.done', {
       path, pageName, perRow,
+      // What the width was measured from, so a row that comes out the wrong
+      // width can be read off a capture instead of reasoned about.
+      widthCap: widthCap === Infinity ? null : widthCap,
+      widthsIgnored: shelves.length * 2 - widths.length,
       totalItems: allItems.length, freshItems: freshItems.length,
       carried: carried.length,
       deduped: (freshItems.length + carried.length) - dedupedItems.length,
