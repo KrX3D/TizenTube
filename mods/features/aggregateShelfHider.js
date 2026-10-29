@@ -1,9 +1,29 @@
 import { configRead } from '../config.js';
-import { appendFileOnlyLog, getItemVideoId } from './hideWatched.js';
+import { appendFileOnlyLog, getItemVideoId, consolidationApplies } from './hideWatched.js';
 import { shelfItemArrays } from './duplicateVideoHider.js';
 
 /**
  * Remove the aggregated row the Subscriptions page puts above the real ones.
+ *
+ * Mostly of historical interest now. consolidateShelves does this better: it
+ * pools the videos out of every shelf, drops the duplicates and rebuilds the
+ * page as normal rows, so the aggregated row stops existing without anything
+ * being thrown away. This file deletes the row and everything in it that lives
+ * nowhere else, which on the 29 October capture would have been five of
+ * fifteen videos.
+ *
+ * Worse, it runs first -- processShelves is called immediately before
+ * consolidateShelves on the same contents -- so those videos are gone before
+ * consolidation can pool them. Deleting a row to fix its width, when the next
+ * pass is about to rebuild every row anyway, is all cost.
+ *
+ * So it stands down whenever consolidation is going to run, which on
+ * Subscriptions is whenever hiding watched videos is on. It still does its
+ * original job when consolidation is switched off: without it the duplicate
+ * hider keeps the aggregated row's copy of each video, empties the per-channel
+ * rows, and the emptied-shelf cleanup then deletes them, collapsing the page
+ * into the one long row. That is what this was written for and it is still the
+ * only thing standing between that page and that outcome.
  *
  * Reported twice from the device: Subscriptions opens with one long row
  * ("Relevanteste" / "Most relevant") holding a dozen videos, and the rows below
@@ -67,6 +87,10 @@ const MIN_SHARED_RATIO = 0.6;
 // sharing videos says nothing about which is the aggregate.
 const MIN_OTHER_SHELVES = 2;
 
+// Which page this last stood down for, so the line above is logged on a change
+// of answer instead of on every response.
+let _lastStandDown = null;
+
 function shelfVideoIds(shelve) {
   const ids = [];
   try {
@@ -94,6 +118,20 @@ export function filterAggregateShelves(shelves, pageName) {
     if (!Array.isArray(shelves)) return;
     if (!configRead('hideAggregateShelf')) return;
     if (pageName !== PAGE) return;
+    // Consolidation is about to pool every shelf's videos and repack them, so
+    // removing a row here would only delete the ones it alone holds. Said once
+    // per change of answer rather than once per response.
+    if (consolidationApplies(pageName)) {
+      if (_lastStandDown !== pageName) {
+        _lastStandDown = pageName;
+        appendFileOnlyLog('aggregateShelf.standDown', {
+          page: pageName,
+          reason: 'consolidateShelves rebuilds these rows and keeps every video',
+        });
+      }
+      return;
+    }
+    _lastStandDown = null;
     // Nothing to compare against, so nothing can be shown to be an aggregate.
     if (shelves.length < MIN_OTHER_SHELVES + 1) return;
 
