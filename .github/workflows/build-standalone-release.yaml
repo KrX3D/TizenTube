@@ -102,7 +102,18 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest, which began migrating to Ubuntu 26 on
+    # 19 October 2026 (actions/runner-images#14748).
+    #
+    # This job downloads Tizen Studio's own CLI and runs it, and declares
+    # nothing about what that needs — no apt-get, no setup-java. Whatever JDK
+    # and libraries the vendor tool depends on come from the runner image, so
+    # the image is an undeclared dependency of the build and a silent change of
+    # it is exactly how a release breaks. The other workflows stay on
+    # ubuntu-latest: they run node and npm and declare their own versions.
+    #
+    # Revisit when Tizen Studio is known good on the newer image.
+    runs-on: ubuntu-24.04
     # Only proceed on a successful npm-publish run that was itself triggered by
     # a push to main (build-publish-cleanup.yml's job is skipped entirely for
     # pull_request runs, which can still report an overall "success" — checking
@@ -219,7 +230,7 @@ jobs:
       # holding files dated November 2025. There was no working URL to move to.
       - name: Restore the Tizen Studio installer from cache
         id: tizen_cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: tizen-installer
           key: tizen-installer-${{ env.TIZEN_STUDIO_VER }}-ubuntu-64
