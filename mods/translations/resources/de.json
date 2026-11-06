@@ -541,7 +541,6 @@
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Kanal",
         "markWatched": "Als gesehen markieren",
-        "unmarkWatched": "Doch nicht gesehen",
         "playPlaylist": "Playlist abspielen"
     },
     "toasts": {
@@ -576,11 +575,8 @@
         "hideWatchedChannelHidingAgain": "Gesehene Videos von „{{name}}“ werden außerhalb der eigenen Kanalseite wieder ausgeblendet.",
         "hideWatchedExemptionRemoved": "„{{name}}“ blendet gesehene Videos wieder aus.",
         "markWatchedWorking": "YouTube wird mitgeteilt, dass dies gesehen wurde…",
-        "markWatchedOnAccount": "Meldung angenommen und hier ausgeblendet. Falls es auf anderen Geräten nicht auftaucht, hat YouTube es nicht gespeichert.",
-        "markWatchedFailed": "YouTube hat das nicht übernommen, daher wurde nichts ausgeblendet — es bleibt hier und auf anderen Geräten unverändert.",
-        "unmarkWatchedRestored": "Hier nicht mehr als gesehen markiert — das Video ist wieder da.",
-        "unmarkWatchedHistory": "Hier entfernt, aber der Verlauf deines Kontos führt das Video weiterhin, daher bleibt es ausgeblendet. Das kann nur YouTube ändern.",
-        "unmarkWatchedNothing": "Für dieses Video war hier nichts markiert."
+        "markWatchedOnAccount": "Im Konto als gesehen markiert — andere Geräte blenden es ebenfalls aus.",
+        "markWatchedFailed": "YouTube hat das nicht übernommen, daher wurde nichts ausgeblendet — es bleibt hier und auf anderen Geräten unverändert."
     },
     "general": {
         "dislikes": "Dislikes",

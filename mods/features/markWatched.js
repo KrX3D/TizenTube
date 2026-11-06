@@ -1,4 +1,5 @@
 import { appendFileOnlyLog } from './hideWatched.js';
+import { refreshWatchHistory, isInWatchHistory } from './watchHistory.js';
 import { noteProgressChanged } from './watchProgressStore.js';
 
 /**
@@ -437,13 +438,20 @@ function notePending(videoId) {
     } catch (_) { }
 }
 
-/** Remember it locally too, so the tile goes now rather than on the next load. */
+/**
+ * Cache what the account already says, so the tile goes now rather than on the
+ * next history refresh.
+ *
+ * Only ever called once the history has been re-read and confirmed to list
+ * this video. It is a copy of the truth, not a claim about it -- which is the
+ * distinction the previous version lost, and the reason a video ended up
+ * hidden on one TV and nowhere else.
+ */
 function recordLocally(videoId) {
     try {
         if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
         window._ttVideoProgressCache[videoId] = 100;
         noteProgressChanged(videoId);
-        notePending(videoId);
         return true;
     } catch (err) {
         appendFileOnlyLog('markWatched.local.failed', { videoId, message: err && err.message || String(err) });
@@ -452,71 +460,44 @@ function recordLocally(videoId) {
 }
 
 /**
- * Undo a local mark.
+ * Did it reach the account's watch history?
  *
- * Reported: a video was marked watched, the toast said it would be watched on
- * other devices, it never appeared on a PC, and there was no way to get the
- * video back. There still is no way to withdraw it from the account -- nothing
- * in the API takes something out of your watch history -- but the local record
- * is ours and can be removed, and that is what was hiding the tile.
+ * The pings return 200 whether or not YouTube keeps the video, so a 200 was
+ * never evidence. Reported: a video marked on the TV was hidden there and
+ * still listed on a PC, because the local record was written on that 200.
  *
- * Returns what it managed:
- *   'restored' — the local record is gone and the video will be back
- *   'history'  — removed, but the account's history still lists it, so it
- *                stays hidden and only YouTube can change that
- *   'none'     — there was nothing recorded here to remove
+ * The history itself is the only evidence, so it is re-read and asked. Nothing
+ * is hidden unless the answer is yes -- which is the whole requirement: a
+ * video that is not watched should not be hidden, and one that IS watched is
+ * hidden everywhere by the ordinary filter, without this needing to do
+ * anything special.
+ *
+ * The walk takes a few seconds. That is affordable for something a viewer
+ * deliberately asked for, and the toast says it is working.
  */
-export function unmarkVideoWatched(videoId) {
-    const id = String(videoId || '').trim();
-    if (!id) return 'none';
-    try {
-        const cache = window._ttVideoProgressCache;
-        const had = !!cache && cache[id] !== undefined && cache[id] !== null;
-        if (cache) delete cache[id];
-        // Schedules the debounced write. flushProgressCache rebuilds the stored
-        // object from the cache's own keys, so a deleted key stays deleted.
-        noteProgressChanged(id);
-        try {
-            const pending = window.__ttMarkWatchedPending;
-            if (Array.isArray(pending)) {
-                const at = pending.indexOf(id);
-                if (at !== -1) pending.splice(at, 1);
-            }
-        } catch (_) { }
-        // getWatchPercent checks history before this cache, so a video YouTube
-        // really did record stays hidden however this cache is edited. Saying
-        // so is better than appearing to do nothing.
-        const inHistory = watchedByAccountHistory(id);
-        appendFileOnlyLog('markWatched.unmarked', { videoId: id, hadLocal: had, inHistory });
-        if (inHistory) return 'history';
-        return had ? 'restored' : 'none';
-    } catch (err) {
-        appendFileOnlyLog('markWatched.unmark.failed', { videoId: id, message: err && err.message || String(err) });
-        return 'none';
-    }
-}
-
-/**
- * Whether the account's own history lists this video.
- *
- * Read off the lookup hideWatched.js already holds, so this module does not
- * import watchHistory.js and risk a cycle through hideWatched.
- */
-function watchedByAccountHistory(videoId) {
-    try {
-        const check = window.__ttWatchedLookup;
-        return typeof check === 'function' ? check(videoId) === true : false;
-    } catch (_) {
-        return false;
-    }
+function confirmInHistory(id) {
+    notePending(id);
+    return Promise.resolve(refreshWatchHistory('markWatched', true)).then(
+        () => {
+            const landed = isInWatchHistory(id);
+            appendFileOnlyLog('markWatched.confirmed', { videoId: id, inHistory: landed });
+            if (!landed) return 'none';
+            recordLocally(id);
+            return 'account';
+        },
+        (err) => {
+            appendFileOnlyLog('markWatched.confirmFailed', { videoId: id, message: (err && err.message) || String(err) });
+            return 'none';
+        }
+    );
 }
 
 /**
  * Mark one video watched.
  *
  * Resolves to what actually happened:
- *   'account' — YouTube accepted the watch report, and it is recorded here
- *   'none'    — YouTube did not, and nothing was hidden anywhere
+ *   'account' — the account's history now lists it, confirmed by re-reading
+ *   'none'    — it does not, and nothing was hidden anywhere
  *
  * 'account' is named for what was accepted, not for what the account ends up
  * holding. The pings below return 200 and that is all a 200 says: these are
@@ -570,8 +551,7 @@ export function markVideoWatched(videoId, watchParams) {
                 // History has the entry, which is the part that reaches a PC;
                 // without a duration there is no honest watchtime to claim.
                 appendFileOnlyLog('markWatched.noWatchtime', { videoId: id, lengthSeconds, hasUrl: !!watchtimeUrl });
-                recordLocally(id);
-                return 'account';
+                return confirmInHistory(id);
             }
             // st/et are the span played, as a pair of lists, and YouTube wants
             // them to agree with each other and with the duration. Claiming
@@ -585,12 +565,9 @@ export function markVideoWatched(videoId, watchParams) {
                 state: 'paused',
                 final: 1,
             });
-            return ping(watchtime, 'watchtime').then(() => {
-                // Only now, once YouTube has it, is it remembered here — so
-                // the tile leaving the shelf always means the same thing.
-                recordLocally(id);
-                return 'account';
-            });
+            // Asking the account is the only way to know, and until it says
+            // yes nothing is hidden anywhere.
+            return ping(watchtime, 'watchtime').then(() => confirmInHistory(id));
         });
     }).catch((err) => {
         appendFileOnlyLog('markWatched.failed', { videoId: id, message: err && err.message || String(err) });
