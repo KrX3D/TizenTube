@@ -1,5 +1,6 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog, setWatchedLookup } from './hideWatched.js';
+import { readCachedWatchHistory, writeCachedWatchHistory } from './watchHistoryCache.js';
 
 /**
  * watchHistory.js — ask YouTube what you have watched, since it will not say.
@@ -192,9 +193,19 @@ export function refreshWatchHistory(reason) {
         if (ids.length > MAX_IDS) ids.length = MAX_IDS;
         const next = Object.create(null);
         for (let i = 0; i < ids.length; i++) next[ids[i]] = true;
+        // How much the seed was missing, which is the measure of whether
+        // caching the ids was worth it: 0 means the first render of this start
+        // was already filtering on the truth.
+        let missedBySeed = 0;
+        for (let i = 0; i < ids.length; i++) {
+            if (_watched[ids[i]] !== true) missedBySeed++;
+        }
         _watched = next;
         _count = ids.length;
         _fetchedAt = Date.now();
+        // Stored only on a complete walk. A partial set would read as "these
+        // are the only watched videos" at the next start.
+        writeCachedWatchHistory(ids);
         // Did the videos this session marked actually reach the account?
         // Nothing else answers that: the watch report returns 200 whether or
         // not YouTube keeps it, and the only evidence is the history itself.
@@ -217,6 +228,8 @@ export function refreshWatchHistory(reason) {
         } catch (_) { }
         appendFileOnlyLog('watchHistory.loaded', {
             reason: reason || null, count: _count, tookMs: Date.now() - startedAt,
+            // Videos this start's first responses were filtered without.
+            missedBySeed,
             pages: perPage.length, perPage: perPage,
         });
         return _count;
@@ -240,6 +253,32 @@ export function watchHistoryCount() {
 // Registered rather than imported by hideWatched.js, which holds
 // appendFileOnlyLog and must not import anything that imports it back.
 setWatchedLookup(isInWatchHistory);
+
+// Seeded here, at import, because that is the whole point: the first
+// Subscriptions response is parsed about a second after the page navigates and
+// the fetch below does not land for another three to five. Anything asked
+// before then used to be answered with "not watched" for every video.
+//
+// Nothing overwrites a fetched set with a cached one: this runs once, before
+// any fetch can have completed, and loadWatchHistory replaces _watched wholesale
+// when it does.
+if (enabled()) {
+    try {
+        const seed = readCachedWatchHistory();
+        if (seed) {
+            const next = Object.create(null);
+            for (let i = 0; i < seed.ids.length; i++) next[seed.ids[i]] = true;
+            _watched = next;
+            _count = seed.ids.length;
+            appendFileOnlyLog('watchHistory.seeded', {
+                count: _count,
+                ageMin: Math.round(seed.ageMs / 60000),
+            });
+        } else {
+            appendFileOnlyLog('watchHistory.noSeed', {});
+        }
+    } catch (_) { }
+}
 
 // The client appears some way into startup, so the first fetch waits for it
 // rather than racing it. Same approach as the long press menu's playlist warm.
