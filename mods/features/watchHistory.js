@@ -206,6 +206,26 @@ export function refreshWatchHistory(reason) {
         // Stored only on a complete walk. A partial set would read as "these
         // are the only watched videos" at the next start.
         writeCachedWatchHistory(ids);
+        // Did the videos this session marked actually reach the account?
+        // Nothing else answers that: the watch report returns 200 whether or
+        // not YouTube keeps it, and the only evidence is the history itself.
+        try {
+            const pending = window.__ttMarkWatchedPending;
+            if (Array.isArray(pending) && pending.length) {
+                const kept = [];
+                const lost = [];
+                for (let i = 0; i < pending.length; i++) {
+                    (next[pending[i]] === true ? kept : lost).push(pending[i]);
+                }
+                appendFileOnlyLog('markWatched.inHistory', {
+                    kept: kept.length, lost: lost.length,
+                    // Ids only, and only the ones that did not arrive, which
+                    // are the ones worth looking up by hand.
+                    lostIds: lost.slice(0, 10),
+                });
+                window.__ttMarkWatchedPending = lost;
+            }
+        } catch (_) { }
         appendFileOnlyLog('watchHistory.loaded', {
             reason: reason || null, count: _count, tookMs: Date.now() - startedAt,
             // Videos this start's first responses were filtered without.

@@ -418,12 +418,32 @@ function ping(url, what) {
         });
 }
 
+/**
+ * Ids marked during this session, so the next history load can say whether
+ * YouTube actually kept them.
+ *
+ * A window global rather than an export because watchHistory.js would
+ * otherwise have to import this module, and nothing there needs the rest of
+ * it. The same arrangement as __ttMarkWatchedInFlight and __ttResolveCommand.
+ */
+function notePending(videoId) {
+    try {
+        if (!Array.isArray(window.__ttMarkWatchedPending)) window.__ttMarkWatchedPending = [];
+        if (window.__ttMarkWatchedPending.indexOf(videoId) === -1) {
+            window.__ttMarkWatchedPending.push(videoId);
+        }
+        // Bounded: a session that marks hundreds should not grow this forever.
+        if (window.__ttMarkWatchedPending.length > 50) window.__ttMarkWatchedPending.shift();
+    } catch (_) { }
+}
+
 /** Remember it locally too, so the tile goes now rather than on the next load. */
 function recordLocally(videoId) {
     try {
         if (!window._ttVideoProgressCache) window._ttVideoProgressCache = {};
         window._ttVideoProgressCache[videoId] = 100;
         noteProgressChanged(videoId);
+        notePending(videoId);
         return true;
     } catch (err) {
         appendFileOnlyLog('markWatched.local.failed', { videoId, message: err && err.message || String(err) });
@@ -432,11 +452,79 @@ function recordLocally(videoId) {
 }
 
 /**
+ * Undo a local mark.
+ *
+ * Reported: a video was marked watched, the toast said it would be watched on
+ * other devices, it never appeared on a PC, and there was no way to get the
+ * video back. There still is no way to withdraw it from the account -- nothing
+ * in the API takes something out of your watch history -- but the local record
+ * is ours and can be removed, and that is what was hiding the tile.
+ *
+ * Returns what it managed:
+ *   'restored' — the local record is gone and the video will be back
+ *   'history'  — removed, but the account's history still lists it, so it
+ *                stays hidden and only YouTube can change that
+ *   'none'     — there was nothing recorded here to remove
+ */
+export function unmarkVideoWatched(videoId) {
+    const id = String(videoId || '').trim();
+    if (!id) return 'none';
+    try {
+        const cache = window._ttVideoProgressCache;
+        const had = !!cache && cache[id] !== undefined && cache[id] !== null;
+        if (cache) delete cache[id];
+        // Schedules the debounced write. flushProgressCache rebuilds the stored
+        // object from the cache's own keys, so a deleted key stays deleted.
+        noteProgressChanged(id);
+        try {
+            const pending = window.__ttMarkWatchedPending;
+            if (Array.isArray(pending)) {
+                const at = pending.indexOf(id);
+                if (at !== -1) pending.splice(at, 1);
+            }
+        } catch (_) { }
+        // getWatchPercent checks history before this cache, so a video YouTube
+        // really did record stays hidden however this cache is edited. Saying
+        // so is better than appearing to do nothing.
+        const inHistory = watchedByAccountHistory(id);
+        appendFileOnlyLog('markWatched.unmarked', { videoId: id, hadLocal: had, inHistory });
+        if (inHistory) return 'history';
+        return had ? 'restored' : 'none';
+    } catch (err) {
+        appendFileOnlyLog('markWatched.unmark.failed', { videoId: id, message: err && err.message || String(err) });
+        return 'none';
+    }
+}
+
+/**
+ * Whether the account's own history lists this video.
+ *
+ * Read off the lookup hideWatched.js already holds, so this module does not
+ * import watchHistory.js and risk a cycle through hideWatched.
+ */
+function watchedByAccountHistory(videoId) {
+    try {
+        const check = window.__ttWatchedLookup;
+        return typeof check === 'function' ? check(videoId) === true : false;
+    } catch (_) {
+        return false;
+    }
+}
+
+/**
  * Mark one video watched.
  *
  * Resolves to what actually happened:
- *   'account' — YouTube accepted it, and it is recorded here as well
+ *   'account' — YouTube accepted the watch report, and it is recorded here
  *   'none'    — YouTube did not, and nothing was hidden anywhere
+ *
+ * 'account' is named for what was accepted, not for what the account ends up
+ * holding. The pings below return 200 and that is all a 200 says: these are
+ * telemetry endpoints, not a history API, and nothing in the response promises
+ * the video reached your watch history. It was reported that a video marked
+ * this way never appeared on a PC, so the toast no longer claims it will --
+ * see toasts.markWatchedOnAccount -- and the ids go on a pending list that the
+ * next history load checks, so a capture can settle whether this works at all.
  *
  * Nothing is written locally until YouTube has accepted it, and that is a
  * deliberate reversal. The first version hid the video here first so the tile
