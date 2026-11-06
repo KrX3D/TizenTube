@@ -167,9 +167,13 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: false
 
-# Allow this workflow to push back changes to the repo
+# contents: write to push the version bump back; id-token: write so npm can
+# mint a short-lived OIDC credential and publish as a trusted publisher
+# instead of using a long-lived token. Without id-token the publish falls
+# back to looking for a token and fails.
 permissions:
   contents: write
+  id-token: write
 
 env:
   PACKAGE_NAME: '@krx3d/tizentube2'
@@ -218,6 +222,12 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
+          # Required for trusted publishing: this is what puts registry.npmjs.org
+          # into .npmrc so npm knows where to present its OIDC credential. It
+          # also writes an _authToken line that reads NODE_AUTH_TOKEN, which is
+          # deliberately unset for the publish (so OIDC is used) and set only on
+          # the cleanup steps further down, which still need a real token.
+          registry-url: 'https://registry.npmjs.org'
 
       # ----------------------------
       # Version bump (push to main only) - MUST happen BEFORE building dist
@@ -418,20 +428,24 @@ jobs:
       # --------------------
       # NPM AUTH
       # --------------------
-      - name: Configure npm auth
-        if: success()
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${NPM_TOKEN:-}" ]; then
-            echo "::error::NPM_TOKEN secret is not set"
-            exit 1
-          fi
-          printf "//registry.npmjs.org/:_authToken=%s\n" "$NPM_TOKEN" > ~/.npmrc
-          printf "always-auth=true\n" >> ~/.npmrc
-          npm whoami
-          echo "✓ npm auth OK"
+      # No npm auth step before publishing any more.
+      #
+      # It wrote a token into ~/.npmrc and then ran `npm whoami` as a health
+      # check, and on 6 November that check is what failed the release: the
+      # token had expired and whoami returned 401 after dist/ and the version
+      # bump had already been committed to main. A long-lived publish token is
+      # also on npm's way out -- a granular token with "bypass 2FA" loses
+      # direct publish around January 2027.
+      #
+      # Trusted publishing replaces it. npm mints a short-lived credential from
+      # the OIDC token this job requests, so there is nothing to expire and
+      # nothing to rotate. whoami is not even a valid check for it -- npm's own
+      # documentation says so -- which is the other reason this step is gone.
+      #
+      # It still has to be configured once on npm, under
+      # Packages -> @krx3d/tizentube2 -> Settings -> Trusted publishing, naming
+      # this repository and this workflow file, with direct publish allowed.
+      # Staged publishing alone is not enough for `npm publish` below.
 
       # --------------------
       # PUBLISH
@@ -464,6 +478,23 @@ jobs:
             exit 1
           fi
           echo "dist/userScript.js carries ${VER}"
+
+      # Trusted publishing needs npm 11.5.1 or newer. node-version 24 resolves
+      # to whatever 24.x is current and its bundled npm has moved over time, so
+      # this checks rather than assumes: an npm without OIDC support does not
+      # explain itself, it just fails to authenticate.
+      - name: Ensure npm can use trusted publishing
+        if: success()
+        run: |
+          set -euo pipefail
+          need=11.5.1
+          have=$(npm --version)
+          echo "npm ${have} (trusted publishing needs ${need} or newer)"
+          if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | head -1)" != "$need" ]; then
+            echo "Upgrading npm for OIDC support"
+            npm install -g npm@latest
+            echo "npm now $(npm --version)"
+          fi
 
       - name: Publish package to npm
         if: success()
@@ -645,10 +676,43 @@ jobs:
       # To actually remove versions today, run
       # scripts/npm-cleanup/unpublish-old-versions.ps1 locally; it prompts for a
       # 2FA code, which is the only path npm still allows.
-      - name: Unpublish old versions (verified) and fallback to deprecate
+      # OIDC covers `npm publish` and nothing else, so the deprecating below
+      # still needs a real token -- and npm's package setting decides whether
+      # one is accepted at all. Under "Publishing access", the recommended
+      # "Require two-factor authentication and disallow bypass 2fa tokens"
+      # refuses every token, which leaves deprecation to be done by hand.
+      #
+      # So a missing or refused token is a warning and a skip, never a failed
+      # release: by this point the package is already published and live.
+      #
+      # whoami is the right check here, where authentication really is a token.
+      # It is not a check of trusted publishing, which is why the publish above
+      # no longer uses it.
+      - name: Check the npm token the cleanup needs
+        id: cleanup_auth
         if: steps.confirm_publish.outputs.confirmed == 'true'
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NPM_TOKEN is not set, so old versions will not be deprecated. The publish itself used trusted publishing and is unaffected."
+            exit 0
+          fi
+          if npm whoami > /dev/null 2>&1; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+            echo "Token accepted; cleanup can deprecate."
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NPM_TOKEN was refused by the registry, so old versions will not be deprecated. The publish itself used trusted publishing and is unaffected. Either the token expired, or this package now disallows bypass-2fa tokens."
+          fi
+
+      - name: Unpublish old versions (verified) and fallback to deprecate
+        if: steps.confirm_publish.outputs.confirmed == 'true' && steps.cleanup_auth.outputs.ok == 'true'
+        env:
           PKG: ${{ env.PACKAGE_NAME }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -736,9 +800,10 @@ jobs:
       # DEPRECATE older (>72h)
       # --------------------
       - name: Deprecate older versions
-        if: steps.confirm_publish.outputs.confirmed == 'true'
+        if: steps.confirm_publish.outputs.confirmed == 'true' && steps.cleanup_auth.outputs.ok == 'true'
         env:
           PKG: ${{ env.PACKAGE_NAME }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           if [ ! -s /tmp/to_deprecate.txt ]; then
