@@ -6,6 +6,18 @@ import { t } from 'i18next';
 import { isCategoryEnabled } from './logCategories.js';
 
 // Copied from https://github.com/ajayyy/SponsorBlock/blob/da1a535de784540ee10166a75a3eb8537073838c/src/config.ts#L113-L134
+// Two skips of the same segment closer together than this are a loop rather
+// than a viewer watching it twice.
+const RESKIP_LOOP_MS = 1000;
+
+// And this many skips of one segment is a loop however slowly it cycles. Three
+// leaves room for a viewer who really did seek back twice.
+const MAX_SKIPS_PER_SEGMENT = 3;
+
+// A gap this long before the same segment comes round again is someone going
+// back on purpose, not a loop, so the count starts over.
+const RESKIP_FORGET_MS = 30000;
+
 const barTypes = {
   sponsor: {
     color: '#00d400',
@@ -391,11 +403,35 @@ class SponsorBlockHandler {
         if (!this.manualSkippableCategories.includes(segment.category)) {
           const wasSkippedBefore = this.skippedCategories.get(segment.UUID);
           if (wasSkippedBefore) {
-            wasSkippedBefore.count++;
+            // Measured from the PREVIOUS skip, not the first one.
+            //
+            // The old test was lastSkipped - firstSkipped < 1000, and
+            // firstSkipped never changes. So one second after a segment was
+            // first skipped that test is false and stays false for the rest of
+            // the video: the guard disarmed itself permanently, and any loop
+            // slower than a second ran unchecked. Reported on the 5.0 TV as a
+            // segment being skipped, coming back, and being skipped again
+            // without end.
+            //
+            // Counting from the previous skip catches a loop at any speed, and
+            // the count cap below catches one that paces itself just under the
+            // threshold.
+            const sinceLast = Date.now() - (Number(wasSkippedBefore.lastSkipped) || 0);
+            if (sinceLast > RESKIP_FORGET_MS) {
+              // Long enough that this is a viewer going back to watch it on
+              // purpose rather than a loop. Start counting again, and allow a
+              // fresh toast if it does turn into one.
+              wasSkippedBefore.count = 1;
+              wasSkippedBefore.hasShownToast = false;
+            } else {
+              wasSkippedBefore.count++;
+            }
             wasSkippedBefore.lastSkipped = Date.now();
             this.skippedCategories.set(segment.UUID, wasSkippedBefore);
 
-            if (wasSkippedBefore.lastSkipped - wasSkippedBefore.firstSkipped < 1000) {
+            const looping = sinceLast < RESKIP_LOOP_MS
+              || wasSkippedBefore.count > MAX_SKIPS_PER_SEGMENT;
+            if (looping) {
               if (!wasSkippedBefore.hasShownToast) {
                 if (configRead('enableSponsorBlockToasts')) {
                   showToast('SponsorBlock', t('sponsorblock.toasts.notSkipping', { segment: skipName, count: wasSkippedBefore.count }));
@@ -403,6 +439,21 @@ class SponsorBlockHandler {
                 wasSkippedBefore.hasShownToast = true;
                 this.skippedCategories.set(segment.UUID, wasSkippedBefore);
               }
+              // What a capture needs to say WHY the playhead came back: how
+              // long the cycle took, and where it resumed from. A position
+              // back at the segment's start means something restored it --
+              // the player being rebuilt is the candidate on this TV, which
+              // unwedge.playerReplaced reports separately. A position at the
+              // segment's end means the seek landed and was undone.
+              appendFileOnlyLog('sponsorblock.skipLoop', {
+                category: skipName,
+                start: segment.segment?.[0] ?? null,
+                end,
+                count: wasSkippedBefore.count,
+                sinceLastMs: sinceLast,
+                at: Math.round((Number(this.video.currentTime) || 0) * 10) / 10,
+                videoId: this.videoID || null,
+              });
               return;
             }
           } else {
