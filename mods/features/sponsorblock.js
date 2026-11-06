@@ -27,21 +27,27 @@ const SEEK_CHECK_MS = 400;
 // was told. A tenth of a second is below anything a player rounds by.
 const SEEK_SHORT_TOLERANCE_S = 0.1;
 
-// Where a retry aims instead, as seconds past the segment end, in order.
+// There is deliberately no retry here, and the reason is worth recording.
 //
-// The 5.0 TV snaps a seek back to the nearest keyframe before the requested
-// time. Asking for the segment end therefore lands somewhere before it, and if
-// the segment is shorter than the gap between keyframes that is before the
-// segment STARTS -- so it plays into the segment again and is skipped again,
-// for ever. Captured 6 November on a 1.38 second segment: seven skips of the
-// same UUID, one every three seconds, which is exactly the delay this file
-// computes for a playhead three seconds short of the start.
+// The first version of this seeked again, further past the end, on the theory
+// that the player was honouring seeks at the nearest earlier keyframe. A
+// capture with every log category on disproved that:
 //
-// Aiming further forward gives the snap somewhere to land past the end. Two
-// entries only: each retry skips real content, so if five seconds past the end
-// still will not hold, the segment is left alone rather than cutting further
-// into the video.
-const SEEK_RETRY_MARGINS_S = [2, 5];
+//   17:24:30  player.heartbeat at 1447  movedSec 1.6  ratio 0.16  stuttering
+//   17:24:40  player.heartbeat at 1448  movedSec 1.5  ratio 0.15  stuttering
+//   17:24:50  player.heartbeat at 1447  movedSec -1.2 stuck true
+//   17:25:00  player.heartbeat at 1448  movedSec 1.6  ratio 0.16  stuttering
+//
+// Thirty seconds, with twenty-four seconds buffered and readyState 4, and the
+// playhead oscillating between 1447 and 1448. The segment starts at 1449.161
+// and the skip asks for 1450.538 thirteen times. The position never goes near
+// either. The seeks are not landing early -- they are not landing at all, on a
+// player that is managing a sixth of real time and getting nowhere.
+//
+// Seeking again on a player in that state is the last thing to do: every
+// currentTime assignment is another seek for something already struggling, and
+// the repeated skipping is a plausible part of why it cannot recover. So one
+// seek is attempted, and if it does not take, this stands down.
 
 const barTypes = {
   sponsor: {
@@ -507,7 +513,7 @@ class SponsorBlockHandler {
             end,
             videoId: this.videoID || null,
           });
-          this.seekPast(segment, end, 0);
+          this.seekPast(segment, end);
           this.scheduleSkip();
         }
       } catch (skipErr) {
@@ -524,15 +530,15 @@ class SponsorBlockHandler {
    * on a short segment lands before the segment even starts. Nothing in the
    * media API reports that, so the only way to know is to look afterwards.
    */
-  seekPast(segment, end, attempt) {
-    const margin = attempt > 0 ? (SEEK_RETRY_MARGINS_S[attempt - 1] || 0) : 0;
+  seekPast(segment, end) {
     const duration = Number(this.video.duration) || 0;
-    let target = end + margin;
+    let target = end;
     // Never ask for the last second: seeking to the very end finishes the
     // video instead of skipping within it. This also clamps a retry margin
     // that would otherwise run past the end.
     if (duration > 0 && duration - target < 1) target = duration - 1;
     if (!(target > 0)) return;
+    const before = Number(this.video.currentTime) || 0;
     try {
       this.video.currentTime = target;
     } catch (_) {
@@ -546,27 +552,18 @@ class SponsorBlockHandler {
         // Landed past the end, which is all that was being asked for.
         if (at >= end - SEEK_SHORT_TOLERANCE_S) return;
 
-        appendFileOnlyLog('sponsorblock.seekShort', {
+        // Everything needed to tell the two explanations apart. A landing
+        // that is short but ahead of where the playhead was means the player
+        // honoured the seek at an earlier point; a landing that has not moved
+        // at all means it ignored the seek, which is what the 6 November
+        // capture shows.
+        this.unskippableSegments.add(segment.UUID);
+        appendFileOnlyLog('sponsorblock.seekIgnored', {
           requested: Math.round(target * 100) / 100,
           landed: Math.round(at * 100) / 100,
-          // Negative means it landed before the segment even starts, which is
-          // the shape that loops.
+          wasAt: Math.round(before * 100) / 100,
+          movedSec: Math.round((at - before) * 100) / 100,
           shortOfStartSec: Math.round((segment.segment[0] - at) * 100) / 100,
-          attempt,
-          videoId: this.videoID || null,
-        });
-
-        if (attempt < SEEK_RETRY_MARGINS_S.length) {
-          this.seekPast(segment, end, attempt + 1);
-          return;
-        }
-
-        // Out of retries. Leaving the segment alone costs a second or two of
-        // what it contains; continuing to seek costs the video.
-        this.unskippableSegments.add(segment.UUID);
-        appendFileOnlyLog('sponsorblock.seekGaveUp', {
-          start: segment.segment?.[0] ?? null,
-          end,
           videoId: this.videoID || null,
         });
       } catch (_) { }
