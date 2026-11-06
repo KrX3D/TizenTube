@@ -106,8 +106,57 @@ export function categoryForLabel(label) {
   return PREFIX_CATEGORY[prefix] || 'other';
 }
 
+// Labels never filtered by category.
+//
+// Only the startup report, and it has to be here: a line whose job is to say
+// which categories are off cannot be silenced by a category being off. Entries
+// ending in a dot match by prefix, as in VERBATIM_LABELS.
+const ALWAYS_LABELS = ['logCategories.'];
+
+function isAlwaysLabel(label) {
+  try {
+    const name = String(label);
+    for (let i = 0; i < ALWAYS_LABELS.length; i++) {
+      const entry = ALWAYS_LABELS[i];
+      if (entry.charAt(entry.length - 1) === '.') {
+        if (name.lastIndexOf(entry, 0) === 0) return true;
+      } else if (name === entry) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Which categories are on, which are off, and whether filtering applies.
+ *
+ * `filtering: false` means the stored list was missing or unreadable, so
+ * isCategoryEnabled is letting everything through — a different situation from
+ * every category happening to be enabled, and worth telling apart in a capture.
+ */
+export function categoryState() {
+  try {
+    const enabled = configRead('logCategories');
+    if (!Array.isArray(enabled)) {
+      return { on: LOG_CATEGORIES.slice(), off: [], filtering: false };
+    }
+    const on = [];
+    const off = [];
+    for (let i = 0; i < LOG_CATEGORIES.length; i++) {
+      (enabled.indexOf(LOG_CATEGORIES[i]) !== -1 ? on : off).push(LOG_CATEGORIES[i]);
+    }
+    return { on, off, filtering: true };
+  } catch {
+    return { on: LOG_CATEGORIES.slice(), off: [], filtering: false };
+  }
+}
+
 export function isCategoryEnabled(label) {
   try {
+    if (isAlwaysLabel(label)) return true;
     const enabled = configRead('logCategories');
     // Not an array (corrupted config, or a build predating this key) — let
     // everything through rather than silently going dark.
@@ -153,6 +202,9 @@ const VERBATIM_LABELS = [
   // request was or was not accepted, and basic mode was reducing the shape
   // fields that say where to look next.
   'markWatched.',
+  // The list of disabled categories is the entire payload; basic mode would
+  // reduce it to "[4]", which answers nothing.
+  'logCategories.',
   // The two shapes being compared are the whole content of these lines.
   'playerRequest.',
   // The list of startup screens is the entire content of this line.
