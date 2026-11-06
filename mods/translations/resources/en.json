@@ -541,6 +541,7 @@
         "playlistMenuSubtitle": "Playlist",
         "channelMenuSubtitle": "Channel",
         "markWatched": "Mark As Watched",
+        "unmarkWatched": "Not Watched After All",
         "playPlaylist": "Play Playlist"
     },
     "toasts": {
@@ -575,8 +576,11 @@
         "hideWatchedChannelHidingAgain": "“{{name}}” has its watched videos hidden again outside its own page.",
         "hideWatchedExemptionRemoved": "“{{name}}” hides watched videos again.",
         "markWatchedWorking": "Telling YouTube this has been watched…",
-        "markWatchedOnAccount": "Marked as watched on your account — it will be watched on other devices too.",
-        "markWatchedFailed": "YouTube would not accept this, so nothing was hidden — it stays as it is here and on your other devices."
+        "markWatchedOnAccount": "Watch report accepted, and hidden here. If it does not show up on your other devices, YouTube did not keep it.",
+        "markWatchedFailed": "YouTube would not accept this, so nothing was hidden — it stays as it is here and on your other devices.",
+        "unmarkWatchedRestored": "No longer marked as watched here — the video is back.",
+        "unmarkWatchedHistory": "Removed here, but your account’s history still lists this video, so it stays hidden. Only YouTube can change that.",
+        "unmarkWatchedNothing": "Nothing was marked here for this video."
     },
     "general": {
         "dislikes": "Dislikes",

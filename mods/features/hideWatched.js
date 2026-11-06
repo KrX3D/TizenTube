@@ -291,6 +291,10 @@ let _exemption = null;
 let _watchedLookup = null;
 
 export function setWatchedLookup(check) {
+  // Also published as a global so markWatched.js can ask whether the account's
+  // history lists a video without importing watchHistory.js, which imports
+  // this module and would close a cycle.
+  try { window.__ttWatchedLookup = check; } catch (_) { }
     _watchedLookup = typeof check === 'function' ? check : null;
 }
 

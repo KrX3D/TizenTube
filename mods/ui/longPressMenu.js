@@ -647,14 +647,28 @@ function markWatchedEntry(data) {
     } catch (_) {
         return [];
     }
-    return [tagMenuItem('markWatched', MenuServiceItemRenderer(t('videoMenu.markWatched'), {
+    // Already marked here, so the useful thing to offer is taking it back.
+    //
+    // Reported: a video was marked by mistake, the tile was still on screen,
+    // and there was no way to undo it -- the next navigation hid it and then it
+    // could not even be long-pressed. This covers that window. It cannot help
+    // once the tile is gone; showing the channel's watched videos again brings
+    // it back within reach, and then this entry is here.
+    let locallyMarked = false;
+    try {
+        const pct = window._ttVideoProgressCache?.[data.videoId];
+        locallyMarked = pct !== undefined && pct !== null && Number(pct) >= 100;
+    } catch (_) { }
+
+    return [tagMenuItem('markWatched', MenuServiceItemRenderer(
+        locallyMarked ? t('videoMenu.unmarkWatched') : t('videoMenu.markWatched'), {
         clickTrackingParams: null,
         playlistEditEndpoint: {
             // The signed params off the tile's own watchEndpoint go with it.
             // Without them the player request comes back UNPLAYABLE with no
             // tracking block, which is what made this fail the first time.
             customAction: {
-                action: 'MARK_WATCHED',
+                action: locallyMarked ? 'UNMARK_WATCHED' : 'MARK_WATCHED',
                 parameters: { videoId: data.videoId, params: data.watchEndpointData?.params || null }
             }
         }
