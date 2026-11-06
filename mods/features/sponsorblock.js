@@ -18,6 +18,31 @@ const MAX_SKIPS_PER_SEGMENT = 3;
 // back on purpose, not a loop, so the count starts over.
 const RESKIP_FORGET_MS = 30000;
 
+// How long after a skip to look at where the playhead actually ended up.
+// Long enough for the seek to settle on a slow TV, short enough that a failed
+// skip is corrected before much of the segment has played.
+const SEEK_CHECK_MS = 400;
+
+// Landing this far short of the segment end means the seek did not go where it
+// was told. A tenth of a second is below anything a player rounds by.
+const SEEK_SHORT_TOLERANCE_S = 0.1;
+
+// Where a retry aims instead, as seconds past the segment end, in order.
+//
+// The 5.0 TV snaps a seek back to the nearest keyframe before the requested
+// time. Asking for the segment end therefore lands somewhere before it, and if
+// the segment is shorter than the gap between keyframes that is before the
+// segment STARTS -- so it plays into the segment again and is skipped again,
+// for ever. Captured 6 November on a 1.38 second segment: seven skips of the
+// same UUID, one every three seconds, which is exactly the delay this file
+// computes for a playhead three seconds short of the start.
+//
+// Aiming further forward gives the snap somewhere to land past the end. Two
+// entries only: each retry skips real content, so if five seconds past the end
+// still will not hold, the segment is left alone rather than cutting further
+// into the video.
+const SEEK_RETRY_MARGINS_S = [2, 5];
+
 const barTypes = {
   sponsor: {
     color: '#00d400',
@@ -118,6 +143,10 @@ class SponsorBlockHandler {
   skippableCategories = [];
   manualSkippableCategories = [];
   skippedCategories = new Map();
+  // Segments whose skip could not be made to stick. Letting a second of
+  // self-promotion play is better than seeking through the video looking for a
+  // keyframe that will hold.
+  unskippableSegments = new Set();
 
   constructor(videoID) {
     this.videoID = videoID;
@@ -392,6 +421,10 @@ class SponsorBlockHandler {
           say('pausedAtSkip', this.videoID, 'Currently paused, ignoring...');
           return;
         }
+        if (this.unskippableSegments.has(segment.UUID)) {
+          say('seekWontHold', this.videoID, 'Skipping this one does not hold, leaving it', segment);
+          return;
+        }
         if (!this.skippableCategories.includes(segment.category)) {
           say('notSkippable', this.videoID, 'Segment', segment.category, 'is not skippable, ignoring...');
           return;
@@ -474,17 +507,70 @@ class SponsorBlockHandler {
             end,
             videoId: this.videoID || null,
           });
-          if (this.video.duration - end < 1) {
-            this.video.currentTime = end - 1;
-          } else {
-            this.video.currentTime = end;
-          }
+          this.seekPast(segment, end, 0);
           this.scheduleSkip();
         }
       } catch (skipErr) {
         console.warn('[SponsorBlock] scheduleSkip timeout handler error:', skipErr);
       }
     }, (start - this.video.currentTime) * 1000 / (this.video.playbackRate || 1));
+  }
+
+  /**
+   * Put the playhead past a segment, and check that it went there.
+   *
+   * Setting currentTime is a request, not an instruction: this TV honours it
+   * by seeking to the nearest keyframe at or before the time asked for, which
+   * on a short segment lands before the segment even starts. Nothing in the
+   * media API reports that, so the only way to know is to look afterwards.
+   */
+  seekPast(segment, end, attempt) {
+    const margin = attempt > 0 ? (SEEK_RETRY_MARGINS_S[attempt - 1] || 0) : 0;
+    const duration = Number(this.video.duration) || 0;
+    let target = end + margin;
+    // Never ask for the last second: seeking to the very end finishes the
+    // video instead of skipping within it. This also clamps a retry margin
+    // that would otherwise run past the end.
+    if (duration > 0 && duration - target < 1) target = duration - 1;
+    if (!(target > 0)) return;
+    try {
+      this.video.currentTime = target;
+    } catch (_) {
+      return;
+    }
+
+    setTimeout(() => {
+      try {
+        if (!this.active || !this.video || this.video.paused) return;
+        const at = Number(this.video.currentTime) || 0;
+        // Landed past the end, which is all that was being asked for.
+        if (at >= end - SEEK_SHORT_TOLERANCE_S) return;
+
+        appendFileOnlyLog('sponsorblock.seekShort', {
+          requested: Math.round(target * 100) / 100,
+          landed: Math.round(at * 100) / 100,
+          // Negative means it landed before the segment even starts, which is
+          // the shape that loops.
+          shortOfStartSec: Math.round((segment.segment[0] - at) * 100) / 100,
+          attempt,
+          videoId: this.videoID || null,
+        });
+
+        if (attempt < SEEK_RETRY_MARGINS_S.length) {
+          this.seekPast(segment, end, attempt + 1);
+          return;
+        }
+
+        // Out of retries. Leaving the segment alone costs a second or two of
+        // what it contains; continuing to seek costs the video.
+        this.unskippableSegments.add(segment.UUID);
+        appendFileOnlyLog('sponsorblock.seekGaveUp', {
+          start: segment.segment?.[0] ?? null,
+          end,
+          videoId: this.videoID || null,
+        });
+      } catch (_) { }
+    }, SEEK_CHECK_MS);
   }
 
   destroy() {
@@ -511,6 +597,7 @@ class SponsorBlockHandler {
     }
 
     this.skippedCategories.clear();
+    this.unskippableSegments.clear();
   }
 }
 
