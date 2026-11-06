@@ -153,9 +153,12 @@ function browse(client, payload) {
  * treated as success — a response that came back before sign-in would
  * otherwise wipe the set and be trusted for ten minutes.
  */
-export function refreshWatchHistory(reason) {
+export function refreshWatchHistory(reason, force) {
     if (!enabled() || _inFlight) return Promise.resolve(_count);
-    if (_fetchedAt && Date.now() - _fetchedAt < REFRESH_MS) return Promise.resolve(_count);
+    // force skips the ten-minute throttle. Marking a video watched has to ask
+    // the account whether that actually happened, and the answer is worthless
+    // if it comes from a set fetched before the attempt.
+    if (!force && _fetchedAt && Date.now() - _fetchedAt < REFRESH_MS) return Promise.resolve(_count);
     const client = innerTubeClient();
     if (!client) return Promise.resolve(_count);
 

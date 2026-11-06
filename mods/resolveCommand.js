@@ -17,7 +17,7 @@ import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
 import showHideWatchedExemptions from './ui/hideWatchedExemptionsSettings.js';
-import { markVideoWatched, unmarkVideoWatched } from './features/markWatched.js';
+import { markVideoWatched } from './features/markWatched.js';
 import {
     toggleChannelNameExemption,
     toggleChannelPageExemption,
@@ -541,17 +541,6 @@ function customAction(action, parameters) {
                 if (how === 'account') showToast('TizenTube', t('toasts.markWatchedOnAccount'));
                 else showToast('TizenTube', t('toasts.markWatchedFailed'));
             }, () => showToast('TizenTube', t('toasts.markWatchedFailed')));
-            break;
-        }
-        case 'UNMARK_WATCHED': {
-            const videoId = parameters?.videoId;
-            if (!videoId) break;
-            // No await: removing a local record is a delete and a debounced
-            // write, so there is nothing to wait for and no request to fail.
-            const how = unmarkVideoWatched(videoId);
-            if (how === 'restored') showToast('TizenTube', t('toasts.unmarkWatchedRestored'));
-            else if (how === 'history') showToast('TizenTube', t('toasts.unmarkWatchedHistory'));
-            else showToast('TizenTube', t('toasts.unmarkWatchedNothing'));
             break;
         }
         case 'SHOW_HIDE_WATCHED_EXEMPTIONS':
