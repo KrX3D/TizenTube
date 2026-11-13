@@ -9,6 +9,7 @@ import resolveCommand, { patchResolveCommand } from '../resolveCommand.js';
 import { pipToFullscreen } from '../features/pictureInPicture.js';
 import { noteReload, recentReload, clearReloadNote } from '../features/reloadCoordinator.js';
 import { refreshIfFirstResponseMissed } from '../features/missedFirstResponse.js';
+import { reopenVideoAfterReload } from '../features/resumeOutOfVideo.js';
 import { appendFileOnlyLog } from '../features/hideWatched.js';
 import getCommandExecutor from './customCommandExecution.js';
 import { t } from 'i18next';
@@ -248,6 +249,10 @@ ${isStandalone ? `
       showToast(t('welcomeMsg.title'), t('welcomeMsg.subtitle'));
     }, 2000);
   }
+
+  // A wake reload during a video went to Home instead; play the video again.
+  // See resumeOutOfVideo.js.
+  reopenVideoAfterReload(resolveCommand);
 
   if (configRead('reloadHomeOnStartup')) {
     // Not after the page has just been reloaded for waking up: the feed is as

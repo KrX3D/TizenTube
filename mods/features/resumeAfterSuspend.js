@@ -2,6 +2,7 @@ import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { waitForNetwork } from './networkReady.js';
 import { noteReload } from './reloadCoordinator.js';
+import { reloadOutOfVideo } from './resumeOutOfVideo.js';
 import { showToast } from '../ui/ytUI.js';
 import { t } from 'i18next';
 
@@ -139,13 +140,13 @@ async function onVisible(gen, awayMs) {
   // a second time for the same wake.
   noteReload('resume');
   if (!toldWaiting) {
-    location.reload();
+    if (!reloadOutOfVideo()) location.reload();
     return;
   }
   // After a visible wait, say what is about to happen and give the toast a
   // moment on screen — reloading at once would wipe it before it rendered.
   toast('toasts.networkBackReloading');
-  setTimeout(() => location.reload(), RELOAD_NOTICE_MS);
+  setTimeout(() => { if (!reloadOutOfVideo()) location.reload(); }, RELOAD_NOTICE_MS);
 }
 
 function schedule(awayMs) {
