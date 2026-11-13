@@ -1,25 +1,26 @@
-// Smart Hub Preview: TEST BUILD.
+// Smart Hub Preview: TizenTube's row on the TV home bar.
 //
-// Asked for: a row of TizenTube content on the TV's home bar when the app
-// is highlighted, the way Emby shows one. That is Samsung's Smart Hub
-// Preview: a background service hands a JSON description of the row to
-// webapis.preview.setPreviewData(). This first version only answers whether
-// the row appears on these TVs at all, so it publishes three fixed tiles.
-// Real rows (Continue Watching, new from subscriptions) come after.
+// The row is built in the page by mods/features/homeBarPreview.js (latest
+// unfinished history entry, latest playlists, subscriptions) and stored by
+// StandaloneService in tt-home-bar-preview.json. This service only publishes
+// that file with webapis.preview.setPreviewData() and exits, as Samsung's
+// sample does; a preview service that does not exit is ended after five
+// minutes, which is also why this is not part of StandaloneService.
 //
-// A service of its own rather than part of StandaloneService: Samsung's
-// sample calls exit() right after setPreviewData, and a preview service that
-// does not exit is terminated after five minutes. StandaloneService has to
-// keep running for the proxy and the injector.
+// Started by the system about every ten minutes, by index.html on every app
+// start, and by StandaloneService right after the row changes.
 //
-// Plain ES5 on purpose. The 5.0 TV runs services on Node 4.4.3, and this
-// file is copied as-is (nothing bundles or transpiles it).
+// Samsung shows these rows on TVs up to 2021. Confirmed on the 5.0 TV; the
+// 6.5 TV accepts the data and shows nothing, as it does for every app.
 //
-// The system launches this service by itself roughly every ten minutes;
-// index.html also launches it on every start (the operation and caller data
-// match Samsung's BackgroundServiceLocal sample).
+// Plain ES5 on purpose: the 5.0 TV runs services on Node 4.4.3, and this file
+// is copied as-is (nothing bundles or transpiles it).
 
 var http = require('http');
+var fs = require('fs');
+var path = require('path');
+
+var PREVIEW_FILE = 'tt-home-bar-preview.json';
 
 // Lines land in the syslog through StandaloneService, when it is running.
 function report(level, message) {
@@ -38,31 +39,32 @@ function report(level, message) {
     } catch (e) {}
 }
 
-function tile(videoId, title, subtitle) {
-    return {
-        title: title,
-        subtitle: subtitle,
-        // hqdefault is 480x360, inside Samsung's 4:3 limits (333x250 to
-        // 480x360) and well under the 360 KB cap.
-        image_url: 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg',
-        image_ratio: '4by3',
-        action_data: JSON.stringify({ videoId: videoId }),
-        is_playable: true
-    };
+// The same places StandaloneService tries (storeCandidates in
+// service/index.js), derived the same way: /opt/usr/apps/<pkgId>/res/wgt/...
+function candidates() {
+    var parts = String(__dirname).split(String.fromCharCode(92)).join('/').split('/');
+    var i = parts.indexOf('apps');
+    var pkg = (i !== -1 && parts[i + 1]) ? parts[i + 1] : '';
+    if (!pkg) return [];
+    var out = [];
+    if (process.env.HOME) out.push(path.join(process.env.HOME, 'apps_rw', pkg, 'data', PREVIEW_FILE));
+    out.push(path.join('/opt/usr/home/owner/apps_rw', pkg, 'data', PREVIEW_FILE));
+    out.push(path.join('/home/owner/apps_rw', pkg, 'data', PREVIEW_FILE));
+    out.push(path.join('/opt/usr/apps', pkg, 'data', PREVIEW_FILE));
+    return out;
 }
 
-var PREVIEW = {
-    sections: [{
-        title: 'TizenTube (Test)',
-        tiles: [
-            tile('aqz-KE-bpKQ', 'Big Buck Bunny', 'Test tile 1'),
-            tile('eRsGyueVLvQ', 'Sintel', 'Test tile 2'),
-            tile('R6MlUcmOul8', 'Tears of Steel', 'Test tile 3')
-        ]
-    }]
-};
-
-var started = Date.now();
+function readPreview() {
+    var list = candidates();
+    for (var i = 0; i < list.length; i++) {
+        try {
+            var raw = fs.readFileSync(list[i], 'utf8');
+            var data = JSON.parse(raw);
+            if (data && data.sections && data.sections.length !== undefined) return { data: data, raw: raw, file: list[i] };
+        } catch (e) {}
+    }
+    return null;
+}
 
 function exitSoon() {
     // Give the report a moment to leave before the process goes.
@@ -75,20 +77,25 @@ function publish(trigger) {
     var hasPreview = typeof webapis !== 'undefined' && webapis && webapis.preview
         && typeof webapis.preview.setPreviewData === 'function';
     if (!hasPreview) {
-        report('ERROR', 'webapis.preview is not available in this service (trigger ' + trigger
-            + ', webapis ' + (typeof webapis) + ')');
+        report('ERROR', 'webapis.preview is not available (trigger ' + trigger + ')');
         exitSoon();
         return;
     }
-    var version = '';
-    try { version = webapis.preview.getVersion(); } catch (e) { version = 'n/a'; }
+    var stored = readPreview();
+    if (!stored) {
+        // Nothing built yet: TizenTube has not run long enough since install.
+        report('INFO', 'no home bar row stored yet (trigger ' + trigger + ')');
+        exitSoon();
+        return;
+    }
+    var tiles = 0;
+    for (var i = 0; i < stored.data.sections.length; i++) tiles += (stored.data.sections[i].tiles || []).length;
     try {
-        webapis.preview.setPreviewData(JSON.stringify(PREVIEW), function () {
-            report('INFO', 'setPreviewData succeeded (trigger ' + trigger + ', preview API ' + version
-                + ', ' + (Date.now() - started) + ' ms after start)');
+        webapis.preview.setPreviewData(stored.raw, function () {
+            report('INFO', 'published ' + stored.data.sections.length + ' sections, ' + tiles + ' tiles (trigger ' + trigger + ')');
             exitSoon();
         }, function (err) {
-            report('ERROR', 'setPreviewData failed (trigger ' + trigger + '): '
+            report('ERROR', 'setPreviewData failed (trigger ' + trigger + ', ' + stored.data.sections.length + ' sections): '
                 + (err && (err.name + ': ' + err.message) || err));
             exitSoon();
         });
@@ -98,9 +105,7 @@ function publish(trigger) {
     }
 }
 
-module.exports.onStart = function () {
-    report('INFO', 'onStart');
-};
+module.exports.onStart = function () {};
 
 module.exports.onRequest = function () {
     var trigger = 'system';

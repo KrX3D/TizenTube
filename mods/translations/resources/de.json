@@ -400,7 +400,27 @@
                     "hideViewCounts": "Aufrufzahlen ausblenden",
                     "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden",
                     "returnYoutubeDislike": "Return YouTube Dislike (sendet Video-IDs an returnyoutubedislike.com)",
-                    "unwedgePlayer": "Eingefrorenen Player automatisch wiederherstellen"
+                    "unwedgePlayer": "Eingefrorenen Player automatisch wiederherstellen",
+                    "homeBarPreview": {
+                        "title": "Zeile in der TV-Startleiste (Smart Hub)",
+                        "subtitle": "Nur Standalone-App. Erscheint, wenn TizenTube in der Startleiste markiert ist; Fernseher bis 2021.",
+                        "off": "Aus",
+                        "options": {
+                            "enable": "TizenTube-Zeile in der Startleiste anzeigen",
+                            "history": {
+                                "title": "Weiterschauen",
+                                "subtitle": "Die neuesten Videos aus deinem Verlauf, jeweils nur wenn nicht zu Ende gesehen (unter 90 %)"
+                            },
+                            "playlists": {
+                                "title": "Playlists",
+                                "subtitle": "Deine neuesten Playlists, ohne „Später ansehen“ und „Mag ich“"
+                            },
+                            "subscriptions": {
+                                "title": "Abos",
+                                "subtitle": "Nicht gesehene Videos von deiner Abo-Seite"
+                            }
+                        }
+                    }
                 }
             },
             "updater": {
@@ -584,6 +604,13 @@
             "thousand": " Tsd.",
             "million": " Mio.",
             "billion": " Mrd."
+        }
+    },
+    "homeBarPreview": {
+        "sections": {
+            "continue": "Weiterschauen",
+            "playlists": "Deine Playlists",
+            "subscriptions": "Neu in deinen Abos"
         }
     }
 }

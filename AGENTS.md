@@ -75,6 +75,8 @@ standalone/                  # standalone installable app — see "Standalone mo
   config.xml                  # Tizen app manifest — app id: krx3dTtSt1.TizenTubeStandalone
   index.html                  # loading screen, decides injector vs proxy path
   icon.png, icon_16b9.png
+  preview/preview.js          # PreviewService: publishes the TV home bar row (Smart Hub Preview) from
+                                # tt-home-bar-preview.json and exits; plain ES5, copied as-is (Node 4.4.3)
   service/                    # standalone's own local proxy + CDP injector (NOT mods/'s service/)
     index.js                  # Express proxy: rewrites youtube.com/tv, injects userscript <script> tag
     injector.js               # CDP-based injector (same technique TizenBrew itself uses)
@@ -146,6 +148,7 @@ scripts/pc-installer/         # PC-side install/update script (SDB from the PC, 
 | `videoQueuing.js` | Manual video queue feature. |
 | `playlistBatchCollect.js` | Batch-collects playlist items (`enablePlaylistBatchCollect`). |
 | `logServer.js` | Optional remote log server (`logServerEnabled`) for on-device debugging. In TizenBrew mode, relays via TizenBrew's own `127.0.0.1:8081` service + CDP-queue fallback. In standalone mode (`window.location.hostname === 'localhost'`), instead POSTs to the standalone service's own `POST /tizentube/log` (see `standalone/service/index.js`), which relays to the PC receiver at `logServerHost`:`logServerPort` (same `/tv-log` path/JSON shape as TizenBrew's `remoteLogger.js`, so the receiver script at `scripts/log-receiver/receiver.ps1` works for both). Host/port are set via the RED-key theme overlay (`mods/ui/ui.js`), standalone-only fields — there's no free-text entry in the native TV settings menu. The standalone *service itself* also self-logs its own lifecycle (startup, uncaught exceptions, DIAL service load, proxy errors) unconditionally to a hardcoded `DEFAULT_LOG_HOST`/`DEFAULT_LOG_PORT` in `standalone/service/index.js`, independent of any page config — added specifically because the service can crash before the page/userscript ever loads, at which point page-driven config never gets read. `relayLog` (the single choke point both the page-side proxy fetch and the CDP-queue drain ultimately funnel through) tracks per-`host:port` availability: after the first failed attempt (fast `ECONNREFUSED`, or a 3s timeout for a genuinely unreachable host that would otherwise hang far longer at the OS TCP-connect level) it skips all further attempts to that target for the rest of the process, so an unreachable/not-running PC receiver can't add repeated delay to every subsequent log call. |
+| `homeBarPreview.js` | Standalone only: builds TizenTube's row on the TV home bar (Smart Hub Preview, TVs up to 2021) from the latest unfinished history entry, the latest playlists and the subscriptions page, via the InnerTube client; hands it to the service (POST on the proxy path, `window.__ttHomeBarPreview` drained by the injector's CDP poll otherwise). `openLaunchAction()` opens what a tile asked for (`window.__ttLaunchAction`, set by the injector from index.html's `ttLaunch`). |
 | `visualConsole.js` | On-screen debug console (`enableDebugConsole`) — shows version via `../../package.json`, executes commands via `resolveCommand`. |
 
 ## UI map (`mods/ui/*.js`)

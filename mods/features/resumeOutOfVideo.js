@@ -108,26 +108,42 @@ export function reopenVideoAfterReload(resolveCommand) {
   if (typeof note.index === 'number') endpoint.index = note.index;
   if (note.time > 0) endpoint.startTimeSeconds = note.time;
 
+  openWhenReady(resolveCommand, { clickTrackingParams: null, watchEndpoint: endpoint }, 'resume', 'reopenedVideo',
+    { videoId: note.videoId, time: endpoint.startTimeSeconds || 0 });
+  return true;
+}
+
+/**
+ * Run a command once YouTube's command resolver exists, unless the user has
+ * already left Home by then. Shared by the wake reload above and by
+ * homeBarPreview.js's tile launches.
+ *
+ * @param {(cmd: object) => void} resolveCommand
+ * @param {object} command
+ * @param {string} logPrefix  label prefix, e.g. 'resume'
+ * @param {string} doneLabel  logged as `${logPrefix}.${doneLabel}` once run
+ * @param {object} detail     added to that log line
+ */
+export function openWhenReady(resolveCommand, command, logPrefix, doneLabel, detail) {
   const startedAt = Date.now();
   const attempt = () => {
     // The user already went somewhere else; do not pull them back.
     const hash = String(location.hash || '');
     if (hash && hash !== '#/' && hash !== '#') {
-      appendFileOnlyLog('resume.reopenSkipped', { reason: 'navigated', hash: hash.slice(0, 40) });
+      appendFileOnlyLog(logPrefix + '.reopenSkipped', { reason: 'navigated', hash: hash.slice(0, 40) });
       return;
     }
     if (!resolverReady()) {
       if (Date.now() - startedAt < RESOLVER_WAIT_MS) { setTimeout(attempt, RESOLVER_POLL_MS); return; }
-      appendFileOnlyLog('resume.reopenSkipped', { reason: 'noResolver' });
+      appendFileOnlyLog(logPrefix + '.reopenSkipped', { reason: 'noResolver' });
       return;
     }
     try {
-      resolveCommand({ clickTrackingParams: null, watchEndpoint: endpoint });
-      appendFileOnlyLog('resume.reopenedVideo', { videoId: note.videoId, time: endpoint.startTimeSeconds || 0, afterMs: Date.now() - startedAt });
+      resolveCommand(command);
+      appendFileOnlyLog(logPrefix + '.' + doneLabel, Object.assign({}, detail, { afterMs: Date.now() - startedAt }));
     } catch (err) {
-      appendFileOnlyLog('resume.reopenFailed', { msg: String(err?.message || err) });
+      appendFileOnlyLog(logPrefix + '.reopenFailed', { msg: String(err?.message || err) });
     }
   };
   attempt();
-  return true;
 }

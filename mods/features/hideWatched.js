@@ -240,6 +240,11 @@ function responseWatchPercent(item) {
   return null;
 }
 
+// The progress the tile itself carries, without the history rule below that
+// counts any video in the account history as 100%. homeBarPreview.js needs
+// this for history entries, where that rule would mark every one finished.
+export const tileWatchPercent = (item) => { try { return responseWatchPercent(item); } catch (_) { return null; } };
+
 // The higher of what the response says and what is known locally.
 //
 // The response used to win outright, with the cache only a fallback for when it

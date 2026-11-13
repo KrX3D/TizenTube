@@ -400,7 +400,27 @@
                     "hideViewCounts": "Hide View Counts",
                     "hideQualityBadges": "Hide 4K/8K and Dubbed Badges",
                     "returnYoutubeDislike": "Return YouTube Dislike (sends video ids to returnyoutubedislike.com)",
-                    "unwedgePlayer": "Recover a frozen player automatically"
+                    "unwedgePlayer": "Recover a frozen player automatically",
+                    "homeBarPreview": {
+                        "title": "Home bar row (Smart Hub)",
+                        "subtitle": "Standalone app only. Shown when TizenTube is highlighted on the TV home bar; TVs up to 2021.",
+                        "off": "Off",
+                        "options": {
+                            "enable": "Show TizenTube row on the home bar",
+                            "history": {
+                                "title": "Continue watching",
+                                "subtitle": "The latest videos in your history, each only if it is not finished (under 90%)"
+                            },
+                            "playlists": {
+                                "title": "Playlists",
+                                "subtitle": "Your latest playlists, without Watch Later and Liked videos"
+                            },
+                            "subscriptions": {
+                                "title": "Subscriptions",
+                                "subtitle": "Unwatched videos from your subscriptions page"
+                            }
+                        }
+                    }
                 }
             },
             "updater": {
@@ -584,6 +604,13 @@
             "thousand": "K",
             "million": "M",
             "billion": "B"
+        }
+    },
+    "homeBarPreview": {
+        "sections": {
+            "continue": "Continue watching",
+            "playlists": "Your playlists",
+            "subscriptions": "New from your subscriptions"
         }
     }
 }
