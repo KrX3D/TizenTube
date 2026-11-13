@@ -12,6 +12,7 @@ import { refreshIfFirstResponseMissed } from '../features/missedFirstResponse.js
 import { reopenVideoAfterReload } from '../features/resumeOutOfVideo.js';
 import { appendFileOnlyLog } from '../features/hideWatched.js';
 import getCommandExecutor from './customCommandExecution.js';
+import { ensureGuideFiltered } from '../features/guideFilterGuard.js';
 import { t } from 'i18next';
 
 // It just works, okay?
@@ -282,6 +283,9 @@ ${isStandalone ? `
   if (commandExecutor) {
     commandExecutor.executeFunction(new commandExecutor.commandFunction('reloadGuideAction'));
   }
+  // That reload can come too early to matter; check a guide actually went
+  // through the sidebar filter. See guideFilterGuard.js.
+  ensureGuideFiltered(getCommandExecutor);
 
   // Fix UI issues, again. Love, Googol.
 

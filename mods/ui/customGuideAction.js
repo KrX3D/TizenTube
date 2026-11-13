@@ -6,6 +6,7 @@ import { guideEntryKey } from "./guideEntryKey.js";
 // appendFileOnlyLog comes from hideWatched.js, which thirty-odd modules
 // already import, so it is loaded before this regardless of order.
 import { appendFileOnlyLog } from "../features/hideWatched.js";
+import { noteGuideParsed } from "../features/guideFilterGuard.js";
 
 /** Order entries are plain browseId strings or { browseId, title } objects. */
 function orderBrowseId(orderItem) {
@@ -77,6 +78,7 @@ JSON.parse = function () {
 
     try {
         if (r && r.items && Array.isArray(r.items) && r.items[0] && r.items[0].guideSectionRenderer) {
+            noteGuideParsed();
             const firstSection = r.items[0].guideSectionRenderer;
             if (Array.isArray(firstSection.items)) {
                 try {
