@@ -403,7 +403,7 @@
                     "unwedgePlayer": "Eingefrorenen Player automatisch wiederherstellen",
                     "homeBarPreview": {
                         "title": "Zeile in der TV-Startleiste (Smart Hub)",
-                        "subtitle": "Nur Standalone-App. Erscheint, wenn TizenTube in der Startleiste markiert ist; Fernseher bis 2021.",
+                        "subtitle": "Nur Samsung-Fernseher (Tizen) mit der TizenTube-Standalone-App, Modelle bis 2021; nicht auf Android TV. Erscheint, wenn TizenTube in der Startleiste markiert ist. Änderungen erscheinen innerhalb von 10 Minuten (Samsung erlaubt nur eine Aktualisierung pro 10 Min.).",
                         "off": "Aus",
                         "options": {
                             "enable": "TizenTube-Zeile in der Startleiste anzeigen",
