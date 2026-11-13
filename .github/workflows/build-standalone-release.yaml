@@ -96,6 +96,11 @@ on:
       release_version:
         description: 'Release version/tag name (e.g. v1.0.0)'
         required: false
+      artifact_only:
+        description: 'Only build the .wgt as a run artifact; publish no release (for test builds from a branch)'
+        type: boolean
+        required: false
+        default: false
 
 env:
   TIZEN_STUDIO_VER: 5.6
@@ -350,6 +355,7 @@ jobs:
       # release; the build/TBI_METADATA header stays first so the TizenBrew
       # Installer still finds it.
       - name: Build release notes
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.artifact_only }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -373,6 +379,7 @@ jobs:
       # The .wgt is uploaded as an artifact by the step above, before any of
       # this runs, so a failure here never loses the build.
       - name: Release TizenTube Standalone
+        if: ${{ github.event_name != 'workflow_dispatch' || !inputs.artifact_only }}
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ env.RELEASE_VERSION }}

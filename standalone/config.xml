@@ -14,6 +14,8 @@
     <icon src="icon_16b9.png" width="1920" height="1080"/>
     <icon src="icon.png" width="1024" height="1024"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+    <!-- Smart Hub Preview (test build): the row shown when the app is highlighted on the home bar. See preview/preview.js. -->
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.preview" value="bg_service"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/floating.navigation" value="false"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.game.mode" value="true"/>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.uwe" value="true"/>
@@ -36,6 +38,12 @@
         <tizen:content src="service/dist/index.js"/>
         <tizen:name>StandaloneService</tizen:name>
         <tizen:description>StandaloneService</tizen:description>
+    </tizen:service>
+    <tizen:service id="krx3dTtSt1.PreviewService">
+        <tizen:content src="preview/preview.js"/>
+        <tizen:name>PreviewService</tizen:name>
+        <tizen:description>Smart Hub Preview</tizen:description>
+        <tizen:category name="http://tizen.org/category/service"/>
     </tizen:service>
     <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="enable" encryption="disable" install-location="auto" hwkey-event="enable"/>
 </widget>
