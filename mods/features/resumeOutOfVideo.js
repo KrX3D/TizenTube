@@ -31,18 +31,14 @@ const MAX_AGE_MS = 120000;
 const RESOLVER_WAIT_MS = 20000;
 const RESOLVER_POLL_MS = 250;
 
-function hashParams() {
-  const hash = String(location.hash || '');
-  const query = hash.split('?')[1] || '';
-  const out = {};
-  for (const part of query.split('&')) {
-    if (!part) continue;
-    const eq = part.indexOf('=');
-    const key = eq === -1 ? part : part.slice(0, eq);
-    const value = eq === -1 ? '' : part.slice(eq + 1);
-    try { out[decodeURIComponent(key)] = decodeURIComponent(value); } catch (_) { out[key] = value; }
-  }
-  return out;
+// Only the three values this needs, each read by a fixed pattern. A generic
+// parser that copies every key from the URL onto an object is what code
+// scanning flagged (a key such as __proto__ would write to the prototype).
+function hashParam(name) {
+  const query = String(location.hash || '').split('?')[1] || '';
+  const match = query.match(new RegExp('(?:^|&)' + name + '=([^&]*)'));
+  if (!match) return '';
+  try { return decodeURIComponent(match[1]); } catch (_) { return match[1]; }
 }
 
 /**
@@ -55,14 +51,15 @@ export function reloadOutOfVideo() {
   try {
     const hash = String(location.hash || '');
     if (!hash.startsWith('#/watch')) return false;
-    const params = hashParams();
-    const videoId = params.v;
+    const videoId = hashParam('v');
     if (!videoId) return false;
     const video = document.querySelector('video');
     const time = video && isFinite(video.currentTime) ? Math.floor(video.currentTime) : 0;
     const note = { videoId, at: Date.now(), time };
-    if (params.list) note.playlistId = params.list;
-    if (params.index && /^\d+$/.test(params.index)) note.index = Number(params.index);
+    const list = hashParam('list');
+    if (list) note.playlistId = list;
+    const index = hashParam('index');
+    if (/^\d+$/.test(index)) note.index = Number(index);
     sessionStorage.setItem(KEY, JSON.stringify(note));
     // replaceState rather than assigning the hash: a hash change is handled by
     // YouTube's router as a navigation, and the reload must not race it.
