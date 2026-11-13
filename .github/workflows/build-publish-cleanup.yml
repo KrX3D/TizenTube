@@ -186,11 +186,15 @@ env:
   # refused request writes nothing, and if npm allows this again for
   # automation, removal resumes on the next run with no change here.
   # Set to 'false' only to stop attempting it altogether.
-  ALLOW_UNPUBLISH: 'true'
+  # 'false': npm refuses unpublish from this granular bypass-2FA token
+  # (see "Decide versions" below), so every attempt only produced a 403 and a
+  # warning. Old versions are deprecated instead; scripts/npm-cleanup removes
+  # them locally.
+  ALLOW_UNPUBLISH: 'false'
 
 jobs:
   build-publish-clean:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     # Prevent loop on bot commits and on our own "[skip ci]" commits.
     #
@@ -956,10 +960,22 @@ jobs:
         # continue-on-error here, a benign throttle still failed the whole
         # job even though that fallback ran and succeeded.
         continue-on-error: true
-        uses: egad13/purge-jsdelivr-cache@v1
-        with:
-          url: ${{ steps.cdn_urls.outputs.urls }}
-          attempts: 3
+        # Was egad13/purge-jsdelivr-cache@v1, which targets Node 20 (deprecated
+        # on the runners). jsDelivr's purge API is one JSON POST, so it is done
+        # here directly: paths without the host, all in one request.
+        env:
+          CDN_URLS: ${{ steps.cdn_urls.outputs.urls }}
+        run: |
+          set -euo pipefail
+          BODY=$(node -e 'const u=(process.env.CDN_URLS||"").split(",").filter(Boolean).map(x=>x.replace(/^https:\/\/cdn\.jsdelivr\.net/,""));process.stdout.write(JSON.stringify({path:u}))')
+          echo "Purging $(echo "$BODY" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).path.length))') paths"
+          for attempt in 1 2 3; do
+            CODE=$(curl -s -o /tmp/purge.json -w '%{http_code}' -X POST https://purge.jsdelivr.net/ -H 'Content-Type: application/json' -d "$BODY" || true)
+            echo "attempt ${attempt}: HTTP ${CODE}"; head -c 600 /tmp/purge.json || true; echo
+            if [ "$CODE" -ge 200 ] && [ "$CODE" -lt 300 ]; then exit 0; fi
+            sleep 5
+          done
+          exit 1
 
       - name: Purge individual URLs (fallback if batch fails)
         if: steps.confirm_publish.outputs.confirmed == 'true' && failure()
