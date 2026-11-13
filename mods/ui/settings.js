@@ -1002,6 +1002,76 @@ export default function modernUI(update, parameters) {
                     ]
                 },
                 {
+                    // TizenTube's row on the TV home bar (homeBarPreview.js). Standalone
+                    // app only, and only TVs up to 2021 draw it.
+                    name: t('settings.options.uiSettings.options.homeBarPreview.title'),
+                    icon: 'TV',
+                    value: null,
+                    menuId: 'tt-home-bar-preview',
+                    menuHeader: {
+                        title: t('settings.options.uiSettings.options.homeBarPreview.title'),
+                        subtitle: t('settings.options.uiSettings.options.homeBarPreview.subtitle')
+                    },
+                    options: [
+                        {
+                            name: t('settings.options.uiSettings.options.homeBarPreview.options.enable'),
+                            icon: 'TV',
+                            value: 'homeBarPreviewEnabled'
+                        },
+                        {
+                            name: t('settings.options.uiSettings.options.homeBarPreview.options.history.title'),
+                            icon: 'PLAY_ARROW',
+                            value: null,
+                            menuId: 'tt-home-bar-preview-history',
+                            menuHeader: {
+                                title: t('settings.options.uiSettings.options.homeBarPreview.options.history.title'),
+                                subtitle: t('settings.options.uiSettings.options.homeBarPreview.options.history.subtitle')
+                            },
+                            options: [0, 1, 2, 3, 5].map((n) => {
+                                return {
+                                    name: n === 0 ? t('settings.options.uiSettings.options.homeBarPreview.off') : String(n),
+                                    key: 'homeBarPreviewHistoryCount',
+                                    value: n
+                                }
+                            })
+                        },
+                        {
+                            name: t('settings.options.uiSettings.options.homeBarPreview.options.playlists.title'),
+                            icon: 'PLAYLIST_PLAY',
+                            value: null,
+                            menuId: 'tt-home-bar-preview-playlists',
+                            menuHeader: {
+                                title: t('settings.options.uiSettings.options.homeBarPreview.options.playlists.title'),
+                                subtitle: t('settings.options.uiSettings.options.homeBarPreview.options.playlists.subtitle')
+                            },
+                            options: [0, 1, 2, 3, 4, 5].map((n) => {
+                                return {
+                                    name: n === 0 ? t('settings.options.uiSettings.options.homeBarPreview.off') : String(n),
+                                    key: 'homeBarPreviewPlaylistCount',
+                                    value: n
+                                }
+                            })
+                        },
+                        {
+                            name: t('settings.options.uiSettings.options.homeBarPreview.options.subscriptions.title'),
+                            icon: 'SUBSCRIPTIONS',
+                            value: null,
+                            menuId: 'tt-home-bar-preview-subscriptions',
+                            menuHeader: {
+                                title: t('settings.options.uiSettings.options.homeBarPreview.options.subscriptions.title'),
+                                subtitle: t('settings.options.uiSettings.options.homeBarPreview.options.subscriptions.subtitle')
+                            },
+                            options: [0, 2, 4, 6, 8, 10].map((n) => {
+                                return {
+                                    name: n === 0 ? t('settings.options.uiSettings.options.homeBarPreview.off') : String(n),
+                                    key: 'homeBarPreviewSubscriptionCount',
+                                    value: n
+                                }
+                            })
+                        }
+                    ]
+                },
+                {
                     name: t('settings.options.uiSettings.options.screenDimming.title'),
                     icon: 'EYE_OFF',
                     value: null,

@@ -53,6 +53,11 @@ const RETRY_DELAY_MS = 750;
 let _relaySyslog = null;
 function setSyslogRelay(fn) { _relaySyslog = typeof fn === 'function' ? fn : null; }
 
+// The TV home bar row (mods/features/homeBarPreview.js) and the tile a launch
+// came from. Set by index.js, which owns the file and the pending action.
+let _homeBarHooks = null;
+function setHomeBarHooks(hooks) { _homeBarHooks = hooks && typeof hooks === 'object' ? hooks : null; }
+
 function pollLogQueue(client, relayLog) {
     if (typeof relayLog !== 'function') return;
 
@@ -98,7 +103,9 @@ function pollLogQueue(client, relayLog) {
             // Both queues are drained in the same round-trip: syslog adds no
             // extra evaluate() and so no extra in-page cost, which matters
             // because this poll already competes with YouTube's own rendering.
-            expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; return JSON.stringify({ logs: q, syslog: s }); })()',
+            // The home bar row rides along: set by homeBarPreview.js when it
+            // changes, so it is null on almost every poll and costs nothing.
+            expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h }); })()',
             returnByValue: true
         }).then(result => {
             consecutiveFailures = 0;
@@ -110,6 +117,9 @@ function pollLogQueue(client, relayLog) {
             const entries = Array.isArray(drained) ? drained : (drained.logs || []);
             for (const entry of entries) {
                 relayLog(entry, entry.__ttLogHost, entry.__ttLogPort);
+            }
+            if (!Array.isArray(drained) && typeof drained.homeBar === 'string' && _homeBarHooks && typeof _homeBarHooks.store === 'function') {
+                try { _homeBarHooks.store(drained.homeBar); } catch (e) { }
             }
             if (_relaySyslog) {
                 for (const item of (Array.isArray(drained) ? [] : (drained.syslog || []))) {
@@ -537,7 +547,12 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     // standalone app even though this path loads real youtube.com
                     // directly (window.location.hostname isn't 'localhost' here,
                     // unlike the proxy path).
-                    return client.Runtime.evaluate({ expression: `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\n` + modFile, contextId: m.context.id });
+                    // A home bar tile's request, if the app was started from one;
+                    // homeBarPreview.js opens it. JSON.stringify, so nothing in
+                    // it can become code.
+                    let launchAction = null;
+                    try { launchAction = _homeBarHooks && typeof _homeBarHooks.launchAction === 'function' ? _homeBarHooks.launchAction() : null; } catch (e) { }
+                    return client.Runtime.evaluate({ expression: `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\nwindow.__ttLaunchAction = ${JSON.stringify(launchAction)};\n` + modFile, contextId: m.context.id });
                 }).then(() => {
                     injected = true;
                     // Exempts this session from the stale guard: once injected it
@@ -1020,6 +1035,7 @@ function startDebugger(args, relayLog, sessionId, attempt) {
 
 module.exports = {
     setSyslogRelay,
+    setHomeBarHooks,
     // Without this on the list, index.js's typeof check quietly found nothing
     // and the copy was never kept or read — a no-op that would have looked
     // exactly like the cache not helping.

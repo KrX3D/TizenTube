@@ -107,6 +107,12 @@ const defaultConfig = {
   preferredVideoCodec: 'any',
   launchToOnStartup: null,
   reloadHomeOnStartup: true,
+  // Standalone app only: TizenTube's row on the TV home bar (Smart Hub
+  // Preview, TVs up to 2021). Counts per section; 0 leaves a section out.
+  homeBarPreviewEnabled: true,
+  homeBarPreviewHistoryCount: 1,
+  homeBarPreviewPlaylistCount: 3,
+  homeBarPreviewSubscriptionCount: 6,
   disabledSidebarContents: ['TROPHY', 'NEWS', 'YOUTUBE_MUSIC', 'BROADCAST', 'CLAPPERBOARD', 'LIVE', 'GAMING', 'TAB_MORE', 'SEARCH'],
   sidebarContentsOrder: [],
   disableChannelsOnSidebar: false,

@@ -1104,6 +1104,13 @@ try {
             noteSyslogTarget(host, port, frame);
             relaySyslog(frame, host, port, report);
         });
+        // Home bar row and tile launches (see the home bar section below).
+        if (typeof injector.setHomeBarHooks === 'function') {
+            injector.setHomeBarHooks({
+                store: function (json) { storeHomeBarPreview(json, 'cdp'); },
+                launchAction: function () { return pendingLaunchAction(false); }
+            });
+        }
     }
 } catch (err) {
     logServiceEvent('ERROR', `require('./injector.js') FAILED: ${err && err.stack || err}`);
@@ -1227,8 +1234,129 @@ app.get('/tizentube/getState', (req, res) => {
     });
 });
 
+// ── Home bar row (Smart Hub Preview) ──────────────────────────────────────────
+//
+// mods/features/homeBarPreview.js builds the row in the page and hands it over:
+// by POST on the proxy path, through the injector's CDP poll otherwise. It is
+// kept in a file because the one publishing it is PreviewService
+// (preview/preview.js), a separate process the system starts on its own about
+// every ten minutes. After a change PreviewService is started at once as well,
+// so the row does not wait for that.
+const HOME_BAR_PREVIEW_FILE = 'tt-home-bar-preview.json';
+const HOME_BAR_PREVIEW_MAX_BYTES = 64 * 1024;
+let _homeBarPreviewPath = null;
+let _homeBarPreviewLast = '';
+
+function validHomeBarPreview(json) {
+    if (typeof json !== 'string' || !json || json.length > HOME_BAR_PREVIEW_MAX_BYTES) return null;
+    let data;
+    try { data = JSON.parse(json); } catch (e) { return null; }
+    if (!data || !Array.isArray(data.sections)) return null;
+    let tiles = 0;
+    for (const section of data.sections) {
+        if (!section || !Array.isArray(section.tiles) || !section.tiles.length) return null;
+        for (const tile of section.tiles) {
+            if (!tile || typeof tile.image_url !== 'string' || tile.image_url.indexOf('https://i.ytimg.com/') !== 0) return null;
+            if (typeof tile.action_data !== 'string' || tile.action_data.length > 200) return null;
+            tiles++;
+        }
+    }
+    return tiles > 40 ? null : data;
+}
+
+function storeHomeBarPreview(json, via) {
+    const data = validHomeBarPreview(json);
+    if (!data) {
+        logServiceEvent('WARN', 'home bar row rejected (' + via + '): not a valid preview, ' + String(json && json.length) + ' bytes');
+        return false;
+    }
+    if (json === _homeBarPreviewLast) return true;
+    const fs = require('fs');
+    const path = require('path');
+    const candidates = _homeBarPreviewPath ? [_homeBarPreviewPath] : storeCandidates(HOME_BAR_PREVIEW_FILE);
+    for (let i = 0; i < candidates.length; i++) {
+        try {
+            mkdirpSync(fs, path.dirname(candidates[i]));
+            fs.writeFileSync(candidates[i], json, { mode: 0o600 });
+            if (fs.readFileSync(candidates[i], 'utf8') !== json) continue;
+            _homeBarPreviewPath = candidates[i];
+            _homeBarPreviewLast = json;
+            logServiceEvent('INFO', 'home bar row stored (' + via + '): '
+                + data.sections.map(function (s) { return (s.title || '?') + ' ' + s.tiles.length; }).join(', ')
+                + (data.sections.length ? '' : 'empty (switched off)') + ' at ' + candidates[i]);
+            launchPreviewService();
+            return true;
+        } catch (e) { }
+    }
+    logServiceEvent('ERROR', 'home bar row could not be stored; tried ' + candidates.join(', '));
+    return false;
+}
+
+function launchPreviewService() {
+    try {
+        const packageId = tizen.application.getAppInfo().packageId;
+        tizen.application.launchAppControl(
+            new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/pick', null, 'image/jpeg', null,
+                [new tizen.ApplicationControlData('caller', ['ForegroundApp'])]),
+            packageId + '.PreviewService',
+            function () { },
+            function (e) { logServiceEvent('WARN', 'PreviewService launch failed: ' + (e && e.message || e)); }
+        );
+    } catch (e) {
+        logServiceEvent('WARN', 'PreviewService launch threw: ' + (e && e.message || e));
+    }
+}
+
+// What a home bar tile asked for when it started the app. index.html hands it
+// over with the debugger request (CDP path) or by POST (proxy path); the page
+// picks it up at startup. Kept for a minute, which covers the injection.
+const LAUNCH_ACTION_MAX_AGE_MS = 60000;
+let _launchAction = null;
+
+function setLaunchAction(raw, via) {
+    let action = null;
+    try { action = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { action = null; }
+    const video = action && typeof action.v === 'string' && /^[A-Za-z0-9_-]{11}$/.test(action.v) ? action.v : null;
+    const playlist = action && typeof action.p === 'string' && /^[A-Za-z0-9_-]{10,64}$/.test(action.p) ? action.p : null;
+    if (!video && !playlist) {
+        logServiceEvent('WARN', 'home bar launch action ignored (' + via + '): ' + String(raw).slice(0, 120));
+        return;
+    }
+    _launchAction = video ? { v: video, at: Date.now() } : { p: playlist, at: Date.now() };
+    logServiceEvent('INFO', 'home bar tile launch (' + via + '): ' + JSON.stringify(_launchAction));
+}
+
+function pendingLaunchAction(take) {
+    if (!_launchAction || Date.now() - _launchAction.at > LAUNCH_ACTION_MAX_AGE_MS) return null;
+    const action = _launchAction;
+    if (take) _launchAction = null;
+    return action;
+}
+
+app.post('/tizentube/homeBarPreview', express.text({ type: '*/*', limit: '80kb' }), (req, res) => {
+    res.status(storeHomeBarPreview(String(req.body || ''), 'proxy') ? 204 : 400).end();
+});
+
+app.post('/tizentube/launchAction', express.json(), (req, res) => {
+    setLaunchAction(req.body || null, 'proxy');
+    res.status(204).end();
+});
+
+app.get('/tizentube/launchAction', (req, res) => {
+    const action = pendingLaunchAction(true);
+    if (!action) return res.status(204).end();
+    res.json(action);
+});
+
 app.get('/tizentube/debugger', (req, res) => {
-    const args = req.originalUrl.split('?')[1] || '';
+    // ttLaunch is index.html's hand-over of a home bar tile; it is not for
+    // YouTube, so it is taken out of what the injector passes on.
+    const query = req.originalUrl.split('?')[1] || '';
+    const args = query.split('&').filter(function (part) {
+        if (part.indexOf('ttLaunch=') !== 0) return true;
+        try { setLaunchAction(decodeURIComponent(part.slice('ttLaunch='.length)), 'cdp'); } catch (e) { }
+        return false;
+    }).join('&');
     // setInterval fires every 50ms regardless of whether the previous
     // getAppsContext callback has returned yet — if that call ever takes
     // longer than 50ms (plausible under load), multiple overlapping calls

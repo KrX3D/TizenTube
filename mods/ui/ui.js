@@ -10,6 +10,7 @@ import { pipToFullscreen } from '../features/pictureInPicture.js';
 import { noteReload, recentReload, clearReloadNote } from '../features/reloadCoordinator.js';
 import { refreshIfFirstResponseMissed } from '../features/missedFirstResponse.js';
 import { reopenVideoAfterReload } from '../features/resumeOutOfVideo.js';
+import { openLaunchAction } from '../features/homeBarPreview.js';
 import { appendFileOnlyLog } from '../features/hideWatched.js';
 import getCommandExecutor from './customCommandExecution.js';
 import { ensureGuideFiltered } from '../features/guideFilterGuard.js';
@@ -254,8 +255,12 @@ ${isStandalone ? `
   // A wake reload during a video went to Home instead; play the video again.
   // See resumeOutOfVideo.js.
   reopenVideoAfterReload(resolveCommand);
+  // Started from a tile on the TV home bar: open what it asked for, and do not
+  // let the startup reload below replace it. See homeBarPreview.js.
+  const launchedFromTile = openLaunchAction(resolveCommand);
+  if (launchedFromTile) appendFileOnlyLog('reload.startup_skipped', { reason: 'homeBarTile' });
 
-  if (configRead('reloadHomeOnStartup')) {
+  if (!launchedFromTile && configRead('reloadHomeOnStartup')) {
     // Not after the page has just been reloaded for waking up: the feed is as
     // fresh as this would make it, and doing it anyway is the second of the
     // three reloads reported after powering the TV on.
