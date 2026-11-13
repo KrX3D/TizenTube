@@ -1247,21 +1247,54 @@ const HOME_BAR_PREVIEW_MAX_BYTES = 64 * 1024;
 let _homeBarPreviewPath = null;
 let _homeBarPreviewLast = '';
 
+// The row is rebuilt from checked fields rather than written as received
+// (code scanning #150, js/http-to-file-access): only the fields Samsung's
+// format uses, titles as bounded plain strings, the image URL re-made from a
+// video id and a known size, and action_data re-encoded from a checked video
+// or playlist id. Nothing the page sends reaches the file otherwise.
+const PREVIEW_IMAGE = /^https:\/\/i\.ytimg\.com\/vi\/([A-Za-z0-9_-]{11})\/(mqdefault|hqdefault)\.jpg$/;
+const PREVIEW_RATIOS = ['16by9', '4by3', '1by1', '2by3'];
+
+function previewText(value, max) {
+    return typeof value === 'string' ? value.replace(/[\u0000-\u001f]/g, ' ').slice(0, max) : '';
+}
+
+function previewAction(raw) {
+    let action;
+    try { action = JSON.parse(raw); } catch (e) { return null; }
+    if (action && typeof action.v === 'string' && /^[A-Za-z0-9_-]{11}$/.test(action.v)) return JSON.stringify({ v: action.v });
+    if (action && typeof action.p === 'string' && /^[A-Za-z0-9_-]{10,64}$/.test(action.p)) return JSON.stringify({ p: action.p });
+    return null;
+}
+
 function validHomeBarPreview(json) {
     if (typeof json !== 'string' || !json || json.length > HOME_BAR_PREVIEW_MAX_BYTES) return null;
     let data;
     try { data = JSON.parse(json); } catch (e) { return null; }
-    if (!data || !Array.isArray(data.sections)) return null;
+    if (!data || !Array.isArray(data.sections) || data.sections.length > 10) return null;
+    const sections = [];
     let tiles = 0;
     for (const section of data.sections) {
         if (!section || !Array.isArray(section.tiles) || !section.tiles.length) return null;
+        const clean = { title: previewText(section.title, 80), tiles: [] };
         for (const tile of section.tiles) {
-            if (!tile || typeof tile.image_url !== 'string' || tile.image_url.indexOf('https://i.ytimg.com/') !== 0) return null;
-            if (typeof tile.action_data !== 'string' || tile.action_data.length > 200) return null;
+            const image = tile && typeof tile.image_url === 'string' ? PREVIEW_IMAGE.exec(tile.image_url) : null;
+            const action = tile && typeof tile.action_data === 'string' ? previewAction(tile.action_data) : null;
+            if (!image || !action) return null;
+            const ratio = PREVIEW_RATIOS.indexOf(tile.image_ratio) !== -1 ? PREVIEW_RATIOS[PREVIEW_RATIOS.indexOf(tile.image_ratio)] : '16by9';
+            clean.tiles.push({
+                title: previewText(tile.title, 120),
+                subtitle: previewText(tile.subtitle, 80),
+                image_url: 'https://i.ytimg.com/vi/' + image[1] + '/' + image[2] + '.jpg',
+                image_ratio: ratio,
+                action_data: action,
+                is_playable: tile.is_playable === true
+            });
             tiles++;
         }
+        sections.push(clean);
     }
-    return tiles > 40 ? null : data;
+    return tiles > 40 ? null : { sections: sections };
 }
 
 function storeHomeBarPreview(json, via) {
@@ -1270,6 +1303,8 @@ function storeHomeBarPreview(json, via) {
         logServiceEvent('WARN', 'home bar row rejected (' + via + '): not a valid preview, ' + String(json && json.length) + ' bytes');
         return false;
     }
+    // What is written is the rebuilt row, never the text as received.
+    json = JSON.stringify(data);
     if (json === _homeBarPreviewLast) return true;
     const fs = require('fs');
     const path = require('path');
