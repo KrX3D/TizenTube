@@ -117,6 +117,7 @@ function disableWhosWatching(value) {
             return;
         }
         LeanbackRecurringActions = JSON.parse(raw);
+        if (!LeanbackRecurringActions || !LeanbackRecurringActions.data || !LeanbackRecurringActions.data.data) return;
     } catch (err) {
         console.warn('[disableWhosWatching] Failed to read/parse recurring_actions:', err);
         return;
@@ -168,7 +169,8 @@ function disableWhosWatching(value) {
             date.setDate(date.getDate() + 7);
             LeanbackRecurringActions.data.data["startup-screen-account-selector-with-guest"] &&
                 (LeanbackRecurringActions.data.data["startup-screen-account-selector-with-guest"].lastFired = date.getTime());
-            LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
+            LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts &&
+                (LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime());
             LeanbackRecurringActions.data.data["startup-screen-signed-out-welcome-back"] &&
                 (LeanbackRecurringActions.data.data["startup-screen-signed-out-welcome-back"].lastFired = date.getTime());
             localStorage['yt.leanback.default::recurring_actions'] = JSON.stringify(LeanbackRecurringActions);
@@ -190,7 +192,8 @@ function disableWhosWatching(value) {
                 try {
                     LeanbackRecurringActions.data.data["startup-screen-account-selector-with-guest"] &&
                         (LeanbackRecurringActions.data.data["startup-screen-account-selector-with-guest"].lastFired = date.getTime());
-                    LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime();
+                    LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts &&
+                        (LeanbackRecurringActions.data.data.whos_watching_fullscreen_zero_accounts.lastFired = date.getTime());
                     LeanbackRecurringActions.data.data["startup-screen-signed-out-welcome-back"] &&
                         (LeanbackRecurringActions.data.data["startup-screen-signed-out-welcome-back"].lastFired = date.getTime());
                     localStorage['yt.leanback.default::recurring_actions'] = JSON.stringify(LeanbackRecurringActions);
