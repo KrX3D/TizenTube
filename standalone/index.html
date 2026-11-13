@@ -253,6 +253,7 @@
                 .then(r => r.json())
                 .then(res => {
                     sendLog('INFO', 'getState resolved: ' + JSON.stringify(res));
+                    previewTest();
                     if (res.canConnectToDaemon && !res.isConnecting) {
                         sendLog('INFO', 'Taking CDP-injection path, launching debugger and exiting');
                         breadcrumb('cdp-handoff');
@@ -508,6 +509,48 @@
             }
 
             attempt();
+        }
+
+        // Smart Hub Preview test build (see preview/preview.js). Called once
+        // the service answers, so the report has somewhere to go.
+        var previewTestDone = false;
+        function previewTest() {
+            if (previewTestDone) return;
+            previewTestDone = true;
+            function report(level, message) {
+                try {
+                    fetch('http://localhost:8099/tizentube/previewEvent', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ level: level, message: '[index.html] ' + message })
+                    }).catch(function () {});
+                } catch (e) {}
+            }
+            // A tile on the home bar starts the app with its action_data under
+            // the key PAYLOAD. Only reported for now; opening the video comes
+            // once the row is known to work.
+            try {
+                var data = tizen.application.getCurrentApplication().getRequestedAppControl().appControl.data || [];
+                var keys = [];
+                for (var i = 0; i < data.length; i++) {
+                    keys.push(data[i].key);
+                    if (data[i].key === 'PAYLOAD') report('INFO', 'started from a preview tile, PAYLOAD=' + String(data[i].value && data[i].value[0]).slice(0, 300));
+                }
+                report('INFO', 'launch app-control keys: ' + JSON.stringify(keys));
+            } catch (e) {
+                report('ERROR', 'reading app-control failed: ' + (e && e.message || e));
+            }
+            try {
+                tizen.application.launchAppControl(
+                    new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/pick', null, 'image/jpeg', null,
+                        [new tizen.ApplicationControlData('caller', ['ForegroundApp'])]),
+                    pkgId + '.PreviewService',
+                    function () { report('INFO', 'PreviewService launched'); },
+                    function (e) { report('ERROR', 'PreviewService launch failed: ' + (e && e.message || e)); }
+                );
+            } catch (e) {
+                report('ERROR', 'PreviewService launch threw: ' + (e && e.message || e));
+            }
         }
 
         function launchService() {

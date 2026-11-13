@@ -1251,6 +1251,15 @@ app.post('/tizentube/log', express.json(), (req, res) => {
     res.status(204).end();
 });
 
+// Smart Hub Preview test build: PreviewService (preview/preview.js) and
+// index.html's tile-launch report land in the syslog through here.
+app.post('/tizentube/previewEvent', express.json(), (req, res) => {
+    const { level, message } = req.body || {};
+    if (!message) return res.status(400).end();
+    logServiceEvent(level === 'ERROR' ? 'ERROR' : 'INFO', String(message).slice(0, 1000));
+    res.status(204).end();
+});
+
 // Syslog frames are built page-side and only need a socket here.
 app.post('/tizentube/syslog', express.json(), (req, res) => {
     const { host, port, frame } = req.body || {};
