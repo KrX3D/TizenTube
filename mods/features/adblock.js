@@ -51,6 +51,7 @@ import { noteVideoLength } from './playbackProgress.js';
 import { filterAggregateShelves } from './aggregateShelfHider.js';
 import { logSubscriptionsShelfShape } from './subscriptionsShelfDiag.js';
 import { addChannelSidebarButton } from './sidebarChannelButton.js';
+import { noteResponsePage } from './missedFirstResponse.js';
 import {
   isLockupVideo,
   lockupVideoId,
@@ -910,7 +911,9 @@ JSON.parse = function () {
     ? (name) => { const now = Date.now(); _marks[name] = (_marks[name] || 0) + (now - _markAt); _markAt = now; }
     : () => { };
   try {
-    const detectedPage = detectPageFromResponse(r) || detectCurrentPage();
+    const responsePage = detectPageFromResponse(r);
+    noteResponsePage(responsePage);
+    const detectedPage = responsePage || detectCurrentPage();
     window.__ttLastDetectedPage = detectedPage;
     window.__ttParseSeq = Number(window.__ttParseSeq || 0) + 1;
     const hash = location.hash || '';

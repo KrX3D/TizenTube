@@ -8,6 +8,7 @@ import modernUI from './settings.js';
 import resolveCommand, { patchResolveCommand } from '../resolveCommand.js';
 import { pipToFullscreen } from '../features/pictureInPicture.js';
 import { noteReload, recentReload, clearReloadNote } from '../features/reloadCoordinator.js';
+import { refreshIfFirstResponseMissed } from '../features/missedFirstResponse.js';
 import { appendFileOnlyLog } from '../features/hideWatched.js';
 import getCommandExecutor from './customCommandExecution.js';
 import { t } from 'i18next';
@@ -256,6 +257,9 @@ ${isStandalone ? `
     if (justReloaded) {
       appendFileOnlyLog('reload.startup_skipped', justReloaded);
       clearReloadNote();
+      // The skipped refetch is also what normally replaces a first response
+      // parsed before the mod was in place; see missedFirstResponse.js.
+      refreshIfFirstResponseMissed(() => resolveCommand({ signalAction: { signal: 'SOFT_RELOAD_PAGE' } }));
     } else if (configRead('launchToOnStartup')) {
       noteReload('startup_launch_to');
       resolveCommand(JSON.parse(configRead('launchToOnStartup')));
