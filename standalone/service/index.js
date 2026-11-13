@@ -1016,6 +1016,34 @@ try {
     logServiceEvent('WARN', `dns fallback not installed: ${err && err.stack || err}`);
 }
 
+// Watch history on the proxy path (ported from reisxd/TizenTube#749).
+//
+// The player reports playback to /api/stats/playback, /watchtime and /qoe
+// with image and beacon requests. standaloneUserscript.js already routes
+// those through this proxy, but such requests cannot carry an Authorization
+// header, and the TV client identifies the account by that header rather
+// than by cookies. Without it the reports reach YouTube and are recorded
+// against no one, so nothing lands in the account's history. The token the
+// page last sent on its own /youtubei/ calls is attached to them here.
+//
+// Only ever forwarded to YouTube's own hosts, and only to /api/stats/.
+let _lastYoutubeAuthorization = null;
+
+function isYoutubeHost(hostname) {
+    return hostname === 'youtube.com' || hostname === 'www.youtube.com';
+}
+
+function attachAccountToStatsReport(targetUrl, headers) {
+    if (!isYoutubeHost(targetUrl.hostname)) return;
+    if (targetUrl.pathname.indexOf('/youtubei/') === 0 && headers['authorization']) {
+        _lastYoutubeAuthorization = headers['authorization'];
+        return;
+    }
+    if (targetUrl.pathname.indexOf('/api/stats/') === 0 && !headers['authorization'] && _lastYoutubeAuthorization) {
+        headers['authorization'] = _lastYoutubeAuthorization;
+    }
+}
+
 let express;
 try {
     express = require('express');
@@ -1323,6 +1351,8 @@ app.all('*', (req, res) => {
     }
 
     headers['accept-encoding'] = 'gzip, deflate';
+
+    attachAccountToStatsReport(parsedTargetUrl, headers);
 
     const hasBody = ['POST', 'PUT', 'PATCH'].indexOf(req.method) !== -1;
     const fetchOptions = {
