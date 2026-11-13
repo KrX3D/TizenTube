@@ -21,6 +21,13 @@ function updateStyle() {
     }
 };
 
-document.head.appendChild(style);
+// The script can be evaluated before YouTube's document has a <head>
+// (TizenBrew's cached injection); a throw here would stop the rest of the
+// bundle. Ported from reisxd/TizenTube#759.
+if (document.head) {
+    document.head.appendChild(style);
+} else {
+    document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
+}
 updateStyle();
 export default updateStyle;

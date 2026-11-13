@@ -5,25 +5,28 @@ import resolveCommand from "../resolveCommand.js";
 window.isPipPlaying = false;
 let PlayerService = null;
 
+// YouTube's services can still be registering when 'load' fires, so a miss
+// is retried for a while before PiP is given up on (reisxd/TizenTube#759).
+const PIP_LOAD_RETRY_MS = 250;
+const PIP_LOAD_MAX_TRIES = 80;
+let pipLoadTries = 0;
+
 function pipLoad() {
     try {
-        const mappings = Object.values(window._yttv).find(a => a && a.mappings);
-        if (!mappings) {
-            console.warn('[PiP] Could not find _yttv mappings — PiP will not be available');
+        const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
+        const ready = mappings && typeof mappings.get === 'function'
+            && mappings.get('PlayerService') && mappings.get('PlaybackPreviewService');
+        if (!ready) {
+            if (++pipLoadTries < PIP_LOAD_MAX_TRIES) {
+                setTimeout(pipLoad, PIP_LOAD_RETRY_MS);
+                return;
+            }
+            console.warn('[PiP] PlayerService/PlaybackPreviewService not found after ' + pipLoadTries + ' tries — PiP will not be available');
             return;
         }
 
         PlayerService = mappings.get('PlayerService');
-        if (!PlayerService) {
-            console.warn('[PiP] PlayerService not found in mappings');
-            return;
-        }
-
         const PlaybackPreviewService = mappings.get('PlaybackPreviewService');
-        if (!PlaybackPreviewService) {
-            console.warn('[PiP] PlaybackPreviewService not found in mappings');
-            return;
-        }
 
         const PlaybackPreviewServiceStart = PlaybackPreviewService.start;
         const PlaybackPreviewServiceStop = PlaybackPreviewService.stop;
@@ -254,6 +257,14 @@ const observerPipEnter = new MutationObserver(() => {
     }
 });
 
-observerPipEnter.observe(document.body, { childList: true, subtree: true });
+// No <body> yet when the script runs before the page (reisxd/TizenTube#759).
+function observePipEnter() {
+    observerPipEnter.observe(document.body, { childList: true, subtree: true });
+}
+if (document.body) {
+    observePipEnter();
+} else {
+    document.addEventListener('DOMContentLoaded', observePipEnter);
+}
 
 export { enablePip, pipToFullscreen };

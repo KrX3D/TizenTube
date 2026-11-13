@@ -33,6 +33,13 @@
    * @function initiateSpatialNavigation
    */
   function initiateSpatialNavigation() {
+    // Evaluated before the document exists (reisxd/TizenTube#759): the
+    // getComputedStyle(document.documentElement) below would throw.
+    if (!document.documentElement) {
+      document.addEventListener('DOMContentLoaded', initiateSpatialNavigation);
+      return;
+    }
+
     /*
      * Bind the standards APIs to be exposed to the window object for authors
      */
