@@ -1284,12 +1284,43 @@ function storeHomeBarPreview(json, via) {
             logServiceEvent('INFO', 'home bar row stored (' + via + '): '
                 + data.sections.map(function (s) { return (s.title || '?') + ' ' + s.tiles.length; }).join(', ')
                 + (data.sections.length ? '' : 'empty (switched off)') + ' at ' + candidates[i]);
-            launchPreviewService();
+            schedulePreviewPublish();
             return true;
         } catch (e) { }
     }
     logServiceEvent('ERROR', 'home bar row could not be stored; tried ' + candidates.join(', '));
     return false;
+}
+
+// Samsung takes one setPreviewData every ten minutes and silently drops the
+// rest: a capture showed a settings change stored and "published" twice within
+// a minute with nothing changing on screen. PreviewService records when it last
+// published (tt-home-bar-preview-published.json) and skips a repeat; here a
+// changed row waits until that ten minutes is up instead of being sent into
+// the void.
+const PREVIEW_MIN_GAP_MS = 10 * 60 * 1000 + 15000;
+let _previewPublishTimer = null;
+
+function lastPreviewPublishAt() {
+    if (!_homeBarPreviewPath) return 0;
+    try {
+        const raw = require('fs').readFileSync(require('path').join(require('path').dirname(_homeBarPreviewPath), 'tt-home-bar-preview-published.json'), 'utf8');
+        const at = Number(JSON.parse(raw).at);
+        return isFinite(at) ? at : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+function schedulePreviewPublish() {
+    if (_previewPublishTimer) return;
+    const waitMs = Math.max(0, lastPreviewPublishAt() + PREVIEW_MIN_GAP_MS - Date.now());
+    if (!waitMs) return launchPreviewService();
+    logServiceEvent('INFO', 'home bar row will be published in ' + Math.round(waitMs / 1000) + ' s (Samsung allows one update per 10 min)');
+    _previewPublishTimer = setTimeout(function () {
+        _previewPublishTimer = null;
+        launchPreviewService();
+    }, waitMs);
 }
 
 function launchPreviewService() {
@@ -1326,10 +1357,21 @@ function setLaunchAction(raw, via) {
     logServiceEvent('INFO', 'home bar tile launch (' + via + '): ' + JSON.stringify(_launchAction));
 }
 
+// Handed to every context of one start (a start creates two), then gone. The
+// first version kept it for a whole minute, so starting TizenTube normally
+// twice within that minute after a tile launch opened the tile's playlist both
+// times (captured 15:51:57, 15:52:22, 15:52:46).
+const LAUNCH_ACTION_SHARE_MS = 10000;
+
 function pendingLaunchAction(take) {
     if (!_launchAction || Date.now() - _launchAction.at > LAUNCH_ACTION_MAX_AGE_MS) return null;
-    const action = _launchAction;
+    if (_launchAction.givenAt && Date.now() - _launchAction.givenAt > LAUNCH_ACTION_SHARE_MS) {
+        _launchAction = null;
+        return null;
+    }
+    const action = { v: _launchAction.v, p: _launchAction.p, at: _launchAction.at };
     if (take) _launchAction = null;
+    else if (!_launchAction.givenAt) _launchAction.givenAt = Date.now();
     return action;
 }
 
@@ -1352,11 +1394,15 @@ app.get('/tizentube/debugger', (req, res) => {
     // ttLaunch is index.html's hand-over of a home bar tile; it is not for
     // YouTube, so it is taken out of what the injector passes on.
     const query = req.originalUrl.split('?')[1] || '';
+    let fromTile = false;
     const args = query.split('&').filter(function (part) {
         if (part.indexOf('ttLaunch=') !== 0) return true;
+        fromTile = true;
         try { setLaunchAction(decodeURIComponent(part.slice('ttLaunch='.length)), 'cdp'); } catch (e) { }
         return false;
     }).join('&');
+    // A normal start: whatever an earlier tile asked for is not this start's.
+    if (!fromTile) _launchAction = null;
     // setInterval fires every 50ms regardless of whether the previous
     // getAppsContext callback has returned yet — if that call ever takes
     // longer than 50ms (plausible under load), multiple overlapping calls

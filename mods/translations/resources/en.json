@@ -403,7 +403,7 @@
                     "unwedgePlayer": "Recover a frozen player automatically",
                     "homeBarPreview": {
                         "title": "Home bar row (Smart Hub)",
-                        "subtitle": "Standalone app only. Shown when TizenTube is highlighted on the TV home bar; TVs up to 2021.",
+                        "subtitle": "Samsung TVs (Tizen) with the TizenTube standalone app only, models up to 2021; not on Android TV. Shown when TizenTube is highlighted on the home bar. Changes reach the TV within 10 minutes (Samsung allows one update per 10 min).",
                         "off": "Off",
                         "options": {
                             "enable": "Show TizenTube row on the home bar",

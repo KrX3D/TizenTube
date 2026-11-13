@@ -4,6 +4,7 @@ import {
 } from './hideWatched.js';
 import { getLockup, isLockupShort, lockupSubtitle, lockupSelectCommand } from './lockupViewModel.js';
 import { openWhenReady } from './resumeOutOfVideo.js';
+import { channelNameOf, isChannelHidden } from './channelHider.js';
 import { t } from 'i18next';
 
 /**
@@ -41,7 +42,10 @@ const FINISHED_PERCENT = 90;
 // After startup, so the fetches do not compete with the first page load.
 const FIRST_RUN_MS = 20000;
 const REFRESH_MS = 15 * 60 * 1000;
-const MAX_DEPTH = 16;
+// Subscriptions nests its shelves inside the channel tabs (tvSecondaryNav →
+// tabs → tabRenderer → …), past the 16 the first version allowed, which is why
+// that section stayed empty on the TV while History and Playlists worked.
+const MAX_DEPTH = 40;
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const PLAYLIST_ID = /^[A-Za-z0-9_-]{10,64}$/;
 // Watch Later, Liked videos and the old "My YouTube" alias for Watch Later.
@@ -168,10 +172,14 @@ function playlistIdOf(item) {
   return id;
 }
 
+// mqdefault is 16:9 (320x180) and has no black bars. hqdefault, used first,
+// is a 4:3 frame with the 16:9 picture letterboxed inside, which is what put a
+// bar above and below every tile. 320x180 is under Samsung's documented 16:9
+// minimum (444x250); should the TV refuse it, PreviewService falls back to the
+// hqdefault form that is known to work.
+const IMAGE_RATIO = '16by9';
 function videoThumb(videoId) {
-  // 480x360, inside Samsung's 4:3 limits (333x250 to 480x360) and far under
-  // the 360 KB cap. Confirmed rendering on the 5.0 TV by the test build.
-  return 'https://i.ytimg.com/vi/' + videoId + '/hqdefault.jpg';
+  return 'https://i.ytimg.com/vi/' + videoId + '/mqdefault.jpg';
 }
 
 /** A playlist's cover as a video thumbnail, when its URL names the video. */
@@ -192,7 +200,7 @@ function videoTile(item, id) {
     title: clip(getItemTitle(item) || '', 100),
     subtitle: clip(subtitleOf(item), 60),
     image_url: videoThumb(id),
-    image_ratio: '4by3',
+    image_ratio: IMAGE_RATIO,
     action_data: JSON.stringify({ v: id }),
     is_playable: true,
   };
@@ -242,7 +250,7 @@ async function playlistSection(client, wanted) {
       title: clip(getItemTitle(item) || text(item?.tileRenderer?.metadata?.tileMetadataRenderer?.title) || '', 100),
       subtitle: clip(subtitleOf(item), 60),
       image_url: image,
-      image_ratio: '4by3',
+      image_ratio: IMAGE_RATIO,
       action_data: JSON.stringify({ p: id }),
       is_playable: false,
     });
@@ -257,17 +265,24 @@ async function subscriptionSection(client, wanted) {
   if (!response) return null;
   const tiles = [];
   const seen = new Set();
-  for (const item of collectItems(response, [], 0)) {
+  const items = collectItems(response, [], 0);
+  // What happened to the page's tiles, so an empty section says why.
+  const stats = { items: items.length, notVideo: 0, hiddenChannel: 0, watched: 0 };
+  for (const item of items) {
     const id = videoIdOf(item);
-    if (!id || seen.has(id)) continue;
+    if (!id) { stats.notVideo++; continue; }
+    if (seen.has(id)) continue;
     seen.add(id);
+    // Channels hidden through the long-press menu stay hidden here too.
+    if (isChannelHidden(channelNameOf(item))) { stats.hiddenChannel++; continue; }
     // Watched ones are left out, by the same rule hide-watched uses
     // (history included) at the 90% mark.
     const pct = getWatchPercent(item);
-    if (pct !== null && pct >= FINISHED_PERCENT) continue;
+    if (pct !== null && pct >= FINISHED_PERCENT) { stats.watched++; continue; }
     tiles.push(videoTile(item, id));
     if (tiles.length >= wanted) break;
   }
+  appendFileOnlyLog('homeBar.subscriptions', Object.assign(stats, { kept: tiles.length }));
   return tiles.length ? { title: t('homeBarPreview.sections.subscriptions'), tiles } : null;
 }
 

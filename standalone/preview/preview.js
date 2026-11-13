@@ -21,6 +21,12 @@ var fs = require('fs');
 var path = require('path');
 
 var PREVIEW_FILE = 'tt-home-bar-preview.json';
+// When this last published and what. Samsung takes one setPreviewData every
+// ten minutes and drops the rest without an error, so a repeat of the same row
+// is skipped and a changed one waits; StandaloneService starts this service
+// again once the ten minutes are up.
+var STATE_FILE = 'tt-home-bar-preview-published.json';
+var MIN_GAP_MS = 10 * 60 * 1000;
 
 // Lines land in the syslog through StandaloneService, when it is running.
 function report(level, message) {
@@ -73,6 +79,20 @@ function exitSoon() {
     }, 1500);
 }
 
+function readState(dir) {
+    try { return JSON.parse(fs.readFileSync(path.join(dir, STATE_FILE), 'utf8')) || {}; } catch (e) { return {}; }
+}
+
+function writeState(dir, raw) {
+    try { fs.writeFileSync(path.join(dir, STATE_FILE), JSON.stringify({ at: Date.now(), raw: raw })); } catch (e) {}
+}
+
+// The 4:3 thumbnail form the test build proved, for a TV that refuses the
+// 16:9 mqdefault images (smaller than Samsung's documented minimum).
+function fallbackRaw(raw) {
+    return raw.split('/mqdefault.jpg').join('/hqdefault.jpg').split('"16by9"').join('"4by3"');
+}
+
 function publish(trigger) {
     var hasPreview = typeof webapis !== 'undefined' && webapis && webapis.preview
         && typeof webapis.preview.setPreviewData === 'function';
@@ -90,19 +110,37 @@ function publish(trigger) {
     }
     var tiles = 0;
     for (var i = 0; i < stored.data.sections.length; i++) tiles += (stored.data.sections[i].tiles || []).length;
-    try {
-        webapis.preview.setPreviewData(stored.raw, function () {
-            report('INFO', 'published ' + stored.data.sections.length + ' sections, ' + tiles + ' tiles (trigger ' + trigger + ')');
-            exitSoon();
-        }, function (err) {
-            report('ERROR', 'setPreviewData failed (trigger ' + trigger + ', ' + stored.data.sections.length + ' sections): '
-                + (err && (err.name + ': ' + err.message) || err));
-            exitSoon();
-        });
-    } catch (e) {
-        report('ERROR', 'setPreviewData threw (trigger ' + trigger + '): ' + (e && e.message || e));
+    var dir = path.dirname(stored.file);
+    var state = readState(dir);
+    var sinceMs = Date.now() - Number(state.at || 0);
+    if (state.raw === stored.raw && trigger === 'app') {
+        // Already showing this row; publishing it again would only use up the
+        // one update Samsung allows per ten minutes.
         exitSoon();
+        return;
     }
+    if (sinceMs >= 0 && sinceMs < MIN_GAP_MS) {
+        report('INFO', 'row changed, waiting ' + Math.round((MIN_GAP_MS - sinceMs) / 1000) + ' s: Samsung allows one update per 10 min (trigger ' + trigger + ')');
+        exitSoon();
+        return;
+    }
+    var attempt = function (raw, label, onFail) {
+        try {
+            webapis.preview.setPreviewData(raw, function () {
+                writeState(dir, stored.raw);
+                report('INFO', 'published ' + stored.data.sections.length + ' sections, ' + tiles + ' tiles' + label + ' (trigger ' + trigger + ')');
+                exitSoon();
+            }, function (err) {
+                report('ERROR', 'setPreviewData failed' + label + ' (trigger ' + trigger + '): ' + (err && (err.name + ': ' + err.message) || err));
+                if (onFail) onFail(); else exitSoon();
+            });
+        } catch (e) {
+            report('ERROR', 'setPreviewData threw' + label + ' (trigger ' + trigger + '): ' + (e && e.message || e));
+            if (onFail) onFail(); else exitSoon();
+        }
+    };
+    var fallback = fallbackRaw(stored.raw);
+    attempt(stored.raw, '', fallback !== stored.raw ? function () { attempt(fallback, ' with 4:3 thumbnails', null); } : null);
 }
 
 module.exports.onStart = function () {};
