@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+'use strict';
 // process.stdout/stderr rather than console: CodeQL ties console.* here to the TV's
 // console hook in mods/features/visualConsole.js and reports file data reaching the
 // log senders (js/file-access-to-http), though this script never runs on the TV.
@@ -9,7 +10,7 @@ const writeErr = (line) => process.stderr.write(`${line}\n`);
 // Plain Node, no dependencies, so it runs in any CI job that has actions/checkout.
 //
 // Usage:
-//   node scripts/check-i18n.cjs --en <en.json> --de <de.json> [--src <dir>]... [--go <file.go>]
+//   node scripts/i18n-check/check-i18n.cjs --en <en.json> --de <de.json> [--src <dir>]... [--go <file.go>]
 //
 // Fails on:
 //   - a key in one language file but not the other (nested JSON is flattened to a.b.c)
@@ -20,7 +21,6 @@ const writeErr = (line) => process.stderr.write(`${line}\n`);
 // Keys built at runtime (t('state.' + x)) are skipped, they cannot be checked statically.
 // Keys starting with "__" (metadata such as __contributors) are ignored.
 
-'use strict';
 const fs = require('fs');
 const path = require('path');
 
