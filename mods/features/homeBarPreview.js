@@ -74,7 +74,7 @@ function innerTubeClient() {
   }
 }
 
-function browse(client, browseId) {
+function browse(client, browseId, continuation) {
   // The response passes through adblock.js's parse hook, which records the
   // page it names as the page on screen. Put back what was there, so a
   // background fetch of Subscriptions does not make the hook treat the page
@@ -84,7 +84,7 @@ function browse(client, browseId) {
   return new Promise((resolve) => {
     const done = (value) => { restore(); resolve(value); };
     try {
-      client.fetch({ path: '/youtubei/v1/browse', payload: { browseId } })
+      client.fetch({ path: '/youtubei/v1/browse', payload: continuation ? { continuation } : { browseId } })
         .subscribe(done, (err) => {
           restore();
           appendFileOnlyLog('homeBar.fetchFailed', { browseId, message: (err && err.message) || String(err) });
@@ -110,6 +110,25 @@ function collectItems(node, out, depth) {
     return out;
   }
   for (const key of Object.keys(node)) collectItems(node[key], out, depth + 1);
+  return out;
+}
+
+/**
+ * The "load more" tokens of a response, in page order. Only next-page ones:
+ * a reload token would fetch the same first batch again.
+ */
+function continuationTokens(node, out, depth) {
+  if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return out;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) continuationTokens(node[i], out, depth + 1);
+    return out;
+  }
+  const token = node.nextContinuationData?.continuation
+    || node.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+  if (typeof token === 'string' && token && out.indexOf(token) === -1) out.push(token);
+  for (const key of Object.keys(node)) {
+    if (key !== 'reloadContinuationData') continuationTokens(node[key], out, depth + 1);
+  }
   return out;
 }
 
@@ -259,30 +278,47 @@ async function playlistSection(client, wanted) {
   return tiles.length ? { title: t('homeBarPreview.sections.playlists'), tiles } : null;
 }
 
+// Pages of the subscriptions feed fetched at most per refresh. The first one
+// often holds only a few videos, and once watched ones and hidden channels
+// are taken out it can leave fewer than were asked for.
+const SUBSCRIPTION_PAGES = 5;
+
 async function subscriptionSection(client, wanted) {
   if (!wanted) return null;
-  const response = await browse(client, 'FEsubscriptions');
+  let response = await browse(client, 'FEsubscriptions');
   if (!response) return null;
   const tiles = [];
   const seen = new Set();
-  const items = collectItems(response, [], 0);
-  // What happened to the page's tiles, so an empty section says why.
-  const stats = { items: items.length, notVideo: 0, hiddenChannel: 0, watched: 0 };
-  for (const item of items) {
-    const id = videoIdOf(item);
-    if (!id) { stats.notVideo++; continue; }
-    if (seen.has(id)) continue;
-    seen.add(id);
-    // Channels hidden through the long-press menu stay hidden here too.
-    if (isChannelHidden(channelNameOf(item))) { stats.hiddenChannel++; continue; }
-    // Watched ones are left out, by the same rule hide-watched uses
-    // (history included) at the 90% mark.
-    const pct = getWatchPercent(item);
-    if (pct !== null && pct >= FINISHED_PERCENT) { stats.watched++; continue; }
-    tiles.push(videoTile(item, id));
-    if (tiles.length >= wanted) break;
+  const usedTokens = new Set();
+  // What happened to the page's tiles, so a short section says why.
+  const stats = { pages: 0, items: 0, notVideo: 0, hiddenChannel: 0, watched: 0 };
+  while (response) {
+    stats.pages++;
+    const items = collectItems(response, [], 0);
+    stats.items += items.length;
+    for (const item of items) {
+      const id = videoIdOf(item);
+      if (!id) { stats.notVideo++; continue; }
+      if (seen.has(id)) continue;
+      seen.add(id);
+      // Channels hidden through the long-press menu stay hidden here too.
+      if (isChannelHidden(channelNameOf(item))) { stats.hiddenChannel++; continue; }
+      // Watched ones are left out, by the same rule hide-watched uses
+      // (history included) at the 90% mark.
+      const pct = getWatchPercent(item);
+      if (pct !== null && pct >= FINISHED_PERCENT) { stats.watched++; continue; }
+      tiles.push(videoTile(item, id));
+      if (tiles.length >= wanted) break;
+    }
+    // The count is what is kept, not what is looked at: load the next page
+    // until enough are left after filtering.
+    if (tiles.length >= wanted || stats.pages >= SUBSCRIPTION_PAGES) break;
+    const token = continuationTokens(response, [], 0).find(tok => !usedTokens.has(tok));
+    if (!token) break;
+    usedTokens.add(token);
+    response = await browse(client, 'FEsubscriptions', token);
   }
-  appendFileOnlyLog('homeBar.subscriptions', Object.assign(stats, { kept: tiles.length }));
+  appendFileOnlyLog('homeBar.subscriptions', Object.assign(stats, { wanted, kept: tiles.length }));
   return tiles.length ? { title: t('homeBarPreview.sections.subscriptions'), tiles } : null;
 }
 
