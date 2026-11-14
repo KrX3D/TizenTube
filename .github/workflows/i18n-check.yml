@@ -1,0 +1,24 @@
+# en/de translation check: same keys in both languages, same placeholders, and every
+# key used in mods/ actually exists. The other languages are not checked (they lag
+# behind by design). CI-only script, nothing here ends up on the TV.
+name: i18n check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mods/**"
+      - "scripts/i18n-check/**"
+      - ".github/workflows/i18n-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check en/de translations
+        run: node scripts/i18n-check/check-i18n.cjs --en mods/translations/resources/en.json --de mods/translations/resources/de.json --src mods

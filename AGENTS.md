@@ -98,11 +98,13 @@ standalone/                  # standalone installable app — see "Standalone mo
     build-publish-cleanup.yml   # push to main: bump version, build, npm publish, cleanup old npm versions
     build-standalone-release.yaml  # builds/signs standalone/ into a .wgt via Tizen Studio, GitHub Release
     codeql.yml                  # security scanning
+    i18n-check.yml              # PRs: en/de key + placeholder parity, keys used in mods/ must exist
     claude.yml
   assets/
     profiles.xml                 # Tizen Studio signing profile for standalone (see Known issues)
 
 scripts/tampermonkey/         # local Chrome-based dev/test loader — see README.md
+scripts/i18n-check/           # CI-only en/de translation check (run by i18n-check.yml; also runnable locally)
 scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote logging (see Feature map)
 scripts/npm-cleanup/          # local `npm unpublish` of old versions, with a 2FA code — the publish
                                 # workflow attempts removal too, but npm refuses it from any token it
@@ -235,6 +237,11 @@ build step builds top-level `service/` first because
   signs `standalone/` into a `.wgt` using **Tizen Studio's own CLI**
   (`tizen build-web` + `tizen package`, via `.github/assets/profiles.xml`)
   — see "Known unresolved issues", this is mid-troubleshooting.
+- **`i18n-check.yml`** — on PRs touching `mods/`: runs
+  `scripts/i18n-check/check-i18n.cjs`, which fails on en/de key or placeholder
+  mismatches and on `t('key')` calls whose key is in neither file. Only en and
+  de are checked. Locally: `node scripts/i18n-check/check-i18n.cjs --en
+  mods/translations/resources/en.json --de mods/translations/resources/de.json --src mods`
 - **`codeql.yml`** — security scanning on PRs; check its findings before
   merging anything touching `standalone/service/` (the proxy) or auth-ish
   code — false positives happen (e.g. SSRF flags on the proxy's
