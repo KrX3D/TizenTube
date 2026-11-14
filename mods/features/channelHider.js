@@ -1,6 +1,7 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { lockupSubtitle } from './lockupViewModel.js';
+import { subscriptionHiddenChannels, isHiddenOnSubscriptions } from './subscriptionChannelFilter.js';
 
 /**
  * channelHider.js — hide every video from a channel you don't want to see.
@@ -63,10 +64,13 @@ const MAX_LOGGED = 100;
  */
 export function filterHiddenChannels(items, pageName = null) {
     if (!Array.isArray(items) || !items.length) return items;
-    if (!hiddenChannels().length) return items;
+    // Channels picked in the Subscriptions channel list only count on that page.
+    const onSubscriptions = pageName === 'subscriptions' && subscriptionHiddenChannels().length > 0;
+    if (!hiddenChannels().length && !onSubscriptions) return items;
     return items.filter(item => {
         const name = channelNameOf(item);
-        if (!name || !isChannelHidden(name)) return true;
+        if (!name) return true;
+        if (!isChannelHidden(name) && !(onSubscriptions && isHiddenOnSubscriptions(name))) return true;
         try {
             const id = item?.tileRenderer?.contentId || '?';
             const key = name + ':' + id;

@@ -1266,6 +1266,16 @@ export default function modernUI(update, parameters) {
                     }
                 },
                 {
+                    name: t('settings.options.uiSettings.options.subscriptionChannelFilter.title'),
+                    icon: 'SUBSCRIPTIONS',
+                    value: null,
+                    action: {
+                        customAction: {
+                            action: 'SHOW_SUBSCRIPTION_CHANNEL_FILTER'
+                        }
+                    }
+                },
+                {
                     name: t('settings.options.uiSettings.options.hideDuplicateVideos'),
                     icon: 'PRIVACY_UNLISTED',
                     value: 'hideDuplicateVideos'

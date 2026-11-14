@@ -5,6 +5,7 @@ import {
 import { getLockup, isLockupShort, lockupSubtitle, lockupSelectCommand } from './lockupViewModel.js';
 import { openWhenReady } from './resumeOutOfVideo.js';
 import { channelNameOf, isChannelHidden } from './channelHider.js';
+import { isHiddenOnSubscriptions } from './subscriptionChannelFilter.js';
 import { t } from 'i18next';
 
 /**
@@ -65,7 +66,7 @@ function count(key, fallback) {
   return isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 20) : fallback;
 }
 
-function innerTubeClient() {
+export function innerTubeClient() {
   try {
     const mappings = Object.values(window._yttv || {}).find(a => a && a.mappings);
     return (mappings && mappings.get('KabukiInnerTubeClient')) || null;
@@ -74,7 +75,7 @@ function innerTubeClient() {
   }
 }
 
-function browse(client, browseId, continuation) {
+export function browse(client, browseId, continuation) {
   // The response passes through adblock.js's parse hook, which records the
   // page it names as the page on screen. Put back what was there, so a
   // background fetch of Subscriptions does not make the hook treat the page
@@ -301,8 +302,10 @@ async function subscriptionSection(client, wanted) {
       if (!id) { stats.notVideo++; continue; }
       if (seen.has(id)) continue;
       seen.add(id);
-      // Channels hidden through the long-press menu stay hidden here too.
-      if (isChannelHidden(channelNameOf(item))) { stats.hiddenChannel++; continue; }
+      // Channels hidden through the long-press menu, or only on the
+      // Subscriptions page, stay hidden here too.
+      const channel = channelNameOf(item);
+      if (isChannelHidden(channel) || isHiddenOnSubscriptions(channel)) { stats.hiddenChannel++; continue; }
       // Watched ones are left out, by the same rule hide-watched uses
       // (history included) at the 90% mark.
       const pct = getWatchPercent(item);
@@ -374,7 +377,8 @@ if (isStandalone()) {
   setTimeout(() => refresh('startup'), FIRST_RUN_MS);
   setInterval(() => refresh('interval'), REFRESH_MS);
   configChangeEmitter.addEventListener('configChange', (e) => {
-    if (String(e?.detail?.key || '').indexOf('homeBarPreview') === 0) refresh('settings');
+    const key = String(e?.detail?.key || '');
+    if (key.indexOf('homeBarPreview') === 0 || key === 'subscriptionHiddenChannels') refresh('settings');
   });
 }
 
