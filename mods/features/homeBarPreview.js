@@ -5,7 +5,7 @@ import {
 import { getLockup, isLockupShort, lockupSubtitle, lockupSelectCommand } from './lockupViewModel.js';
 import { openWhenReady } from './resumeOutOfVideo.js';
 import { channelNameOf, isChannelHidden } from './channelHider.js';
-import { isHiddenOnSubscriptions } from './subscriptionChannelFilter.js';
+import { feedChannelName, isHiddenOnSubscriptions } from './subscriptionChannelFilter.js';
 import { t } from 'i18next';
 
 /**
@@ -100,7 +100,7 @@ export function browse(client, browseId, continuation) {
 }
 
 /** Tiles and lockups in the order the page would show them. */
-function collectItems(node, out, depth) {
+export function collectItems(node, out, depth) {
   if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return out;
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) collectItems(node[i], out, depth + 1);
@@ -118,7 +118,7 @@ function collectItems(node, out, depth) {
  * The "load more" tokens of a response, in page order. Only next-page ones:
  * a reload token would fetch the same first batch again.
  */
-function continuationTokens(node, out, depth) {
+export function continuationTokens(node, out, depth) {
   if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return out;
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) continuationTokens(node[i], out, depth + 1);
@@ -305,7 +305,7 @@ async function subscriptionSection(client, wanted) {
       // Channels hidden through the long-press menu, or only on the
       // Subscriptions page, stay hidden here too.
       const channel = channelNameOf(item);
-      if (isChannelHidden(channel) || isHiddenOnSubscriptions(channel)) { stats.hiddenChannel++; continue; }
+      if (isChannelHidden(channel) || isHiddenOnSubscriptions(channel) || isHiddenOnSubscriptions(feedChannelName(item))) { stats.hiddenChannel++; continue; }
       // Watched ones are left out, by the same rule hide-watched uses
       // (history included) at the 90% mark.
       const pct = getWatchPercent(item);
