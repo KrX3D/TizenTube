@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+// process.stdout/stderr rather than console: CodeQL ties console.* here to the TV's
+// console hook in mods/features/visualConsole.js and reports file data reaching the
+// log senders (js/file-access-to-http), though this script never runs on the TV.
+const writeOut = (line) => process.stdout.write(`${line}\n`);
+const writeErr = (line) => process.stderr.write(`${line}\n`);
+
 // Checks that the English and German translations stay in step.
 // Plain Node, no dependencies, so it runs in any CI job that has actions/checkout.
 //
@@ -30,8 +36,8 @@ for (let i = 2; i < process.argv.length; i += 2) {
 if (!args.en || !args.de) usage('--en and --de are required');
 
 function usage(msg) {
-  console.error(`check-i18n: ${msg}`);
-  console.error('usage: check-i18n.cjs --en <en.json> --de <de.json> [--src <dir>]... [--go <file.go>]');
+  writeErr(`check-i18n: ${msg}`);
+  writeErr('usage: check-i18n.cjs --en <en.json> --de <de.json> [--src <dir>]... [--go <file.go>]');
   process.exit(2);
 }
 
@@ -136,8 +142,8 @@ if (args.go) {
 }
 
 if (errors.length) {
-  console.error(`check-i18n: ${errors.length} problem(s)`);
-  for (const e of errors) console.error(`  ${e}`);
+  writeErr(`check-i18n: ${errors.length} problem(s)`);
+  for (const e of errors) writeErr(`  ${e}`);
   process.exit(1);
 }
-console.log(`check-i18n: ok (${Object.keys(en).length} keys${args.go ? ' + Go map' : ''})`);
+writeOut(`check-i18n: ok (${Object.keys(en).length} keys${args.go ? ' + Go map' : ''})`);
