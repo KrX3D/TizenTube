@@ -396,6 +396,14 @@
                         "unhide": "Auswählen, um den Kanal wieder einzublenden",
                         "empty": "Es sind keine Kanäle ausgeblendet"
                     },
+                    "subscriptionChannelFilter": {
+                        "title": "Kanäle in Abos ausblenden",
+                        "subtitle": "Kanal auswählen, um seine Videos auf der Abos-Seite (und im Abo-Teil der Zeile in der TV-Startleiste) aus- oder einzublenden. Der Kanal selbst bleibt erreichbar.",
+                        "shown": "In Abos sichtbar",
+                        "hidden": "In Abos ausgeblendet",
+                        "empty": "Keine abonnierten Kanäle gefunden",
+                        "loading": "Abonnierte Kanäle werden geladen…"
+                    },
                     "keywordHider": "Videos nach Titel-Stichwort ausblenden",
                     "hideViewCounts": "Aufrufzahlen ausblenden",
                     "hideQualityBadges": "4K/8K- und Synchronisiert-Badges ausblenden",
@@ -584,6 +592,8 @@
         "videoPlaysNext": "Video wird als Nächstes abgespielt.",
         "channelHidden": "„{{name}}“ ist jetzt ausgeblendet.",
         "channelShownAgain": "„{{name}}“ wird wieder angezeigt.",
+        "subscriptionChannelHidden": "„{{name}}“ wird in Abos ausgeblendet.",
+        "subscriptionChannelShown": "„{{name}}“ wird in Abos wieder angezeigt.",
         "channelHideFailed": "Diese Kachel verrät nicht, zu welchem Kanal sie gehört.",
         "savedToPlaylist": "In „{{name}}“ gespeichert.",
         "saveToPlaylistFailed": "Konnte nicht in „{{name}}“ gespeichert werden.",

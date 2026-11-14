@@ -16,6 +16,7 @@ import showGuideSettings from './ui/sidebarModification.js';
 import showLongPressMenuSettings from './ui/longPressMenuSettings.js';
 import showLongPressPlaylists from './ui/longPressPlaylistSettings.js';
 import showHiddenChannels from './ui/hiddenChannelsSettings.js';
+import showSubscriptionChannels from './ui/subscriptionChannelsSettings.js';
 import showHideWatchedExemptions from './ui/hideWatchedExemptionsSettings.js';
 import { markVideoWatched } from './features/markWatched.js';
 import {
@@ -551,6 +552,12 @@ function customAction(action, parameters) {
             break;
         case 'UNHIDE_CHANNEL':
             showHiddenChannels('UNHIDE_CHANNEL', parameters);
+            break;
+        case 'SHOW_SUBSCRIPTION_CHANNEL_FILTER':
+            showSubscriptionChannels('subscriptionChannelFilter');
+            break;
+        case 'TOGGLE_SUBSCRIPTION_CHANNEL':
+            showSubscriptionChannels('TOGGLE_SUBSCRIPTION_CHANNEL', parameters);
             break;
         case 'GO_TO_CHANNEL':
             requestNextAndNavigateChannel(parameters);

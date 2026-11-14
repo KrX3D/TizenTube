@@ -28,6 +28,8 @@ const defaultConfig = {
   longPressMenuHidden: [],
   longPressShowPlaylists: false,
   hiddenChannels: [],
+  // Hidden on the Subscriptions page only; see subscriptionChannelFilter.js.
+  subscriptionHiddenChannels: [],
   longPressPlaylistIds: [],
   longPressPlaylistOrder: [],
   enableShorts: false,
