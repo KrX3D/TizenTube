@@ -5,7 +5,7 @@ import {
 import { getLockup, isLockupShort, lockupSubtitle, lockupSelectCommand } from './lockupViewModel.js';
 import { openWhenReady } from './resumeOutOfVideo.js';
 import { channelNameOf, isChannelHidden } from './channelHider.js';
-import { feedChannelName, isHiddenOnSubscriptions } from './subscriptionChannelFilter.js';
+import { isTileHiddenOnSubscriptions, noteSubscriptionChannels } from './subscriptionChannelFilter.js';
 import { t } from 'i18next';
 
 /**
@@ -297,6 +297,8 @@ async function subscriptionSection(client, wanted) {
     stats.pages++;
     const items = collectItems(response, [], 0);
     stats.items += items.length;
+    // Learn the uploaders of tiles that do not name them, for the next run.
+    noteSubscriptionChannels(items);
     for (const item of items) {
       const id = videoIdOf(item);
       if (!id) { stats.notVideo++; continue; }
@@ -305,7 +307,7 @@ async function subscriptionSection(client, wanted) {
       // Channels hidden through the long-press menu, or only on the
       // Subscriptions page, stay hidden here too.
       const channel = channelNameOf(item);
-      if (isChannelHidden(channel) || isHiddenOnSubscriptions(channel) || isHiddenOnSubscriptions(feedChannelName(item))) { stats.hiddenChannel++; continue; }
+      if (isChannelHidden(channel) || isTileHiddenOnSubscriptions(item, channel)) { stats.hiddenChannel++; continue; }
       // Watched ones are left out, by the same rule hide-watched uses
       // (history included) at the 90% mark.
       const pct = getWatchPercent(item);

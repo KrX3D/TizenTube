@@ -143,7 +143,21 @@ function checkBoot() {
         if (!ok) missing.push(check.name);
     }
 
-    return { missing, iconCount: iconMap ? iconMap.size : 0 };
+    return { missing, iconCount: iconMap ? iconMap.size : 0, similar: similarIcons(iconMap, missing) };
+}
+
+// For each missing icon, names in the map sharing a word with it, so the log
+// says what to use instead (MENU might now be MENU_HORIZONTAL, for example).
+function similarIcons(iconMap, missing) {
+    if (!iconMap) return {};
+    const names = Array.from(iconMap.keys());
+    const out = {};
+    for (const icon of missing) {
+        if (ICONS.indexOf(icon) === -1) continue;
+        const words = icon.split('_').filter(w => w.length > 2);
+        out[icon] = names.filter(n => words.some(w => n.indexOf(w) !== -1)).slice(0, 15);
+    }
+    return out;
 }
 
 function checkPlayer() {
@@ -180,7 +194,7 @@ function startBootCheck() {
         if (hasResolveCommand(yttvValues())) {
             setTimeout(() => {
                 const result = checkBoot();
-                report('boot', result.missing, { icons: ICONS.length, iconMapSize: result.iconCount });
+                report('boot', result.missing, { icons: ICONS.length, iconMapSize: result.iconCount, similar: result.similar });
             }, BOOT_SETTLE_MS);
             return;
         }

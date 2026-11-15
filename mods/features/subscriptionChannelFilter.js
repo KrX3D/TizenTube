@@ -1,5 +1,5 @@
 import { configRead, configWrite } from '../config.js';
-import { appendFileOnlyLog } from './hideWatched.js';
+import { appendFileOnlyLog, getItemVideoId } from './hideWatched.js';
 import { lockupSubtitle } from './lockupViewModel.js';
 
 /**
@@ -9,20 +9,30 @@ import { lockupSubtitle } from './lockupViewModel.js';
  * Asked for: a subscription to music channels that are never watched on the
  * TV. Unlike the long-press "hide this channel" (channelHider.js), which hides
  * a channel everywhere, these are only hidden on the Subscriptions feed and in
- * the subscriptions part of the TV home bar row (homeBarPreview.js). The
- * channel's own tab and page, search and Home are untouched.
+ * the subscriptions part of the TV home bar row (homeBarPreview.js).
  *
- * By name, for the same reason channelHider.js gives: a feed tile carries the
- * channel's name, not its id. The names come from the Subscriptions page's
- * channel tabs, which use the same spelling as the tiles.
+ * A feed tile does not always name its channel. Music uploads show the artist
+ * ("eaJ" on a CloudKid upload), collaborations show "GNU und 2 weitere", and
+ * no tile carries a channel id (checked against a dumped Subscriptions
+ * response on the 5.0 TV). So the uploader of each video is looked up once
+ * through YouTube's oEmbed endpoint (author_name) and kept, and a tile is
+ * hidden when its uploader or its shown name is a hidden channel. A video seen
+ * for the first time is looked up in the background and hidden from the next
+ * load of the page on.
  */
 
-// Channels seen on the Subscriptions page, name → last seen, so the picker has
-// a list even where the page's channel tabs do not name the channels (the 5.0
-// TV's do not: the picker found no channel tab at all there).
-const SEEN_KEY = 'ytaf-subscription-channels-seen';
-const MAX_SEEN = 300;
+const UPLOADERS_KEY = 'ytaf-video-uploaders';
+const MAX_UPLOADERS = 800;
+// The list of an earlier version, built from tile names; it held artists.
+const OLD_SEEN_KEY = 'ytaf-subscription-channels-seen';
+const LOOKUP_CONCURRENCY = 3;
+// Background lookups per page load, so a long feed does not fire hundreds.
+const BACKGROUND_LIMIT = 40;
 const NOT_A_NAME = /^(vor |live|premiere)|\b(ago|views|aufrufe|zuschauer|watching)\b/i;
+const COLLAB = /^(.+?)\s+(und|and)\s+\d+\s+(weitere|more)$/i;
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+try { localStorage.removeItem(OLD_SEEN_KEY); } catch (_) { }
 
 function normalise(name) {
   return String(name || '').trim().toLowerCase();
@@ -59,26 +69,11 @@ function lineText(text) {
   return '';
 }
 
-/**
- * The channel of a feed tile, only when the tile says so for certain: a line
- * part linking to a channel (UC…), else the first line part when it is not a
- * date or view count. Stricter than channelNameOf, because a wrong guess here
- * would put "vor 1 Tag" in the list.
- */
+/** The name a feed tile shows under its title: a channel, an artist or "X und 2 weitere". */
 export function feedChannelName(item) {
   try {
     const lines = item?.tileRenderer?.metadata?.tileMetadataRenderer?.lines;
     if (Array.isArray(lines)) {
-      for (const line of lines) {
-        for (const part of (line?.lineRenderer?.items || [])) {
-          const text = part?.lineItemRenderer?.text;
-          const runs = Array.isArray(text?.runs) ? text.runs : [];
-          for (const run of runs) {
-            const id = run?.navigationEndpoint?.browseEndpoint?.browseId;
-            if (typeof id === 'string' && id.indexOf('UC') === 0 && run.text) return String(run.text).trim();
-          }
-        }
-      }
       const first = lineText(lines[0]?.lineRenderer?.items?.[0]?.lineItemRenderer?.text).trim();
       if (first && first !== '•' && !NOT_A_NAME.test(first)) return first;
     }
@@ -88,38 +83,110 @@ export function feedChannelName(item) {
   return '';
 }
 
-function readSeen() {
+// ── Uploaders ────────────────────────────────────────────────────────────────
+
+let _uploaders = null;
+
+function uploaders() {
+  if (_uploaders) return _uploaders;
   try {
-    const parsed = JSON.parse(localStorage.getItem(SEEN_KEY) || '{}');
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    const parsed = JSON.parse(localStorage.getItem(UPLOADERS_KEY) || '{}');
+    _uploaders = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch (_) {
-    return {};
+    _uploaders = {};
   }
+  return _uploaders;
 }
 
-/** Remember the channels of Subscriptions tiles; called before any are hidden. */
-export function noteSubscriptionChannels(items) {
-  if (!Array.isArray(items) || !items.length) return;
+function saveUploaders() {
   try {
-    const seen = readSeen();
-    const now = Date.now();
-    let changed = false;
-    for (const item of items) {
-      const name = feedChannelName(item);
-      if (!name || name.length > 100) continue;
-      if (!seen[name]) changed = true;
-      seen[name] = now;
-    }
-    if (!changed) return;
-    const names = Object.keys(seen);
-    if (names.length > MAX_SEEN) {
-      names.sort((a, b) => seen[b] - seen[a]);
-      for (const old of names.slice(MAX_SEEN)) delete seen[old];
-    }
-    localStorage.setItem(SEEN_KEY, JSON.stringify(seen));
+    const map = uploaders();
+    const ids = Object.keys(map);
+    // Oldest first, as added: drop from the front.
+    for (let i = 0; i < ids.length - MAX_UPLOADERS; i++) delete map[ids[i]];
+    localStorage.setItem(UPLOADERS_KEY, JSON.stringify(map));
   } catch (_) { }
 }
 
-export function seenSubscriptionChannels() {
-  return Object.keys(readSeen());
+export function uploaderOf(videoId) {
+  return uploaders()[videoId] || '';
+}
+
+/** Every uploader looked up so far. */
+export function knownUploaders() {
+  const map = uploaders();
+  const out = [];
+  for (const id of Object.keys(map)) if (map[id] && out.indexOf(map[id]) === -1) out.push(map[id]);
+  return out;
+}
+
+const _failed = new Set();
+const _pending = new Set();
+
+function lookupUploader(videoId) {
+  const url = 'https://www.youtube.com/oembed?format=json&url='
+    + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId);
+  return fetch(url, { credentials: 'omit' })
+    .then(res => (res.ok ? res.json() : null))
+    .then((data) => {
+      const name = String((data && data.author_name) || '').trim();
+      if (!name) { _failed.add(videoId); return ''; }
+      uploaders()[videoId] = name.slice(0, 100);
+      return name;
+    })
+    .catch(() => { _failed.add(videoId); return ''; });
+}
+
+/** Look up the uploaders of these videos, a few at a time. Resolves to how many failed. */
+export function resolveUploaders(videoIds) {
+  const queue = videoIds.filter(id => VIDEO_ID.test(id) && !uploaderOf(id) && !_failed.has(id) && !_pending.has(id));
+  queue.forEach(id => _pending.add(id));
+  let failed = 0;
+  const worker = () => {
+    const id = queue.shift();
+    if (!id) return Promise.resolve();
+    return lookupUploader(id).then((name) => {
+      _pending.delete(id);
+      if (!name) failed++;
+      return worker();
+    });
+  };
+  const workers = [];
+  for (let i = 0; i < LOOKUP_CONCURRENCY; i++) workers.push(worker());
+  return Promise.all(workers).then(() => { saveUploaders(); return failed; });
+}
+
+let _backgroundUsed = 0;
+
+/**
+ * Called with the Subscriptions page's tiles before any are hidden: look up
+ * the uploaders not known yet, so their tiles can be hidden next time.
+ */
+export function noteSubscriptionChannels(items) {
+  if (!Array.isArray(items) || !items.length || !subscriptionHiddenChannels().length) return;
+  if (_backgroundUsed >= BACKGROUND_LIMIT) return;
+  const ids = [];
+  for (const item of items) {
+    const id = getItemVideoId(item);
+    if (id && VIDEO_ID.test(id) && !uploaderOf(id) && !_failed.has(id) && !_pending.has(id)) ids.push(id);
+  }
+  if (!ids.length) return;
+  const batch = ids.slice(0, BACKGROUND_LIMIT - _backgroundUsed);
+  _backgroundUsed += batch.length;
+  resolveUploaders(batch).then((failed) => {
+    appendFileOnlyLog('channelHider.subscriptions.uploaders', { looked: batch.length, failed });
+  });
+}
+
+/** Whether a Subscriptions tile belongs to a channel hidden there. */
+export function isTileHiddenOnSubscriptions(item, shownName) {
+  if (!subscriptionHiddenChannels().length) return false;
+  const names = [uploaderOf(getItemVideoId(item)), feedChannelName(item), shownName];
+  for (const name of names) {
+    if (!name) continue;
+    if (isHiddenOnSubscriptions(name)) return true;
+    const collab = COLLAB.exec(String(name).trim());
+    if (collab && isHiddenOnSubscriptions(collab[1])) return true;
+  }
+  return false;
 }
