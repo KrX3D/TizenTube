@@ -45,3 +45,4 @@ import "./features/logCategoriesReport.js";
 import "./features/playerRequestShape.js";
 import "./features/longPressProbe.js";
 import "./ui/sidebarModification.js";
+import "./features/internalsCheck.js";

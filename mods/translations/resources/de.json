@@ -60,6 +60,13 @@
                     "ttWelcomeMsg": "TT-Begrüßungsnachricht anzeigen",
                     "guestSignInReminder": "Gast-Anmeldeerinnerung anzeigen",
                     "reloadHomeOnStartup": "Startseite beim Start neu laden",
+                    "internalsCheck": {
+                        "title": "Vor YouTube-Änderungen warnen",
+                        "subtitle": "Beim Start anzeigen, welche Symbole oder App-Interna TizenTube nicht mehr findet",
+                        "toastTitle": "TizenTube: YouTube geändert",
+                        "toast": "Nicht gefunden: {{names}}",
+                        "more": "+{{n}} weitere"
+                    },
                     "logging": {
                         "title": "Protokollierung",
                         "verbosity": {

@@ -79,6 +79,9 @@ const PREFIX_CATEGORY = {
   // switching off the thing being looked at.
   sponsorblock: 'sponsorblock',
 
+  // Startup check for renamed icons/internals; on whenever 'other' is.
+  internals: 'other',
+
   // Not label prefixes any real line uses: these are the names the two former
   // settings are read under, via isCategoryEnabled('playbackDiag.'). Without
   // them the lookup falls through to 'other', which is on by default, so the
