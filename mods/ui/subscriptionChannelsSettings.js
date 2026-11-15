@@ -2,9 +2,10 @@ import { buttonItem, overlayPanelItemListRenderer, showModal, showToast } from '
 import { innerTubeClient, browse, collectItems, continuationTokens } from '../features/homeBarPreview.js';
 import { extractNavTabBrowseId } from '../features/shorts.js';
 import {
-  feedChannelName, isHiddenOnSubscriptions, seenSubscriptionChannels, subscriptionHiddenChannels, toggleSubscriptionChannel,
+  isHiddenOnSubscriptions, knownUploaders, resolveUploaders, subscriptionHiddenChannels, toggleSubscriptionChannel, uploaderOf,
 } from '../features/subscriptionChannelFilter.js';
-import { appendFileOnlyLog } from '../features/hideWatched.js';
+import { appendFileOnlyLog, getItemTitle, getItemVideoId } from '../features/hideWatched.js';
+import { lockupSelectCommand } from '../features/lockupViewModel.js';
 import { t } from 'i18next';
 
 /**
@@ -12,14 +13,12 @@ import { t } from 'i18next';
  * switchable between shown and hidden on the Subscriptions page. See
  * subscriptionChannelFilter.js.
  *
- * The list is put together from three places, because none is enough alone:
- *   - the Subscriptions page's channel tabs, where they name a channel (on the
- *     5.0 TV they do not: no tab carried a channel id),
- *   - the channels of the feed's videos, from a few pages fetched when the
- *     screen opens,
- *   - channels remembered from browsing the Subscriptions page
- *     (noteSubscriptionChannels in subscriptionChannelFilter.js).
- * Channels hidden earlier stay in the list, so they can be shown again.
+ * Only real channels go in the list, never the names tiles show (an artist,
+ * "GNU und 2 weitere"):
+ *   - the channel list (browse FEchannels, what youtube.com/feed/channels
+ *     shows) and channel tabs, where they carry a channel id,
+ *   - the uploaders of the feed's videos, looked up when the screen opens,
+ *   - uploaders looked up earlier, and channels already hidden.
  */
 
 const KEY = 'settings.options.uiSettings.options.subscriptionChannelFilter';
@@ -41,7 +40,11 @@ function tabIds(tab) {
   return String(extractNavTabBrowseId(tab)).split(',').filter(Boolean);
 }
 
-/** Channel tabs (browse id UC…) anywhere in the Subscriptions response. */
+const CHANNEL_ID = /^UC[A-Za-z0-9_-]{10,}$/;
+// Feed videos whose uploader is looked up when the screen opens.
+const FEED_VIDEOS = 60;
+
+/** Channel tabs (browse id UC…) anywhere in a response. */
 function collectChannelTabs(node, out, depth) {
   if (!node || typeof node !== 'object' || depth > MAX_DEPTH) return out;
   if (Array.isArray(node)) {
@@ -49,12 +52,25 @@ function collectChannelTabs(node, out, depth) {
     return out;
   }
   if (node.tabRenderer) {
-    out.tabs.push({ title: tabTitle(node).trim().slice(0, 40), ids: tabIds(node).slice(0, 3) });
     const name = tabTitle(node).trim();
-    if (name && tabIds(node).some(id => /^UC[A-Za-z0-9_-]{10,}$/.test(id))) out.names.push(name);
+    if (name && tabIds(node).some(id => CHANNEL_ID.test(id))) out.push(name);
     return out;
   }
   for (const key of Object.keys(node)) collectChannelTabs(node[key], out, depth + 1);
+  return out;
+}
+
+/** Channel tiles (they open a UC… page) in a response, as their titles. */
+function channelTileNames(response) {
+  const out = [];
+  for (const item of collectItems(response, [], 0)) {
+    const id = item?.tileRenderer?.onSelectCommand?.browseEndpoint?.browseId
+      || lockupSelectCommand(item)?.browseEndpoint?.browseId || '';
+    if (!CHANNEL_ID.test(String(id))) continue;
+    const name = getItemTitle(item)
+      || tabTitle({ tabRenderer: { title: item?.tileRenderer?.metadata?.tileMetadataRenderer?.title } });
+    if (name) out.push(String(name).trim());
+  }
   return out;
 }
 
@@ -66,42 +82,49 @@ function addName(names, name) {
 async function loadChannels() {
   const client = innerTubeClient();
   const names = [];
-  const stats = { hasClient: !!client, pages: 0, tiles: 0, fromTabs: 0, fromFeed: 0, remembered: 0, hidden: 0 };
-  let tabs = [];
+  const stats = { hasClient: !!client, fromChannelList: 0, fromTabs: 0, feedPages: 0, videos: 0, lookupsFailed: 0, fromUploaders: 0, known: 0, hidden: 0 };
   if (client) {
+    // The channel list, as youtube.com/feed/channels shows it.
+    const channels = await browse(client, 'FEchannels');
+    if (channels) {
+      for (const name of channelTileNames(channels)) addName(names, name);
+      for (const name of collectChannelTabs(channels, [], 0)) addName(names, name);
+      stats.fromChannelList = names.length;
+    }
     let response = await browse(client, 'FEsubscriptions');
-    const used = new Set();
-    while (response && stats.pages < FEED_PAGES) {
-      stats.pages++;
-      if (stats.pages === 1) {
-        const found = collectChannelTabs(response, { tabs: [], names: [] }, 0);
-        tabs = found.tabs;
-        for (const name of found.names) addName(names, name);
-        stats.fromTabs = names.length;
-        stats.topKeys = Object.keys(response).slice(0, 8);
-      }
-      const items = collectItems(response, [], 0);
-      stats.tiles += items.length;
+    if (response) {
       const before = names.length;
-      for (const item of items) addName(names, feedChannelName(item));
-      stats.fromFeed += names.length - before;
+      for (const name of collectChannelTabs(response, [], 0)) addName(names, name);
+      stats.fromTabs = names.length - before;
+    }
+    // The uploaders of the feed's videos: the channels that actually post there.
+    const ids = [];
+    const used = new Set();
+    while (response && stats.feedPages < FEED_PAGES && ids.length < FEED_VIDEOS) {
+      stats.feedPages++;
+      for (const item of collectItems(response, [], 0)) {
+        const id = getItemVideoId(item);
+        if (id && ids.indexOf(id) === -1 && ids.length < FEED_VIDEOS) ids.push(id);
+      }
       const token = continuationTokens(response, [], 0).find(tok => !used.has(tok));
       if (!token) break;
       used.add(token);
       response = await browse(client, 'FEsubscriptions', token);
     }
+    stats.videos = ids.length;
+    stats.lookupsFailed = await resolveUploaders(ids);
+    const before = names.length;
+    for (const id of ids) addName(names, uploaderOf(id));
+    stats.fromUploaders = names.length - before;
   }
   let before = names.length;
-  for (const name of seenSubscriptionChannels()) addName(names, name);
-  stats.remembered = names.length - before;
+  for (const name of knownUploaders()) addName(names, name);
+  stats.known = names.length - before;
   before = names.length;
   for (const name of subscriptionHiddenChannels()) addName(names, name);
   stats.hidden = names.length - before;
   names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-  // The tabs as found, so a list built without them says what they looked like.
-  appendFileOnlyLog('channelHider.subscriptions.list', Object.assign(stats, {
-    channels: names.length, tabCount: tabs.length, tabs: tabs.slice(0, 6),
-  }));
+  appendFileOnlyLog('channelHider.subscriptions.list', Object.assign(stats, { channels: names.length }));
   return names;
 }
 

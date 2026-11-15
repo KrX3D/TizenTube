@@ -1,7 +1,9 @@
 import { configRead } from '../config.js';
 import { appendFileOnlyLog } from './hideWatched.js';
 import { lockupSubtitle } from './lockupViewModel.js';
-import { subscriptionHiddenChannels, isHiddenOnSubscriptions, noteSubscriptionChannels, feedChannelName } from './subscriptionChannelFilter.js';
+import {
+    subscriptionHiddenChannels, noteSubscriptionChannels, feedChannelName, isTileHiddenOnSubscriptions,
+} from './subscriptionChannelFilter.js';
 
 /**
  * channelHider.js — hide every video from a channel you don't want to see.
@@ -73,7 +75,7 @@ export function filterHiddenChannels(items, pageName = null) {
         const name = channelNameOf(item);
         const feedName = onSubscriptions ? feedChannelName(item) : '';
         const hidden = (name && isChannelHidden(name))
-            || (onSubscriptions && (isHiddenOnSubscriptions(feedName) || isHiddenOnSubscriptions(name)));
+            || (onSubscriptions && isTileHiddenOnSubscriptions(item, name));
         if (!hidden) return true;
         try {
             const id = item?.tileRenderer?.contentId || '?';
