@@ -109,6 +109,9 @@ const defaultConfig = {
   preferredVideoCodec: 'any',
   launchToOnStartup: null,
   reloadHomeOnStartup: true,
+  // Startup check that toasts icon/internal names YouTube renamed or removed
+  // (mods/features/internalsCheck.js). Silent when everything is found.
+  enableInternalsCheck: true,
   // Standalone app only: TizenTube's row on the TV home bar (Smart Hub
   // Preview, TVs up to 2021). Counts per section; 0 leaves a section out.
   homeBarPreviewEnabled: true,

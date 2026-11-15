@@ -60,6 +60,13 @@
                     "ttWelcomeMsg": "Show TT Welcome Message",
                     "guestSignInReminder": "Show Guest Sign In Reminder",
                     "reloadHomeOnStartup": "Reload Home on Startup",
+                    "internalsCheck": {
+                        "title": "Warn About YouTube Changes",
+                        "subtitle": "At startup, show which icons or app internals TizenTube can no longer find",
+                        "toastTitle": "TizenTube: YouTube changed",
+                        "toast": "Not found: {{names}}",
+                        "more": "+{{n}} more"
+                    },
                     "logging": {
                         "title": "Logging",
                         "verbosity": {

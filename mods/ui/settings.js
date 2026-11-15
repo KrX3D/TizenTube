@@ -410,6 +410,12 @@ export default function modernUI(update, parameters) {
                     value: 'reloadHomeOnStartup'
                 },
                 {
+                    name: t('settings.options.misc.options.internalsCheck.title'),
+                    subtitle: t('settings.options.misc.options.internalsCheck.subtitle'),
+                    icon: 'BUG_REPORT',
+                    value: 'enableInternalsCheck'
+                },
+                {
                     // Reported: the three outputs and the three options that apply
                     // to all of them sat side by side under Sonstiges, and the
                     // options were inside the debug console's own submenu as though
