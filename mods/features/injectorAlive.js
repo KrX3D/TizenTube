@@ -13,7 +13,12 @@
  * seconds). A stamp newer than the moment of asking means it is still there.
  * A page whose service is older than the stamp never gets one, and is
  * reported as 'unknown' so callers keep their old behaviour.
+ *
+ * When the connection drops, the service reconnects to the same debug port by
+ * itself (injector.js reattach), so a wake waits long enough for that.
  */
+
+import { appendFileOnlyLog } from './hideWatched.js';
 
 const POLL_MS = 250;
 
@@ -29,7 +34,7 @@ function onCdpPath() {
 export function checkInjector(timeoutMs) {
   if (!onCdpPath() || typeof window.__ttInjectorSeenAt !== 'number') return Promise.resolve('unknown');
   const since = Date.now();
-  const limit = Number(timeoutMs) || 6000;
+  const limit = Number(timeoutMs) || 15000;
   return new Promise((resolve) => {
     const tick = () => {
       if (window.__ttInjectorSeenAt >= since) return resolve('alive');
@@ -38,4 +43,17 @@ export function checkInjector(timeoutMs) {
     };
     tick();
   });
+}
+
+// Whether this page can use the TV's own app APIs. If it can, a later version
+// could restart the service itself when the whole service is gone, which a
+// reconnect cannot fix. Logged once per page load on the CDP path.
+if (onCdpPath()) {
+  setTimeout(() => {
+    let app = false;
+    let webapisSeen = false;
+    try { app = typeof tizen !== 'undefined' && !!tizen.application && typeof tizen.application.launchAppControl === 'function'; } catch (_) { }
+    try { webapisSeen = typeof webapis !== 'undefined' && !!webapis; } catch (_) { }
+    appendFileOnlyLog('standalone.pageApis', { tizenApplication: app, webapis: webapisSeen });
+  }, 15000);
 }
