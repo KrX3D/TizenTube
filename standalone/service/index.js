@@ -644,6 +644,40 @@ function userScriptCachePath() {
     return null;
 }
 
+// The running app's debug port, so a service the page restarts can reconnect
+// (injector.js reattachSaved). Beside the kept userscript.
+const DEBUG_PORT_FILE = 'tt-debug-port.json';
+
+function debugPortPath() {
+    const cache = userScriptCachePath();
+    if (!cache) return null;
+    const path = require('path');
+    return path.join(path.dirname(cache), DEBUG_PORT_FILE);
+}
+
+function writeDebugPort(info) {
+    const target = debugPortPath();
+    if (!target || !info || !info.port) return;
+    try {
+        const fs = require('fs');
+        mkdirpSync(fs, require('path').dirname(target));
+        fs.writeFileSync(target, JSON.stringify({ host: String(info.host || '127.0.0.1'), port: Number(info.port), at: Date.now() }), { mode: 0o600 });
+    } catch (e) { }
+}
+
+function readDebugPort() {
+    const target = debugPortPath();
+    if (!target) return null;
+    try {
+        const data = JSON.parse(require('fs').readFileSync(target, 'utf8'));
+        const port = Number(data && data.port);
+        if (!(port > 0 && port < 65536)) return null;
+        return { host: String(data.host || '127.0.0.1'), port: port };
+    } catch (e) {
+        return null;
+    }
+}
+
 /** Keep this version's bundle, so a 503 next time costs nothing. */
 function writeUserScriptCache(version, source) {
     if (!version || !source || source.length < USERSCRIPT_MIN_BYTES) return false;
@@ -1095,6 +1129,9 @@ try {
     try {
         if (typeof injector.setUserScriptCache === 'function') {
             injector.setUserScriptCache({ read: readUserScriptCache, write: writeUserScriptCache });
+        }
+        if (typeof injector.setDebugPortStore === 'function') {
+            injector.setDebugPortStore({ read: readDebugPort, write: writeDebugPort });
         }
     } catch (err) {
         logServiceEvent('WARN', 'userscript cache not installed: ' + (err && err.stack || err));
@@ -1977,4 +2014,17 @@ try {
 // the entry point — its exports are never what the runner sees.
 module.exports.onStart = function () { };
 module.exports.onStop = function () { };
-module.exports.onRequest = function () { };
+// The page asks for a reconnect (ttReattach) when it wakes to find no
+// injector: this service had gone, and the request is what started it again.
+module.exports.onRequest = function () {
+    try {
+        const req = tizen.application.getCurrentApplication().getRequestedAppControl();
+        const data = (req && req.appControl && req.appControl.data) || [];
+        const wantsReattach = data.some(function (item) { return item && item.key === 'ttReattach'; });
+        if (!wantsReattach) return;
+        logServiceEvent('INFO', 'the page asked for a reconnect (ttReattach)');
+        if (injector && typeof injector.reattachSaved === 'function') injector.reattachSaved(relayInjectorLog);
+    } catch (err) {
+        logServiceEvent('WARN', 'onRequest failed: ' + (err && err.message || err));
+    }
+};

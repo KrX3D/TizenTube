@@ -144,6 +144,40 @@ function pollLogQueue(client, relayLog) {
 const REATTACH_DELAY_MS = 3000;
 const REATTACH_MAX_TRIES = 100;
 
+// Where the running app's debug port is kept, so a service started fresh by
+// the page (index.js onRequest, ttReattach) can find the app again.
+let _portStore = null;
+function setDebugPortStore(store) { _portStore = store && typeof store.read === 'function' ? store : null; }
+
+/**
+ * Reconnect to the app's last known debug port. Asked for by the page when it
+ * wakes to find no injector: the whole service had gone, and this one was
+ * just started for it. Tries for about a minute.
+ */
+function reattachSaved(relayLog) {
+    const log = (level, message) => {
+        if (typeof relayLog === 'function') relayLog({ ts: new Date().toISOString(), level, context: 'Injector', message });
+    };
+    let saved = null;
+    try { saved = _portStore ? _portStore.read() : null; } catch (e) { }
+    if (!saved || !saved.port) {
+        log('WARN', 'reattach requested, but no debug port is known');
+        return false;
+    }
+    if (_injectedSession) {
+        log('INFO', 'reattach requested, but a session is already attached');
+        return true;
+    }
+    log('INFO', 'reattach requested: reconnecting to ' + saved.host + ':' + saved.port);
+    const getModFile = () => {
+        const kept = _cache ? _cache.read() : null;
+        if (kept) return Promise.resolve(kept.source);
+        return fetch(USERSCRIPT_UNPINNED).then(res => res.text());
+    };
+    reattach(saved.host, saved.port, relayLog, _activeSessionId, getModFile, REATTACH_MAX_TRIES - 20);
+    return true;
+}
+
 function injectionPrelude() {
     return `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\nwindow.__ttLaunchAction = null;\n`;
 }
@@ -185,6 +219,11 @@ function reattach(host, port, relayLog, sessionId, getModFile, tries) {
                 // The page still carrying the mod must not get a second copy,
                 // so each context is asked first.
                 client.on('Runtime.executionContextCreated', m => {
+                    // A launch since then owns the page now.
+                    if (sessionId !== _activeSessionId) {
+                        try { client.close(); } catch (e) { }
+                        return;
+                    }
                     const auxData = (m.context && m.context.auxData) || {};
                     if (auxData.isDefault === false) return;
                     const contextId = m.context.id;
@@ -1131,6 +1170,7 @@ function startDebugger(args, relayLog, sessionId, attempt) {
                 }
                 if (dataString.includes('debug')) {
                     const port = Number(dataString.substr(dataString.indexOf(':') + 1, 6).replace(' ', ''));
+                    try { if (_portStore && port) _portStore.write({ host: res.ip, port: port }); } catch (e) { }
                     clearTimeout(safetyTimeout);
                     connectToDebugger(res.ip, port, args, relayLog, sessionId, attempt);
                     clearTimeout(streamEndFallback);
@@ -1150,6 +1190,8 @@ module.exports = {
     // and the copy was never kept or read — a no-op that would have looked
     // exactly like the cache not helping.
     setUserScriptCache,
+    setDebugPortStore,
+    reattachSaved,
     userScriptSource,
     // The pinned URL if one has been resolved, for callers that cannot wait.
     lastPinnedUserScriptUrl: function () { return _pinnedUrl; },
