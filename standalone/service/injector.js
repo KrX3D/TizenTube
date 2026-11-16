@@ -137,6 +137,75 @@ function pollLogQueue(client, relayLog) {
     client.on('disconnect', () => clearInterval(interval));
 }
 
+// Reconnecting after an injected session's CDP connection dropped (seen after
+// a night in standby): every REATTACH_DELAY_MS, up to REATTACH_MAX_TRIES in a
+// row while the port does not answer, which is what a closed app looks like.
+// A new launch (startDebugger bumps _activeSessionId) ends it.
+const REATTACH_DELAY_MS = 3000;
+const REATTACH_MAX_TRIES = 100;
+
+function injectionPrelude() {
+    return `window.__ttStandalone = true;\nwindow.__tizenTubeStandaloneVersion = ${JSON.stringify(standaloneVersion)};\nwindow.__ttLaunchAction = null;\n`;
+}
+
+function reattach(host, port, relayLog, sessionId, getModFile, tries) {
+    const log = (level, message) => {
+        if (typeof relayLog === 'function') relayLog({ ts: new Date().toISOString(), level, context: 'Injector', message });
+    };
+    if (sessionId !== _activeSessionId) return;
+    if (tries >= REATTACH_MAX_TRIES) {
+        log('WARN', 'CDP port ' + port + ' did not answer for ' + Math.round(REATTACH_MAX_TRIES * REATTACH_DELAY_MS / 1000) + ' s; the app is probably closed, stopped reconnecting');
+        return;
+    }
+    const again = () => reattach(host, port, relayLog, sessionId, getModFile, tries + 1);
+    setTimeout(() => {
+        if (sessionId !== _activeSessionId) return;
+        fetch(`http://${host}:${port}/json`).then(() => {
+            if (sessionId !== _activeSessionId) return;
+            const emitter = CDP({ host, port, local: true }, client => {
+                if (sessionId !== _activeSessionId) {
+                    try { client.close(); } catch (e) { }
+                    return;
+                }
+                log('INFO', 'CDP reconnected to port ' + port + ' after ' + tries + ' tries');
+                _injectedSession = true;
+                let pollStarted = false;
+                const startPoll = () => {
+                    if (pollStarted) return;
+                    pollStarted = true;
+                    pollLogQueue(client, relayLog);
+                };
+                client.on('disconnect', () => {
+                    if (sessionId !== _activeSessionId) return;
+                    _injectedSession = false;
+                    log('WARN', 'CDP connection closed again; reconnecting to port ' + port);
+                    reattach(host, port, relayLog, sessionId, getModFile, 0);
+                });
+                // Runtime.enable reports the contexts that already exist too.
+                // The page still carrying the mod must not get a second copy,
+                // so each context is asked first.
+                client.on('Runtime.executionContextCreated', m => {
+                    const auxData = (m.context && m.context.auxData) || {};
+                    if (auxData.isDefault === false) return;
+                    const contextId = m.context.id;
+                    client.Runtime.evaluate({ expression: 'window.__ttStandalone === true', contextId, returnByValue: true }).then(r => {
+                        if (r && r.result && r.result.value === true) {
+                            startPoll();
+                            return;
+                        }
+                        return getModFile().then(modFile => client.Runtime.evaluate({ expression: injectionPrelude() + modFile, contextId })).then(() => {
+                            log('INFO', 'Injection after reconnect succeeded for contextId=' + contextId);
+                            startPoll();
+                        });
+                    }).catch(e => log('WARN', 'Injection after reconnect failed for contextId=' + contextId + ': ' + (e && e.message || e)));
+                });
+                client.Runtime.enable().catch(() => { });
+            });
+            if (emitter && typeof emitter.on === 'function') emitter.on('error', again);
+        }).catch(again);
+    }, REATTACH_DELAY_MS);
+}
+
 function retryOrGiveUp(sessionId, attempt, args, relayLog, reason) {
     if (sessionId !== _activeSessionId) return; // superseded by a newer attempt, abort silently
     noteProgress();
@@ -347,7 +416,7 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     // Was silent: after a night in standby the page came back
                     // without the mod and nothing said the injector had gone.
                     if (typeof relayLog === 'function') {
-                        relayLog({ ts: new Date().toISOString(), level: 'WARN', context: 'Injector', message: 'CDP connection closed after injection: a reload of this page now comes back without the mod until TizenTube is reopened' });
+                        relayLog({ ts: new Date().toISOString(), level: 'WARN', context: 'Injector', message: 'CDP connection closed after injection; reconnecting to port ' + port + ' so a reload still gets the mod' });
                     }
                     // The session's CDP connection has now genuinely ended
                     // (the injected youtube.com/tv session is over) — only
@@ -356,6 +425,9 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     // succeeds.
                     isConnecting = false;
                     _injectedSession = false;
+                    // The app is still running in debug mode on this port, so
+                    // the connection can simply be opened again — no relaunch.
+                    reattach(host, port, relayLog, sessionId, () => modFilePromise, 0);
                 }
             });
 
