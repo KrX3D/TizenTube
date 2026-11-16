@@ -45,6 +45,29 @@ export function checkInjector(timeoutMs) {
   });
 }
 
+/**
+ * Start the standalone service and ask it to reconnect to this app (ttReattach,
+ * handled by service/index.js onRequest). For when the whole service has gone,
+ * which the service's own reconnect cannot cover. Resolves to whether the
+ * request could be made; false when this page has no tizen.application.
+ */
+export function requestServiceRestart() {
+  return new Promise((resolve) => {
+    try {
+      if (typeof tizen === 'undefined' || !tizen.application || typeof tizen.application.launchAppControl !== 'function') {
+        resolve(false);
+        return;
+      }
+      const pkg = tizen.application.getCurrentApplication().appInfo.packageId;
+      const control = new tizen.ApplicationControl('http://tizen.org/appcontrol/operation/service', null, null, null,
+        [new tizen.ApplicationControlData('ttReattach', ['1'])]);
+      tizen.application.launchAppControl(control, pkg + '.StandaloneService', () => resolve(true), () => resolve(false));
+    } catch (_) {
+      resolve(false);
+    }
+  });
+}
+
 // Whether this page can use the TV's own app APIs. If it can, a later version
 // could restart the service itself when the whole service is gone, which a
 // reconnect cannot fix. Logged once per page load on the CDP path.

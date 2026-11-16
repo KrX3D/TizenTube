@@ -3,7 +3,7 @@ import { appendFileOnlyLog } from './hideWatched.js';
 import { waitForNetwork } from './networkReady.js';
 import { noteReload } from './reloadCoordinator.js';
 import { reloadOutOfVideo } from './resumeOutOfVideo.js';
-import { checkInjector } from './injectorAlive.js';
+import { checkInjector, requestServiceRestart } from './injectorAlive.js';
 import { showToast } from '../ui/ytUI.js';
 import { t } from 'i18next';
 
@@ -134,8 +134,16 @@ async function onVisible(gen, awayMs) {
   }
   // On the CDP path a reload only gets the mod back if the injector is still
   // attached; without it this would trade a stale page for plain YouTube.
-  const injector = await checkInjector();
+  let injector = await checkInjector();
   if (gen !== generation) return;
+  if (injector === 'gone') {
+    // The service itself may have gone, not only its connection: start it
+    // again and let it reconnect, then reload as usual.
+    const asked = await requestServiceRestart();
+    if (asked) injector = await checkInjector(30000);
+    if (gen !== generation) return;
+    appendFileOnlyLog('resume.service_restart', { asked, result: injector });
+  }
   if (injector === 'gone') {
     appendFileOnlyLog('resume.injector_gone', {});
     toast('toasts.reopenAfterStandby');
