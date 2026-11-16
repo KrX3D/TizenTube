@@ -24,6 +24,8 @@ const standaloneVersion = tizen.application.getAppInfo().version;
 // doing by reopening ~5 times). This makes the service retry automatically
 // instead, the way TizenBrew does.
 let _activeSessionId = 0;
+// How long a launch waits for the CDN before injecting the kept copy instead.
+const KEPT_AFTER_MS = 2000;
 const MAX_RETRY_ATTEMPTS = 10;
 const RETRY_DELAY_MS = 750;
 
@@ -105,7 +107,7 @@ function pollLogQueue(client, relayLog) {
             // because this poll already competes with YouTube's own rendering.
             // The home bar row rides along: set by homeBarPreview.js when it
             // changes, so it is null on almost every poll and costs nothing.
-            expression: '(function(){ var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h }); })()',
+            expression: '(function(){ window.__ttInjectorSeenAt = Date.now(); var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h }); })()',
             returnByValue: true
         }).then(result => {
             consecutiveFailures = 0;
@@ -342,6 +344,11 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                     }
                     retryOrGiveUp(sessionId, attempt, args, relayLog, 'CDP disconnected before injection succeeded');
                 } else if (sessionId === _activeSessionId) {
+                    // Was silent: after a night in standby the page came back
+                    // without the mod and nothing said the injector had gone.
+                    if (typeof relayLog === 'function') {
+                        relayLog({ ts: new Date().toISOString(), level: 'WARN', context: 'Injector', message: 'CDP connection closed after injection: a reload of this page now comes back without the mod until TizenTube is reopened' });
+                    }
                     // The session's CDP connection has now genuinely ended
                     // (the injected youtube.com/tv session is over) — only
                     // now is it safe to clear isConnecting. See the comment
@@ -517,7 +524,38 @@ function connectToDebugger(host, port, args, relayLog, sessionId, attempt, probe
                 });
             };
 
-            const modFilePromise = userScriptSource().then((src) => fetchUserScript(src, true));
+            const networkModFile = userScriptSource().then((src) => fetchUserScript(src, true));
+            // The page is already loading without the mod while this fetches.
+            // Measured on the 5.0 TV: 12 s from launch to the CDN answering,
+            // all of it plain YouTube with ads on screen. With a copy kept on
+            // the TV, wait only briefly for the network and use the copy if it
+            // is slower; the network result still updates the copy for next
+            // time (fetchUserScript writes it).
+            const modFilePromise = (() => {
+                const kept = _cache ? _cache.read() : null;
+                if (!kept) return networkModFile;
+                return new Promise((resolve) => {
+                    let settled = false;
+                    const useKept = (why) => {
+                        if (settled) return;
+                        settled = true;
+                        if (typeof relayLog === 'function') {
+                            relayLog({ ts: new Date().toISOString(), level: 'INFO', context: 'Injector', message: 'using the userscript kept on this TV (' + kept.version + '): ' + why });
+                        }
+                        resolve(kept.source);
+                    };
+                    const timer = setTimeout(() => useKept('the CDN took longer than ' + KEPT_AFTER_MS + ' ms'), KEPT_AFTER_MS);
+                    networkModFile.then((text) => {
+                        if (settled) return;
+                        settled = true;
+                        clearTimeout(timer);
+                        resolve(text);
+                    }, (err) => {
+                        clearTimeout(timer);
+                        useKept('the CDN failed: ' + (err && err.message || err));
+                    });
+                });
+            })();
 
             client.on('Runtime.executionContextCreated', m => {
                 // Matches TizenBrew's own debugger.js: only inject into the

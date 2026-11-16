@@ -594,6 +594,7 @@
         "networkWaiting": "Warte auf das Netzwerk… ({{seconds}}s)",
         "networkBack": "Das Netzwerk ist wieder da.",
         "networkBackReloading": "Das Netzwerk ist wieder da, die Seite wird neu geladen…",
+        "reopenAfterStandby": "TizenTube hat im Standby die Verbindung verloren. TizenTube schließen und neu öffnen, damit alles wieder mit Mod lädt.",
         "networkStillOffline": "Immer noch kein Netzwerk. Die Seite wird neu geladen, sobald es wieder da ist.",
         "networkContinuingAnyway": "Immer noch kein Netzwerk, starte trotzdem…",
         "videoPlaysNext": "Video wird als Nächstes abgespielt.",

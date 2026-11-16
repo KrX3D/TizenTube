@@ -594,6 +594,7 @@
         "networkWaiting": "Waiting for the network… ({{seconds}}s)",
         "networkBack": "The network is back.",
         "networkBackReloading": "The network is back, reloading the page…",
+        "reopenAfterStandby": "TizenTube lost its connection in standby. Close and reopen TizenTube to refresh with all its features.",
         "networkStillOffline": "Still no network. The page will reload as soon as it is back.",
         "networkContinuingAnyway": "Still no network, starting anyway…",
         "videoPlaysNext": "Video plays next.",
