@@ -168,36 +168,155 @@ function relaySyslog(frame, host, port, report) {
         problem(`syslog refused: host=${JSON.stringify(host)} port=${JSON.stringify(port)} is not a plain IPv4 address and port`);
         return;
     }
-    let socket;
-    try {
-        socket = dgram.createSocket('udp4');
-    } catch (e) {
-        problem(`syslog could not open a UDP socket: ${e && e.message || e}`);
+    // While earlier lines are still held, this one queues behind them, so the
+    // receiver gets them in the order they were written.
+    if (_syslogHeld.length) {
+        holdSyslogFrame(frame, targetHost, targetPort, report);
         return;
     }
-    // UDP gives no delivery signal; errors here mean the send itself failed
-    // (bad host, no route). Swallow them — a syslog target that is not
-    // listening must never disturb playback.
-    socket.on('error', () => { try { socket.close(); } catch (e) { } });
-    try {
-        const buf = utf8Buffer(frame);
-        socket.send(buf, 0, buf.length, targetPort, targetHost, (err) => {
-            if (err) {
-                // No `err &&` guard: err is the reason this branch was taken,
-                // so testing it again is dead code (CodeQL 131).
-                problem(`syslog send to ${targetHost}:${targetPort} failed: ${err.message || err}`);
-            } else if (!_syslogSendLogged) {
+    sendSyslogDatagram(frame, targetHost, targetPort, (err) => {
+        if (!err) {
+            if (!_syslogSendLogged) {
                 // Once per service run: enough to confirm the path works
                 // end to end without one log line per log line.
                 _syslogSendLogged = true;
                 logServiceEvent('INFO', `syslog datagram sent to ${targetHost}:${targetPort} (further sends not logged)`);
             }
-            try { socket.close(); } catch (e) { }
-        });
-    } catch (e) {
-        problem(`syslog send threw: ${e && e.message || e}`);
-        try { socket.close(); } catch (e2) { }
+            return;
+        }
+        if (isNetworkDown(err)) {
+            holdSyslogFrame(frame, targetHost, targetPort, report, err);
+            return;
+        }
+        problem(`syslog send to ${targetHost}:${targetPort} failed: ${err.message || err}`);
+    });
+}
+
+/**
+ * One frame as one datagram; `done(err)` is called exactly once.
+ *
+ * UDP gives no delivery signal, so an error here means the send itself failed
+ * (no socket, no route). A syslog target that is not listening must never
+ * disturb playback, so nothing here throws.
+ */
+function sendSyslogDatagram(frame, host, port, done) {
+    let finished = false;
+    function finish(err) {
+        if (finished) return;
+        finished = true;
+        try { socket.close(); } catch (e) { }
+        try { done(err || null); } catch (e) { }
     }
+    let socket;
+    try {
+        socket = dgram.createSocket('udp4');
+    } catch (e) {
+        socket = null;
+        finish(e);
+        return;
+    }
+    socket.on('error', (err) => finish(err));
+    try {
+        const buf = utf8Buffer(frame);
+        socket.send(buf, 0, buf.length, port, host, (err) => finish(err));
+    } catch (e) {
+        finish(e);
+    }
+}
+
+// ── Holding frames while the network is down ─────────────────────────────
+//
+// Reported: right after the TV wakes, the service loses its log lines with
+// "syslog send ... failed: ENETUNREACH". The wake is exactly what those lines
+// are about, and the network interface comes back a few seconds after the
+// process does. Each failure was also logged through logServiceEvent, which
+// built another frame that failed the same way, so the outage fed itself.
+//
+// Now a send that fails because there is no network is kept, up to the last
+// SYSLOG_HOLD_MAX frames, and retried every SYSLOG_RETRY_MS. Once one goes
+// through, the rest follow one after another in the order they were written.
+// Each frame already carries the timestamp it was written at, so a late
+// arrival still reads at the right point in the log.
+const SYSLOG_HOLD_MAX = 200;
+const SYSLOG_RETRY_MS = 3000;
+// Codes that mean "no network yet", which waiting fixes. Anything else (a bad
+// argument, a closed socket) is reported and dropped as before.
+const SYSLOG_NETWORK_DOWN = ['ENETUNREACH', 'EHOSTUNREACH', 'ENETDOWN', 'EADDRNOTAVAIL'];
+let _syslogHeld = [];
+let _syslogHeldDropped = 0;
+let _syslogHeldSent = 0;
+let _syslogOutageSince = 0;
+let _syslogRetryTimer = null;
+let _syslogDraining = false;
+
+function isNetworkDown(err) {
+    if (!err) return false;
+    if (SYSLOG_NETWORK_DOWN.indexOf(err.code) !== -1) return true;
+    // Node 4's errnoException always sets .code, but the message is the
+    // fallback in case some runtime only puts it there.
+    const text = String(err.message || err);
+    for (let i = 0; i < SYSLOG_NETWORK_DOWN.length; i++) {
+        if (text.indexOf(SYSLOG_NETWORK_DOWN[i]) !== -1) return true;
+    }
+    return false;
+}
+
+function holdSyslogFrame(frame, host, port, report, err) {
+    // Oldest out first: the lines nearest the wake are the ones worth having.
+    if (_syslogHeld.length >= SYSLOG_HOLD_MAX) {
+        _syslogHeld.shift();
+        _syslogHeldDropped++;
+    }
+    _syslogHeld.push({ frame: frame, host: host, port: port });
+    if (!_syslogOutageSince) {
+        _syslogOutageSince = Date.now();
+        const message = `syslog send to ${host}:${port} failed: ${err && (err.message || err) || 'network down'}; `
+            + `holding up to ${SYSLOG_HOLD_MAX} lines until it works again`;
+        // Once per outage. This line is queued behind the held one above, so
+        // it reaches the syslog receiver too, once the network is back.
+        if (typeof report === 'function') { try { report(message); } catch (e) { } }
+        logServiceEvent('WARN', message);
+    }
+    scheduleSyslogRetry();
+}
+
+function scheduleSyslogRetry() {
+    if (_syslogRetryTimer || _syslogDraining || !_syslogHeld.length) return;
+    _syslogRetryTimer = setTimeout(() => {
+        _syslogRetryTimer = null;
+        drainSyslogHeld();
+    }, SYSLOG_RETRY_MS);
+    try { if (typeof _syslogRetryTimer.unref === 'function') _syslogRetryTimer.unref(); } catch (e) { }
+}
+
+/** Sends held frames one at a time, oldest first, until empty or the network fails again. */
+function drainSyslogHeld() {
+    if (_syslogDraining || !_syslogHeld.length) return;
+    _syslogDraining = true;
+    const next = _syslogHeld[0];
+    sendSyslogDatagram(next.frame, next.host, next.port, (err) => {
+        _syslogDraining = false;
+        if (err && isNetworkDown(err)) {
+            scheduleSyslogRetry();
+            return;
+        }
+        // Sent, or failed for a reason waiting will not fix: either way it
+        // leaves the queue. The identity check covers the cap having pushed
+        // it out while it was in flight.
+        if (_syslogHeld[0] === next) _syslogHeld.shift();
+        if (!err) _syslogHeldSent++;
+        if (_syslogHeld.length) {
+            drainSyslogHeld();
+            return;
+        }
+        const seconds = Math.round((Date.now() - _syslogOutageSince) / 1000);
+        const summary = `syslog works again after ${seconds}s: resent ${_syslogHeldSent} held lines`
+            + (_syslogHeldDropped ? `, ${_syslogHeldDropped} older ones dropped (limit ${SYSLOG_HOLD_MAX})` : '');
+        _syslogOutageSince = 0;
+        _syslogHeldSent = 0;
+        _syslogHeldDropped = 0;
+        logServiceEvent('INFO', summary);
+    });
 }
 
 // Relays one entry to the PC receiver TizenBrew's own remoteLogger.js targets
