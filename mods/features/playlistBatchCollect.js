@@ -754,8 +754,51 @@ export function scheduleCollectAfterNativeSettles(continuations, reason) {
   }, NATIVE_SETTLE_MS);
 }
 
-function autoStartCollect(continuations, seedContents) {
-  if (!batchCollectActive()) return;
+// Direct "load more" for adblock.js's playlist auto-load.
+//
+// The TV client has no handler for continuationCommand in resolveCommand
+// ("Unhandled command."), and activating the <yt-continuation> sentinel loaded
+// nothing in 15 of 26 checked tries. This asks YouTube for the next page
+// ourselves, with the stored continuation token and the context/headers
+// captured from the page's own browse request — the same request _collectAll
+// already makes. Data fetched this way cannot be pushed into YouTube's virtual
+// list directly, so the run goes through the collector's normal endings: a
+// complete playlist is cached and the page reloaded once with all of it; a
+// partial one is injected into the next native continuation.
+//
+// Called with force=true because auto-load only fires when filtering emptied a
+// batch, so there is something to load even when hide-watched (the collector's
+// own gate) is not what emptied it.
+//
+// Returns what happened, so the caller knows whether to fall back:
+//   'started'        a fetch run is now going
+//   'running'        one was already going — nothing to add
+//   'settle_pending' the collector starts by itself within NATIVE_SETTLE_MS
+//   'complete'       this page already holds the whole playlist
+//   'prefetch_ready' data is waiting for a native continuation to carry it
+//   'no_context' | 'no_token'  cannot fetch; caller falls back
+export function requestNextPlaylistPage(token, reason) {
+  if (window.__ttPrefetchStarted) return 'running';
+  if (window.__ttNativeSettleTimer) return 'settle_pending';
+  const key = playlistKeyFromHash();
+  if (window.__ttServedFromCache === key) return 'complete';
+  if (window.__ttPrefetchedBatch) return 'prefetch_ready';
+  if (!_lastBrowseContext || !_lastBrowseUrl || !_nativeFetch) return 'no_context';
+  if (!token || typeof token !== 'string') return 'no_token';
+
+  // Seed with what YouTube itself delivered since the initial page, so a
+  // complete run can be cached from item 1. Only filled while hide-watched is
+  // active; otherwise storeFullPlaylist's floor check refuses a short list and
+  // the run ends as a prefetch instead.
+  const acc = window.__ttContinuationAcc;
+  const seed = (acc && acc.key === key && Array.isArray(acc.contents)) ? acc.contents : [];
+  _log('playlist.auto_load.direct_fetch', { reason, seeded: seed.length, tokenLen: token.length });
+  autoStartCollect([{ nextContinuationData: { continuation: token } }], seed, true);
+  return window.__ttPrefetchStarted ? 'started' : 'no_context';
+}
+
+function autoStartCollect(continuations, seedContents, force = false) {
+  if (!force && !batchCollectActive()) return;
   if (window.__ttPrefetchStarted || window.__ttPrefetchedBatch) return;
 
   if (!_lastBrowseContext || !_lastBrowseUrl) {

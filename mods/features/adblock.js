@@ -11,7 +11,7 @@ import { PatchSettings } from '../ui/customYTSettings.js';
 import { notePlaylistPage } from './playlistOwnership.js';
 import { t } from 'i18next';
 import './logServer.js';
-import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch, batchCollectActive } from './playlistBatchCollect.js';
+import { scheduleCollectAfterNativeSettles, getCachedFullPlaylist, consumeCachedFullPlaylist, noteInitialPlaylistContents, noteContinuationBatch, batchCollectActive, requestNextPlaylistPage } from './playlistBatchCollect.js';
 import { readBranding, writeBranding, brandingCacheSize } from './deArrowCache.js';
 import {
   appendFileOnlyLog,
@@ -131,8 +131,64 @@ function storePlaylistContinuationToken(continuations, label = '') {
 function _verifyAutoLoadEffect(reason, attempt, method, beforeCount) {
   setTimeout(() => {
     const afterCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : null;
-    appendFileOnlyLog('playlist.auto_load.verify', { reason, attempt, method, beforeCount, afterCount, worked: afterCount !== null && afterCount > beforeCount });
+    const worked = afterCount !== null && afterCount > beforeCount;
+    appendFileOnlyLog('playlist.auto_load.verify', { reason, attempt, method, beforeCount, afterCount, worked });
+    // Backup for the console check in resolveCommandIsUnhandled(): if the
+    // client logs through a console reference captured before our wrap, that
+    // check sees nothing, but a continuationCommand that loaded nothing is
+    // still a failure. worked:false is the trustworthy direction (see above).
+    if (method === 'resolveCommand' && !worked) markContinuationCommandUnsupported('verify_no_effect');
   }, 1200);
+}
+
+// The TV client has no handler for continuationCommand: resolveCommand logs
+// "Unhandled command." and returns, without throwing, so the old code counted
+// it as a success and never reached its fallbacks. Once it has failed, skip it
+// for the rest of the session (page lifetime, not stored) — a later app
+// version may handle it, and a restart retries it once.
+function markContinuationCommandUnsupported(why) {
+  if (window.__ttContinuationCommandUnsupported) return;
+  window.__ttContinuationCommandUnsupported = true;
+  appendFileOnlyLog('playlist.auto_load.resolveCommand_unsupported', { why });
+}
+
+function _isUnhandledCommandArg(a) {
+  try {
+    if (typeof a === 'string') return a.indexOf('Unhandled command') !== -1;
+    if (a && typeof a.message === 'string') return a.message.indexOf('Unhandled command') !== -1;
+  } catch (_) {}
+  return false;
+}
+
+// Runs resolveCommand(cmd) and reports whether the client logged
+// "Unhandled command." while doing so. The console methods are swapped only
+// for this synchronous call and put back afterwards (only if nothing else
+// replaced them meanwhile); every call still reaches the original method, so
+// visualConsole.js and the real console see the same output as before.
+function resolveCommandIsUnhandled(cmd) {
+  const names = ['log', 'info', 'warn', 'error', 'debug'];
+  const saved = {};
+  let unhandled = false;
+  for (const n of names) {
+    const orig = console[n];
+    if (typeof orig !== 'function') continue;
+    const wrapper = function () {
+      for (let i = 0; i < arguments.length; i++) {
+        if (_isUnhandledCommandArg(arguments[i])) { unhandled = true; break; }
+      }
+      return orig.apply(this, arguments);
+    };
+    saved[n] = { orig, wrapper };
+    console[n] = wrapper;
+  }
+  try {
+    resolveCommand(cmd);
+  } finally {
+    for (const n of Object.keys(saved)) {
+      if (console[n] === saved[n].wrapper) console[n] = saved[n].orig;
+    }
+  }
+  return unhandled;
 }
 
 function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
@@ -140,33 +196,58 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
 
   const beforeCount = Array.isArray(window.__ttCurrentPlaylistItems) ? window.__ttCurrentPlaylistItems.length : 0;
 
-  // Primary: use YouTube TV's own resolveCommand with the stored continuation token.
-  // This is the most reliable trigger since it goes through the same code path as
-  // the TV's internal "load more" mechanism.
+  // 1. YouTube TV's own resolveCommand with the stored continuation token —
+  //    skipped once it has failed this session (see markContinuationCommandUnsupported).
   const token = window.__ttPlaylistContinuationToken;
-  if (token) {
+  if (!token) {
+    appendFileOnlyLog('playlist.auto_load.no_token', { reason, attempt });
+  } else if (window.__ttContinuationCommandUnsupported) {
+    if (attempt === 0) appendFileOnlyLog('playlist.auto_load.resolveCommand_skipped', { reason });
+  } else {
     try {
-      resolveCommand({
+      const unhandled = resolveCommandIsUnhandled({
         clickTrackingParams: '',
         continuationCommand: {
           token,
           request: 'CONTINUATION_REQUEST_TYPE_BROWSE',
         },
       });
-      appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'resolveCommand', tokenLen: token.length });
-      _verifyAutoLoadEffect(reason, attempt, 'resolveCommand', beforeCount);
-      return;
+      if (unhandled) {
+        markContinuationCommandUnsupported('unhandled_command');
+      } else {
+        appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'resolveCommand', tokenLen: token.length });
+        _verifyAutoLoadEffect(reason, attempt, 'resolveCommand', beforeCount);
+        return;
+      }
     } catch (err) {
-      // Previously silent — every on-device attempt logged method:"yt-continuation"
-      // with no way to tell whether that's because this threw or because token
-      // was falsy. Now it's visible either way.
       appendFileOnlyLog('playlist.auto_load.resolveCommand_error', { reason, attempt, tokenLen: token.length, err: String(err?.message || err) });
+      markContinuationCommandUnsupported('threw');
     }
-  } else {
-    appendFileOnlyLog('playlist.auto_load.no_token', { reason, attempt });
   }
 
-  // Fallback 1: activate the <yt-continuation> sentinel element directly.
+  // 2. Request the next page from YouTube ourselves with the token. The
+  //    result reaches the screen through playlistBatchCollect.js (full-list
+  //    reload, or injection into the next native continuation), so there is
+  //    no 1.2s verify here — the collector logs its own outcome.
+  let direct = 'no_token';
+  try {
+    direct = requestNextPlaylistPage(token, reason);
+  } catch (err) {
+    direct = 'error';
+    appendFileOnlyLog('playlist.auto_load.direct_fetch_error', { reason, attempt, err: String(err?.message || err) });
+  }
+  if (direct === 'started' || direct === 'running' || direct === 'settle_pending' || direct === 'complete') {
+    // Clicking the sentinel now would drive YouTube's own continuations in
+    // parallel with the fetch run, and every keep-one batch it produces leaves
+    // a helper tile stranded (see isBatchCollectHandlingPlaylist).
+    appendFileOnlyLog('playlist.auto_load.trigger', { reason, attempt, method: 'direct_fetch', state: direct });
+    return;
+  }
+  // 'prefetch_ready' falls through on purpose: that data needs a native
+  // continuation to carry it, which is what the sentinel asks for.
+  if (attempt === 0) appendFileOnlyLog('playlist.auto_load.direct_fetch_unavailable', { reason, state: direct });
+
+  // 3. Activate the <yt-continuation> sentinel element directly.
   // YouTube TV uses this element to detect when the user has scrolled to the bottom;
   // clicking/activating it triggers the same continuation fetch as reaching the end.
   try {
@@ -774,6 +855,10 @@ function processResponsePayload(payload, detectedPage) {
         hasMore: !!plc.continuations,
       });
     }
+    // The object-root handler stores the token too. Without this a batch that
+    // only came through here left auto-load holding an older token, so it
+    // re-requested a page YouTube had already delivered.
+    storePlaylistContinuationToken(plc.continuations, 'arrayPayload.plc');
     // Same accumulator hook as the object-root handler above. Confirmed
     // necessary on-device: three continuations arrived through that path, all
     // with hasContinuation:true, and the FINAL batch (8 of 68 items, the one

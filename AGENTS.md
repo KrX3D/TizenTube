@@ -872,6 +872,18 @@ returned `[]` for the rest, and playlist loading stalled after two batches on
 device. It was reverted in #679. If you change the helper logic, test a long,
 mostly-watched playlist and confirm it still loads past batch 2.
 
+### Playlist auto-load: the TV client cannot resolve `continuationCommand`
+
+`resolveCommand({ continuationCommand })` only logs "Unhandled command." on the
+TV client and returns without throwing, and activating the `<yt-continuation>`
+sentinel loaded nothing in 15 of 26 checked tries. `attemptPlaylistAutoLoad`
+(adblock.js) therefore skips `continuationCommand` for the session after its
+first failure and asks `requestNextPlaylistPage` (playlistBatchCollect.js) to
+fetch the next pages itself with the token. Fetched data cannot be pushed into
+the virtual list, so it reaches the screen through the collector's endings
+(full-list cache + one `SOFT_RELOAD_PAGE`, or injection into the next native
+continuation); the sentinel is only the last fallback.
+
 ### Tizen 5.0 has no usable Polymer element APIs
 
 `yt-virtual-list` positions its rows by transform from its own data model, and
