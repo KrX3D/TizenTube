@@ -152,20 +152,26 @@ function pollLogQueue(client, relayLog) {
         }).catch(() => { });
     };
 
-    // Whether the remote access page is open, as last told to this page.
-    // Pushed only on change; the page sends its log lines for that page
-    // only while true (mods/features/logServer.js).
-    let lastViewer = null;
+    // Whether the remote access page is open. Set on every poll, inside the
+    // drain below: pushing it only on change lost it whenever the page
+    // reloaded (a new context starts without it), so page lines stopped
+    // reaching that page until it was closed and reopened. The page sends
+    // its log lines for that page only while true (mods/features/logServer.js).
+    const remoteViewer = () => {
+        if (!_remoteHooks || typeof _remoteHooks.viewer !== 'function') return null;
+        try { return !!_remoteHooks.viewer(); } catch (e) { return false; }
+    };
 
     let consecutiveFailures = 0;
     const interval = setInterval(() => {
+        const viewer = remoteViewer();
         client.Runtime.evaluate({
             // Both queues are drained in the same round-trip: syslog adds no
             // extra evaluate() and so no extra in-page cost, which matters
             // because this poll already competes with YouTube's own rendering.
             // The home bar row rides along: set by homeBarPreview.js when it
             // changes, so it is null on almost every poll and costs nothing.
-            expression: '(function(){ window.__ttInjectorSeenAt = Date.now(); var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; var r = window.__ttRemoteAccess || null; window.__ttRemoteAccess = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h, remote: r }); })()',
+            expression: '(function(){ window.__ttInjectorSeenAt = Date.now();' + (viewer === null ? '' : ' window.__ttRemoteViewer = ' + viewer + ';') + ' var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; var r = window.__ttRemoteAccess || null; window.__ttRemoteAccess = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h, remote: r }); })()',
             returnByValue: true
         }).then(result => {
             consecutiveFailures = 0;
@@ -180,14 +186,6 @@ function pollLogQueue(client, relayLog) {
             }
             if (!Array.isArray(drained) && typeof drained.homeBar === 'string' && _homeBarHooks && typeof _homeBarHooks.store === 'function') {
                 try { _homeBarHooks.store(drained.homeBar); } catch (e) { }
-            }
-            if (_remoteHooks && typeof _remoteHooks.viewer === 'function') {
-                let viewer = false;
-                try { viewer = !!_remoteHooks.viewer(); } catch (e) { }
-                if (viewer !== lastViewer) {
-                    lastViewer = viewer;
-                    client.Runtime.evaluate({ expression: 'window.__ttRemoteViewer = ' + viewer, returnByValue: true }).catch(() => { lastViewer = null; });
-                }
             }
             if (!Array.isArray(drained) && drained.remote && _remoteHooks && typeof _remoteHooks.apply === 'function') {
                 let remoteInfo = null;

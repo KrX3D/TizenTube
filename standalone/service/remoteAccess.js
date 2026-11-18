@@ -212,7 +212,11 @@ function createRemoteAccess(opts) {
 
         if (pathname === '/api/status' && req.method === 'GET') {
             let health = null;
-            try { health = opts.health ? opts.health() : null; } catch (e) { health = { error: String(e) }; }
+            try { health = opts.health ? opts.health() : null; } catch (e) {
+                // Detail to the log only, never into the response (CodeQL js/stack-trace-exposure).
+                log('ERROR', 'health check failed: ' + (e && e.stack || e));
+                health = { error: 'health check failed; see the log' };
+            }
             return sendJson(res, 200, { evalEnabled: state.evalEnabled, pageReachable: !!(opts.canEvaluate && opts.canEvaluate()), health: health });
         }
 
