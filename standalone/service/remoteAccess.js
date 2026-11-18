@@ -28,6 +28,7 @@ const MAX_MESSAGE = 4000;
 const MAX_EVAL_SOURCE = 100000;
 const MAX_FAILURES = 10;
 const LOCKOUT_MS = 10 * 60 * 1000;
+const VIEWER_WINDOW_MS = 10000;
 
 function newPin() {
     return String(Math.floor(1000 + Math.random() * 9000));
@@ -60,6 +61,7 @@ function createRemoteAccess(opts) {
     let state = { enabled: false, evalEnabled: false, pin: newPin() };
     let server = null;
     const failures = {};
+    let lastViewerAt = 0;
 
     function log(level, message) {
         try { if (opts.log) opts.log(level, 'remoteAccess: ' + message); } catch (e) { }
@@ -111,6 +113,13 @@ function createRemoteAccess(opts) {
         if (lines.length > MAX_LINES) lines.splice(0, lines.length - MAX_LINES);
     }
 
+    // Someone has the page open: it polls /api/logs every second. The page
+    // (TizenTube) sends its own log lines only while this is true, so they
+    // cost nothing when nobody is watching.
+    function viewerActive() {
+        return state.enabled && Date.now() - lastViewerAt < VIEWER_WINDOW_MS;
+    }
+
     function info() {
         const ips = lanAddresses();
         return {
@@ -121,6 +130,7 @@ function createRemoteAccess(opts) {
             listening: !!server,
             pin: state.pin,
             port: REMOTE_PORT,
+            viewer: viewerActive(),
             urls: ips.map(function (ip) { return 'http://' + ip + ':' + REMOTE_PORT + '/?pin=' + state.pin; })
         };
     }
@@ -193,6 +203,7 @@ function createRemoteAccess(opts) {
         if (pathname === '/' && req.method === 'GET') return send(res, 200, 'text/html; charset=utf-8', REMOTE_PAGE);
 
         if (pathname === '/api/logs' && req.method === 'GET') {
+            lastViewerAt = Date.now();
             const since = Number(query.since) || 0;
             const out = [];
             for (let i = 0; i < lines.length; i++) if (lines[i].id > since) out.push(lines[i]);
@@ -218,7 +229,8 @@ function createRemoteAccess(opts) {
                 pending.then(function (result) {
                     sendJson(res, 200, result || {});
                 }, function (e) {
-                    sendJson(res, 500, { error: String(e && e.message || e) });
+                    log('ERROR', 'eval failed: ' + (e && e.stack || e));
+                    sendJson(res, 500, { error: 'Running the code failed on the TV side; see the log.' });
                 });
             });
         }
@@ -274,7 +286,7 @@ function createRemoteAccess(opts) {
         if (state.enabled) start();
     }
 
-    return { addLog: addLog, applyState: applyState, info: info, begin: begin, port: REMOTE_PORT };
+    return { addLog: addLog, applyState: applyState, info: info, viewerActive: viewerActive, begin: begin, port: REMOTE_PORT };
 }
 
 // ── Pages ───────────────────────────────────────────────────────────────────
@@ -314,6 +326,7 @@ const REMOTE_PAGE = String.raw`<!DOCTYPE html>
   <select id="level"><option value="">all</option><option value="WARN">WARN+</option><option value="ERROR">ERROR</option></select>
   <button id="pause">Pause</button>
   <button id="clear">Clear</button>
+  <button id="copy">Copy</button>
   <button id="save">Download</button>
   <button id="evalToggle" style="display:none">JS</button>
   <span id="status"></span>
@@ -327,15 +340,16 @@ const REMOTE_PAGE = String.raw`<!DOCTYPE html>
 <script>
 (function () {
   var de = /^de/i.test(navigator.language || '');
-  var L = de ? { pause: 'Pause', resume: 'Weiter', clear: 'Leeren', save: 'Herunterladen', filter: 'Filter', all: 'alle', run: 'Ausführen (Strg+Enter)',
+  var L = de ? { pause: 'Pause', resume: 'Weiter', clear: 'Leeren', save: 'Herunterladen', copy: 'Kopieren', copied: 'Kopiert', copyTitle: 'Kopiert nur die angezeigten (gefilterten) Zeilen', saveTitle: 'Lädt alle Zeilen herunter, ohne Filter', filter: 'Filter', all: 'alle', run: 'Ausführen (Strg+Enter)',
       offline: 'TV nicht erreichbar', lines: 'Zeilen', pageNo: 'YouTube-Seite nicht erreichbar (nur über den Debugger-Startweg)',
-      hint: 'Läuft in der YouTube-Seite. Promises werden abgewartet.', note: 'Seiten-Logs erscheinen nur, solange "Remote-Logging aktivieren" auf dem TV an ist.' }
-    : { pause: 'Pause', resume: 'Resume', clear: 'Clear', save: 'Download', filter: 'Filter', all: 'all', run: 'Run (Ctrl+Enter)',
+      hint: 'Läuft in der YouTube-Seite. Promises werden abgewartet.', note: 'Seiten-Logs kommen, solange diese Seite offen ist (ab dem Öffnen, ältere nicht).' }
+    : { pause: 'Pause', resume: 'Resume', clear: 'Clear', save: 'Download', copy: 'Copy', copied: 'Copied', copyTitle: 'Copies only the lines shown (filtered)', saveTitle: 'Downloads every line, unfiltered', filter: 'Filter', all: 'all', run: 'Run (Ctrl+Enter)',
       offline: 'TV not reachable', lines: 'lines', pageNo: 'YouTube page not reachable (debugger launch path only)',
-      hint: 'Runs in the YouTube page. Promises are awaited.', note: 'Page logs only appear while "Enable Remote Logging" is on on the TV.' };
+      hint: 'Runs in the YouTube page. Promises are awaited.', note: 'Page logs arrive while this page is open (from when it was opened, not before).' };
   var pin = (/[?&]pin=(\d+)/.exec(location.search) || [])[1] || '';
   var $ = function (id) { return document.getElementById(id); };
   $('pause').textContent = L.pause; $('clear').textContent = L.clear; $('save').textContent = L.save;
+  $('copy').textContent = L.copy; $('copy').title = L.copyTitle; $('save').title = L.saveTitle;
   $('filter').placeholder = L.filter; $('level').options[0].textContent = L.all; $('run').textContent = L.run; $('evalHint').textContent = L.hint;
   var all = [], since = 0, paused = false, logEl = $('log');
 
@@ -363,11 +377,12 @@ const REMOTE_PAGE = String.raw`<!DOCTYPE html>
     all.forEach(function (x) { if (visible(x)) frag.appendChild(row(x)); });
     logEl.appendChild(frag); logEl.scrollTop = logEl.scrollHeight;
   }
+  // Polls on while paused: the TV sends page logs only while this page is
+  // asking for them. Paused just stops drawing; Resume draws the backlog.
   function poll() {
-    if (paused) return setTimeout(poll, 1000);
     api('api/logs?since=' + since).then(function (j) {
       var atBottom = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
-      j.lines.forEach(function (x) { all.push(x); if (visible(x)) logEl.appendChild(row(x)); });
+      j.lines.forEach(function (x) { all.push(x); if (!paused && visible(x)) logEl.appendChild(row(x)); });
       if (all.length > 5000) { all = all.slice(-4000); redraw(); }
       since = j.next;
       if (atBottom) logEl.scrollTop = logEl.scrollHeight;
@@ -382,10 +397,22 @@ const REMOTE_PAGE = String.raw`<!DOCTYPE html>
     }).catch(function () { });
   }
   $('filter').oninput = redraw; $('level').onchange = redraw;
-  $('pause').onclick = function () { paused = !paused; this.textContent = paused ? L.resume : L.pause; this.className = paused ? 'on' : ''; };
+  $('pause').onclick = function () { paused = !paused; this.textContent = paused ? L.resume : L.pause; this.className = paused ? 'on' : ''; if (!paused) redraw(); };
   $('clear').onclick = function () { all = []; redraw(); };
+  function line(x) { return '[' + x.ts + '] [' + x.level + '] [' + x.context + '] ' + x.message; }
+  // navigator.clipboard needs https; this page is plain http on the LAN, so
+  // the old textarea + execCommand route is the one that works here.
+  $('copy').onclick = function () {
+    var text = all.filter(visible).map(line).join('\n');
+    var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    var ok = false; try { ok = document.execCommand('copy'); } catch (e) { }
+    document.body.removeChild(ta);
+    if (!ok && navigator.clipboard) navigator.clipboard.writeText(text).then(function () { }, function () { });
+    var b = this; b.textContent = L.copied; setTimeout(function () { b.textContent = L.copy; }, 1500);
+  };
   $('save').onclick = function () {
-    var text = all.map(function (x) { return '[' + x.ts + '] [' + x.level + '] [' + x.context + '] ' + x.message; }).join('\n');
+    var text = all.map(line).join('\n');
     var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
     a.download = 'tizentube-' + new Date().toISOString().replace(/[:.]/g, '-') + '.log'; a.click();
   };

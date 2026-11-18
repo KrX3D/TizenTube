@@ -89,7 +89,32 @@ export function newRemoteAccessPin() {
     setTimeout(() => window.removeEventListener('tt-remote-info', onInfo), 10000);
 }
 
+// Proxy path: nothing can push into this page, so ask whether the remote
+// page is open (info.viewer). The CDP path gets __ttRemoteViewer pushed by
+// the injector's poll instead.
+let _viewerTimer = null;
+function watchViewerOnProxyPath() {
+    if (window.location.hostname !== 'localhost') return;
+    const on = !!configRead('enableRemoteAccess');
+    if (!on) {
+        if (_viewerTimer) { clearInterval(_viewerTimer); _viewerTimer = null; }
+        window.__ttRemoteViewer = false;
+        return;
+    }
+    if (_viewerTimer) return;
+    _viewerTimer = setInterval(() => {
+        fetch('/tizentube/remoteAccess').then((r) => r.json()).then((info) => {
+            window.__ttRemoteInfo = info;
+            window.__ttRemoteViewer = !!(info && info.viewer);
+        }).catch(() => { });
+    }, 3000);
+}
+
 if (isStandalonePage()) {
+    configChangeEmitter.addEventListener('configChange', (ev) => {
+        if (ev && ev.detail && KEYS.indexOf(ev.detail.key) >= 0) watchViewerOnProxyPath();
+    });
+    watchViewerOnProxyPath();
     configChangeEmitter.addEventListener('configChange', (ev) => {
         if (ev && ev.detail && KEYS.indexOf(ev.detail.key) >= 0) publish(false);
     });

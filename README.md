@@ -198,12 +198,20 @@ What has to be allowed between VLANs (e.g. in UniFi) for each feature. Nothing h
 
 | Port | Direction | Used for | Needed when |
 | --- | --- | --- | --- |
-| TCP 8098 | notebook/phone → TV | **Remote Access** page (standalone app): live log, download, JavaScript console. Needs the 4-digit PIN; 10 wrong PINs lock that address out for 10 minutes. | Settings > Miscellaneous > Remote Access is on |
+| TCP 8098 | notebook/phone → TV | **Remote Access** page (standalone app) at `http://<tv-ip>:8098/?pin=XXXX`: live log, copy, download, JavaScript console. Needs the 4-digit PIN; 10 wrong PINs lock that address out for 10 minutes. | Settings > Miscellaneous > Remote Access is on |
 | TCP 3030 (default, configurable) | TV → PC | **Remote Log Server**: logs pushed to `scripts/log-receiver/receiver.ps1` | Remote Logging is on and a receiver IP is set |
 | UDP 514 (default, configurable) | TV → syslog server | **Syslog Output** | Syslog Output is on |
 | TCP 8099 | TV only (127.0.0.1) | Standalone service and YouTube proxy. Bound to 127.0.0.1, **not reachable from the network**, no rule needed. | always (standalone) |
 
-**Remote Access in short:** turn it on under Settings > Miscellaneous > Remote Access, then pick *Show Address and QR Code* and scan it, or type the address shown (it includes `?pin=`). The PIN stays the same across restarts, so a bookmark keeps working; *New PIN* replaces it. The service log is always there; the page's own log lines appear while *Enable Remote Logging* is on (it turns itself off at each start, as before), with or without a receiver IP. *Allow Running Code* adds a JS box; it works on the debugger launch path (Host PC IP 127.0.0.1), not on the proxy path.
+**Remote Access in short:**
+
+1. On the TV: Settings > Miscellaneous > Remote Access > *Enable Remote Access*. The menu row then shows the address, e.g. `http://192.168.70.115:8098/?pin=1234`.
+2. On the notebook or phone: open that address, or pick *Show Address and QR Code* and scan it. Without `?pin=` the page asks for the PIN.
+3. The PIN stays the same across restarts, so a bookmark keeps working; *New PIN* replaces it.
+
+The service's own log is always kept (last 2000 lines, including startup). The page's log lines (navigation, ads, player, console) are sent while the remote page is open in a browser, independent of *Enable Remote Logging* and syslog, and cost nothing when nobody is watching. *Copy* copies only the lines currently shown (filter applied); *Download* saves all of them.
+
+*Allow Running Code* is for testing and debugging: the remote page gets a JS box that runs code in YouTube on the TV and shows the result (promises are awaited). Works on the debugger launch path (Host PC IP 127.0.0.1), not on the proxy path. Leave it off when you don't need it.
 
 # Title keyword filter
 

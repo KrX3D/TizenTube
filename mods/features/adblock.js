@@ -229,7 +229,7 @@ function attemptPlaylistAutoLoad(reason = 'playlist.auto_load', attempt = 0) {
   //    result reaches the screen through playlistBatchCollect.js (full-list
   //    reload, or injection into the next native continuation), so there is
   //    no 1.2s verify here — the collector logs its own outcome.
-  let direct = 'no_token';
+  let direct;
   try {
     direct = requestNextPlaylistPage(token, reason);
   } catch (err) {

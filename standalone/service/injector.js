@@ -104,7 +104,7 @@ function evaluateInPage(code) {
                     if (r && !r.pending) return resolve(r);
                     if (Date.now() - started > EVAL_TIMEOUT_MS) return resolve({ error: 'Promise did not settle within 30 s' });
                     setTimeout(tick, 250);
-                }, err => resolve({ error: String(err && err.message || err) }));
+                }, () => resolve({ error: 'Lost the connection to the YouTube page while waiting for the promise' }));
             };
             tick();
         });
@@ -152,6 +152,11 @@ function pollLogQueue(client, relayLog) {
         }).catch(() => { });
     };
 
+    // Whether the remote access page is open, as last told to this page.
+    // Pushed only on change; the page sends its log lines for that page
+    // only while true (mods/features/logServer.js).
+    let lastViewer = null;
+
     let consecutiveFailures = 0;
     const interval = setInterval(() => {
         client.Runtime.evaluate({
@@ -175,6 +180,14 @@ function pollLogQueue(client, relayLog) {
             }
             if (!Array.isArray(drained) && typeof drained.homeBar === 'string' && _homeBarHooks && typeof _homeBarHooks.store === 'function') {
                 try { _homeBarHooks.store(drained.homeBar); } catch (e) { }
+            }
+            if (_remoteHooks && typeof _remoteHooks.viewer === 'function') {
+                let viewer = false;
+                try { viewer = !!_remoteHooks.viewer(); } catch (e) { }
+                if (viewer !== lastViewer) {
+                    lastViewer = viewer;
+                    client.Runtime.evaluate({ expression: 'window.__ttRemoteViewer = ' + viewer, returnByValue: true }).catch(() => { lastViewer = null; });
+                }
             }
             if (!Array.isArray(drained) && drained.remote && _remoteHooks && typeof _remoteHooks.apply === 'function') {
                 let remoteInfo = null;

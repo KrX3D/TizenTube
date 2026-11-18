@@ -27,6 +27,19 @@ export function isEnabled() {
     try { return !!configRead('logServerEnabled'); } catch { return false; }
 }
 
+// The remote access page (port 8098) is open in a browser right now. Set by
+// the standalone service (injector poll, or remoteAccess.js on the proxy
+// path) and only ever true in standalone mode. Page lines go to that page
+// only while someone is watching, so it costs nothing otherwise.
+export function isRemoteViewerActive() {
+    return window.__ttRemoteViewer === true;
+}
+
+/** Whether page log lines should be built and sent at all. */
+export function isRelayActive() {
+    return isEnabled() || isRemoteViewerActive();
+}
+
 function pushToQueue(entry) {
     if (!Array.isArray(window.__ttLogQueue)) window.__ttLogQueue = [];
     if (window.__ttLogQueue.length < MAX_QUEUE) window.__ttLogQueue.push(entry);
@@ -91,17 +104,18 @@ function queueProxyLog(item) {
     scheduleProxyLogFlush();
 }
 
-function sendOne(_url, entry) {
+function sendOne(_url, entry, force) {
     if (window.location.hostname === 'localhost' || window.__ttStandalone === true) {
         // Standalone mode: no TizenBrew present. Two sub-paths, delivered
         // differently since only one is actually same-origin with a fetch:
         const host = configRead('logServerHost');
         const port = configRead('logServerPort');
-        // Remote access (remoteAccess.js) shows the log on the TV's own
-        // port 8098. Without a PC receiver the entry still goes to the
-        // service, marked so the service keeps it for that page only.
-        if (!host) {
-            if (!configRead('enableRemoteAccess')) return false;
+        // To the PC receiver only when Remote Logging is on (or the test
+        // button asked) and an IP is set. Otherwise the line is only for the
+        // remote access page (port 8098): it still goes to the service,
+        // marked so the service keeps it for that page and stops there.
+        if (!host || !(force || isEnabled())) {
+            if (!isRemoteViewerActive()) return false;
             entry = Object.assign({}, entry, { __ttRemoteOnly: true });
         }
 
@@ -173,10 +187,10 @@ export function sendRemotePayload(_url, entry, force) {
     // BEFORE turning logging on is the point of a test button — refusing to
     // send until it is already enabled made it useless for its main job,
     // confirming the host and port are right.
-    if (!force && !isEnabled()) return false;
+    if (!force && !isRelayActive()) return false;
 
     const fullMessage = (entry && entry.message) || '';
-    if (fullMessage.length <= MAX_MSG_CHUNK) return sendOne(_url, entry);
+    if (fullMessage.length <= MAX_MSG_CHUNK) return sendOne(_url, entry, force);
 
     const totalParts = Math.ceil(fullMessage.length / MAX_MSG_CHUNK);
     let anySent = false;
@@ -186,7 +200,7 @@ export function sendRemotePayload(_url, entry, force) {
             message: chunkMsg,
             _formatted: buildFormatted(entry, chunkMsg),
         });
-        if (sendOne(_url, chunkedEntry)) anySent = true;
+        if (sendOne(_url, chunkedEntry, force)) anySent = true;
     }
     return anySent;
 }
@@ -202,7 +216,7 @@ function install() {
     const arr = window.__ttFileOnlyLogs;
     arr.push = function (...args) {
         const result = origPush.apply(this, args);
-        if (!isEnabled()) return result;
+        if (!isRelayActive()) return result;
         for (const line of args) {
             try {
                 const raw = String(line);

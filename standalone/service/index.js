@@ -1283,7 +1283,10 @@ try {
             relaySyslog(frame, host, port, report);
         });
         if (typeof injector.setRemoteAccessHooks === 'function') {
-            injector.setRemoteAccessHooks({ apply: function (wanted) { return _remote ? _remote.applyState(wanted) : null; } });
+            injector.setRemoteAccessHooks({
+                apply: function (wanted) { return _remote ? _remote.applyState(wanted) : null; },
+                viewer: function () { return !!(_remote && _remote.viewerActive()); }
+            });
         }
         // Home bar row and tile launches (see the home bar section below).
         if (typeof injector.setHomeBarHooks === 'function') {
@@ -1679,6 +1682,12 @@ app.post('/tizentube/previewEvent', express.json(), (req, res) => {
 });
 
 // Remote access on the proxy path; the CDP path carries this in the log poll.
+// Asked every few seconds by the page on the proxy path, for info.viewer.
+app.get('/tizentube/remoteAccess', (req, res) => {
+    if (!_remote) return res.status(503).json({ error: 'remote access not available' });
+    res.json(_remote.info());
+});
+
 app.post('/tizentube/remoteAccess', express.json(), (req, res) => {
     if (!_remote) return res.status(503).json({ error: 'remote access not available' });
     res.json(_remote.applyState(req.body || {}));
