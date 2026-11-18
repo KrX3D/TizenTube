@@ -60,8 +60,61 @@ function setSyslogRelay(fn) { _relaySyslog = typeof fn === 'function' ? fn : nul
 let _homeBarHooks = null;
 function setHomeBarHooks(hooks) { _homeBarHooks = hooks && typeof hooks === 'object' ? hooks : null; }
 
+// The page's CDP session while it is up, for remote access (remoteAccess.js):
+// running code from a notebook and handing the page its remote address.
+let _pageClient = null;
+
+// Remote access state the page asked for, and what to tell it back. Set by
+// index.js; the poll below carries both directions.
+let _remoteHooks = null;
+function setRemoteAccessHooks(hooks) { _remoteHooks = hooks && typeof hooks === 'object' ? hooks : null; }
+
+const EVAL_TIMEOUT_MS = 30000;
+
+/**
+ * Runs code from the remote page in the YouTube page. Promise of
+ * { value } or { error }, or null when no page session is up.
+ * A returned promise is awaited by polling, since awaitPromise is not
+ * something this Cobalt's CDP is known to support.
+ */
+function evaluateInPage(code) {
+    const client = _pageClient;
+    if (!client) return null;
+    const id = 'e' + Date.now() + Math.floor(Math.random() * 1e6);
+    const fmt = 'function(v){ if (v === undefined) return "undefined"; if (typeof v === "function") return String(v); if (v && typeof v.nodeType === "number") return String(v.outerHTML || v.nodeName).slice(0, 5000); try { var s = JSON.stringify(v, null, 2); return s === undefined ? String(v) : s; } catch (e) { return String(v); } }';
+    const expression = '(function(){ var fmt = ' + fmt + '; var store = window.__ttRemoteEval || (window.__ttRemoteEval = {}); try {'
+        + ' var r = (0, eval)(' + JSON.stringify(code) + ');'
+        + ' if (r && typeof r.then === "function") { store[' + JSON.stringify(id) + '] = null;'
+        + '  r.then(function(v){ store[' + JSON.stringify(id) + '] = { value: fmt(v) }; }, function(e){ store[' + JSON.stringify(id) + '] = { error: String(e && e.stack || e) }; });'
+        + '  return JSON.stringify({ pending: true }); }'
+        + ' return JSON.stringify({ value: fmt(r) });'
+        + ' } catch (e) { return JSON.stringify({ error: String(e && e.stack || e) }); } })()';
+    const read = (expr) => client.Runtime.evaluate({ expression: expr, returnByValue: true }).then(r => {
+        if (r && r.exceptionDetails) return { error: String((r.exceptionDetails.exception && r.exceptionDetails.exception.description) || r.exceptionDetails.text || 'exception') };
+        const v = r && r.result && r.result.value;
+        try { return JSON.parse(v); } catch (e) { return { value: String(v) }; }
+    });
+    return read(expression).then(first => {
+        if (!first || !first.pending) return first;
+        const started = Date.now();
+        const take = '(function(){ var s = window.__ttRemoteEval || {}; var v = s[' + JSON.stringify(id) + ']; if (v) delete s[' + JSON.stringify(id) + ']; return JSON.stringify(v || { pending: true }); })()';
+        return new Promise(resolve => {
+            const tick = () => {
+                read(take).then(r => {
+                    if (r && !r.pending) return resolve(r);
+                    if (Date.now() - started > EVAL_TIMEOUT_MS) return resolve({ error: 'Promise did not settle within 30 s' });
+                    setTimeout(tick, 250);
+                }, err => resolve({ error: String(err && err.message || err) }));
+            };
+            tick();
+        });
+    });
+}
+
 function pollLogQueue(client, relayLog) {
     if (typeof relayLog !== 'function') return;
+    _pageClient = client;
+    client.on('disconnect', () => { if (_pageClient === client) _pageClient = null; });
 
     // The interval below has no lifecycle tied to the CDP connection it
     // depends on. Confirmed on-device: once that connection closes (page
@@ -107,7 +160,7 @@ function pollLogQueue(client, relayLog) {
             // because this poll already competes with YouTube's own rendering.
             // The home bar row rides along: set by homeBarPreview.js when it
             // changes, so it is null on almost every poll and costs nothing.
-            expression: '(function(){ window.__ttInjectorSeenAt = Date.now(); var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h }); })()',
+            expression: '(function(){ window.__ttInjectorSeenAt = Date.now(); var q = window.__ttLogQueue || []; window.__ttLogQueue = []; var s = window.__ttSyslogQueue || []; window.__ttSyslogQueue = []; var h = window.__ttHomeBarPreview || null; window.__ttHomeBarPreview = null; var r = window.__ttRemoteAccess || null; window.__ttRemoteAccess = null; return JSON.stringify({ logs: q, syslog: s, homeBar: h, remote: r }); })()',
             returnByValue: true
         }).then(result => {
             consecutiveFailures = 0;
@@ -123,6 +176,16 @@ function pollLogQueue(client, relayLog) {
             if (!Array.isArray(drained) && typeof drained.homeBar === 'string' && _homeBarHooks && typeof _homeBarHooks.store === 'function') {
                 try { _homeBarHooks.store(drained.homeBar); } catch (e) { }
             }
+            if (!Array.isArray(drained) && drained.remote && _remoteHooks && typeof _remoteHooks.apply === 'function') {
+                let remoteInfo = null;
+                try { remoteInfo = _remoteHooks.apply(drained.remote); } catch (e) { }
+                if (remoteInfo) {
+                    client.Runtime.evaluate({
+                        expression: 'window.__ttRemoteInfo = ' + JSON.stringify(remoteInfo) + '; try { window.dispatchEvent(new Event("tt-remote-info")); } catch (e) { }',
+                        returnByValue: true
+                    }).catch(() => { });
+                }
+            }
             if (_relaySyslog) {
                 for (const item of (Array.isArray(drained) ? [] : (drained.syslog || []))) {
                     _relaySyslog(item.frame, item.host, item.port, reportSyslogProblem);
@@ -130,7 +193,10 @@ function pollLogQueue(client, relayLog) {
             }
         }).catch(() => {
             consecutiveFailures++;
-            if (consecutiveFailures >= 3) clearInterval(interval);
+            if (consecutiveFailures >= 3) {
+                clearInterval(interval);
+                if (_pageClient === client) _pageClient = null;
+            }
         });
     }, 2000);
 
@@ -1186,6 +1252,9 @@ function startDebugger(args, relayLog, sessionId, attempt) {
 module.exports = {
     setSyslogRelay,
     setHomeBarHooks,
+    setRemoteAccessHooks,
+    evaluateInPage,
+    hasPageSession: function () { return !!_pageClient; },
     // Without this on the list, index.js's typeof check quietly found nothing
     // and the copy was never kept or read — a no-op that would have looked
     // exactly like the cache not helping.

@@ -122,6 +122,22 @@
                         "port": "Receiver Port",
                         "testSentButOff": "Test log sent, but Remote Logging is still off."
                     },
+                    "remoteAccess": {
+                        "title": "Remote Access",
+                        "enable": "Enable Remote Access",
+                        "show": "Show Address and QR Code",
+                        "eval": "Allow Running Code",
+                        "evalSubtitle": "The remote page can run JavaScript in YouTube, for testing",
+                        "newPin": "New PIN",
+                        "newPinSubtitle": "Old links and bookmarks stop working",
+                        "newPinDone": "New PIN: {{pin}}",
+                        "qrMessage": "Open on a notebook or phone in the same network: {{url}}",
+                        "off": "Off",
+                        "waiting": "Starting…",
+                        "notListening": "Port {{port}} could not be opened",
+                        "noNetwork": "No network address found",
+                        "standaloneOnly": "Only in the standalone app"
+                    },
                     "syslog": {
                         "title": "Syslog Server",
                         "enable": "Enable Syslog Output",
