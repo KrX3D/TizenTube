@@ -8,6 +8,25 @@
                 "title": "Social-Media-Links",
                 "qrCodeScanMessage": "Du kannst die {{name}}-Seite besuchen, indem du den untenstehenden QR-Code scannst."
             },
+            "groups": {
+                "ads": "Werbung & SponsorBlock",
+                "playback": "Wiedergabe",
+                "playbackQuality": "Qualität",
+                "playbackControls": "Steuerung",
+                "filters": "Inhalte filtern",
+                "videoTypes": "Videotypen",
+                "channels": "Kanäle",
+                "shelves": "Regale",
+                "appearance": "Darstellung",
+                "thumbnails": "Vorschaubilder",
+                "tileInfo": "Kachel-Infos",
+                "navigation": "Navigation & Start",
+                "sidebar": "Seitenleiste",
+                "startup": "Beim Start",
+                "remote": "Fernbedienung",
+                "diagnostics": "Diagnose",
+                "about": "Über TizenTube"
+            },
             "adBlock": "Werbeblocker",
             "sponsorblock": {
                 "title": "SponsorBlock-Einstellungen",
@@ -201,7 +220,7 @@
                 "subtitle": "Videoplayer-Funktionen anpassen",
                 "options": {
                     "patching": {
-                        "title": "Videoplayer-UI patchen",
+                        "title": "Player-Oberfläche",
                         "options": {
                             "enableVPUIPatching": "Videoplayer-UI-Patching aktivieren",
                             "previousNextBtns": "Vorheriger-/Nächster-Buttons aktivieren",
@@ -241,6 +260,7 @@
                     },
                     "remainingTime": "Restzeit anzeigen",
                     "hideRelatedVideosPlayer": "Ähnliche Videos im Player ausblenden",
+                    "hideRelatedVideosPlayerSubtitle": "Nur die Liste unter dem Video, nicht die Startseite",
                     "preferredVideoCodec": {
                         "title": "Bevorzugter Videocodec",
                         "subtitle": "Wähle den bevorzugten Videocodec für die Wiedergabe"

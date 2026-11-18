@@ -149,7 +149,7 @@ options are described in the row rather than listed separately.
 
 Long-pressing a tile opens a menu of actions for that video. Upstream offers a
 fixed list of five; this fork makes the list configurable and adds entries to
-it. The options live on their own settings page under Miscellaneous.
+it. The options live on their own settings page under Remote control.
 
 | Feature | What it does |
 | --- | --- |
