@@ -42,7 +42,7 @@ const BOOT_SETTLE_MS = 10000;
 // No resolveCommand by then means there is no way to show a toast either.
 const BOOT_GIVE_UP_MS = 60000;
 // The player's internals load with the player. They are retried this long
-// after the first <video> appears before counting as missing.
+// after the first video starts playing before counting as missing.
 const PLAYER_RETRY_MS = 30000;
 const POLL_MS = 2000;
 // Names shown in the toast before the rest are counted as "+N".
@@ -213,7 +213,13 @@ function startPlayerCheck() {
     let videoSeenAt = 0;
     const poll = () => {
         if (!videoSeenAt) {
-            if (document.querySelector('video')) videoSeenAt = Date.now();
+            // A video that is actually playing, not just present: YouTube TV
+            // keeps a <video> element from start, but loads the player
+            // controls only once something plays. Counting from the element
+            // reported the container missing on a TV left on the home page
+            // for 30 s before the first video (seen on Tizen 5.5).
+            const video = document.querySelector('video');
+            if (video && video.readyState >= 2 && video.currentTime > 0) videoSeenAt = Date.now();
             setTimeout(poll, POLL_MS);
             return;
         }
