@@ -8,6 +8,25 @@
                 "title": "Social Media Links",
                 "qrCodeScanMessage": "You can visit the {{name}} page by scanning the QR code below."
             },
+            "groups": {
+                "ads": "Ads & SponsorBlock",
+                "playback": "Playback",
+                "playbackQuality": "Quality",
+                "playbackControls": "Controls",
+                "filters": "Content filters",
+                "videoTypes": "Video types",
+                "channels": "Channels",
+                "shelves": "Shelves",
+                "appearance": "Appearance",
+                "thumbnails": "Thumbnails",
+                "tileInfo": "Tile details",
+                "navigation": "Navigation & startup",
+                "sidebar": "Sidebar",
+                "startup": "On startup",
+                "remote": "Remote control",
+                "diagnostics": "Diagnostics",
+                "about": "About TizenTube"
+            },
             "adBlock": "Ad Block",
             "sponsorblock": {
                 "title": "SponsorBlock Settings",
@@ -185,7 +204,7 @@
                 "subtitle": "Customize video player features",
                 "options": {
                     "patching": {
-                        "title": "Patch Video Player UI",
+                        "title": "Player interface",
                         "options": {
                             "enableVPUIPatching": "Enable Video Player UI Patching",
                             "previousNextBtns": "Enable Previous and Next Buttons",
@@ -225,6 +244,7 @@
                     },
                     "remainingTime": "Show Time Remaining",
                     "hideRelatedVideosPlayer": "Hide Related Videos in Player",
+                    "hideRelatedVideosPlayerSubtitle": "Only the list below the video on the watch page, not the home page",
                     "preferredVideoCodec": {
                         "title": "Preferred Video Codec",
                         "subtitle": "Choose the preferred video codec for playback"
