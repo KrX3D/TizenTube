@@ -21,7 +21,9 @@ export function appendFileOnlyLog(label, payload) {
   const anySinkEnabled = configRead('enableDebugConsole')
     || configRead('enableDebugLogging')
     || configRead('logServerEnabled')
-    || configRead('syslogEnabled');
+    || configRead('syslogEnabled')
+    // The remote access page (standalone, port 8098) open in a browser.
+    || window.__ttRemoteViewer === true;
   if (!anySinkEnabled) return;
   // Filtering happens before the entry is built, so a disabled category costs
   // nothing — no JSON.stringify, no queue entry, and no work for

@@ -146,7 +146,7 @@
                         "enable": "Fernzugriff aktivieren",
                         "show": "Adresse und QR-Code anzeigen",
                         "eval": "Code ausführen erlauben",
-                        "evalSubtitle": "Die Fernzugriffsseite kann JavaScript in YouTube ausführen, zum Testen",
+                        "evalSubtitle": "Zum Testen und Fehlersuchen: Die Fernzugriffsseite bekommt ein JS-Feld, das Code in YouTube auf diesem TV ausführt und das Ergebnis zeigt. Nur einschalten, solange es gebraucht wird",
                         "newPin": "Neue PIN",
                         "newPinSubtitle": "Alte Links und Lesezeichen funktionieren dann nicht mehr",
                         "newPinDone": "Neue PIN: {{pin}}",

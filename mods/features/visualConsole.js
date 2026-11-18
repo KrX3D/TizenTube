@@ -1,7 +1,7 @@
 import { configRead, configWrite, configChangeEmitter } from '../config.js';
 import resolveCommand from '../resolveCommand.js';
 import rootPkg from '../../package.json';
-import { sendRemotePayload, isEnabled as isLogServerEnabled } from './logServer.js';
+import { sendRemotePayload, isRelayActive as isLogRelayActive } from './logServer.js';
 import { sendSyslog, isSyslogEnabled } from './syslog.js';
 import { tvModelForDisplay } from './deviceName.js';
 
@@ -110,7 +110,8 @@ function initVisualConsole() {
     // relays this exact same stream, independent of the visual flags below
     // (which still control only the on-screen accumulation/rendering).
     const wantsVisual = !!configRead('enableDebugConsole') || !!configRead('enableDebugLogging');
-    const wantsRemote = isLogServerEnabled();
+    // Log server, or the remote access page open in a browser.
+    const wantsRemote = isLogRelayActive();
     // Syslog counts as a reason to do this work, which it did not before.
     // With only syslog switched on, this returned here and every console line
     // was dropped — one of the two reasons syslog carried less than the log

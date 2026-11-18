@@ -146,7 +146,7 @@
                         "enable": "Enable Remote Access",
                         "show": "Show Address and QR Code",
                         "eval": "Allow Running Code",
-                        "evalSubtitle": "The remote page can run JavaScript in YouTube, for testing",
+                        "evalSubtitle": "For testing and debugging: the remote page gets a JS box that runs code in YouTube on this TV and shows the result. Only turn on while you need it",
                         "newPin": "New PIN",
                         "newPinSubtitle": "Old links and bookmarks stop working",
                         "newPinDone": "New PIN: {{pin}}",
