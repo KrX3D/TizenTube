@@ -134,6 +134,12 @@ const defaultConfig = {
   debugConsolePosition: 'top-left',
   debugConsoleHeight: 1054,
   logServerEnabled: false,
+  // Remote access page on the LAN (standalone only, port 8098, PIN). Kept
+  // across restarts: it costs the page nothing, and the service keeps its
+  // own copy so the port is there before the page loads.
+  enableRemoteAccess: false,
+  // Lets that page run JavaScript in this page. Off unless asked for.
+  enableRemoteEval: false,
   // Every category on by default, so upgrading changes nothing until the
   // user narrows it down. 'basic' vs 'detailed' controls payload depth.
   // sponsorblock is listed but deliberately NOT on by default: it was the

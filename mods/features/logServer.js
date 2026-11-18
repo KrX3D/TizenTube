@@ -97,7 +97,13 @@ function sendOne(_url, entry) {
         // differently since only one is actually same-origin with a fetch:
         const host = configRead('logServerHost');
         const port = configRead('logServerPort');
-        if (!host) return false;
+        // Remote access (remoteAccess.js) shows the log on the TV's own
+        // port 8098. Without a PC receiver the entry still goes to the
+        // service, marked so the service keeps it for that page only.
+        if (!host) {
+            if (!configRead('enableRemoteAccess')) return false;
+            entry = Object.assign({}, entry, { __ttRemoteOnly: true });
+        }
 
         if (window.location.hostname === 'localhost') {
             // Proxy path: page is served from localhost:8099 itself — same

@@ -188,8 +188,22 @@ it. The options live on their own settings page under Miscellaneous.
 | Log Subscriptions Shelf Layout **(fork)** | One-off diagnostic that records how the Subscriptions page is laid out, for chasing a layout problem on a specific TV |
 | Syslog Output **(fork)** | Sends the same logs to a syslog server (an unRAID box, a router, anything that listens), with its own IP, port and connection test. Frames are RFC 5424, with the TV's model as the HOSTNAME field and `TizenTube` as APP-NAME, so a server that files by host writes one file per TV rather than one called after the page. A name typed into the settings overrides the model. Independent of the log server below, so one can be used without the other |
 | Remote Log Server **(fork)** | Streams logs to a PC receiver for on-device debugging, with a built-in connection test |
+| Remote Access **(fork, standalone only)** | A page on the TV's own address (port 8098) for a notebook or phone: the log live, filterable and downloadable, with no PC receiver needed. Optionally a JavaScript box that runs code in the YouTube page, for testing. Needs a 4-digit PIN; the QR code in Settings carries it. See [Network ports](#network-ports) |
 
 Missing something? [Request it](https://github.com/reisxd/TizenTube/issues/new).
+
+# Network ports
+
+What has to be allowed between VLANs (e.g. in UniFi) for each feature. Nothing here is needed for TizenTube itself to play YouTube.
+
+| Port | Direction | Used for | Needed when |
+| --- | --- | --- | --- |
+| TCP 8098 | notebook/phone → TV | **Remote Access** page (standalone app): live log, download, JavaScript console. Needs the 4-digit PIN; 10 wrong PINs lock that address out for 10 minutes. | Settings > Miscellaneous > Remote Access is on |
+| TCP 3030 (default, configurable) | TV → PC | **Remote Log Server**: logs pushed to `scripts/log-receiver/receiver.ps1` | Remote Logging is on and a receiver IP is set |
+| UDP 514 (default, configurable) | TV → syslog server | **Syslog Output** | Syslog Output is on |
+| TCP 8099 | TV only (127.0.0.1) | Standalone service and YouTube proxy. Bound to 127.0.0.1, **not reachable from the network**, no rule needed. | always (standalone) |
+
+**Remote Access in short:** turn it on under Settings > Miscellaneous > Remote Access, then pick *Show Address and QR Code* and scan it, or type the address shown (it includes `?pin=`). The PIN stays the same across restarts, so a bookmark keeps working; *New PIN* replaces it. The service log is always there; the page's own log lines appear while *Enable Remote Logging* is on (it turns itself off at each start, as before), with or without a receiver IP. *Allow Running Code* adds a JS box; it works on the debugger launch path (Host PC IP 127.0.0.1), not on the proxy path.
 
 # Title keyword filter
 

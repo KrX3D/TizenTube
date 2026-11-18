@@ -8,6 +8,7 @@ import { playlistContinue } from './features/playlistContinue.js';
 import { sendTestPing } from './features/logServer.js';
 import { showNumericEditor, saveNumericEditor, cancelNumericEditor } from './ui/numericEditor.js';
 import { sendSyslogTest } from './features/syslog.js';
+import { showRemoteAccessQr, newRemoteAccessPin } from './features/remoteAccess.js';
 import { screenOff } from './features/screenOff.js';
 import { shareCurrentVideo, shareVideo, sharePlaylist } from './features/qrShare.js';
 import { showBrowseTileMenu } from './ui/browseTileMenu.js';
@@ -649,6 +650,12 @@ function customAction(action, parameters) {
             showLogServerTestToast(sendTestPing());
             break;
         }
+        case 'REMOTE_ACCESS_SHOW':
+            showRemoteAccessQr();
+            break;
+        case 'REMOTE_ACCESS_NEW_PIN':
+            newRemoteAccessPin();
+            break;
     }
 }
 

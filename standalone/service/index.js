@@ -659,7 +659,29 @@ function noteReceiver(host, port) {
 
 loadPersistedReceiver();
 
+// Remote access page on the LAN (remoteAccess.js). Created here so its log
+// buffer has everything from this point on, plus what was logged before.
+// Started later (begin(), next to app.listen) once the storage path exists.
+let _remote = null;
+try {
+    _remote = require('./remoteAccess.js')({
+        storeDir: function () { const p = debugPortPath(); return p ? require('path').dirname(p) : null; },
+        health: function () { return healthSnapshot(); },
+        evaluate: function (code) { return injector && typeof injector.evaluateInPage === 'function' ? injector.evaluateInPage(code) : null; },
+        canEvaluate: function () { return !!(injector && typeof injector.hasPageSession === 'function' && injector.hasPageSession()); },
+        log: function (level, message) { logServiceEvent(level, message); }
+    });
+    (global.__ttPendingServiceLogs || []).concat(_heldLogs).forEach(function (held) { _remote.addLog(held); });
+} catch (err) {
+    _remote = null;
+    logServiceEvent('ERROR', `remote access not available: ${err && err.stack || err}`);
+}
+
 function relayLog(entry, host, port) {
+    // Every line this service relays, the page's included, is also kept for
+    // the remote page. Page lines sent only for that page stop here.
+    if (_remote) _remote.addLog(entry);
+    if (entry && entry.__ttRemoteOnly) return;
     // Any caller that knows the address teaches it to the service. That covers
     // the CDP path too: the page cannot reach localhost from an HTTPS context,
     // so it queues entries tagged with the host and injector.js drains them
@@ -1260,6 +1282,9 @@ try {
             noteSyslogTarget(host, port, frame);
             relaySyslog(frame, host, port, report);
         });
+        if (typeof injector.setRemoteAccessHooks === 'function') {
+            injector.setRemoteAccessHooks({ apply: function (wanted) { return _remote ? _remote.applyState(wanted) : null; } });
+        }
         // Home bar row and tile launches (see the home bar section below).
         if (typeof injector.setHomeBarHooks === 'function') {
             injector.setHomeBarHooks({
@@ -1653,6 +1678,12 @@ app.post('/tizentube/previewEvent', express.json(), (req, res) => {
     res.status(204).end();
 });
 
+// Remote access on the proxy path; the CDP path carries this in the log poll.
+app.post('/tizentube/remoteAccess', express.json(), (req, res) => {
+    if (!_remote) return res.status(503).json({ error: 'remote access not available' });
+    res.json(_remote.applyState(req.body || {}));
+});
+
 // Syslog frames are built page-side and only need a socket here.
 app.post('/tizentube/syslog', express.json(), (req, res) => {
     const { host, port, frame } = req.body || {};
@@ -1867,6 +1898,10 @@ app.all('*', (req, res) => {
             }
         });
 });
+
+if (_remote) {
+    try { _remote.begin(); } catch (err) { logServiceEvent('ERROR', `remote access start failed: ${err && err.stack || err}`); }
+}
 
 const server = app.listen(PORT, "127.0.0.1", () => {
     logServiceEvent('INFO', `Standalone service listening on 127.0.0.1:${PORT}`);

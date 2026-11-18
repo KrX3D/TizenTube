@@ -122,6 +122,22 @@
                         "port": "Port des Empfängers",
                         "testSentButOff": "Test-Log gesendet, aber die Remote-Protokollierung ist noch aus."
                     },
+                    "remoteAccess": {
+                        "title": "Fernzugriff",
+                        "enable": "Fernzugriff aktivieren",
+                        "show": "Adresse und QR-Code anzeigen",
+                        "eval": "Code ausführen erlauben",
+                        "evalSubtitle": "Die Fernzugriffsseite kann JavaScript in YouTube ausführen, zum Testen",
+                        "newPin": "Neue PIN",
+                        "newPinSubtitle": "Alte Links und Lesezeichen funktionieren dann nicht mehr",
+                        "newPinDone": "Neue PIN: {{pin}}",
+                        "qrMessage": "Auf einem Notebook oder Handy im selben Netzwerk öffnen: {{url}}",
+                        "off": "Aus",
+                        "waiting": "Wird gestartet…",
+                        "notListening": "Port {{port}} konnte nicht geöffnet werden",
+                        "noNetwork": "Keine Netzwerkadresse gefunden",
+                        "standaloneOnly": "Nur in der Standalone-App"
+                    },
                     "syslog": {
                         "title": "Syslog-Server",
                         "enable": "Syslog-Ausgabe aktivieren",

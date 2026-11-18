@@ -4,6 +4,7 @@ import qrcode from 'qrcode-npm';
 import { t } from 'i18next';
 import resolveCommand from '../resolveCommand.js';
 import { getStandaloneVersion, moduleVersion } from '../version.js';
+import { remoteAccessSubtitle } from '../features/remoteAccess.js';
 
 const qrcodes = {};
 
@@ -570,6 +571,44 @@ export default function modernUI(update, parameters) {
                                     icon: 'SEND',
                                     customAction: {
                                         action: 'LOG_SERVER_TEST_PING'
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            // Standalone only: a page on the LAN (port 8098)
+                            // with the live log and, if allowed, a JS console.
+                            name: t('settings.options.misc.options.remoteAccess.title'),
+                            icon: 'BROADCAST',
+                            value: null,
+                            menuId: 'tt-remote-access-settings',
+                            subtitle: remoteAccessSubtitle(),
+                            options: [
+                                {
+                                    name: t('settings.options.misc.options.remoteAccess.enable'),
+                                    icon: 'WIFI',
+                                    value: 'enableRemoteAccess'
+                                },
+                                {
+                                    name: t('settings.options.misc.options.remoteAccess.show'),
+                                    subtitle: () => remoteAccessSubtitle(),
+                                    icon: 'OPEN_IN_NEW',
+                                    customAction: {
+                                        action: 'REMOTE_ACCESS_SHOW'
+                                    }
+                                },
+                                {
+                                    name: t('settings.options.misc.options.remoteAccess.eval'),
+                                    subtitle: t('settings.options.misc.options.remoteAccess.evalSubtitle'),
+                                    icon: 'BUG_REPORT',
+                                    value: 'enableRemoteEval'
+                                },
+                                {
+                                    name: t('settings.options.misc.options.remoteAccess.newPin'),
+                                    subtitle: t('settings.options.misc.options.remoteAccess.newPinSubtitle'),
+                                    icon: 'PRIVACY_UNLISTED',
+                                    customAction: {
+                                        action: 'REMOTE_ACCESS_NEW_PIN'
                                     }
                                 }
                             ]

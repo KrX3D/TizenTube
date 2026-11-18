@@ -73,8 +73,9 @@ export function sharePlaylist(playlistId) {
     shareUrlAsQr(`https://www.youtube.com/playlist?list=${list}`);
 }
 
-/** The modal, which is the same whatever the URL points at. */
-function shareUrlAsQr(shareUrl) {
+/** The modal, which is the same whatever the URL points at. Title and
+ *  message default to the share texts; remote access passes its own. */
+export function shareUrlAsQr(shareUrl, title, message) {
     try {
         // The smallest version that holds this URL, so a short one stays as
         // large and as readable as it was before playlists came along.
@@ -104,9 +105,9 @@ function shareUrlAsQr(shareUrl) {
         }
 
         showModal({
-            title: t('player.share.title'),
+            title: title || t('player.share.title'),
         }, overlayPanelItemListRenderer([
-            overlayMessageRenderer(t('player.share.qrCodeScanMessage')),
+            overlayMessageRenderer(message || t('player.share.qrCodeScanMessage')),
             QrCodeRenderer(qrDataUrl)
         ]), 'tt-share-modal');
     } catch (err) {
