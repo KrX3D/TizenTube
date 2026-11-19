@@ -28,8 +28,7 @@ they matter for understanding "what code path am I changing":
 2. **Standalone mode (`standalone/`).** A self-contained, separately
    installable Tizen app that doesn't need TizenBrew at all. See
    "Standalone mode" section below — it's non-trivial and has its own
-   quirks, including an unresolved packaging/signing issue (see "Known
-   unresolved issues").
+   quirks. It is the path in daily use (see "Known issues").
 
 Both paths ultimately load the *same* `mods/userScript.js` bundle from the
 npm CDN at runtime — standalone mode does not bundle a copy of the mod
@@ -90,7 +89,7 @@ standalone/                  # standalone installable app — see "Standalone mo
                                 # SyntaxError while Node parses that huge bundle — which can't be
                                 # caught from inside the bundle itself, since parse errors happen
                                 # before any of that file's own code runs — is at least catchable
-                                # and loggable here. See "Known unresolved issues" re: Tizen 5.5.
+                                # and loggable here. See "Known issues" (history) re: Tizen 5.5.
     build-service.js          # ncc-bundles index.js, regex-patches known bundled-dep bugs, Babel-
                                 # transpiles the bundle for Node 4.4.3, → dist/bundle.js; copies
                                 # bootstrap.js → dist/index.js unmodified
@@ -112,9 +111,6 @@ scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote l
 scripts/npm-cleanup/          # local `npm unpublish` of old versions, with a 2FA code — the publish
                                 # workflow attempts removal too, but npm refuses it from any token it
                                 # still issues, so this is the only path that works
-scripts/pc-installer/         # PC-side install/update script (SDB from the PC, no on-device installer app
-                                # needed) — workaround for the Host PC IP 127.0.0.1 conflict with standalone's
-                                # proxy path; in progress, see AGENTS.md "Known unresolved issues"
 ```
 
 ## Configuration system (`mods/config.js`)
@@ -242,8 +238,9 @@ build step builds top-level `service/` first because
   `standalone/config.xml` before packaging), or by a `v*.*.*` tag push, or
   manually. Builds `mods/`, `service/`, and `standalone/service/`, then
   signs `standalone/` into a `.wgt` using **Tizen Studio's own CLI**
-  (`tizen build-web` + `tizen package`, via `.github/assets/profiles.xml`)
-  — see "Known unresolved issues", this is mid-troubleshooting.
+  (`tizen build-web` + `tizen package`, via `.github/assets/profiles.xml`).
+  Signing works since 2026-08-02; see "Known issues" for the `-legacy`
+  and one-cert-per-app lessons.
 - **`i18n-check.yml`** — on PRs touching `mods/`: runs
   `scripts/i18n-check/check-i18n.cjs`, which fails on en/de key or placeholder
   mismatches and on `t('key')` calls whose key is in neither file. Only en and
@@ -264,7 +261,23 @@ cd standalone/service && npm install && npm run build   # builds dist/index.js
 Revert `dist/*` afterward if you're not intentionally changing it —
 CI owns that file's committed state.
 
-## Known unresolved issues (as of writing)
+## Known issues
+
+What is still open (as of 2026-11-19):
+
+- **Proxy path: YouTube can stop playback.** With Host PC IP set to
+  anything other than `127.0.0.1`, standalone uses the local proxy, and
+  YouTube can answer the proxied traffic with a verification QR code that
+  stops video playback. Not fixable on our side; upstream added the CDP
+  injector to avoid it. Details in "Not resolved — reframed" below.
+- **Host PC IP must stay `127.0.0.1`** for the CDP path and for
+  TizenBrew/TizenBrewInstaller, so `sdb` from a PC cannot connect to the
+  TVs.
+- **Q-Symphony 5.1 audio** is a deferred feature, see the end of this
+  section.
+
+Everything else in this section is history. Do not reopen it without a
+new on-device log.
 
 > **Read this first (2026-10-03).** Standalone mode is the path the user
 > actually runs: the standalone `.wgt` is installed and in daily use on
@@ -407,11 +420,10 @@ Originally reported 2026-08-02 after the install issue above was fixed:
   zero logs, whether `safeRequire`'s per-require logging finally shows
   which one fails there.
 
-  Also found, still unresolved/unconfirmed either way: `app.onRequest is
-  not a function` fires repeatedly every launch (from Tizen's own service
-  runner) but doesn't crash the process — likely benign, since neither
-  our nor upstream's `standalone/service/index.js` implements that
-  handler and upstream still works; and one `Cannot find context with
+  Also found at the time: `app.onRequest is
+  not a function` fired repeatedly every launch (from Tizen's own service
+  runner). Since fixed: `standalone/service/index.js` now exports
+  `onRequest` (also used for the `ttReattach` service restart); and one `Cannot find context with
   specified id` from the CDP injector, a normal context-invalidation race
   that seems to resolve itself once a fresh execution context appears.
   Neither is proven unrelated to the retry-need — worth re-reading the
@@ -768,9 +780,11 @@ Originally reported 2026-08-02 after the install issue above was fixed:
   mode (breaks *already-working* video playback, not just launch) that
   the CDP path doesn't have at all.
 
-  **Net effect: neither path is simply "the answer."** CDP is
-  connection-unreliable (this session's whole investigation, several
-  genuine fixes landed, not fully solved). Proxy connects reliably but
+  **Net effect at the time (2026-08-03): neither path was simply "the
+  answer."** CDP was connection-unreliable (this session's whole
+  investigation, several genuine fixes landed, not fully solved). Since
+  2026-10-03 the CDP path's "works once" failure no longer reproduces —
+  see the top of this section. Proxy connects reliably but
   can silently stop video playback via YouTube's own bot detection,
   which isn't something fixable by patching our own code — it's why
   upstream moved away from it. README.md now documents both failure
@@ -787,10 +801,8 @@ Originally reported 2026-08-02 after the install issue above was fixed:
   SDB-based mechanisms (TizenBrewInstaller needs it to install/update
   packages) — so a TV configured for standalone's proxy path can't use
   those without switching Host PC IP back and forth. A PC-side
-  installer script (`scripts/pc-installer/`, this repo) is being built
-  as a workaround specifically for the install/update case, since SDB
-  installs work the same over network as USB and don't need
-  `127.0.0.1` — see that script's own docs. TizenBrew's own CDP
+  installer script (`scripts/pc-installer/`) was started as a workaround
+  for the install/update case but is not committed to this repo. TizenBrew's own CDP
   injection has no equivalent workaround; whether it needs one is a
   separate, cross-repo question, not resolved here.
 
@@ -823,7 +835,7 @@ isTypeSupported`/`canPlayType` for AC-3/E-AC-3/AC-4, careful never to claim
 a codec the platform doesn't actually support), a settings toggle with 3
 UA profiles, and a diagnostics panel (~600 lines total). Not yet ported —
 deferred. Of its two reasons the first is now gone: standalone mode runs and
-is in daily use (see the top of "Known unresolved issues"), so it can be
+is in daily use (see the top of "Known issues"), so it can be
 tested. Still open is that the user's hardware is an unconfirmed fit (has
 a Samsung soundbar, not confirmed Q-Symphony-compatible). Ask before
 implementing if this comes back up.
