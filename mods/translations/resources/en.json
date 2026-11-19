@@ -259,8 +259,8 @@
                         "subtitle": "Set the speed increments for video playback speed adjustments"
                     },
                     "remainingTime": "Show Time Remaining",
-                    "hideRelatedVideosPlayer": "Hide Related Videos in Player",
-                    "hideRelatedVideosPlayerSubtitle": "Only the list below the video on the watch page, not the home page",
+                    "hideRelatedVideosPlayer": "Hide All Videos Below the Player",
+                    "hideRelatedVideosPlayerSubtitle": "Removes the whole video panel below a playing video, not just suggestions. Queued videos stay. Home and other pages are not affected",
                     "preferredVideoCodec": {
                         "title": "Preferred Video Codec",
                         "subtitle": "Choose the preferred video codec for playback"
