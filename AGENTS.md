@@ -101,12 +101,14 @@ standalone/                  # standalone installable app — see "Standalone mo
     build-standalone-release.yaml  # builds/signs standalone/ into a .wgt via Tizen Studio, GitHub Release
     codeql.yml                  # security scanning
     i18n-check.yml              # PRs: en/de key + placeholder parity, keys used in mods/ must exist
+    runtime-syntax-check.yml    # PRs: built bundles must parse on Node 4.4.3 (service) / Chrome 47 (userscript)
     claude.yml
   assets/
     profiles.xml                 # Tizen Studio signing profile for standalone (see Known issues)
 
 scripts/tampermonkey/         # local Chrome-based dev/test loader — see README.md
 scripts/i18n-check/           # CI-only en/de translation check (run by i18n-check.yml; also runnable locally)
+scripts/runtime-syntax-check/ # CI-only: compiles built bundles in old V8 (run by runtime-syntax-check.yml)
 scripts/log-receiver/         # PC-side PS1 receiver for logServer.js's remote logging (see Feature map)
 scripts/npm-cleanup/          # local `npm unpublish` of old versions, with a 2FA code — the publish
                                 # workflow attempts removal too, but npm refuses it from any token it
@@ -246,6 +248,16 @@ build step builds top-level `service/` first because
   mismatches and on `t('key')` calls whose key is in neither file. Only en and
   de are checked. Locally: `node scripts/i18n-check/check-i18n.cjs --en
   mods/translations/resources/en.json --de mods/translations/resources/de.json --src mods`
+- **`runtime-syntax-check.yml`** — on PRs touching `mods/`, `service/` or
+  `standalone/service/`: builds all three bundles, then compiles (never runs)
+  them with `scripts/runtime-syntax-check/check-syntax.js` under old Node
+  binaries from nodejs.org: Node 4.4.3 for `dist/service.js` and
+  `standalone/service/dist/*` (Tizen 5.5's service runtime), Node 5.12 with
+  `--harmony_rest_parameters` (≈ Chrome 47's V8) for `dist/userScript.js`.
+  `--nolazy` so errors inside function bodies count too. Syntax only — a
+  missing runtime API is not caught. A failure prints the line, column and a
+  snippet of the bundle; fix it in the Babel config or the dependency, not by
+  editing `dist/`.
 - **`codeql.yml`** — security scanning on PRs; check its findings before
   merging anything touching `standalone/service/` (the proxy) or auth-ish
   code — false positives happen (e.g. SSRF flags on the proxy's
