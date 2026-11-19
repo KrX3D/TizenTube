@@ -102,7 +102,7 @@ options are described in the row rather than listed separately.
 | Speed Settings Increments | Sets the step size used by the playback-speed control |
 | Picture-in-Picture / Mini Player | Both available from the player options popup; the two buttons can be swapped |
 | Screen Off | Blanks the screen while audio keeps playing — for using the TV as a music player |
-| Hide Related Videos in Player | Removes the related/suggested-videos rail that slides in over the player, so a nudge on the D-pad during playback doesn't cover the video with recommendations |
+| Hide All Videos Below the Player | Removes the whole video panel below a playing video (suggestions and every other shelf in it), so a nudge on the D-pad during playback doesn't cover the video. If videos are queued, the panel stays with only the queue |
 | Number Keys Jump to Percentage | Pressing `1`–`9` jumps to that percentage of the video, `0` jumps to the start |
 | Reload After TV Wakes **(fork)** | Reloads the page after standby. A short absence only rebuilds a dead player, fixing the frozen first frame; an absence over 5 minutes reloads whatever the player looks like, since the feed and its continuations were fetched before the TV slept. Waits for the network first, so it never lands on the webview's offline page. A sleep the platform announces no event for is caught by the wall-clock gap between heartbeat ticks |
 | Player UI patching | Optional Previous/Next, Super Thanks, Ask, and Speed Controls buttons |

@@ -45,7 +45,7 @@ import { filterHiddenChannels } from './channelHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterMusicShelves } from './musicShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
-import { hideRelatedVideos } from './relatedVideosHider.js';
+import { hideRelatedVideos, dropEmptyRelatedPanel } from './relatedVideosHider.js';
 import { dedupeShelves } from './duplicateVideoHider.js';
 import { noteVideoLength } from './playbackProgress.js';
 import { filterAggregateShelves } from './aggregateShelfHider.js';
@@ -1232,6 +1232,7 @@ JSON.parse = function () {
             watchNextSlr.contents.unshift(ShelfRenderer('Queued Videos', queuedVideosClone, queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ? queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) : 0));
           }
         } catch (_) { }
+        try { dropEmptyRelatedPanel(r.contents.singleColumnWatchNextResults); } catch (_) { }
       }
       if (r?.continuationContents?.sectionListContinuation?.contents) {
         const wNextSlc = r.continuationContents.sectionListContinuation;
@@ -1479,6 +1480,7 @@ JSON.parse = function () {
           nonWatchWnSlr.contents.unshift(ShelfRenderer('Queued Videos', queuedVideosClone, queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) !== -1 ? queuedVideosClone.findIndex(v => v.contentId === window.queuedVideos.lastVideoId) : 0));
         }
       } catch (_) { }
+      try { dropEmptyRelatedPanel(r.contents.singleColumnWatchNextResults); } catch (_) { }
     }
 
     // Strip YouTube own shopping and NFL watermark overlays (upstream

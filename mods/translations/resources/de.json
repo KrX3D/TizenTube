@@ -259,8 +259,8 @@
                         "subtitle": "Lege die Schritte für Anpassungen der Wiedergabegeschwindigkeit fest"
                     },
                     "remainingTime": "Restzeit anzeigen",
-                    "hideRelatedVideosPlayer": "Ähnliche Videos im Player ausblenden",
-                    "hideRelatedVideosPlayerSubtitle": "Nur die Liste unter dem Video, nicht die Startseite",
+                    "hideRelatedVideosPlayer": "Alle Videos unter dem Player ausblenden",
+                    "hideRelatedVideosPlayerSubtitle": "Entfernt den ganzen Videobereich unter einem laufenden Video, nicht nur Vorschläge. Die Warteschlange bleibt. Startseite und andere Seiten bleiben unverändert",
                     "preferredVideoCodec": {
                         "title": "Bevorzugter Videocodec",
                         "subtitle": "Wähle den bevorzugten Videocodec für die Wiedergabe"
