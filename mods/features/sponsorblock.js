@@ -614,8 +614,11 @@ window.addEventListener(
   () => {
     try {
       const newURL = new URL(location.hash.substring(1), location.href);
-      // A hack, but it works, so...
-      const videoID = newURL.search.replace('?v=', '').split('&')[0];
+      // Only the watch page names a video. Reading any page's query as one
+      // turned every browse page into a lookup: "?c=FEhistory" went to the
+      // SponsorBlock API and replaced the handler of the video before it.
+      const match = newURL.pathname === '/watch' ? /[?&]v=([^&#]+)/.exec(newURL.search) : null;
+      const videoID = match ? match[1] : '';
       const needsReload =
         videoID &&
         (!window.sponsorblock || window.sponsorblock.videoID != videoID);
