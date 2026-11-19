@@ -26,7 +26,7 @@ import { t } from 'i18next';
 // Verified against the icon names already used elsewhere in the settings tree;
 // a Material name that the TV app does not carry silently shows no icon.
 const ICON_FOR_KIND = {};
-ICON_FOR_KIND[PLAYLIST_KIND] = 'PLAYLIST_PLAY';
+ICON_FOR_KIND[PLAYLIST_KIND] = 'PLAYLISTS';
 ICON_FOR_KIND[CHANNEL_PAGE_KIND] = 'ACCOUNT_CIRCLE';
 ICON_FOR_KIND[CHANNEL_NAME_KIND] = 'PERSON';
 

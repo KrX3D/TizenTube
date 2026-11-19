@@ -326,7 +326,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.videoPlayer.options.stopAtPlaylistEnd'),
-                            icon: 'PLAYLIST_PLAY',
+                            icon: 'PLAYLISTS',
                             value: 'enableStopAtPlaylistEnd'
                         }
                     ]
@@ -404,7 +404,7 @@ export default function modernUI(update, parameters) {
                                 },
                                 {
                                     name: t('settings.options.videoPlayer.options.hidePlayerButtons.options.comments'),
-                                    icon: 'ARTICLE',
+                                    icon: 'COMMENT',
                                     value: 'hidePlayerCommentsButton'
                                 },
                                 {
@@ -623,7 +623,7 @@ export default function modernUI(update, parameters) {
                 },
                 {
                     name: t('settings.options.groups.shelves'),
-                    icon: 'MENU',
+                    icon: 'LIST',
                     value: null,
                     menuId: 'tt-group-shelves',
                     menuHeader: t('settings.options.groups.shelves'),
@@ -852,14 +852,14 @@ export default function modernUI(update, parameters) {
         },
         {
             name: t('settings.options.groups.navigation'),
-            icon: 'MENU',
+            icon: 'LIST',
             value: null,
             menuId: 'tt-group-navigation',
             menuHeader: t('settings.options.groups.navigation'),
             options: [
                 {
                     name: t('settings.options.groups.sidebar'),
-                    icon: 'MENU',
+                    icon: 'LIST',
                     value: null,
                     menuId: 'tt-group-sidebar',
                     menuHeader: t('settings.options.groups.sidebar'),
@@ -870,7 +870,7 @@ export default function modernUI(update, parameters) {
                             // matches whatever the account actually has, in the user's
                             // own language (upstream 2f2c567).
                             name: t('settings.options.uiSettings.options.disableSidebarContents.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -881,7 +881,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.uiSettings.options.sortSidebarContents.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -1019,7 +1019,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.uiSettings.options.homeBarPreview.options.playlists.title'),
-                            icon: 'PLAYLIST_PLAY',
+                            icon: 'PLAYLISTS',
                             value: null,
                             menuId: 'tt-home-bar-preview-playlists',
                             menuHeader: {
@@ -1075,7 +1075,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.longPressMenu.visible.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -1086,7 +1086,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.longPressMenu.sort.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -1101,7 +1101,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.longPressMenu.playlists.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -1111,7 +1111,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.longPressMenu.playlistOrder.title'),
-                            icon: 'MENU',
+                            icon: 'LIST',
                             value: null,
                             action: {
                                 customAction: {
@@ -1143,7 +1143,7 @@ export default function modernUI(update, parameters) {
                     // subscriptions-shelf diagnostic govern every output, so they
                     // belong a level up, beside the outputs rather than inside one.
                     name: t('settings.options.misc.options.logging.title'),
-                    icon: 'ARTICLE',
+                    icon: 'TEXT_BOX',
                     value: null,
                     menuId: 'tt-logging-settings',
                     options: [
@@ -1160,7 +1160,7 @@ export default function modernUI(update, parameters) {
                                 },
                                 {
                                     name: t('settings.options.misc.options.debugConsole.enableLogging'),
-                                    icon: 'ARTICLE',
+                                    icon: 'TEXT_BOX',
                                     value: 'enableDebugLogging'
                                 },
                                 {
@@ -1201,7 +1201,7 @@ export default function modernUI(update, parameters) {
                             options: [
                                 {
                                     name: t('settings.options.misc.options.syslog.enable'),
-                                    icon: 'WIFI',
+                                    icon: 'PHONELINK',
                                     value: 'syslogEnabled'
                                 },
                                 {
@@ -1223,7 +1223,7 @@ export default function modernUI(update, parameters) {
                                 {
                                     name: t('settings.options.misc.options.syslog.port'),
                                     subtitle: () => String(configRead('syslogPort') || ''),
-                                    icon: 'WIFI',
+                                    icon: 'PHONELINK',
                                     customAction: {
                                         action: 'NUMERIC_EDITOR_SHOW',
                                         parameters: {
@@ -1255,7 +1255,7 @@ export default function modernUI(update, parameters) {
                             options: [
                                 {
                                     name: t('settings.options.misc.options.logServer.enable'),
-                                    icon: 'WIFI',
+                                    icon: 'PHONELINK',
                                     value: 'logServerEnabled'
                                 },
                                 {
@@ -1274,7 +1274,7 @@ export default function modernUI(update, parameters) {
                                 {
                                     name: t('settings.options.misc.options.logServer.port'),
                                     subtitle: () => String(configRead('logServerPort') || ''),
-                                    icon: 'WIFI',
+                                    icon: 'PHONELINK',
                                     customAction: {
                                         action: 'NUMERIC_EDITOR_SHOW',
                                         parameters: {
@@ -1305,7 +1305,7 @@ export default function modernUI(update, parameters) {
                             options: [
                                 {
                                     name: t('settings.options.misc.options.remoteAccess.enable'),
-                                    icon: 'WIFI',
+                                    icon: 'PHONELINK',
                                     value: 'enableRemoteAccess'
                                 },
                                 {
@@ -1334,7 +1334,7 @@ export default function modernUI(update, parameters) {
                         },
                         {
                             name: t('settings.options.misc.options.logging.verbosity.title'),
-                            icon: 'ARTICLE',
+                            icon: 'TEXT_BOX',
                             value: null,
                             menuId: 'tt-log-verbosity',
                             menuHeader: {
@@ -1361,15 +1361,15 @@ export default function modernUI(update, parameters) {
                                 { name: t('settings.options.misc.options.logging.categories.ads'), icon: 'DOLLAR_SIGN', value: 'ads' },
                                 { name: t('settings.options.misc.options.logging.categories.shorts'), icon: 'YOUTUBE_SHORTS_FILL_24', value: 'shorts' },
                                 { name: t('settings.options.misc.options.logging.categories.watched'), icon: 'VISIBILITY_OFF', value: 'watched' },
-                                { name: t('settings.options.misc.options.logging.categories.playlist'), icon: 'PLAYLIST_PLAY', value: 'playlist' },
+                                { name: t('settings.options.misc.options.logging.categories.playlist'), icon: 'PLAYLISTS', value: 'playlist' },
                                 { name: t('settings.options.misc.options.logging.categories.filters'), icon: 'PRIVACY_UNLISTED', value: 'filters' },
-                                { name: t('settings.options.misc.options.logging.categories.shelves'), icon: 'MENU', value: 'shelves' },
+                                { name: t('settings.options.misc.options.logging.categories.shelves'), icon: 'LIST', value: 'shelves' },
                                 { name: t('settings.options.misc.options.logging.categories.thumbs'), icon: 'VIDEO_QUALITY', value: 'thumbs' },
                                 { name: t('settings.options.misc.options.logging.categories.player'), icon: 'PLAY_CIRCLE', value: 'player' },
                                 { name: t('settings.options.misc.options.logging.categories.sponsorblock'), icon: 'MONEY_HAND', value: 'sponsorblock' },
                                 { name: t('settings.options.misc.options.logging.categories.playbackDiag'), icon: 'SLOW_MOTION_VIDEO', value: 'playbackDiag' },
                                 { name: t('settings.options.misc.options.logging.categories.subsShelf'), icon: 'SUBSCRIPTIONS', value: 'subsShelf' },
-                                { name: t('settings.options.misc.options.logging.categories.other'), icon: 'ARTICLE', value: 'other' }
+                                { name: t('settings.options.misc.options.logging.categories.other'), icon: 'TEXT_BOX', value: 'other' }
                             ]
                         }
                     ]
