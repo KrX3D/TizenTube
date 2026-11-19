@@ -21,6 +21,14 @@ var vm = require('vm');
 var Module = require('module');
 var childProcess = require('child_process');
 
+// process.stdout rather than console: CodeQL ties console.* here to the TV's
+// console hook in mods/features/visualConsole.js and reports file data reaching
+// the log senders (js/file-access-to-http), though this script never runs on
+// the TV. Same fix as scripts/i18n-check/check-i18n.cjs.
+function writeOut(line) {
+    process.stdout.write(line + '\n');
+}
+
 var mode = null;
 var failed = 0;
 var checked = 0;
@@ -54,12 +62,12 @@ function check(file, asModule) {
     try {
         compile(file, asModule);
         checked++;
-        console.log('OK   ' + file);
+        writeOut('OK   ' + file);
     } catch (err) {
         failed++;
-        console.log('FAIL ' + file + ': ' + err);
+        writeOut('FAIL ' + file + ': ' + err);
         var where = locate(file, asModule);
-        if (where) console.log('     at ' + where);
+        if (where) writeOut('     at ' + where);
     }
 }
 
@@ -74,12 +82,12 @@ process.argv.slice(2).forEach(function (arg) {
         return;
     }
     if (!mode) {
-        console.log('Usage: check-syntax.js (--script|--module) file... [(--script|--module) file...]');
+        writeOut('Usage: check-syntax.js (--script|--module) file... [(--script|--module) file...]');
         process.exit(2);
     }
     check(arg, mode === '--module');
 });
 
-console.log('Node ' + process.version + ' (V8 ' + process.versions.v8 + '): ' +
+writeOut('Node ' + process.version + ' (V8 ' + process.versions.v8 + '): ' +
     checked + ' passed, ' + failed + ' failed');
 process.exit(failed || !checked ? 1 : 0);
