@@ -1,0 +1,80 @@
+# Builds the bundles and compiles them with the V8 that runs them on the TVs,
+# so a dependency bump or a syntax change that the old engines cannot parse
+# fails here instead of on a TV. Nothing is executed, only compiled, and
+# nothing built here is committed (build-publish-cleanup.yml owns dist/).
+#
+# - dist/service.js and standalone/service/dist/{index,bundle}.js run on the
+#   Tizen 5.5 service runtime, Node 4.4.3 (Tizen 6.5 has Node 12, a superset).
+#   Checked with real Node 4.4.3.
+# - dist/userScript.js is built for Chrome 47 (mods/rollup.config.js). No Node
+#   ships that exact V8 (4.7); Node 5.12 has V8 4.6 (Chrome 46), and with
+#   --harmony_rest_parameters it parses what Chrome 47 shipped on top of that.
+#
+# --nolazy makes V8 parse every function body up front, so an error deep in a
+# function fails the check too, not only on its first call. Runtime APIs
+# (e.g. a missing Array.prototype method) are not covered, only syntax.
+name: Runtime syntax check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mods/**"
+      - "service/**"
+      - "standalone/service/**"
+      - "scripts/runtime-syntax-check/**"
+      - ".github/workflows/runtime-syntax-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BUILD_NODE_VERSION: '24'
+  SERVICE_NODE_VERSION: '4.4.3'
+  USERSCRIPT_NODE_VERSION: '5.12.0'
+
+jobs:
+  syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.BUILD_NODE_VERSION }}
+
+      - name: Build userscript
+        working-directory: mods
+        run: |
+          npm ci
+          npx rollup -c
+
+      - name: Build DIAL service
+        working-directory: service
+        run: |
+          npm ci
+          npx rollup -c
+
+      - name: Build standalone service
+        working-directory: standalone/service
+        run: |
+          npm install
+          npm run build
+
+      - name: Download old Node runtimes
+        run: |
+          for v in "$SERVICE_NODE_VERSION" "$USERSCRIPT_NODE_VERSION"; do
+            curl -fsSL "https://nodejs.org/dist/v$v/node-v$v-linux-x64.tar.xz" | tar xJ -C "$RUNNER_TEMP"
+          done
+
+      - name: Service bundles parse on Node 4.4.3 (Tizen 5.5)
+        run: |
+          "$RUNNER_TEMP/node-v$SERVICE_NODE_VERSION-linux-x64/bin/node" --nolazy \
+            scripts/runtime-syntax-check/check-syntax.js --module \
+            dist/service.js standalone/service/dist/index.js standalone/service/dist/bundle.js
+
+      - name: Userscript parses as Chrome 47
+        run: |
+          "$RUNNER_TEMP/node-v$USERSCRIPT_NODE_VERSION-linux-x64/bin/node" --nolazy --harmony_rest_parameters \
+            scripts/runtime-syntax-check/check-syntax.js --script dist/userScript.js
