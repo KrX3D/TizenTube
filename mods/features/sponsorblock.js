@@ -534,8 +534,7 @@ class SponsorBlockHandler {
     const duration = Number(this.video.duration) || 0;
     let target = end;
     // Never ask for the last second: seeking to the very end finishes the
-    // video instead of skipping within it. This also clamps a retry margin
-    // that would otherwise run past the end.
+    // video instead of skipping within it.
     if (duration > 0 && duration - target < 1) target = duration - 1;
     if (!(target > 0)) return;
     const before = Number(this.video.currentTime) || 0;
