@@ -1,5 +1,4 @@
-import { configRead } from '../config.js';
-import { appendFileOnlyLog } from './hideWatched.js';
+import { configRead, configChangeEmitter } from '../config.js';
 
 // Hides the video panel under the player on the watch page (upstream 5bb41af).
 //
@@ -16,16 +15,35 @@ export function hideRelatedVideos(sectionListRenderer) {
   sectionListRenderer.continuations = [];
 }
 
-// An emptied list still leaves the panel itself on screen: on the 5.5 TV,
-// moving down from the player showed an empty frame of blank tiles that could
-// not be entered. So once the list is empty, the whole panel goes.
-//
-// Called after the queued-videos shelf has been added: if the user has a
-// queue, the panel stays and shows only that shelf.
-export function dropEmptyRelatedPanel(watchNextResults) {
-  if (!watchNextResults?.pivot || !configRead('hideRelatedVideosPlayer')) return;
-  const contents = watchNextResults.pivot.sectionListRenderer?.contents;
-  if (contents && contents.length) return;
-  delete watchNextResults.pivot;
-  appendFileOnlyLog('watchNext.pivotRemoved', {});
+// An empty list still shows a row of blank tiles under the player. That row is
+// YouTube's own loading placeholder: ytlr-pivot always renders, and draws a
+// ytlr-ghost-surface whenever its list has no contents. Deleting `pivot` from
+// the response does not help — the watch page then passes `{}` and the
+// placeholder stays (tried in 1.31.800). So the placeholder is hidden by CSS
+// while the setting is on. The app already refuses focus to an empty pivot,
+// so there is nothing left to move down to. With a queue the list is not
+// empty, no placeholder is drawn and the queue shelf shows as before.
+const STYLE_ID = 'tt-hide-pivot-ghost';
+
+function applyGhostStyle() {
+  if (typeof document === 'undefined') return;
+  let style = document.getElementById(STYLE_ID);
+  if (!configRead('hideRelatedVideosPlayer')) {
+    if (style) style.textContent = '';
+    return;
+  }
+  if (!style) {
+    style = document.createElement('style');
+    style.id = STYLE_ID;
+    (document.head || document.documentElement).appendChild(style);
+  }
+  style.textContent = 'ytlr-pivot ytlr-ghost-surface { display: none !important; }';
 }
+
+applyGhostStyle();
+
+try {
+  configChangeEmitter.addEventListener('configChange', (ev) => {
+    if (ev?.detail?.key === 'hideRelatedVideosPlayer') applyGhostStyle();
+  });
+} catch (_) { }
