@@ -3,6 +3,7 @@ import { lockupVideoId, lockupWatchPercent } from './lockupViewModel.js';
 import { sendSyslog } from './syslog.js';
 import { noteProgressChanged } from './watchProgressStore.js';
 import { isCategoryEnabled, applyVerbosity } from './logCategories.js';
+import { sortByAge } from './subscriptionAgeSort.js';
 
 // ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -579,8 +580,17 @@ export function consolidateShelves(contents, path = 'unknown', pageName = null, 
       seenIds.add(id);
       return true;
     });
-    const dedupedItems = [...carried, ...dedupedFresh];
+    let dedupedItems = [...carried, ...dedupedFresh];
     if (!dedupedItems.length) return;
+
+    // The aggregated row comes first and is sorted by relevance; pooling it
+    // as-is mixed old videos into the top rows. See subscriptionAgeSort.js.
+    if (pageName === 'subscriptions') {
+      const sorted = sortByAge(dedupedItems);
+      const moved = sorted.items.filter((item, i) => item !== dedupedItems[i]).length;
+      appendFileOnlyLog('consolidate.sortByAge', { path, items: dedupedItems.length, known: sorted.known, moved });
+      dedupedItems = sorted.items;
+    }
 
     // perRow: how wide a normal row on this page is.
     //
