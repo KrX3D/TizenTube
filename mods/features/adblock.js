@@ -45,6 +45,7 @@ import { filterHiddenChannels } from './channelHider.js';
 import { filterChannelShelves } from './channelShelfHider.js';
 import { filterMusicShelves } from './musicShelfHider.js';
 import { filterSurveyShelves } from './surveyHider.js';
+import { filterPremiumShelves } from './premiumShelfHider.js';
 import { hideRelatedVideos } from './relatedVideosHider.js';
 import { dedupeShelves } from './duplicateVideoHider.js';
 import { noteVideoLength } from './playbackProgress.js';
@@ -1586,6 +1587,7 @@ function processShelves(shelves, shouldAddPreviews = true, pageHint = null) {
   filterChannelShelves(shelves, activePage);
   filterMusicShelves(shelves, activePage);
   filterSurveyShelves(shelves, activePage);
+  filterPremiumShelves(shelves, activePage);
   for (let i = shelves.length - 1; i >= 0; i--) {
     try {
       const shelve = shelves[i];

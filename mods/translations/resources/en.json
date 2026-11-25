@@ -417,6 +417,7 @@
                     "hideChannelShelves": "Hide Channel Shelves",
                     "hideMusicShelf": "Hide the Music Row",
                     "hideSurveys": "Hide Feedback Surveys",
+                    "hidePremiumShelves": "Hide YouTube Premium Shelves",
                     "sortSidebarContents": {
                         "title": "Sort Sidebar Contents",
                         "subtitle": "Change the order of the entries in the sidebar",

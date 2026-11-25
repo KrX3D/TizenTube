@@ -184,6 +184,7 @@ const defaultConfig = {
   hideChannelShelves: false,
   hideMusicShelf: false,
   hideSurveys: false,
+  hidePremiumShelves: false,
   enableJumpToPercentage: false,
   hideRelatedVideosPlayer: false,
   spoofViewport: 'disabled',
