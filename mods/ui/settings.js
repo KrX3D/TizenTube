@@ -649,6 +649,11 @@ export default function modernUI(update, parameters) {
                             value: 'hideSurveys'
                         },
                         {
+                            name: t('settings.options.uiSettings.options.hidePremiumShelves'),
+                            icon: null,
+                            value: 'hidePremiumShelves'
+                        },
+                        {
                             name: t('settings.options.uiSettings.options.hiddenPlaylists.title'),
                             icon: 'VISIBILITY_OFF',
                             value: null,
